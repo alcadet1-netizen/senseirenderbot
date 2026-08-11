@@ -1,0 +1,102 @@
+"""
+Редактор боссов для админов.
+"""
+from aiogram import F, Router
+from aiogram.filters.callback_data import CallbackData
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+
+from src.core.container import Container
+
+router = Router(name="boss_editor")
+
+
+class BossEditorCallback(CallbackData, prefix="boss_edit"):
+    action: str
+    value: str | None = None
+
+
+class BossEditorFSM(StatesGroup):
+    choosing_action = State()
+    setting_reward_pool = State()
+    setting_ton_chance = State()
+    choosing_boss = State()
+
+
+def get_editor_keyboard(settings: dict):
+    buttons = [
+        [InlineKeyboardButton(text="👹 Выбрать Босса", callback_data=BossEditorCallback(action="choose_boss").pack())],
+        [
+            InlineKeyboardButton(text="💰 Пул наград", callback_data=BossEditorCallback(action="set_reward").pack()),
+            InlineKeyboardButton(text=f"{settings.get('reward_min', 0)}-{settings.get('reward_max', 0)} TON", callback_data=BossEditorCallback(action="noop").pack())
+        ],
+        [
+            InlineKeyboardButton(text="🎲 Шанс TON", callback_data=BossEditorCallback(action="set_ton_chance").pack()),
+            InlineKeyboardButton(text=f"{settings.get('drop_chance', 0) * 100:.1f}%", callback_data=BossEditorCallback(action="noop").pack())
+        ],
+        [InlineKeyboardButton(text="▶️ Старт", callback_data=BossEditorCallback(action="start").pack())]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+from src.core.constants import BOSSES
+
+@router.callback_query(BossEditorCallback.filter(F.action == "set_reward"), BossEditorFSM.choosing_action)
+async def on_set_reward(query: CallbackQuery, state: FSMContext):
+    await query.message.edit_text("Введите новый диапазон наград в формате: min max (например, 0.1 0.5)")
+    await state.set_state(BossEditorFSM.setting_reward_pool)
+
+@router.message(BossEditorFSM.setting_reward_pool)
+async def on_reward_set(message: Message, container: Container, state: FSMContext):
+    try:
+        min_val, max_val = map(float, message.text.split())
+        if min_val > max_val:
+            min_val, max_val = max_val, min_val
+        
+        await container.boss_service.update_setting("reward_min", min_val)
+        await container.boss_service.update_setting("reward_max", max_val)
+        
+        await message.answer(f"✅ Диапазон награды установлен: {min_val} - {max_val} TON")
+        
+    except (ValueError, TypeError):
+        await message.answer("⚠️ Неверный формат. Введите два числа через пробел.")
+
+    await state.set_state(BossEditorFSM.choosing_action)
+    await show_editor(message, container, state)
+
+
+@router.callback_query(BossEditorCallback.filter(F.action == "set_ton_chance"), BossEditorFSM.choosing_action)
+async def on_set_ton_chance(query: CallbackQuery, state: FSMContext):
+    await query.message.edit_text("Введите новый шанс выпадения TON (от 0.0 до 1.0)")
+    await state.set_state(BossEditorFSM.setting_ton_chance)
+
+from src.bot.handlers.boss_commands import launch_boss
+
+@router.callback_query(BossEditorCallback.filter(F.action == "start"), BossEditorFSM.choosing_action)
+async def on_start_boss(query: CallbackQuery, container: Container, state: FSMContext):
+    data = await state.get_data()
+    boss_id = data.get("boss_id")
+
+    if not boss_id:
+        await query.answer("⚠️ Сначала выберите босса!", show_alert=True)
+        return
+
+    target_chat_id = container.settings.allowed_chats[0] if container.settings.allowed_chats else -1002098194464
+    
+    try:
+        reward_settings = await container.boss_service.get_reward_settings()
+        await launch_boss(query.bot, target_chat_id, boss_id, container, reward_settings=reward_settings)
+        await query.message.edit_text(f"✅ Босс <b>{BOSSES[boss_id]['name']}</b> успешно призван в чат {target_chat_id}!")
+        await state.clear()
+    except Exception as e:
+        await query.answer(f"❌ Ошибка при запуске босса: {e}", show_alert=True)
+
+
+
+
+
+@router.message(BossEditorFSM.choosing_action)
+async def handle_initial_editor_message(message: Message, container: Container, state: FSMContext):
+    await show_editor(message, container, state)
+

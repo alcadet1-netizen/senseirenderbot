@@ -1,0 +1,281 @@
+"""
+💰 Сервис криптовалют.
+"""
+
+import asyncio
+from typing import Optional
+
+from redis.asyncio import Redis
+
+from src.core.config import Settings
+from src.core.visuals import Visuals
+from src.infra.redis.cache import CacheManager
+from src.api.crypto_api import CryptoAPI
+
+
+class CryptoService:
+    """Сервис для получения курсов криптовалют."""
+    
+    SYMBOL_MAP = {
+        "ton": "toncoin",
+        "btc": "bitcoin",
+        "eth": "ethereum",
+        "usdt": "tether",
+        "bnb": "binancecoin",
+        "sol": "solana",
+        "not": "notcoin",
+        "dogs": "dogs",
+        "hmstr": "hamster-kombat",
+        "sui": "sui",
+        "doge": "dogecoin",
+    }
+
+    def __init__(self, settings: Settings, redis: Redis):
+        self.settings = settings
+        self.cache = CacheManager(redis)
+        self.api = CryptoAPI(settings.ton_api_key)
+
+    async def get_top_10_message(self) -> str:
+        """Получить ТОП-10 криптовалют + избранное (TON, SUI и др)."""
+        cache_key = "crypto:top10_framed_v2"
+        cached = await self.cache.get(cache_key)
+        if cached:
+            return cached
+
+        # Получаем данные параллельно
+        # Топ-10
+        top_10_usd, top_10_rub = await asyncio.gather(
+            self.api.get_coingecko_top_10("usd"),
+            self.api.get_coingecko_top_10("rub")
+        )
+
+        if not top_10_usd:
+            return "❌ Не удалось получить данные о рынке."
+
+        # Мапа для быстрого поиска цены в рублях для топ-10
+        rub_map = {c['id']: c for c in (top_10_rub or [])}
+        
+        # Список избранного, который нужно отобразить дополнительно
+        # TON, BTC, USDT, DOGE, SOL, SUI, BNB
+        favorites_ids = ["toncoin", "bitcoin", "tether", "dogecoin", "solana", "sui", "binancecoin"]
+        
+        # Получаем цены для избранного (на случай если кого-то нет в топ-10)
+        favorites_data_usd = await self.api.get_coingecko_price(",".join(favorites_ids), "usd")
+        favorites_data_rub = await self.api.get_coingecko_price(",".join(favorites_ids), "rub")
+
+        width = 34
+        lines = []
+        
+        # Заголовок
+        lines.append(Visuals.frame_top_left(width))
+        lines.append(Visuals.frame_line_left("🏆 ТОП-10 КРИПТОВАЛЮТ", width, "center"))
+        lines.append(Visuals.frame_separator_left(width))
+
+        # Множество ID, которые уже выведены (чтобы не дублировать в избранном)
+        displayed_ids = set()
+
+        # Список монет Топ-10
+        for idx, coin_usd in enumerate(top_10_usd, 1):
+            coin_id = coin_usd.get('id')
+            displayed_ids.add(coin_id)
+            
+            coin_rub = rub_map.get(coin_id, {})
+            
+            name = coin_usd.get('name', 'Unknown')
+            symbol = coin_usd.get('symbol', '').upper()
+            price_usd = coin_usd.get('current_price', 0)
+            change = coin_usd.get('price_change_percentage_24h', 0)
+            price_rub = coin_rub.get('current_price', 0)
+            
+            emoji = "📈" if change >= 0 else "📉"
+            
+            # Название
+            lines.append(Visuals.frame_line_left(f"{idx}. {name} ({symbol})", width))
+            
+            # Цены (форматирование)
+            usd_str = f"${price_usd:,.2f}" if price_usd < 1000 else f"${price_usd:,.0f}"
+            rub_str = f"₽{price_rub:,.0f}"
+            
+            lines.append(Visuals.frame_line_left(f"{usd_str} | {rub_str}", width))
+            lines.append(Visuals.frame_line_left(f"{emoji} {change:+.2f}%", width))
+            
+            if idx < len(top_10_usd):
+                lines.append(Visuals.frame_separator_left(width))
+
+        # Секция избранного (только то, что не попало в топ-10)
+        missing_favorites = [fid for fid in favorites_ids if fid not in displayed_ids]
+        
+        if missing_favorites:
+            lines.append(Visuals.frame_separator_left(width))
+            lines.append(Visuals.frame_line_left("💎 ИЗБРАННОЕ", width, "center"))
+            lines.append(Visuals.frame_separator_left(width))
+            
+            # Маппинги
+            name_map = {
+                "toncoin": "TON Coin",
+                "bitcoin": "Bitcoin",
+                "tether": "Tether",
+                "dogecoin": "Dogecoin",
+                "solana": "Solana",
+                "sui": "Sui",
+                "binancecoin": "BNB"
+            }
+            symbol_map = {
+                "toncoin": "TON",
+                "bitcoin": "BTC",
+                "tether": "USDT",
+                "dogecoin": "DOGE",
+                "solana": "SOL",
+                "sui": "SUI",
+                "binancecoin": "BNB"
+            }
+
+            for i, coin_id in enumerate(missing_favorites):
+                usd_data = favorites_data_usd.get(coin_id, {}) if favorites_data_usd else {}
+                rub_data = favorites_data_rub.get(coin_id, {}) if favorites_data_rub else {}
+                
+                price_usd = usd_data.get("usd", 0)
+                price_rub = rub_data.get("rub", 0)
+                change = usd_data.get("usd_24h_change", 0)
+                
+                # Если данных нет (например TON часто отваливается в CoinGecko), пробуем Binance
+                if price_usd == 0:
+                    symbol = symbol_map.get(coin_id, "").upper()
+                    if symbol:
+                        binance_data = await self.api.get_binance_ticker(symbol)
+                        if binance_data:
+                            price_usd = float(binance_data.get("lastPrice", 0))
+                            change = float(binance_data.get("priceChangePercent", 0))
+                            # Приближенно считаем рубль через USDT (если есть в кеше или по курсу 90)
+                            # Лучше взять курс USDT из топ-10 если есть
+                            usdt_rub = 90.0
+                            if rub_map and "tether" in rub_map:
+                                usdt_rub = rub_map["tether"].get("current_price", 90.0)
+                            price_rub = price_usd * usdt_rub
+
+                if price_usd == 0:
+                    continue
+
+                name = name_map.get(coin_id, coin_id.capitalize())
+                symbol = symbol_map.get(coin_id, "").upper()
+                
+                emoji = "🚀" if change >= 0 else "🔻"
+                
+                lines.append(Visuals.frame_line_left(f"{name} ({symbol})", width))
+                lines.append(Visuals.frame_line_left(f"💵 {price_usd:,.2f} $", width))
+                lines.append(Visuals.frame_line_left(f"💴 {price_rub:,.2f} ₽", width))
+                lines.append(Visuals.frame_line_left(f"{emoji} 24h: {change:+.2f}%", width))
+                
+                if i < len(missing_favorites) - 1:
+                    lines.append(Visuals.frame_separator_left(width))
+
+        lines.append(Visuals.frame_bottom_left(width))
+        
+        result = f"<pre>{chr(10).join(lines)}</pre>"
+        await self.cache.set(cache_key, result, ttl=300)
+        return result
+
+    async def get_price_message(self, symbol: str) -> str:
+        """Получить курс валюты в RUB и USDT."""
+        symbol_lower = symbol.lower()
+        coin_id = self.SYMBOL_MAP.get(symbol_lower, symbol_lower)
+        
+        # Пробуем CoinGecko
+        data = await self.api.get_coingecko_price(coin_id, "usd,rub")
+        
+        if not data or coin_id not in data:
+            # Если не нашли в CoinGecko, пробуем Binance (только USDT)
+            binance_data = await self.api.get_binance_ticker(symbol)
+            if binance_data:
+                price = float(binance_data.get("lastPrice", 0))
+                change = float(binance_data.get("priceChangePercent", 0))
+                
+                # Пытаемся получить курс USDT/RUB для конвертации
+                rub_rate = 0
+                try:
+                    usdt_data = await self.api.get_coingecko_price("tether", "rub")
+                    if usdt_data and "tether" in usdt_data:
+                        rub_rate = usdt_data["tether"].get("rub", 0)
+                except Exception:
+                    pass
+                
+                price_rub = price * rub_rate
+                
+                return Visuals.crypto_price_card(
+                    symbol=symbol,
+                    usd=price,
+                    rub=price_rub,
+                    change=change,
+                    market_cap=None
+                )
+            return f"❌ Не удалось найти курс для {symbol.upper()}"
+
+        # CoinGecko результат
+        coin = data[coin_id]
+        usd = coin.get("usd", 0)
+        rub = coin.get("rub", 0)
+        change = coin.get("usd_24h_change", 0)
+        market_cap = coin.get("usd_market_cap", 0)
+        
+        market_cap_rub = market_cap * (rub / usd) if usd > 0 else 0
+        
+        return Visuals.crypto_price_card(
+            symbol=symbol,
+            usd=usd,
+            rub=rub,
+            change=change,
+            market_cap=market_cap,
+            market_cap_rub=market_cap_rub
+        )
+
+    async def get_calculator_message(self, symbol: str, amount: float) -> str:
+        """Рассчитать стоимость монет в рублях."""
+        symbol_lower = symbol.lower()
+        coin_id = self.SYMBOL_MAP.get(symbol_lower, symbol_lower)
+        
+        data = await self.api.get_coingecko_price(coin_id, "rub")
+        
+        price_rub = 0
+        
+        if data and coin_id in data:
+            price_rub = data[coin_id].get("rub", 0)
+        else:
+            # Если не нашли в CoinGecko, пробуем Binance (только USDT)
+            binance_data = await self.api.get_binance_ticker(symbol)
+            if binance_data:
+                price_usd = float(binance_data.get("lastPrice", 0))
+                
+                # Пытаемся получить курс USDT/RUB для конвертации
+                rub_rate = 90.0 # Fallback
+                try:
+                    usdt_data = await self.api.get_coingecko_price("tether", "rub")
+                    if usdt_data and "tether" in usdt_data:
+                        rub_rate = usdt_data["tether"].get("rub", 90.0)
+                except Exception:
+                    pass
+                
+                price_rub = price_usd * rub_rate
+
+        if price_rub == 0:
+             return f"❌ Не удалось найти курс для {symbol.upper()}"
+             
+        total_rub = price_rub * amount
+        
+        width = 30
+        lines = [
+            Visuals.frame_top_left(width),
+            Visuals.frame_line_left(f"🧮 {symbol.upper()} Calculator", width, "center"),
+            Visuals.frame_separator_left(width),
+            Visuals.frame_line_left(f"Кол-во: {amount}", width),
+            Visuals.frame_line_left(f"Курс: {price_rub:,.2f} ₽", width),
+            Visuals.frame_separator_left(width),
+            Visuals.frame_line_left(f"Итого:", width),
+            Visuals.frame_line_left(f"💰 {total_rub:,.2f} ₽", width),
+            Visuals.frame_bottom_left(width)
+        ]
+        
+        return "<pre>\n" + "\n".join(lines) + "\n</pre>"
+
+    # Legacy method compatibility (if needed by other parts of the code, though I think I can remove it if I update usage)
+    async def format_price_message(self, crypto: str = "TON") -> str:
+        return await self.get_price_message(crypto)
