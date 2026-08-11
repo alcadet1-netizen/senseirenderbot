@@ -1,117 +1,88 @@
-# �� 🥋 SENSEI ULTIMATE 2.1
-Эпический Telegram-бот для повышения активности в чате.
+SENSEI ULTIMATE 2.1
+Epic Telegram bot for increasing chat activity.
 
-## �� 🚀 Быстрый старт
+Quick Start
+1. Clone the repository
+   git clone https://github.com/alcadet1-netizen/senseirenderbot.git
+   cd senseirenderbot
 
-### 1. Клонировать репозиторий
-```bash
-git clone https://github.com/alcadet1-netizen/senseirenderbot.git
-cd senseirenderbot
-```
+2. Install dependencies
+   # Recommended to use a virtual environment
+   python -m venv .venv
+   source .venv/bin/activate   # Linux/macOS
+   .\.venv\Scripts\activate    # Windows
 
-### 2. Установка зависимостей
-```bash
-# Рекомендуется использовать виртуальное окружение
-python -m venv .venv
-source .venv/bin/activate   # Linux/macOS
-.\.venv\Scripts\activate    # Windows
+   pip install -r requirements.txt
 
-pip install -r requirements.txt
-```
+3. Configure environment
+   Copy the example config and fill in required values:
+   cp .env.example .env
+   Edit .env, specifying:
+   - BOT_TOKEN – your Telegram bot token (get from @BotFather)
+   - MONGO_URI – MongoDB connection string (default mongodb://localhost:27017/sensei)
+   - Optional: HF_TOKEN – Hugging Face token for image generation (if used)
+   - Other API keys as needed
 
-### 3. Настройка окружения
-Скопируйте пример конфигурации и заполните необходимые значения:
-```bash
-cp .env.example .env
-```
-Отредактируй `.env`, указав:
-- `BOT_TOKEN` – токен вашего Telegram-бота (получить у @BotFather)
-- `MONGO_URI` – строка подключения к MongoDB (по умолчанию `mongodb://localhost:27017/sensei`)
-- При необходимости: `HF_TOKEN` – токен Hugging Face для генерации изображений (опционально)
-- Другие API‑ключи (если используете внешние сервисы)
+4. Run the bot
+   # Using docker-compose (recommended for development):
+   docker-compose up -d
 
-### 4. Запуск бота
-```bash
-# Если используется docker-compose (рекомендовано для разработки):
-docker-compose up -d
+   # Or direct run:
+   python -m src.bot.main
 
-# Или直接 запуск:
-python -m src.bot.main
-```
+The bot will start polling and be ready for use.
 
-Бот начнетpolling и будет готов к работе.
-
-## �� 📁 Структура проекта
-```
+Project Structure
 senseirenderbot/
-├── src/                     # Исходный код
-│   ├── bot/                 # Основной код бота (aiogram)
-│   │   ├── handlers/        # Обработчики команд и событий
-│   │   ├── middlewares/     # Пользовательские middleware
-│   │   ├── states/          # FSM состояния
-│   │   ├── keyboards/       # Клавиатуры
-│   │   ├── db.py            # Инициализация MongoDB
-│   │   └── main.py          # Точка входа
-│   ├── core/                # Ядро: конфигурация, DI‑контейнер, провайдеры
-│   ├── infra/               # Инфраструктурные слои (MongoDB, Redis‑адаптер)
-│   ├── services/            # Бизнес‑логика (игры, экономика и т.д.)
-│   ├── domain/              # Доменные модели и ресурсы
-│   └── texts/               # Локализуемые строки и фразы
-├── scripts/                 # Вспомогательные скрипты (seed, очистка и т.д.)
-├── .env.example             # Пример файла переменных окружения
-├── docker-compose.yml       # Конфигурация для запуска MongoDB (и optionally других сервисов)
-├── Dockerfile               # Официальный образ для production
-├── README.md                # Этот файл
-├── requirements.txt         # Зависимости Python
-�└── .github/
-    └── workflows/
-        └── ci.yml           # GitHub Actions CI (запуск тестов при push)
-```
+├── src/                     # Source code
+│   ├── bot/                 # Main bot code (aiogram)
+│   │   ├── handlers/        # Command and event handlers
+│   │   ├── middlewares/     # Custom middleware
+│   │   ├── states/          # FSM states
+│   │   ├── keyboards/       # Keyboards
+│   │   ├── db.py            # MongoDB initialization
+│   │   └── main.py          # Entry point
+│   ├── core/                # Core: config, DI container, providers
+│   ├── infra/               # Infrastructure layers (MongoDB, Redis adapter)
+│   ├── services/            # Business logic (games, economy, etc.)
+│   ├── domain/              # Domain models and resources
+│   └── texts/               # Localizable strings and phrases
+├── scripts/                 # Helper scripts (seed, cleanup, etc.)
+├── .env.example             # Example environment variables file
+├── docker-compose.yml       # Configuration to run MongoDB (and optionally other services)
+├── Dockerfile               # Official production image
+├── README.md                # This file
+├── requirements.txt         # Python dependencies
+   .github/
+       workflows/
+           ci.yml           # GitHub Actions CI (run tests on push)
 
-## �� 🛠��️ Доступные скрипты
-- `scripts/seed_data.py` – заполняет базу начальными данными (пользователи, достижения и т.п.).
-- `scripts/verify_deletion.py` – проверяет корректность удаления пользователей.
-- `scripts/delete_users.py` – удаляет тестовых пользователей (по необходимости).
+Available Scripts
+- scripts/seed_data.py – populates database with initial data (users, achievements, etc.)
+- scripts/verify_deletion.py – verifies correct deletion of users
+- scripts/delete_users.py – deletes test users (as needed)
 
-## �� 🧪 Тесты
-Запуск тестов:
-```bash
-pytest
-```
-CI workflow (`.github/workflows/ci.yml`) автоматически запушит тесты при каждом push в `main`.
+Tests
+Run tests:
+   pytest
+CI workflow (.github/workflows/ci.yml) automatically runs tests on each push to main.
 
-## �� 🐳 Docker
-Для production рекомендуется собрать образ:
-```bash
-docker build -t sensei-bot:latest .
-```
-И запустить с подключением к вашей MongoDB:
-```bash
-docker run -d --name sensei-bot \
-  --env-file .env \
-  sensei-bot:latest
-```
-Если используете `docker-compose.yml`, достаточно:
-```bash
-docker-compose up -d
-```
-Он поднимет контейнер с ботом и сервис MongoDB.
+Docker
+For production, build the image:
+   docker build -t sensei-bot:latest .
+Run with your MongoDB:
+   docker run -d --name sensei-bot \
+     --env-file .env \
+     sensei-bot:latest
+If using docker-compose.yml, simply:
+   docker-compose up -d
+This will start a container with the bot and a MongoDB service.
 
-## �� 📦 Распространяемый архив
-Для удобного распространения подготовлен архив `sensei-distributive.zip` (не включён в репозиторий, так как представляет собой собранный дистрибутив). Вы можете создать его сами:
-```bash
-git archive --format=zip --output=sensei-distributive.zip HEAD
-```
+Distributable Archive
+For easy distribution, an archive sensei-distributive.zip is prepared (not included in the repository as it is a distribution bundle). You can create it yourself:
+   git archive --format=zip --output=sensei-distributive.zip HEAD
 
-## �� 📜 Лицензия
-Проект распространяется под лицензией MIT – см. файл `LICENSE` (если присутствует).
+License
+Project is distributed under the MIT License – see LICENSE file if present.
 
-## �� 🙏 Благодарности
-- [aiogram](https://docs.aiogram.dev/) – мощная фреймворк для Telegram‑ботов.
-- [MongoDB](https://www.mongodb.com/) – NoSQL‑база данных.
-- [Hugging Face Inference API](https://huggingface.co/inference-api) – генерация изображений.
-- Весь открытый‑сообщество, чьи инструменты и библиотеки делают разработку проще и приятнее.
-
----
-
-_Если у вас возникли вопросы или предложения – откройте Issue или Pull Request. Удачной разработки и пусть ваш чат будет полон активности!_
+For questions or suggestions – open an Issue or Pull Request. Happy development and may your chat be full of activity!
