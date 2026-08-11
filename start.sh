@@ -3,4 +3,4 @@ set -e
 
 # Запускаем бота
 echo "���🚀 Starting bot..."
-python -m src.bot.main
+python src/bot/main.py
