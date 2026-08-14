@@ -31,7 +31,7 @@ async def cmd_offexit(message: Message, bot: Bot, container: Container):
         return
 
     key = f"chat:{message.chat.id}:exit_notifications"
-    await container.redis.set(key, "0")
+    await container.chat_settings_service.set_setting(message.chat.id, key, "0")
     
     await message.answer("🔕 Уведомления о выходе из чата <b>отключены</b>.", parse_mode="HTML")
 
@@ -42,6 +42,6 @@ async def cmd_onexit(message: Message, bot: Bot, container: Container):
         return
 
     key = f"chat:{message.chat.id}:exit_notifications"
-    await container.redis.set(key, "1")
+    await container.chat_settings_service.set_setting(message.chat.id, key, "1")
     
     await message.answer("🔔 Уведомления о выходе из чата <b>включены</b>.", parse_mode="HTML")

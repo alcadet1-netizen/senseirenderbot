@@ -1,53 +1,54 @@
 """
-🏛️ Базовый репозиторий.
+���������� Базовый репозиторий.
 """
 
 from abc import ABC
 from typing import Generic, List, Optional, TypeVar, Type
 
-from sqlalchemy import select, delete
-from sqlalchemy.ext.asyncio import AsyncSession
+from motor.motor_asyncio import AsyncIOMotorCollection
 
 T = TypeVar("T")
 ID = TypeVar("ID")
 
+
 class BaseRepository(ABC, Generic[T, ID]):
-    """Базовый репозиторий с реализацией CRUD."""
+    """Базовый репозиторий с реализацией CRUD для MongoDB."""
 
-    def __init__(self, session: AsyncSession, model: Type[T]):
-        self.session = session
-        self.model = model
+    def __init__(self, collection: AsyncIOMotorCollection):
+        self.collection = collection
 
-    async def get_by_id(self, id: ID) -> Optional[T]:
+    async def get_by_id(self, id: ID) -> Optional[dict]:
         """Получить сущность по ID."""
-        # Предполагаем, что у модели есть поле id
-        result = await self.session.execute(
-            select(self.model).where(self.model.id == id)
-        )
-        return result.scalar_one_or_none()
+        # Предполагаем, что у документа есть поле _id
+        result = await self.collection.find_one({"_id": id})
+        return result
 
-    async def get_all(self, limit: int = 100, offset: int = 0) -> List[T]:
+    async def get_all(self, limit: int = 100, offset: int = 0) -> List[dict]:
         """Получить все сущности."""
-        result = await self.session.execute(
-            select(self.model).limit(limit).offset(offset)
-        )
-        return list(result.scalars().all())
+        cursor = self.collection.find().skip(offset).limit(limit)
+        return await cursor.to_list(length=limit)
 
-    async def add(self, entity: T) -> T:
+    async def add(self, entity: dict) -> str:
         """Добавить сущность."""
-        self.session.add(entity)
-        await self.session.flush()
-        return entity
+        result = await self.collection.insert_one(entity)
+        return str(result.inserted_id)
 
-    async def update(self, entity: T) -> T:
+    async def update(self, entity: dict) -> bool:
         """Обновить сущность."""
-        # В SQLAlchemy ORM изменения отслеживаются автоматически для привязанных объектов.
-        await self.session.flush()
-        return entity
+        # Предполагаем, что у entity есть поле _id
+        if "_id" not in entity:
+            raise ValueError("Entity must have _id field for update")
+
+        entity_id = entity.pop("_id")
+        result = await self.collection.update_one(
+            {"_id": entity_id},
+            {"$set": entity}
+        )
+        # Put the _id back for consistency
+        entity["_id"] = entity_id
+        return result.modified_count > 0
 
     async def delete(self, id: ID) -> bool:
         """Удалить сущность."""
-        result = await self.session.execute(
-            delete(self.model).where(self.model.id == id)
-        )
-        return result.rowcount > 0
+        result = await self.collection.delete_one({"_id": id})
+        return result.deleted_count > 0

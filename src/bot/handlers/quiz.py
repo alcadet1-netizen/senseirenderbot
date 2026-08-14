@@ -7,11 +7,9 @@ from aiogram import Router, Bot, F
 from aiogram.types import Message
 from aiogram.filters import Command, BaseFilter
 from aiogram.fsm.context import FSMContext
-from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from src.bot.states.quiz_states import AddQuestionStates
-from src.services.quiz_service import QuizService
+from src.core.container import Container
 from src.core.visuals import Visuals
 
 router = Router()
@@ -21,14 +19,14 @@ IMAGES_DIR = Path("data/quiz_images")
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def get_quiz_service(session_factory: async_sessionmaker, redis: Redis) -> QuizService:
-    return QuizService(session_factory, redis)
+def get_quiz_service(container: Container) -> "QuizService":
+    return container.quiz_service
 
 
 class QuizActiveFilter(BaseFilter):
     """Фильтр для проверки активной викторины."""
-    async def __call__(self, message: Message, session_factory: async_sessionmaker, redis: Redis) -> bool:
-        service = get_quiz_service(session_factory, redis)
+    async def __call__(self, message: Message, container: Container) -> bool:
+        service = get_quiz_service(container)
         return await service.is_quiz_running(message.chat.id)
 
 
@@ -93,13 +91,12 @@ async def process_image(message: Message, state: FSMContext, bot: Bot):
 async def process_answer(
     message: Message,
     state: FSMContext,
-    session_factory: async_sessionmaker,
-    redis: Redis
+    container: Container
 ):
     """Получение ответа и сохранение вопроса."""
     data = await state.get_data()
     
-    service = get_quiz_service(session_factory, redis)
+    service = get_quiz_service(container)
     question_id = await service.add_question(
         question=data["question_text"],
         answer=message.text.strip(),
@@ -123,12 +120,11 @@ async def process_answer(
 async def cmd_start_quiz(
     message: Message,
     bot: Bot,
-    session_factory: async_sessionmaker,
-    redis: Redis
+    container: Container
 ):
     """Запуск викторины в чате."""
     chat_id = message.chat.id
-    service = get_quiz_service(session_factory, redis)
+    service = get_quiz_service(container)
     
     started = await service.start_quiz(chat_id)
     if not started:
@@ -157,12 +153,11 @@ async def cmd_start_quiz(
 @router.message(Command("stopquiz"), F.chat.type.in_({"group", "supergroup"}))
 async def cmd_stop_quiz(
     message: Message,
-    session_factory: async_sessionmaker,
-    redis: Redis
+    container: Container
 ):
     """Остановка викторины."""
     chat_id = message.chat.id
-    service = get_quiz_service(session_factory, redis)
+    service = get_quiz_service(container)
     
     if not await service.is_quiz_running(chat_id):
         await message.answer("ℹ️ Викторина не запущена.")
@@ -178,14 +173,13 @@ async def cmd_stop_quiz(
 async def check_quiz_answer(
     message: Message,
     bot: Bot,
-    session_factory: async_sessionmaker,
-    redis: Redis
+    container: Container
 ):
     """Проверка ответов на викторину."""
     chat_id = message.chat.id
     user_id = message.from_user.id
-    
-    service = get_quiz_service(session_factory, redis)
+
+    service = get_quiz_service(container)
     
     user_name = html.escape(message.from_user.full_name)
     result = await service.check_answer(chat_id, user_id, user_name, message.text)

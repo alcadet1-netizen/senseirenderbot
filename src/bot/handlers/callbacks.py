@@ -38,18 +38,13 @@ async def cb_check_sub(query: CallbackQuery, container: Container):
     """Проверка подписки по кнопке."""
     user_id = query.from_user.id
     channel_username = "@SenseiDurova"
-    cache_key = f"user:{user_id}:subscribed"
-    
-    is_subscribed = await container.redis.get(cache_key)
-    
-    if not is_subscribed:
-        try:
-            member = await query.bot.get_chat_member(chat_id=channel_username, user_id=user_id)
-            if member.status in ("creator", "administrator", "member", "restricted"):
-                is_subscribed = True
-                await container.redis.set(cache_key, "1", ex=300)
-        except Exception:
-            pass
+
+    # Always check with Telegram (removed Redis caching)
+    try:
+        member = await query.bot.get_chat_member(chat_id=channel_username, user_id=user_id)
+        is_subscribed = member.status in ("creator", "administrator", "member", "restricted")
+    except Exception:
+        is_subscribed = False
             
     if is_subscribed:
         try:

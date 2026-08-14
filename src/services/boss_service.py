@@ -1,5 +1,5 @@
 """
-👹 Сервис для битв с боссами.
+���������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������👹 Сервис для битв с боссами.
 """
 
 import json
@@ -7,9 +7,10 @@ import logging
 import os
 import random
 import time
+import asyncio
 from dataclasses import dataclass
-
-from redis.asyncio import Redis
+from datetime import datetime, timezone
+from typing import Optional, Dict, List, Any, Union
 
 from src.core.config import settings
 from src.core.constants import (
@@ -18,9 +19,9 @@ from src.core.constants import (
     BOSS_ULT_REQUIRED_HITS,
     BOSSES,
 )
+from src.infra.mongo.client import MongoClient
 
 logger = logging.getLogger(__name__)
-
 
 BOSS_INTROS = (
     "Ты слышишь шаги в темноте...",
@@ -93,44 +94,105 @@ BOSS_INTROS = (
 @dataclass
 class BossAttackResult:
     state: dict | None
-    result_type: str # "hit", "killed", "expired", "dead", "evaded"
+    result_type: str  # "hit", "killed", "expired", "dead", "evaded"
     actual_damage: int
-    event: str | None = None # "hp_50" etc.
+    event: str | None = None  # "hp_50" etc.
     is_dodge: bool = False
     combo_count: int = 0
     is_weakness: bool = False
     is_crit: bool = False
 
+
 class BossService:
     """Сервис управления боссами."""
 
-    REDIS_KEY = "boss:state"
-    ULT_COOLDOWN_KEY = "boss:ult_cooldowns"
-    SETTINGS_KEY = "boss:settings"
+    def __init__(self, mongo_client: MongoClient):
+        self.mongo_client = mongo_client
+        self.db = mongo_client.database
+        # Collections
+        self.boss_state = self.db.boss_state  # Stores a single document for the current boss state
+        self.boss_ult_cooldowns = self.db.boss_ult_cooldowns  # Stores user ult cooldowns
+        self.boss_settings = self.db.boss_settings  # Stores reward settings
+        # For locking, we'll use a simple asyncio.Lock assuming single instance.
+        # If multiple instances are needed, we should implement a distributed lock via MongoDB.
+        self._lock = asyncio.Lock()
 
-    # Defaults
-    DEFAULT_DROP_CHANCE = 0.05
-    DEFAULT_REWARD_MIN = 0.006
-    DEFAULT_REWARD_MAX = 0.02
-    DEFAULT_POOL_LIMIT = 1.0 # TON
+        # Defaults
+        self.DEFAULT_DROP_CHANCE = 0.05
+        self.DEFAULT_REWARD_MIN = 0.006
+        self.DEFAULT_REWARD_MAX = 0.02
+        self.DEFAULT_POOL_LIMIT = 1.0  # TON
 
-    def __init__(self, redis: Redis):
-        self.redis = redis
+        # Ensure indexes
+        asyncio.create_task(self._ensure_indexes())
+
+    async def _ensure_indexes(self):
+        """Ensure necessary indexes exist."""
+        try:
+            # Ult cooldowns: index on user_id for fast lookup
+            await self.boss_ult_cooldowns.create_index("user_id")
+            # Boss state: we expect only one document, no index needed
+            # Boss settings: expect one document
+        except Exception as e:
+            logger.warning(f"Failed to ensure indexes: {e}")
+
+    # --- Helper methods to load/save state ---
+
+    async def _get_boss_state_doc(self) -> Optional[Dict]:
+        """Fetch the boss state document."""
+        return await self.boss_state.find_one()
+
+    async def _save_boss_state_doc(self, state: Dict):
+        """Save the boss state document (upsert)."""
+        await self.boss_state.update_one(
+            {},
+            {"$set": state},
+            upsert=True
+        )
+
+    async def _get_settings_doc(self) -> Dict:
+        """Fetch the settings document, providing defaults if missing."""
+        doc = await self.boss_settings.find_one()
+        if not doc:
+            # Insert default settings
+            default_doc = {
+                "drop_chance": self.DEFAULT_DROP_CHANCE,
+                "reward_min": self.DEFAULT_REWARD_MIN,
+                "reward_max": self.DEFAULT_REWARD_MAX,
+                "pool_limit": self.DEFAULT_POOL_LIMIT,
+                "pool_used": 0.0
+            }
+            await self.boss_settings.insert_one(default_doc)
+            return default_doc
+        return doc
+
+    async def _save_settings_doc(self, settings_dict: Dict):
+        """Save the settings document (upsert)."""
+        await self.boss_settings.update_one(
+            {},
+            {"$set": settings_dict},
+            upsert=True
+        )
+
+    # --- Public API ---
 
     async def get_reward_settings(self) -> dict:
         """Получить настройки наград."""
-        data = await self.redis.hgetall(self.SETTINGS_KEY)
+        doc = await self._get_settings_doc()
         return {
-            "drop_chance": float(data.get(b"drop_chance", self.DEFAULT_DROP_CHANCE)),
-            "reward_min": float(data.get(b"reward_min", self.DEFAULT_REWARD_MIN)),
-            "reward_max": float(data.get(b"reward_max", self.DEFAULT_REWARD_MAX)),
-            "pool_limit": float(data.get(b"pool_limit", self.DEFAULT_POOL_LIMIT)),
-            "pool_used": float(data.get(b"pool_used", 0.0))
+            "drop_chance": float(doc.get("drop_chance", self.DEFAULT_DROP_CHANCE)),
+            "reward_min": float(doc.get("reward_min", self.DEFAULT_REWARD_MIN)),
+            "reward_max": float(doc.get("reward_max", self.DEFAULT_REWARD_MAX)),
+            "pool_limit": float(doc.get("pool_limit", self.DEFAULT_POOL_LIMIT)),
+            "pool_used": float(doc.get("pool_used", 0.0))
         }
 
     async def update_setting(self, key: str, value: float):
         """Обновить настройку."""
-        await self.redis.hset(self.SETTINGS_KEY, key, value)
+        await self.boss_settings.update_one(
+            {},
+            {"$set": {key: value}}
+        )
 
     async def check_pool_availability(self, amount: float) -> bool:
         """Проверить, достаточно ли средств в пуле."""
@@ -139,22 +201,25 @@ class BossService:
 
     async def increment_pool_used(self, amount: float):
         """Увеличить счетчик использованного пула."""
-        await self.redis.hincrbyfloat(self.SETTINGS_KEY, "pool_used", amount)
+        await self.boss_settings.update_one(
+            {},
+            {"$inc": {"pool_used": amount}}
+        )
 
     async def reset_pool(self):
         """Сбросить счетчик пула."""
-        await self.redis.hset(self.SETTINGS_KEY, "pool_used", 0.0)
+        await self.boss_settings.update_one(
+            {},
+            {"$set": {"pool_used": 0.0}}
+        )
 
     async def get_state(self) -> dict | None:
         """Получить текущее состояние битвы."""
-        data = await self.redis.get(self.REDIS_KEY)
-        if data:
-            return json.loads(data)
-        return None
+        return await self._get_boss_state_doc()
 
     async def save_state(self, state: dict):
         """Сохранить состояние."""
-        await self.redis.set(self.REDIS_KEY, json.dumps(state))
+        await self._save_boss_state_doc(state)
 
     async def start_boss(
         self,
@@ -167,23 +232,15 @@ class BossService:
             raise ValueError(f"Unknown boss: {boss_id}")
 
         if reward_settings:
-            await self.redis.hset(
-                self.SETTINGS_KEY,
-                mapping={
-                    "drop_chance": reward_settings.get(
-                        "ton_chance", self.DEFAULT_DROP_CHANCE
-                    ),
-                    "reward_min": reward_settings.get(
-                        "reward_min", self.DEFAULT_REWARD_MIN
-                    ),
-                    "reward_max": reward_settings.get(
-                        "reward_max", self.DEFAULT_REWARD_MAX
-                    ),
-                    "pool_limit": reward_settings.get(
-                        "reward_pool", self.DEFAULT_POOL_LIMIT
-                    ),
+            await self.boss_settings.update_one(
+                {},
+                {"$set": {
+                    "drop_chance": reward_settings.get("ton_chance", self.DEFAULT_DROP_CHANCE),
+                    "reward_min": reward_settings.get("reward_min", self.DEFAULT_REWARD_MIN),
+                    "reward_max": reward_settings.get("reward_max", self.DEFAULT_REWARD_MAX),
+                    "pool_limit": reward_settings.get("reward_pool", self.DEFAULT_POOL_LIMIT),
                     "pool_used": 0.0,  # Reset pool on new boss
-                },
+                }}
             )
 
         boss_config = BOSSES[boss_id]
@@ -193,48 +250,58 @@ class BossService:
             deadline = time.time() + duration_hours * 3600
 
         state = {
+            "_id": "boss_state",  # Fixed ID to ensure single document
             "boss_id": boss_id,
             "hp": boss_config["hp"],
             "max_hp": boss_config["hp"],
             "start_time": time.time(),
             "deadline": deadline,
             "intro": random.choice(BOSS_INTROS),
-            "hits": {},      # user_id -> {"name": str, "dmg": int}
-            "cooldowns": {}, # user_id -> timestamp
+            "hits": {},      # user_id -> {"name": str, "dmg": int, "count": int}
+            "cooldowns": {}, # user_id -> timestamp (for normal hits)
             "battle_log": [], # list of {"name": str, "dmg": int, "is_ult": bool, "crit": bool}
             "combo_count": 0,
             "last_combo_time": 0.0,
             "weakness_until": 0.0,
             "is_dead": False,
-            "is_expired": False
+            "is_expired": False,
+            "notified_10": False,
+            "notified_25": False,
+            "notified_50": False,
+            "notified_75": False,
+            "updated_at": datetime.now(timezone.utc)
         }
 
-        await self.save_state(state)
+        await self._save_boss_state_doc(state)
         return state
 
     async def set_message_data(self, chat_id: int, message_id: int, has_photo: bool = False):
         """Сохранить ID сообщения с боссом."""
-        state = await self.get_state()
+        # We'll store this in the boss state document for simplicity
+        state = await self._get_boss_state_doc()
         if state:
             state["chat_id"] = chat_id
             state["message_id"] = message_id
             state["has_photo"] = has_photo
-            await self.save_state(state)
+            state["updated_at"] = datetime.now(timezone.utc)
+            await self._save_boss_state_doc(state)
 
     async def stop_boss(self):
         """Остановить (убить) текущего босса принудительно."""
-        state = await self.get_state()
+        state = await self._get_boss_state_doc()
         if state:
             state["hp"] = 0
             state["is_dead"] = True
-            await self.save_state(state)
+            state["updated_at"] = datetime.now(timezone.utc)
+            await self._save_boss_state_doc(state)
 
     async def attack_boss(self, user_id: int, user_name: str, damage: int, is_ult: bool = False) -> BossAttackResult:
         """
         Нанести удар или ульту по боссу.
         """
-        async with self.redis.lock("boss:lock", timeout=5):
-            state = await self.get_state()
+        # Use a lock to prevent race conditions
+        async with self._lock:
+            state = await self._get_boss_state_doc()
             if not state:
                 return BossAttackResult(None, "dead", 0)
 
@@ -244,7 +311,8 @@ class BossService:
             # Check expiration
             if state.get("deadline") and time.time() > state["deadline"]:
                 state["is_expired"] = True
-                await self.save_state(state)
+                state["updated_at"] = datetime.now(timezone.utc)
+                await self._save_boss_state_doc(state)
                 return BossAttackResult(state, "expired", 0)
 
             now = time.time()
@@ -256,11 +324,13 @@ class BossService:
                 hit_count = user_stats.get("count", 0)
 
                 if hit_count < BOSS_ULT_REQUIRED_HITS:
+                    # We need to return an error; we'll raise ValueError as before but catch it?
+                    # The original raised ValueError. We'll do the same.
                     raise ValueError(f"Нужно еще {BOSS_ULT_REQUIRED_HITS - hit_count} ударов для ульты!")
 
                 # Check global ult cooldown
-                last_ult_raw = await self.redis.hget(self.ULT_COOLDOWN_KEY, user_key)
-                last_ult = float(last_ult_raw) if last_ult_raw else 0
+                last_ult_doc = await self.boss_ult_cooldowns.find_one({"user_id": user_key})
+                last_ult = last_ult_doc.get("last_ult", 0) if last_ult_doc else 0
 
                 if now - last_ult < BOSS_ULT_COOLDOWN_HOURS * 3600:
                     remaining = int(BOSS_ULT_COOLDOWN_HOURS * 3600 - (now - last_ult))
@@ -288,14 +358,14 @@ class BossService:
                 damage = int(damage * 2.0)
 
             # --- Global Combo Mechanic ---
-            combo_window = 10.0 # seconds
+            combo_window = 10.0  # seconds
             last_combo = state.get("last_combo_time", 0)
             combo_count = state.get("combo_count", 0)
 
             if now - last_combo < combo_window:
                 combo_count += 1
             else:
-                combo_count = 1 # Reset or Start new
+                combo_count = 1  # Reset or Start new
 
             # Cap combo multiplier at 2.0x (approx 50 hits)
             combo_multiplier = 1.0 + (min(combo_count, 50) * 0.02)
@@ -332,9 +402,9 @@ class BossService:
             # --- Weakness Mechanic (Trigger) ---
             # 5% chance to trigger weakness if not active
             if not is_weakness_active and not is_ult and not event:
-                 if random.random() < 0.05:
-                     state["weakness_until"] = now + 15.0
-                     event = "weakness_started"
+                if random.random() < 0.05:
+                    state["weakness_until"] = now + 15.0
+                    event = "weakness_started"
 
             # Record hit
             if user_key not in state["hits"]:
@@ -353,17 +423,21 @@ class BossService:
                 "name": user_name,
                 "dmg": actual_damage,
                 "is_ult": is_ult,
-                "crit": actual_damage > 18 and not is_ult, # Simple heuristic for crit
+                "crit": actual_damage > 18 and not is_ult,  # Simple heuristic for crit
                 "evaded": False,
                 "is_weakness": is_weakness_active
             }
             current_log = state.get("battle_log", [])
             current_log.append(log_entry)
-            state["battle_log"] = current_log[-6:] # Keep last 6
+            state["battle_log"] = current_log[-6:]  # Keep last 6
 
             # Update cooldowns
             if is_ult:
-                 await self.redis.hset(self.ULT_COOLDOWN_KEY, user_key, now)
+                await self.boss_ult_cooldowns.update_one(
+                    {"user_id": user_key},
+                    {"$set": {"last_ult": now}},
+                    upsert=True
+                )
             else:
                 state["cooldowns"][user_key] = now
 
@@ -373,7 +447,8 @@ class BossService:
                 state["is_dead"] = True
                 result_type = "killed"
 
-            await self.save_state(state)
+            state["updated_at"] = datetime.now(timezone.utc)
+            await self._save_boss_state_doc(state)
 
             return BossAttackResult(
                 state,
@@ -386,7 +461,7 @@ class BossService:
 
     async def get_leaderboard(self, limit: int = 3) -> list[dict]:
         """Получить топ дамагеров текущего босса."""
-        state = await self.get_state()
+        state = await self._get_boss_state_doc()
         if not state or not state.get("hits"):
             return []
 
@@ -394,7 +469,6 @@ class BossService:
         # Sort by damage desc
         sorted_hits = sorted(hits, key=lambda x: x.get("dmg", 0), reverse=True)
         return sorted_hits[:limit]
-
 
     async def get_boss_image(self, boss_id: str) -> str | None:
         """Получить путь к случайной картинке босса."""
@@ -419,8 +493,8 @@ class BossService:
     def get_hp_bar(self, current: int, maximum: int, length: int = 10) -> str:
         """Полоска HP."""
         if maximum <= 0:
-            return "⬛" * length
+            return "��⬛" * length
         percent = current / maximum
         filled = int(percent * length)
         filled = max(0, min(length, filled))
-        return "🟥" * filled + "⬛" * (length - filled)
+        return "���🟥" * filled + "��⬛" * (length - filled)

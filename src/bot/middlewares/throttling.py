@@ -9,7 +9,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import Message
 
 from src.core.constants import THROTTLE_RATE_LIMIT
-from src.infra.redis.throttling import ThrottleManager
+from src.services.throttle_service import ThrottleService
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 class ThrottlingMiddleware(BaseMiddleware):
     """Middleware для ограничения частоты команд."""
 
-    def __init__(self, throttle_manager: ThrottleManager):
-        self.throttle = throttle_manager
+    def __init__(self, throttle_service: ThrottleService):
+        self.throttle = throttle_service
 
     async def __call__(
         self,

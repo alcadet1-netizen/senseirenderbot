@@ -29,7 +29,9 @@ from src.bot.middlewares.user_activity import (
     format_number,
 )
 from src.core.container import Container
-from src.infra.redis.throttling import ThrottleManager
+# ThrottleManager replaced with MongoDB-based ThrottleService
+# For testing, we'll mock the container's throttle_service
+from src.core.constants import THROTTLE_RATE_LIMIT_MESSAGES
 
 
 # Тестовые данные
@@ -343,7 +345,7 @@ class TestEnhancedUserActivityMiddleware:
     
     def setup_method(self):
         """Настройка тестов."""
-        self.throttle_manager = MagicMock(spec=ThrottleManager)
+        self.throttle_manager = MagicMock()  # Will be used as container.throttle_service
         self.config = ActivityConfig()
         self.middleware = EnhancedUserActivityMiddleware(
             self.throttle_manager,
@@ -456,7 +458,7 @@ class TestEnhancedUserActivityMiddleware:
 async def test_integration():
     """Интеграционный тест middleware."""
     # Создаём полный стек
-    throttle_manager = MagicMock(spec=ThrottleManager)
+    throttle_manager = MagicMock()
     throttle_manager.throttle = AsyncMock(return_value=True)
     
     config = ActivityConfig(

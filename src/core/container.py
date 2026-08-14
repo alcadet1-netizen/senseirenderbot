@@ -1,13 +1,11 @@
 """
-🏗️ DI-контейнер приложения.
+���������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������🏗���������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������🏗���������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������� DI-контейнер приложения.
 """
 
 from dataclasses import dataclass, field
 from typing import Optional
 
-from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
+from src.infra.mongo.client import MongoClient
 from src.core.config import Settings
 
 
@@ -16,8 +14,7 @@ class Container:
     """DI-контейнер для сервисов."""
 
     settings: Settings
-    session_factory: async_sessionmaker[AsyncSession]
-    redis: Redis
+    mongo_client: MongoClient
 
     _user_service: Optional["UserService"] = field(default=None, init=False, repr=False)
     _economy_service: Optional["EconomyService"] = field(default=None, init=False, repr=False)
@@ -38,14 +35,12 @@ class Container:
     _referral_service: Optional["ReferralService"] = field(default=None, init=False, repr=False)
     _message_cleanup_service: Optional["MessageCleanupService"] = field(default=None, init=False, repr=False)
     _chat_activity_service: Optional["ChatActivityService"] = field(default=None, init=False, repr=False)
-    _boss_service: Optional["BossService"] = field(default=None, init=False, repr=False)
-    _xrocket_service: Optional["XRocketService"] = field(default=None, init=False, repr=False)
 
     @property
     def boss_service(self):
         if self._boss_service is None:
             from src.services.boss_service import BossService
-            self._boss_service = BossService(self.redis)
+            self._boss_service = BossService(self.mongo_client)
         return self._boss_service
 
     @property
@@ -59,35 +54,35 @@ class Container:
     def user_service(self):
         if self._user_service is None:
             from src.services.user_service import UserService
-            self._user_service = UserService(self.session_factory, self.redis)
+            self._user_service = UserService(self.mongo_client)
         return self._user_service
 
     @property
     def economy_service(self):
         if self._economy_service is None:
             from src.services.economy_service import EconomyService
-            self._economy_service = EconomyService(self.session_factory, self.redis)
+            self._economy_service = EconomyService(self.mongo_client)
         return self._economy_service
 
     @property
     def daily_service(self):
         if self._daily_service is None:
             from src.services.daily_service import DailyService
-            self._daily_service = DailyService(self.session_factory, self.redis)
+            self._daily_service = DailyService(self.mongo_client)
         return self._daily_service
 
     @property
     def exchange_service(self):
         if self._exchange_service is None:
             from src.services.exchange_service import ExchangeService
-            self._exchange_service = ExchangeService(self.session_factory)
+            self._exchange_service = ExchangeService(self.mongo_client)
         return self._exchange_service
 
     @property
     def achievement_service(self):
         if self._achievement_service is None:
             from src.services.achievement_service import AchievementService
-            self._achievement_service = AchievementService(self.session_factory)
+            self._achievement_service = AchievementService(self.mongo_client)
         return self._achievement_service
 
     @property
@@ -101,42 +96,42 @@ class Container:
     def lottery_service(self):
         if self._lottery_service is None:
             from src.services.lottery_service import LotteryService
-            self._lottery_service = LotteryService(self.session_factory)
+            self._lottery_service = LotteryService(self.mongo_client)
         return self._lottery_service
 
     @property
     def moderation_service(self):
         if self._moderation_service is None:
             from src.services.moderation_service import ModerationService
-            self._moderation_service = ModerationService(self.session_factory)
+            self._moderation_service = ModerationService(self.mongo_client)
         return self._moderation_service
 
     @property
     def broadcast_service(self):
         if self._broadcast_service is None:
             from src.services.broadcast_service import BroadcastService
-            self._broadcast_service = BroadcastService(self.session_factory)
+            self._broadcast_service = BroadcastService(self.mongo_client)
         return self._broadcast_service
 
     @property
     def crypto_service(self):
         if self._crypto_service is None:
             from src.services.crypto_service import CryptoService
-            self._crypto_service = CryptoService(self.settings, self.redis)
+            self._crypto_service = CryptoService(self.settings, self.mongo_client)
         return self._crypto_service
 
     @property
     def stats_service(self):
         if self._stats_service is None:
             from src.services.stats_service import StatsService
-            self._stats_service = StatsService(self.session_factory, self.redis)
+            self._stats_service = StatsService(self.mongo_client)
         return self._stats_service
 
     @property
     def quiz_service(self):
         if self._quiz_service is None:
             from src.services.quiz_service import QuizService
-            self._quiz_service = QuizService(self.session_factory, self.redis)
+            self._quiz_service = QuizService(self.mongo_client)
         return self._quiz_service
 
     @property
@@ -171,22 +166,45 @@ class Container:
     def referral_service(self):
         if self._referral_service is None:
             from src.services.referral_service import ReferralService
-            self._referral_service = ReferralService(self.session_factory, self.redis)
+            self._referral_service = ReferralService(self.mongo_client)
+            # Set the user_service to avoid circular dependency
+            self._referral_service.user_service = self.user_service
         return self._referral_service
 
     @property
     def message_cleanup_service(self):
         if self._message_cleanup_service is None:
             from src.services.message_cleanup_service import MessageCleanupService
-            self._message_cleanup_service = MessageCleanupService(self.redis)
+            self._message_cleanup_service = MessageCleanupService()
         return self._message_cleanup_service
 
     @property
     def chat_activity_service(self):
         if self._chat_activity_service is None:
             from src.services.chat_activity_service import ChatActivityService
-            self._chat_activity_service = ChatActivityService(self.redis)
+            self._chat_activity_service = ChatActivityService(self.mongo_client)
         return self._chat_activity_service
+
+    @property
+    def captcha_service(self):
+        if self._captcha_service is None:
+            from src.services.captcha_service import CaptchaService
+            self._captcha_service = CaptchaService(self.mongo_client)
+        return self._captcha_service
+
+    @property
+    def chat_settings_service(self):
+        if self._chat_settings_service is None:
+            from src.services.chat_settings_service import ChatSettingsService
+            self._chat_settings_service = ChatSettingsService(self.mongo_client)
+        return self._chat_settings_service
+
+    @property
+    def throttle_service(self):
+        if self._throttle_service is None:
+            from src.services.throttle_service import ThrottleService
+            self._throttle_service = ThrottleService(self.mongo_client)
+        return self._throttle_service
 
 
 # Type hints for lazy imports
@@ -203,6 +221,7 @@ if TYPE_CHECKING:
     from src.services.broadcast_service import BroadcastService
     from src.services.crypto_service import CryptoService
     from src.services.stats_service import StatsService
+    from src.services.quiz_service import QuizService
     from src.services.trade_service import TradeService
     from src.services.slots_service import SlotsService
     from src.services.duel_service import DuelService
@@ -211,3 +230,7 @@ if TYPE_CHECKING:
     from src.services.referral_service import ReferralService
     from src.services.message_cleanup_service import MessageCleanupService
     from src.services.chat_activity_service import ChatActivityService
+    from src.services.chat_settings_service import ChatSettingsService
+    from src.services.captcha_service import CaptchaService
+    from src.services.throttle_service import ThrottleService
+    from src.services.boss_service import BossService

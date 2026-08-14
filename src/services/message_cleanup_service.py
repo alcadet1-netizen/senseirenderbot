@@ -1,9 +1,6 @@
-from redis.asyncio import Redis
-
 class MessageCleanupService:
-    def __init__(self, redis: Redis):
-        self.redis = redis
-        self.ttl = 86400  # 24 hours
+    def __init__(self):
+        self.ttl = 86400  # 24 hours (unused)
 
     async def cleanup_previous(self, chat_id: int, user_id: int, key: str, bot):
         """

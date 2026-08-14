@@ -43,7 +43,7 @@ senseirenderbot/
 │   │   ├── db.py            # MongoDB initialization
 │   │   └── main.py          # Entry point
 │   ├── core/                # Core: config, DI container, providers
-│   ├── infra/               # Infrastructure layers (MongoDB, Redis adapter)
+│   ├── infra/               # Infrastructure layers (MongoDB)
 │   ├── services/            # Business logic (games, economy, etc.)
 │   ├── domain/              # Domain models and resources
 │   └── texts/               # Localizable strings and phrases

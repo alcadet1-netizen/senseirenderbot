@@ -9,9 +9,7 @@ services:
       - 8.8.8.8
       - 1.1.1.1
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
+      mongodb:
         condition: service_healthy
     volumes:
       - ./src:/app/src
@@ -19,45 +17,26 @@ services:
     networks:
       - sensei_network
 
-  postgres:
-    image: dockerhub.timeweb.cloud/library/postgres:16-alpine
-    container_name: sensei_postgres
+  mongodb:
+    image: dockerhub.timeweb.cloud/library/mongo:6-jammy
+    container_name: sensei_mongodb
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-sensei}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sensei_pass_2024}
-      POSTGRES_DB: ${POSTGRES_DB:-sensei_db}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-sensei}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mongodb_data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sensei -d sensei_db"]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 5s
       timeout: 5s
       retries: 5
     ports:
-      - "5432:5432"
-    networks:
-      - sensei_network
-
-  redis:
-    image: dockerhub.timeweb.cloud/library/redis:7-alpine
-    container_name: sensei_redis
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
+      - "27017:27017"
     networks:
       - sensei_network
 
 volumes:
-  postgres_data:
-  redis_data:
+  mongodb_data:
 
 networks:
   sensei_network:

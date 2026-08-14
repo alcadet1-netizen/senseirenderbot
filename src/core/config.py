@@ -1,5 +1,5 @@
 """
-🔧 Конфигурация приложения через Pydantic Settings v2.
+���������🔧 Конфигурация приложения через Pydantic Settings v2.
 """
 
 import os
@@ -13,10 +13,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """Главный класс настроек приложения."""
-    
+
     # PATHS
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
-    
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -29,19 +29,15 @@ class Settings(BaseSettings):
     main_chat_id: int = Field(default=0, alias="MAIN_CHAT_ID")
     proxy_url: str = Field(default="", alias="PROXY_URL")
 
-    # DATABASE
-    database_url: str = Field(
-        default="postgresql+asyncpg://postgres:postgres@localhost:5432/sensei_db",
-        alias="DATABASE_URL",
+    # MONGODB
+    mongo_uri: str = Field(
+        default="mongodb://localhost:27017/sensei",
+        alias="MONGO_URI",
     )
-    database_echo: bool = Field(default=False, alias="DATABASE_ECHO")
-
-    # REDIS
-    redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
 
     # CRYPTO API
     ton_api_key: str = Field(default="", alias="TON_API_KEY")
-    xrocket_pay_token: str = Field(default="4df79e3264ab62834a2be6c51", alias="XROCKET_PAY_TOKEN")
+    xrocket_pay_token: str = Field(default="", alias="XROCKET_PAY_TOKEN")
 
     # APP
     debug: bool = Field(default=False, alias="DEBUG")
@@ -72,6 +68,7 @@ class Settings(BaseSettings):
             return [int(x.strip()) for x in self.allowed_chats_str.split(",") if x.strip()]
         except ValueError:
             return []
+
 
     @property
     def admin_ids(self) -> List[int]:

@@ -1,111 +1,160 @@
 """
-🎰 Сервис лотереи.
+���������� Сервис лотереи.
 """
 
-from typing import List
+from typing import List, Dict, Optional
+import random
+from datetime import datetime, timezone
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from src.core.config import settings
+from src.infra.mongo.client import MongoClient
+import logging
 
-from src.domain.repositories import TicketRepository, UserRepository
-from src.infra.database.uow import UnitOfWork
+logger = logging.getLogger(__name__)
 
 
 class LotteryService:
     """Сервис для проведения розыгрышей."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
-        self.session_factory = session_factory
+    def __init__(self, mongo_client: MongoClient):
+        self.mongo_client = mongo_client
+        self.db = mongo_client.database
+        # Collections
+        self.tickets = self.db.tickets  # For ticket tracking
+        self.users = self.db.users
 
     async def run_lottery(self, winners_count: int) -> List[dict]:
         """Провести розыгрыш."""
-        uow = UnitOfWork(self.session_factory)
         winners = []
-        
-        async with uow:
-            ticket_repo = TicketRepository(uow.session)
-            
-            tickets = await ticket_repo.get_random_tickets_for_lottery(winners_count)
-            
-            for ticket in tickets:
-                ticket.is_burned = True
-                ticket.burn_reason = "lottery_win"
-                
-                user = ticket.user
-                
-                # Собираем данные для mention
-                username = user.username
-                first_name = user.first_name or ""
-                last_name = user.last_name or ""
-                full_name = f"{first_name} {last_name}".strip() or f"User {ticket.user_id}"
-                
-                winners.append({
-                    "user_id": ticket.user_id,
-                    "username": username,
-                    "full_name": full_name,
-                    "ticket_code": ticket.code,
-                })
-            
-            await uow.commit()
-        
+
+        # Get active (not burned) tickets
+        active_tickets_cursor = self.tickets.find({"burned": False})
+        active_tickets = await active_tickets_cursor.to_list(length=None)
+
+        if not active_tickets:
+            return winners
+
+        # Shuffle and pick winners
+        random.shuffle(active_tickets)
+        winner_tickets = active_tickets[:min(winners_count, len(active_tickets))]
+
+        for ticket_doc in winner_tickets:
+            # Mark ticket as burned
+            await self.tickets.update_one(
+                {"_id": ticket_doc["_id"]},
+                {"$set": {
+                    "burned": True,
+                    "burn_reason": "lottery_win",
+                    "burned_at": datetime.now(timezone.utc)
+                }}
+            )
+
+            # Get user info
+            user = await self.users.find_one({"id": ticket_doc["user_id"]})
+            if not user:
+                continue
+
+            username = user.get("username")
+            first_name = user.get("first_name", "")
+            last_name = user.get("last_name", "")
+            full_name = f"{first_name} {last_name}".strip() or f"User {ticket_doc['user_id']}"
+
+            winners.append({
+                "user_id": ticket_doc["user_id"],
+                "username": username,
+                "full_name": full_name,
+                "ticket_code": ticket_doc["code"],
+            })
+
         return winners
 
     async def admin_add_ticket(self, user_id: int, admin_id: int) -> dict:
         """Админ выдаёт билет пользователю."""
-        uow = UnitOfWork(self.session_factory)
-        
-        async with uow:
-            user_repo = UserRepository(uow.session)
-            ticket_repo = TicketRepository(uow.session)
-            
-            user = await user_repo.get_by_id(user_id)
-            if not user:
-                return {"success": False, "error": "User not found"}
-            
-            ticket = await ticket_repo.create(user.id)
-            
-            await uow.commit()
-            
-            return {
-                "success": True,
-                "user_id": user.id,
-                "username": user.username or user.first_name or f"User {user.id}",
-                "ticket_code": ticket.code,
-            }
+        # Check if user exists
+        user = await self.users.find_one({"id": user_id})
+        if not user:
+            return {"success": False, "error": "User not found"}
+
+        # Create ticket
+        last_ticket = await self.tickets.find_one(sort=[("_id", -1)])
+        next_id = (last_ticket.get("_id", 0) + 1) if last_ticket else 1
+
+        ticket_doc = {
+            "_id": next_id,
+            "user_id": user_id,
+            "code": f"TICKET-{next_id:08d}",  # Simple ticket code
+            "created_at": datetime.now(timezone.utc),
+            "burned": False
+        }
+        await self.tickets.insert_one(ticket_doc)
+
+        return {
+            "success": True,
+            "user_id": user.id,
+            "username": user.username or user.first_name or f"User {user.id}",
+            "ticket_code": ticket_doc["code"],
+        }
 
     async def admin_burn_user_tickets(self, user_id: int, admin_id: int) -> dict:
         """Админ сжигает все билеты пользователя."""
-        uow = UnitOfWork(self.session_factory)
-        
-        async with uow:
-            user_repo = UserRepository(uow.session)
-            ticket_repo = TicketRepository(uow.session)
-            
-            user = await user_repo.get_by_id(user_id)
-            if not user:
-                return {"success": False, "error": "User not found"}
-            
-            burned_count = await ticket_repo.burn_all_user_tickets(user.id, reason=f"admin_burn_by_{admin_id}")
-            
-            await uow.commit()
-            
-            return {
-                "success": True,
-                "user_id": user.id,
-                "username": user.username or user.first_name or f"User {user.id}",
-                "burned_count": burned_count
+        # Check if user exists
+        user = await self.users.find_one({"id": user_id})
+        if not user:
+            return {"success": False, "error": "User not found"}
+
+        # Burn all user's tickets
+        result = await self.tickets.update_many(
+            {
+                "user_id": user_id,
+                "burned": False
+            },
+            {
+                "$set": {
+                    "burned": True,
+                    "burn_reason": f"admin_burn_by_{admin_id}",
+                    "burned_at": datetime.now(timezone.utc)
+                }
             }
+        )
+
+        burned_count = result.modified_count
+
+        return {
+            "success": True,
+            "user_id": user.id,
+            "username": user.username or user.first_name or f"User {user.id}",
+            "burned_count": burned_count
+        }
 
     async def get_lottery_stats(self) -> dict:
         """Статистика для лотереи."""
-        uow = UnitOfWork(self.session_factory)
-        
-        async with uow:
-            ticket_repo = TicketRepository(uow.session)
-            
-            total_active = await ticket_repo.get_total_active_tickets()
-            top_holders = await ticket_repo.get_top_by_tickets(5)
-            
-            return {
-                "total_active_tickets": total_active,
-                "top_holders": top_holders,
-            }
+        # Total active (not burned) tickets
+        total_active = await self.tickets.count_documents({"burned": False})
+
+        # Top holders - users with most active tickets
+        pipeline = [
+            {"$match": {"burned": False}},
+            {"$group": {"_id": "$user_id", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 5}
+        ]
+        cursor = self.tickets.aggregate(pipeline)
+        top_holders_raw = await cursor.to_list(length=None)
+
+        # Get user info for top holders
+        top_holders = []
+        for holder in top_holders_raw:
+            user_id = holder["_id"]
+            count = holder["count"]
+            user = await self.users.find_one({"id": user_id})
+            username = user.get("username") if user else f"User {user_id}"
+            top_holders.append({
+                "user_id": user_id,
+                "username": username,
+                "ticket_count": count
+            })
+
+        return {
+            "total_active_tickets": total_active,
+            "top_holders": top_holders,
+        }

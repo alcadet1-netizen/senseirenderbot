@@ -53,7 +53,7 @@ async def _wait_for_captcha(bot, chat_id, user_id, message_id, container):
         await asyncio.sleep(20) # 20 секунд на решение
         
         # Проверяем, решена ли капча
-        is_solved = await container.redis.get(f"captcha:solved:{user_id}")
+        is_solved = await container.captcha_service.get_solved(user_id)
         if is_solved:
             return
             
@@ -83,8 +83,8 @@ async def _initiate_captcha(user, container: Container, event):
 
     # Проверка блокировки (чтобы не запускать дважды для одного входа)
     lock_key = f"captcha:lock:{event.chat.id}:{user.id}"
-    # Используем set nx=True для атомарной проверки
-    if not await container.redis.set(lock_key, "1", nx=True, ex=30):
+    # Используем captcha service для атомарной проверки
+    if not await container.captcha_service.set_lock(event.chat.id, user.id, 30):
         return
 
     logging.info(f"🔒 Initiating captcha for {user.id} in {event.chat.id}")
@@ -162,7 +162,7 @@ async def on_captcha_solve(query: CallbackQuery, container: Container):
         return
 
     # 1. Помечаем как решенную
-    await container.redis.set(f"captcha:solved:{target_user_id}", "1", ex=300)
+    await container.captcha_service.set_solved(target_user_id, 300)
     
     # 2. Разблокируем (Unmute) - возвращаем стандартные права
     try:
@@ -211,8 +211,8 @@ async def on_user_leave(event: ChatMemberUpdated, container: Container):
 
     # Проверяем настройки уведомлений (по умолчанию включены)
     key = f"chat:{event.chat.id}:exit_notifications"
-    enabled = await container.redis.get(key)
-    if enabled == b"0" or enabled == "0":
+    enabled = await container.chat_settings_service.get_setting(event.chat.id, key)
+    if enabled == "0":
         return
 
     # Указываем имя пользователя без тега
