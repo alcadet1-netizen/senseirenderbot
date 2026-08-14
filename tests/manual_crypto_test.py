@@ -14,13 +14,12 @@ except Exception as e:
 
 async def test_crypto_calc():
     sys.stderr.write("Testing CryptoService.get_calculator_message...\n")
-    
-    # Mock settings and redis
+
+    # Mock settings
     settings = MagicMock(spec=Settings)
     settings.ton_api_key = "dummy"
-    redis = AsyncMock()
-    
-    service = CryptoService(settings, redis)
+
+    service = CryptoService(settings)
     
     # Mock API
     service.api = AsyncMock()

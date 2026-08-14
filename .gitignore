@@ -38,3 +38,4 @@ Thumbs.db
 .auto-claude/
 .trae/
 
+# Byte-compiled / optimized / DLL files\n__pycache__/\n*.py[cod]\n*.class\n

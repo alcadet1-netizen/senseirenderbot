@@ -15,13 +15,8 @@ async def main():
     # Mock Settings
     settings = MagicMock(spec=Settings)
     settings.ton_api_key = "" # Empty key
-    
-    # Mock Redis
-    redis = MagicMock()
-    # Mock cache.get to return None so it fetches fresh data
-    redis.get = MagicMock(return_value=None)
-    
-    service = CryptoService(settings, redis)
+
+    service = CryptoService(settings)
     
     # Mock CacheManager.get to return None (async)
     async def mock_get(key):

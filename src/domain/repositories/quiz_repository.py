@@ -1,42 +1,45 @@
 from typing import List, Optional
-from sqlalchemy import select, func, delete
-from src.domain.repositories.base import BaseRepository
-from src.infra.database.models.quiz import QuizQuestion
+from motor.motor_asyncio import AsyncIOMotorCollection
+from bson import ObjectId
 
 
-class QuizRepository(BaseRepository[QuizQuestion, int]):
+class QuizRepository:
     """Репозиторий для вопросов викторины."""
-    
-    def __init__(self, session):
-        super().__init__(session, QuizQuestion)
+
+    def __init__(self, collection: AsyncIOMotorCollection):
+        self.collection = collection
 
     async def delete_questions(self, question_ids: List[int]):
         """Удалить список вопросов по ID."""
         if not question_ids:
             return
-        stmt = delete(self.model).where(self.model.id.in_(question_ids))
-        await self.session.execute(stmt)
+        await self.collection.delete_many({"id": {"$in": question_ids}})
 
-    async def get_random_question(self, exclude_ids: List[int] = None) -> Optional[QuizQuestion]:
+    async def get_random_question(self, exclude_ids: List[int] = None) -> Optional[dict]:
         """Получить случайный активный вопрос, исключая указанные ID."""
-        stmt = select(self.model).where(self.model.is_active == True)
-        
+        match = {"is_active": True}
         if exclude_ids:
-            stmt = stmt.where(self.model.id.not_in(exclude_ids))
-            
-        stmt = stmt.order_by(func.random()).limit(1)
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+            match["id"] = {"$nin": exclude_ids}
+        # Use aggregation with $sample for random
+        pipeline = [
+            {"$match": match},
+            {"$sample": {"size": 1}}
+        ]
+        cursor = self.collection.aggregate(pipeline)
+        result = await cursor.to_list(length=1)
+        return result[0] if result else None
 
-    async def add_question(self, question: str, answer: str, image_path: Optional[str] = None) -> QuizQuestion:
+    async def add_question(self, question: str, answer: str, image_path: Optional[str] = None) -> dict:
         """Добавить новый вопрос."""
-        q = QuizQuestion(
-            question_text=question,
-            answer=answer,
-            image_path=image_path,
-            is_active=True
-        )
-        self.session.add(q)
-        # Flush чтобы получить ID, но не коммитить (коммит в сервисе/UoW)
-        await self.session.flush() 
-        return q
+        # Determine next id
+        last = await self.collection.find_one(sort=[("id", -1)])
+        next_id = (last.get("id", 0) if last else 0) + 1
+        quiz_question = {
+            "id": next_id,
+            "question_text": question,
+            "answer": answer,
+            "image_path": image_path,
+            "is_active": True,
+        }
+        await self.collection.insert_one(quiz_question)
+        return quiz_question

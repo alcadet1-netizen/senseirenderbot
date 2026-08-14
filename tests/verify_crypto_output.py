@@ -17,10 +17,10 @@ async def main():
     from src.core import config
     settings = config.get_settings()
     
-    # Mock Redis
-    redis = MagicMock()
-    
-    service = CryptoService(settings, redis)
+    # Mock Settings (already loaded from .env)
+    # No need to mock redis as CryptoService doesn't use it directly
+
+    service = CryptoService(settings)
     
     # Bypass cache
     service.cache.get = AsyncMock(return_value=None)

@@ -74,6 +74,35 @@ class ChatActivityService:
                 logger.error(f"��❌ Error in chat activity monitor: {e}", exc_info=True)
                 await asyncio.sleep(60)  # Wait a minute before retrying on error
 
+    async def _send_reminder(self, bot: Bot, chat_id: int) -> bool:
+        """Send reminder with retry logic.
+
+        Returns True if message was sent successfully, False otherwise.
+        """
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                text = get_inactive_reminder()
+                await bot.send_message(chat_id, text, parse_mode="HTML")
+                logger.info(f"���💤 Sent inactivity reminder to {chat_id} (attempt {attempt + 1})")
+                return True
+            except Exception as e:
+                err_str = str(e).lower()
+                # If it's a fatal error (bot kicked, chat not found, forbidden), don't retry
+                if "kicked" in err_str or "chat not found" in err_str or "forbidden" in err_str:
+                    logger.warning(f"��❌ Bot kicked/blocked in {chat_id}. Removing from monitoring.")
+                    await self.chat_activities.delete_one({"chat_id": chat_id})
+                    return False
+
+                # For other errors, retry if we have attempts left
+                if attempt < max_retries - 1:  # Not the last attempt
+                    logger.warning(f"���⚠️ Attempt {attempt + 1} failed for chat {chat_id}: {e}. Retrying...")
+                    await asyncio.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                else:
+                    logger.error(f"��❌ Failed to send reminder to {chat_id} after {max_retries} attempts: {e}")
+
+        return False
+
     async def _check_chats(self, bot: Bot):
         """Проверяет чаты на неактивность."""
         current_time = int(time.time())
@@ -96,13 +125,12 @@ class ChatActivityService:
                     logger.info(f"���🗑��️ Removed private/channel {chat_id} from active chats monitoring")
                     continue
 
-                text = get_inactive_reminder()
-                await bot.send_message(chat_id, text, parse_mode="HTML")
-                logger.info(f"���💤 Sent inactivity reminder to {chat_id}")
-
-                # Update activity time to prevent spamming
-                # We consider sending the bot's reminder as "activity" so the next reminder comes in another hour
-                await self.update_activity(chat_id)
+                # Send reminder with retry logic
+                success = await self._send_reminder(bot, chat_id)
+                if success:
+                    # Update activity time to prevent spamming
+                    # We consider sending the bot's reminder as "activity" so the next reminder comes in another hour
+                    await self.update_activity(chat_id)
 
             except Exception as e:
                 err_str = str(e).lower()
@@ -111,7 +139,7 @@ class ChatActivityService:
                     await self.chat_activities.delete_one({"chat_id": chat_id})
                     continue
 
-                logger.error(f"��❌ Failed to send reminder to {chat_id}: {e}")
+                logger.error(f"��❌ Error checking chat {chat_id}: {e}")
 
     # Additional utility methods for compatibility
     async def get_chat_activity(self, chat_id: int) -> Optional[dict]:
