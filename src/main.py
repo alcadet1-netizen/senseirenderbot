@@ -1,5 +1,5 @@
 """
-���������������������🚀 Точка входа SENSEI ULTIMATE 2.1.
+🚀 Точка входа SENSEI ULTIMATE 2.1.
 """
 
 import asyncio
@@ -40,58 +40,58 @@ logger = logging.getLogger(__name__)
 async def setup_bot_commands(bot: Bot) -> None:
     """Установка команд бота."""
     commands = [
-        BotCommand(command="senseihelp", description="���📋 Помощь"),
-        BotCommand(command="mysensei", description="���👤 Мой профиль"),
-        BotCommand(command="senseitop", description="���🏆 Топ игроков"),
-        BotCommand(command="senseidaily", description="���🎁 Ежедневный бонус"),
-        BotCommand(command="senseiobmen", description="���💱 Обмен валют"),
-        BotCommand(command="senseiviktorina", description="���🎮 Викторина"),
+        BotCommand(command="senseihelp", description="📋 Помощь"),
+        BotCommand(command="mysensei", description="👤 Мой профиль"),
+        BotCommand(command="senseitop", description="🏆 Топ игроков"),
+        BotCommand(command="senseidaily", description="🎁 Ежедневный бонус"),
+        BotCommand(command="senseiobmen", description="💱 Обмен валют"),
+        BotCommand(command="senseiviktorina", description="🎮 Викторина"),
     ]
     await bot.set_my_commands(commands)
 
 
 async def on_startup(bot: Bot, container: Container) -> None:
     """Действия при запуске."""
-    logger.info("���� SENSEI ULTIMATE 2.1 starting...")
+    logger.info(" SENSEI ULTIMATE 2.1 starting...")
 
     # Подключаемся к MongoDB
     await container.mongo_client.connect()
-    logger.info("��✅ MongoDB connected")
+    logger.info("✅ MongoDB connected")
 
     # Заполняем достижения
     count = await container.achievement_service.seed_achievements()
     if count > 0:
-        logger.info(f"��✅ Seeded {count} achievements")
+        logger.info(f"✅ Seeded {count} achievements")
 
     # Загружаем кэш модерации (if needed)
     # TODO: implement muted users cache in MongoDB
-    logger.info("��✅ Moderation cache loaded (placeholder)")
+    logger.info("✅ Moderation cache loaded (placeholder)")
 
     # Запускаем мониторинг активности чатов
     await container.chat_activity_service.start_monitoring(bot)
-    logger.info("��✅ Chat activity monitoring started")
+    logger.info("✅ Chat activity monitoring started")
 
     # Устанавливаем команды
     await setup_bot_commands(bot)
-    logger.info("��✅ Bot commands set")
+    logger.info("✅ Bot commands set")
 
-    logger.info("���🚀 Bot started successfully!")
+    logger.info("🚀 Bot started successfully!")
 
 
 async def on_shutdown(bot: Bot, container: Container | None = None) -> None:
     """Действия при остановке."""
-    logger.info("���� Shutting down...")
+    logger.info(" Shutting down...")
 
     if container:
         # Возвращаем ставки из активных дуэлей
         await container.duel_service.shutdown()
-        logger.info("��✅ Active duels refunded")
+        logger.info("✅ Active duels refunded")
 
         # Отключаемся от MongoDB
         await container.mongo_client.close()
-        logger.info("��✅ MongoDB disconnected")
+        logger.info("✅ MongoDB disconnected")
 
-    logger.info("���👋 Goodbye!")
+    logger.info("👋 Goodbye!")
 
 
 async def main() -> None:
@@ -108,6 +108,14 @@ async def main() -> None:
         settings=settings,
         mongo_client=mongo_client,
     )
+
+    # Start web server for health checks
+    app = web.Application()
+    app.router.add_get('/health', lambda request: web.Response(text="OK"))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 10000)
+    await site.start()
 
     # Регистрируем middleware для сообщений
     dp.message.middleware(LoggingMiddleware())
@@ -140,13 +148,14 @@ async def main() -> None:
 
     # Запускаем polling
     try:
-        logger.info("���🔄 Starting polling...")
+        logger.info("🔄 Starting polling...")
         await dp.start_polling(
             bot,
             allowed_updates=dp.resolve_used_update_types(),
             close_bot_session=True,
         )
     finally:
+        await runner.cleanup()
         await on_shutdown(bot, container)
 
 
