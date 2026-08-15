@@ -22,7 +22,15 @@ class MongoClient:
             if settings.mongo_db:
                 self._db = self._client[settings.mongo_db]
             else:
-                self._db = self._client.get_default_database()
+                # Fallback to database name from URI if available, otherwise raise error
+                # Parse database name from URI if present (mongodb://host:port/dbname)
+                from urllib.parse import urlparse
+                parsed = urlparse(settings.mongo_uri)
+                db_name = parsed.path.lstrip('/')
+                if db_name:
+                    self._db = self._client[db_name]
+                else:
+                    self._db = self._client.get_default_database()
             # Optionally ping to verify connection
             await self._db.command("ping")
 
