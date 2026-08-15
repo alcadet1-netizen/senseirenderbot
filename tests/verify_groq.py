@@ -12,35 +12,35 @@ from src.services.digest_service import DigestService
 
 async def main():
     print("Testing Groq Configuration...")
-    
+
     # Reload settings to pick up .env changes
     from src.core import config
     import importlib
     importlib.reload(config)
     settings = config.get_settings()
-    
+
     print(f"Groq API Key present: {'Yes' if settings.groq_api_key else 'No'}")
     if settings.groq_api_key:
-        print("✅ API Key is set.")
+        print("API Key is set.")
     else:
-        print("❌ API Key is not set.")
+        print("API Key is not set.")
 
     factory = AIProviderFactory(settings)
     print(f"Active Provider: {factory.active_provider}")
     
     if factory.active_provider == "groq":
-        print("✅ Active provider is Groq.")
+        print("[OK] Active provider is Groq.")
     else:
-        print(f"❌ Active provider is {factory.active_provider}")
+        print(f"[FAIL] Active provider is {factory.active_provider}")
 
     provider = factory.get_provider()
     print(f"Provider URL: {provider.url}")
     print(f"Provider Model: {provider.model}")
-    
+
     if "groq.com" in provider.url:
-        print("✅ URL is correct.")
+        print("[OK] URL is correct.")
     else:
-        print("❌ URL is incorrect.")
+        print("[FAIL] URL is incorrect.")
 
     # Test DigestService limit change
     print("\nTesting DigestService limit...")
@@ -80,9 +80,9 @@ async def main():
     print(f"format_for_llm called with limit: {args[1]}")
     
     if args[1] == 500:
-        print("✅ limit is 500.")
+        print("[OK] limit is 500.")
     else:
-        print(f"❌ limit is {args[1]}.")
+        print(f"[FAIL] limit is {args[1]}.")
 
 if __name__ == "__main__":
     asyncio.run(main())
