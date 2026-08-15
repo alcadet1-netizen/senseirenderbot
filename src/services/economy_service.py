@@ -13,6 +13,7 @@ from src.core.constants import (
     MESSAGES_PER_TICKET,
     XP_PER_MESSAGE,
     KATANA_UPGRADE_COST,
+    KATANA_UPGRADE_COST_TABLE,
     KATANA_UPGRADE_COOLDOWN_HOURS,
     KATANA_WIN_CHANCE,
 )
@@ -52,6 +53,14 @@ class EconomyService:
         if key not in self._locks:
             self._locks[key] = asyncio.Lock()
         return self._locks[key]
+
+    def _get_katana_upgrade_cost(self, katana_length: float) -> float:
+        """Получить стоимость апгрейда катаны в зависимости от её длины."""
+        for max_length, cost in KATANA_UPGRADE_COST_TABLE:
+            if katana_length < max_length:
+                return cost
+        # Если длина больше всех порогов, возвращаем последнюю стоимость
+        return KATANA_UPGRADE_COST_TABLE[-1][1]
 
     def _calculate_halving_multiplier(self, total_in_circulation: float) -> float:
         """Рассчитать множитель халвинга."""
@@ -314,7 +323,16 @@ class EconomyService:
         lock_key = f"katana_up:{user_id}"
         lock = self._get_lock(lock_key)
         async with lock:
-            cost = KATANA_UPGRADE_COST
+            # Get user to determine katana length for dynamic cost
+            user = await self.users.find_one({"id": user_id})
+            if not user:
+                raise UserNotFoundError(user_id)
+            if not user.get("has_katana", False):
+                raise NoKatanaError()
+
+            # Calculate dynamic cost based on katana length
+            katana_length = user.get("katana_length", 0.0)
+            cost = self._get_katana_upgrade_cost(katana_length)
             # Get user
             user = await self.users.find_one({"id": user_id})
             if not user:
