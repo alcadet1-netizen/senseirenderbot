@@ -127,8 +127,8 @@ async def main() -> None:
     dp.message.outer_middleware(DependencyMiddleware(container))
     dp.message.middleware(ModerationMiddleware())
     dp.message.middleware(SubscriptionMiddleware())
-    dp.message.middleware(ThrottlingMiddleware(container))  # TODO: adjust
-    dp.message.middleware(UserActivityMiddleware(container))  # TODO: adjust
+    dp.message.middleware(ThrottlingMiddleware(container.throttle_service))  # Fixed: pass throttle service
+    dp.message.middleware(UserActivityMiddleware(container))
     dp.message.middleware(ChatActivityMiddleware())
     dp.message.middleware(DigestMiddleware(container))
     dp.message.middleware(CommandCleanupMiddleware())
