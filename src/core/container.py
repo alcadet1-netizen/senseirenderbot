@@ -35,6 +35,7 @@ class Container:
     _referral_service: Optional["ReferralService"] = field(default=None, init=False, repr=False)
     _message_cleanup_service: Optional["MessageCleanupService"] = field(default=None, init=False, repr=False)
     _chat_activity_service: Optional["ChatActivityService"] = field(default=None, init=False, repr=False)
+    _throttle_service: Optional["ThrottleService"] = field(default=None, init=False, repr=False)
 
     @property
     def boss_service(self):

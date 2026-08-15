@@ -102,6 +102,9 @@ async def main() -> None:
 
     # Создаём MongoDB клиент
     mongo_client = MongoClient()
+    # Подключаемся к MongoDB
+    await mongo_client.connect()
+    logger.info("✅ MongoDB connected")
 
     # Создаём контейнер
     container = Container(
