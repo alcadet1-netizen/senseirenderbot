@@ -2,7 +2,7 @@
 🏆 Сервис достижений.
 """
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from src.core.config import settings
 from src.core.constants import ACHIEVEMENTS
