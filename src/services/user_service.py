@@ -43,24 +43,24 @@ class UserService:
             if await self.achievements.find_one({"user_id": user_id, "achievement_id": "duel_master"}):
                 role = "Ронин"
 
-            level = self.level_service.get_level(user["xp"])
+            level = self.level_service.get_level(user.get("xp", 0))
             level_name = self.level_service.get_level_name(level)
             xp_next = self.level_service.get_xp_for_next_level(level)
 
             return {
-                "id": user["id"],
+                "id": user.get("id"),
                 "username": user.get("username"),
                 "first_name": user.get("first_name", ""),
                 "last_name": user.get("last_name"),
-                "xp": user["xp"],
+                "xp": user.get("xp", 0),
                 "level": level,
                 "level_name": level_name,
                 "xp_next": xp_next,
-                "coins": user["coins"],
+                "coins": user.get("coins", 0.0),
                 "tickets": tickets_count,
-                "messages": user["messages_count"],
-                "streak": user["daily_streak"],
-                "has_katana": user["has_katana"],
+                "messages": user.get("messages_count", 0),
+                "streak": user.get("daily_streak", 0),
+                "has_katana": user.get("has_katana", False),
                 "katana_length": user.get("katana_length", 0.0),
                 "achievements_count": achievements_count,
                 "wins": user.get("wins", 0),

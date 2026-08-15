@@ -37,3 +37,8 @@ class ThrottleService:
             return True  # Вставка успешна -> не троттлится
         except DuplicateKeyError:
             return False  # Дублирование ключа -> троттлится
+        except Exception as e:
+            # В случае любой другой ошибки (например, проблемы с соединением) логируем и разрешаем операцию
+            # чтобы не блокировать пользователя из-за технических проблем
+            logger.error(f"Error in throttle service for key {doc_id}: {e}")
+            return True
