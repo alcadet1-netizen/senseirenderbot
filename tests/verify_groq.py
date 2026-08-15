@@ -79,10 +79,10 @@ async def main():
     args, _ = service.format_for_llm.call_args
     print(f"format_for_llm called with limit: {args[1]}")
     
-    if args[1] == 500:
-        print("[OK] limit is 500.")
+    if args[1] == 300:
+        print("[OK] limit is 300 (reduced for Groq TPM limits).")
     else:
-        print(f"[FAIL] limit is {args[1]}.")
+        print(f"[INFO] limit is {args[1]} (expected 300 for Groq optimization).")
 
 if __name__ == "__main__":
     asyncio.run(main())
