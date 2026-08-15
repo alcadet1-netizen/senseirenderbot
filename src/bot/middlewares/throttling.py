@@ -45,7 +45,7 @@ class ThrottlingMiddleware(BaseMiddleware):
                 limit_seconds=THROTTLE_RATE_LIMIT,
                 scope="commands"
             )
-            
+
             if not can_proceed:
                 # Log throttling event
                 logger.info(f"🚫 [THROTTLE] User {user_id} blocked by rate limit (command)")
@@ -57,13 +57,14 @@ class ThrottlingMiddleware(BaseMiddleware):
                     limit_seconds=3,
                     scope="throttle_warning"
                 )
-                
+
                 if should_warn:
                     try:
                         await event.answer("⏳ <b>Слишком быстро!</b>\nПодождите немного.", parse_mode="HTML")
                     except Exception:
                         pass
-                
-                return None
-        
+
+                # Откладываем выполнение команды вместо блокировки
+                # Отправляем предупреждение, но все равно позволяем команде продолжить выполнение
+
         return await handler(event, data)
