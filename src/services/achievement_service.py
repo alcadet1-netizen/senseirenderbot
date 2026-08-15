@@ -67,7 +67,8 @@ class AchievementService:
     async def check_and_unlock_achievements(
         self,
         user_id: int,
-        force_check: List[str] = None
+        force_check: List[str] = None,
+        context: Dict[str, Any] = None
     ) -> List[str]:
         """Проверить и разблокировать новые достижения для пользователя.
         Возвращает список newly unlocked achievement IDs.
@@ -103,6 +104,8 @@ class AchievementService:
                                     "created_at": datetime.now(timezone.utc),
                                 }
                                 await self.tx_repo.add(tx_doc)
+        # TODO: Implement regular achievement checking based on user stats and context
+        # For now, we only process force_check achievements
         return newly_unlocked
 
     async def get_user_achievements(self, user_id: int) -> List[Dict]:

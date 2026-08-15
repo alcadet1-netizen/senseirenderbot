@@ -87,11 +87,12 @@ class DailyService:
                 return {"success": False, "error": "banned"}
 
             today = datetime.utcnow().date()
+            start_of_day = datetime.combine(today, datetime.min.time())
 
             # Check if already claimed today
             existing_claim = await self.daily_claims.find_one({
                 "user_id": user_id,
-                "claim_date": today
+                "claim_date": start_of_day
             })
 
             if existing_claim:
@@ -185,7 +186,7 @@ class DailyService:
             # Create daily claim record
             claim_doc = {
                 "user_id": user_id,
-                "claim_date": today,
+                "claim_date": start_of_day,
                 "xp_received": total_xp,
                 "coins_received": int(total_coins),
                 "streak_at_claim": new_streak,
@@ -207,10 +208,11 @@ class DailyService:
     async def can_claim(self, user_id: int) -> Tuple[bool, Optional[str]]:
         """Проверить, может ли пользователь получить бонус."""
         today = datetime.utcnow().date()
+        start_of_day = datetime.combine(today, datetime.min.time())
 
         existing_claim = await self.daily_claims.find_one({
             "user_id": user_id,
-            "claim_date": today
+            "claim_date": start_of_day
         })
 
         if existing_claim:
