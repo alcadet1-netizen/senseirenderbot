@@ -19,7 +19,10 @@ class MongoClient:
         """Connect to MongoDB."""
         if self._client is None:
             self._client = AsyncIOMotorClient(settings.mongo_uri)
-            self._db = self._client.get_default_database()
+            if settings.mongo_db:
+                self._db = self._client[settings.mongo_db]
+            else:
+                self._db = self._client.get_default_database()
             # Optionally ping to verify connection
             await self._db.command("ping")
 

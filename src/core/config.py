@@ -34,6 +34,7 @@ class Settings(BaseSettings):
         default="mongodb://localhost:27017/sensei",
         alias="MONGO_URI",
     )
+    mongo_db: str = Field(default="", alias="MONGO_DB")
 
     # CRYPTO API
     ton_api_key: str = Field(default="", alias="TON_API_KEY")
