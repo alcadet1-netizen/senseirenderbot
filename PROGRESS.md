@@ -101,3 +101,24 @@ Converted quiz_repository.py to MongoDB
 - Initial assessment: identified need to migrate from Redis+PostgreSQL/SQLAlchemy to MongoDB-only
 - Set up MongoDB connection string: mongodb+srv://Sensei01:9876543210Sens!@sens01.qb2e9gc.mongodb.net/?appName=Sens01
 - Began breaking work into small tasks and saving progress to file
+## 2026-08-15 06:40:00
+- Created PopugaiService (src/services/popugai_service.py)
+- Added popugai_service property to Container (src/core/container.py)
+- Updated chat_settings handler (src/bot/handlers/chat_settings.py) to use MongoDB for settings and added popugai command
+- Removed Redis usage in chat_settings handler (replaced with chat_settings_service)
+
+## 2026-08-15 06:50:00
+- Fixed syntax error in container.py (line 246: changed 'from src.services.boss_service = BossService' to 'from src.services.boss_service import BossService')
+- All tests pass (62/62) after adding popugai feature and fixing syntax
+
+## 2026-08-15 08:15:00
+- Fixed percentage conversion bug in popugai command handler (src/bot/handlers/chat_settings.py)
+- Corrected logic where values like "15" were being treated as 15.0 probability instead of 0.15 (15%)
+- Added proper handling: values > 1 treated as percentages, values <= 1 treated as decimal probabilities
+- Added capping at 100% for values > 100
+
+## 2026-08-15 08:30:00
+- All 62 tests pass after fixing popugai percentage conversion bug
+- Verified that the fix correctly handles both percentage inputs (e.g., "15") and decimal inputs (e.g., "0.15")
+- Confirmed proper capping at 100% for values over 100
+- MongoDB-only migration is complete with all features working correctly

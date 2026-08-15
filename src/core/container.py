@@ -36,6 +36,7 @@ class Container:
     _message_cleanup_service: Optional["MessageCleanupService"] = field(default=None, init=False, repr=False)
     _chat_activity_service: Optional["ChatActivityService"] = field(default=None, init=False, repr=False)
     _throttle_service: Optional["ThrottleService"] = field(default=None, init=False, repr=False)
+    _popugai_service: Optional["PopugaiService"] = field(default=None, init=False, repr=False)
 
     @property
     def boss_service(self):
@@ -207,6 +208,13 @@ class Container:
             self._throttle_service = ThrottleService(self.mongo_client)
         return self._throttle_service
 
+    @property
+    def popugai_service(self):
+        if self._popugai_service is None:
+            from src.services.popugai_service import PopugaiService
+            self._popugai_service = PopugaiService(self.mongo_client)
+        return self._popugai_service
+
 
 # Type hints for lazy imports
 from typing import TYPE_CHECKING
@@ -234,4 +242,5 @@ if TYPE_CHECKING:
     from src.services.chat_settings_service import ChatSettingsService
     from src.services.captcha_service import CaptchaService
     from src.services.throttle_service import ThrottleService
+    from src.services.popugai_service import PopugaiService
     from src.services.boss_service import BossService
