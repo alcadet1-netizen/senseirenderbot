@@ -16,7 +16,8 @@ class ThrottleService:
         self.collection = self.db.throttle
         # Ensure indexes
         # Unique index on _id to prevent duplicate inserts within the same window
-        self.collection.create_index([("_id", 1)], unique=True)
+        # Note: _id is already unique, so we just ensure the index exists.
+        self.collection.create_index([("_id", 1)])
         # TTL index on expiry to automatically remove old records
         self.collection.create_index([("expiry", 1)], expireAfterSeconds=0)
 
