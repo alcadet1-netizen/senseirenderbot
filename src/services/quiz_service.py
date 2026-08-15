@@ -1,5 +1,5 @@
 """
-���������������������🧠 Сервис викторины.
+🧠 Сервис викторины.
 """
 
 import asyncio
@@ -63,7 +63,7 @@ class QuizService:
                     question_data = await self.get_next_question(chat_id)
                     if not question_data:
                         summary = await self.generate_summary(chat_id)
-                        await bot.send_message(chat_id, f"���������🏁 Спасибо всем за игру, вопросы кончились!\n\n{summary}", parse_mode="HTML")
+                        await bot.send_message(chat_id, f"🏁 Спасибо всем за игру, вопросы кончились!\n\n{summary}", parse_mode="HTML")
                         await self.stop_quiz(chat_id)
                         break
 
@@ -85,7 +85,7 @@ class QuizService:
             except Exception as e:
                 logger.error(f"Quiz error: {e}")
                 try:
-                    await bot.send_message(chat_id, "������⚠������️ Ошибка викторины.")
+                    await bot.send_message(chat_id, "⚠️ Ошибка викторины.")
                 except:
                     pass  # Bot might not be available
                 await self.stop_quiz(chat_id)
@@ -100,7 +100,7 @@ class QuizService:
         w = Visuals.FRAME_W_MENU
         lines = [
             Visuals.frame_top_left(w),
-            Visuals.frame_line_left(f"������❓ Вопрос #{round_num}", w),
+            Visuals.frame_line_left(f"❓ Вопрос #{round_num}", w),
             Visuals.frame_separator_left(w),
         ]
 

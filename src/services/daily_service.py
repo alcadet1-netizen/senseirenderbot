@@ -1,5 +1,5 @@
 """
-���📅 Сервис ежедневных бонусов.
+📅 Сервис ежедневных бонусов.
 """
 
 from datetime import date, datetime, timedelta, timezone

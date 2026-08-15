@@ -1,5 +1,5 @@
 """
-���������🔗 Сервис реферальной программы.
+🔗 Сервис реферальной программы.
 """
 
 import logging
@@ -32,11 +32,11 @@ class ReferralService:
 
         # Extract referrer ID from code
         if not referrer_code or not referrer_code.startswith("ref_"):
-            return False, "��❌ Неверный код"
+            return False, "❌ Неверный код"
         try:
             referrer_id = int(referrer_code[4:])
         except ValueError:
-            return False, "��❌ Неверный код"
+            return False, "❌ Неверный код"
 
         # Use the user_service to process the referral
         result = await self.user_service.process_referral(referred_id, referrer_id)
@@ -46,10 +46,10 @@ class ReferralService:
             referrer_reward = result.get("referrer_reward", {})
             coins = referrer_reward.get("coins", 0)
             xp = referrer_reward.get("xp", 0)
-            return True, f"���🎉 Бонус: +{coins} монет, +{xp} XP!"
+            return True, f"🎉 Бонус: +{coins} монет, +{xp} XP!"
         else:
             error = result.get("error", "Unknown error")
-            return False, f"��❌ {error}"
+            return False, f"❌ {error}"
 
     # We'll implement other methods as needed, but for now we stub them out
     async def get_stats(self, user_id: int):

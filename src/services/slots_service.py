@@ -1,5 +1,5 @@
 """
-���������������������������������������������������������🎰 Сервис слотов.
+🎰 Сервис слотов.
 """
 
 import random
@@ -91,14 +91,14 @@ class SlotsService:
             )
 
             # 3. Determine outcome
-            symbols = ["���🍒", "���🍋", "���🍊", "���💎", "��⭐", "7��️��⃣"]
+            symbols = ["🍒", "🍋", "🍊", "💎", "⭐", "7️⃣"]
             multipliers = {
-                "���🍒": 3,
-                "���🍋": 4,
-                "���🍊": 5,
-                "���💎": 10,
-                "��⭐": 15,
-                "7��️��⃣": 20
+                "🍒": 3,
+                "🍋": 4,
+                "🍊": 5,
+                "💎": 10,
+                "⭐": 15,
+                "7️⃣": 20
             }
 
             # Chances
@@ -113,13 +113,13 @@ class SlotsService:
 
             if r < JACKPOT_CHANCE:
                 # Jackpot 777
-                winning_symbol = "7��️��⃣"
+                winning_symbol = "7️⃣"
                 result_symbols = [winning_symbol, winning_symbol, winning_symbol]
                 is_win = True
                 prize = bet_amount * multipliers[winning_symbol]
             elif r < WIN_CHANCE:
                 # Win (3 identical non-777)
-                winning_symbol = random.choice([s for s in symbols if s != "7��️��⃣"])
+                winning_symbol = random.choice([s for s in symbols if s != "7️⃣"])
                 result_symbols = [winning_symbol, winning_symbol, winning_symbol]
                 is_win = True
                 prize = bet_amount * multipliers.get(winning_symbol, 3)

@@ -1,5 +1,5 @@
 """
-���������🔧 Конфигурация приложения через Pydantic Settings v2.
+🔧 Конфигурация приложения через Pydantic Settings v2.
 """
 
 import os

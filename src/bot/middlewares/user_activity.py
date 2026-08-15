@@ -1,5 +1,5 @@
 """
-���📊 Middleware для отслеживания активности пользователей.
+📊 Middleware для отслеживания активности пользователей.
 Модуль предоставляет production-ready middleware для:
 - Отслеживания и награждения активности
 - Уведомлений о достижениях и уровнях
@@ -110,7 +110,7 @@ class AchievementData:
     xp_reward: int
     coin_reward: int
     rarity: str = "common"
-    icon: str = "���🏆"
+    icon: str = "🏆"
 
 
 @dataclass(slots=True)
@@ -231,7 +231,7 @@ class MessageBuilder:
 
     Example:
         >>> msg = (MessageBuilder()
-        ...     .title("���🏆 Достижение!")
+        ...     .title("🏆 Достижение!")
         ...     .separator()
         ...     .mention(user)
         ...     .blank_line()
@@ -291,7 +291,7 @@ class MessageBuilder:
         self._lines.append(f"{prefix}{label}: <b>{value}</b>")
         return self
 
-    def mention(self, user: User, prefix: str = "���👤") -> "MessageBuilder":
+    def mention(self, user: User, prefix: str = "👤") -> "MessageBuilder":
         """Добавляет упоминание пользователя."""
         mention_text = get_user_mention(user)
         self._lines.append(f"{prefix} {mention_text}")
@@ -300,9 +300,9 @@ class MessageBuilder:
     def reward(self, xp: int = 0, coins: int = 0) -> "MessageBuilder":
         """Добавляет строки с наградами."""
         if xp > 0:
-            self._lines.append(f"��⚡ +{format_number(xp)} XP")
+            self._lines.append(f"⚡ +{format_number(xp)} XP")
         if coins > 0:
-            self._lines.append(f"���💰 +{format_number(coins)} монет")
+            self._lines.append(f"💰 +{format_number(coins)} монет")
         return self
 
     def level_change(
@@ -312,8 +312,8 @@ class MessageBuilder:
         level_name: str
     ) -> "MessageBuilder":
         """Добавляет информацию о смене уровня."""
-        self._lines.append(f"���📊 Уровень: <b>{old_level}</b> → <b>{new_level}</b>")
-        self._lines.append(f"���🏅 Ранг: <i>{level_name}</i>")
+        self._lines.append(f"📊 Уровень: <b>{old_level}</b> → <b>{new_level}</b>")
+        self._lines.append(f"🏅 Ранг: <i>{level_name}</i>")
         return self
 
     def build(self) -> str:
@@ -326,19 +326,19 @@ class DefaultNotificationFormatter:
 
     # Эмодзи для разных редкостей достижений
     RARITY_EMOJI: Final[Dict[str, str]] = {
-        "common": "���🥉",
-        "uncommon": "���🥈",
-        "rare": "���🥇",
-        "epic": "���💎",
-        "legendary": "���👑",
+        "common": "🥉",
+        "uncommon": "🥈",
+        "rare": "🥇",
+        "epic": "💎",
+        "legendary": "👑",
     }
 
     # Эмодзи для уровней
     LEVEL_EMOJI: Final[Dict[int, str]] = {
-        10: "���🌟",
-        25: "��⭐",
-        50: "���💫",
-        100: "���🌠",
+        10: "🌟",
+        25: "⭐",
+        50: "💫",
+        100: "🌠",
     }
 
     def format_level_up(self, user: User, data: LevelUpData) -> str:
@@ -352,13 +352,13 @@ class DefaultNotificationFormatter:
 
     def format_achievement(self, user: User, data: AchievementData) -> str:
         """Форматирует уведомление о достижении."""
-        emoji = self.RARITY_EMOJI.get(data.rarity, "���🏆")
+        emoji = self.RARITY_EMOJI.get(data.rarity, "🏆")
 
         rewards_list = []
         if data.xp_reward > 0:
             rewards_list.append(f"+{data.xp_reward} XP")
         if data.coin_reward > 0:
-            rewards_list.append(f"+{data.coin_reward} �� 💰")
+            rewards_list.append(f"+{data.coin_reward}  💰")
 
         rewards_str = " ".join(rewards_list)
 
@@ -379,12 +379,12 @@ class DefaultNotificationFormatter:
         """Форматирует уведомление о новом билете."""
         builder = (
             MessageBuilder()
-            .title("���🎫 Новый билет!")
+            .title("🎫 Новый билет!")
             .separator()
             .blank_line()
             .mention(user)
             .blank_line()
-            .field("Код", "", "���🎟")
+            .field("Код", "", "🎟")
         )
 
         # Код билета отдельно для копирования
@@ -402,7 +402,7 @@ class DefaultNotificationFormatter:
         ):
             if level >= threshold:
                 return emoji
-        return "��⬆��️"
+        return "⬆️"
 
 
 class TelegramNotificationSender:
@@ -731,7 +731,7 @@ class ActivityProcessor:
                     xp_reward=ach.get("xp_reward", 0),
                     coin_reward=ach.get("coin_reward", 0),
                     rarity=ach.get("rarity", "common"),
-                    icon=ach.get("icon", "���🏆"),
+                    icon=ach.get("icon", "🏆"),
                 )
 
                 text = self._formatter.format_achievement(user, achievement_data)

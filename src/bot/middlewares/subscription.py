@@ -1,5 +1,5 @@
 """
-���������🔒 Middleware для проверки подписки на канал.
+🔒 Middleware для проверки подписки на канал.
 """
 
 from typing import Any, Awaitable, Callable, Dict
@@ -105,11 +105,11 @@ class SubscriptionMiddleware(BaseMiddleware):
 
         # Если не подписан
         await message.answer(
-            "���������🔒 <b>Доступ ограничен!</b>\n\n"
+            "🔒 <b>Доступ ограничен!</b>\n\n"
             "Для использования бота необходимо подписаться на наш канал:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="���������👉 Подписаться", url=self.channel_url)],
-                [InlineKeyboardButton(text="������✅ Я подписался", callback_data="check_sub")]
+                [InlineKeyboardButton(text="👉 Подписаться", url=self.channel_url)],
+                [InlineKeyboardButton(text="✅ Я подписался", callback_data="check_sub")]
             ]),
             parse_mode="HTML"
         )

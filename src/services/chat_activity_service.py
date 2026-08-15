@@ -1,5 +1,5 @@
 """
-�������������������������������������������������💤 Сервис мониторинга активности чатов.
+💤 Сервис мониторинга активности чатов.
 """
 
 import asyncio
@@ -49,7 +49,7 @@ class ChatActivityService:
             return
 
         self._monitoring_task = asyncio.create_task(self._monitor_loop(bot))
-        logger.info("���💤 Chat activity monitoring started")
+        logger.info("💤 Chat activity monitoring started")
 
     async def stop_monitoring(self):
         """Останавливает мониторинг."""
@@ -60,7 +60,7 @@ class ChatActivityService:
             except asyncio.CancelledError:
                 pass
             self._monitoring_task = None
-            logger.info("���💤 Chat activity monitoring stopped")
+            logger.info("💤 Chat activity monitoring stopped")
 
     async def _monitor_loop(self, bot: Bot):
         """Цикл мониторинга."""
@@ -71,7 +71,7 @@ class ChatActivityService:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"��❌ Error in chat activity monitor: {e}", exc_info=True)
+                logger.error(f"❌ Error in chat activity monitor: {e}", exc_info=True)
                 await asyncio.sleep(60)  # Wait a minute before retrying on error
 
     async def _send_reminder(self, bot: Bot, chat_id: int) -> bool:
@@ -84,22 +84,22 @@ class ChatActivityService:
             try:
                 text = get_inactive_reminder()
                 await bot.send_message(chat_id, text, parse_mode="HTML")
-                logger.info(f"���💤 Sent inactivity reminder to {chat_id} (attempt {attempt + 1})")
+                logger.info(f"💤 Sent inactivity reminder to {chat_id} (attempt {attempt + 1})")
                 return True
             except Exception as e:
                 err_str = str(e).lower()
                 # If it's a fatal error (bot kicked, chat not found, forbidden), don't retry
                 if "kicked" in err_str or "chat not found" in err_str or "forbidden" in err_str:
-                    logger.warning(f"��❌ Bot kicked/blocked in {chat_id}. Removing from monitoring.")
+                    logger.warning(f"❌ Bot kicked/blocked in {chat_id}. Removing from monitoring.")
                     await self.chat_activities.delete_one({"chat_id": chat_id})
                     return False
 
                 # For other errors, retry if we have attempts left
                 if attempt < max_retries - 1:  # Not the last attempt
-                    logger.warning(f"���⚠️ Attempt {attempt + 1} failed for chat {chat_id}: {e}. Retrying...")
+                    logger.warning(f"⚠️ Attempt {attempt + 1} failed for chat {chat_id}: {e}. Retrying...")
                     await asyncio.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
                 else:
-                    logger.error(f"��❌ Failed to send reminder to {chat_id} after {max_retries} attempts: {e}")
+                    logger.error(f"❌ Failed to send reminder to {chat_id} after {max_retries} attempts: {e}")
 
         return False
 
@@ -122,7 +122,7 @@ class ChatActivityService:
                 if chat.type not in ("group", "supergroup"):
                     # Remove from monitoring if it's not a group/supergroup
                     await self.chat_activities.delete_one({"chat_id": chat_id})
-                    logger.info(f"���🗑��️ Removed private/channel {chat_id} from active chats monitoring")
+                    logger.info(f"🗑️ Removed private/channel {chat_id} from active chats monitoring")
                     continue
 
                 # Send reminder with retry logic
@@ -135,11 +135,11 @@ class ChatActivityService:
             except Exception as e:
                 err_str = str(e).lower()
                 if "kicked" in err_str or "chat not found" in err_str or "forbidden" in err_str:
-                    logger.warning(f"��❌ Bot kicked/blocked in {chat_id}. Removing from monitoring.")
+                    logger.warning(f"❌ Bot kicked/blocked in {chat_id}. Removing from monitoring.")
                     await self.chat_activities.delete_one({"chat_id": chat_id})
                     continue
 
-                logger.error(f"��❌ Error checking chat {chat_id}: {e}")
+                logger.error(f"❌ Error checking chat {chat_id}: {e}")
 
     # Additional utility methods for compatibility
     async def get_chat_activity(self, chat_id: int) -> Optional[dict]:

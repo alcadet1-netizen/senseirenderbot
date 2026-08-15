@@ -1,5 +1,5 @@
 """
-���������👤 Обработчики пользовательских команд.
+👤 Обработчики пользовательских команд.
 """
 
 import os
@@ -64,14 +64,14 @@ async def show_profile(message: Message, container: Container, user, is_edit: bo
         profile = await container.user_service.get_profile(user.id)
 
         if not profile:
-            text = f"{mention}\n\n��❌ Профиль не найден. Попробуйте /start"
+            text = f"{mention}\n\n❌ Профиль не найден. Попробуйте /start"
             try:
                 if is_edit:
                     await message.edit_text(text, parse_mode="HTML")
                 else:
                     await message.answer(text, parse_mode="HTML")
             except Exception as e:
-                logger.error(f"��❌ Failed to send profile not found message: {e}")
+                logger.error(f"❌ Failed to send profile not found message: {e}")
             return
 
     card = Visuals.profile_card(
@@ -101,15 +101,15 @@ async def show_profile(message: Message, container: Container, user, is_edit: bo
             await message.edit_text(text, parse_mode="HTML", reply_markup=markup)
         else:
             await message.answer(text, parse_mode="HTML", reply_markup=markup)
-        logger.info(f"��✅ Profile shown for {user.id}")
+        logger.info(f"✅ Profile shown for {user.id}")
     except Exception as e:
-        logger.error(f"��❌ Failed to send profile card: {e}")
+        logger.error(f"❌ Failed to send profile card: {e}")
 
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, command: CommandObject, container: Container) -> None:
     """Команда /start."""
-    logger.info(f"���👉 [CMD] cmd_start triggered by {message.from_user.id}")
+    logger.info(f"👉 [CMD] cmd_start triggered by {message.from_user.id}")
     if not message.from_user:
         return
 
@@ -129,7 +129,7 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
              try:
                 await message.answer(msg, parse_mode="HTML")
              except Exception as e:
-                logger.error(f"��❌ Failed to send referral message: {e}")
+                logger.error(f"❌ Failed to send referral message: {e}")
 
     mention = get_mention(message.from_user)
 
@@ -137,11 +137,11 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
     reply_markup = get_main_keyboard() if message.chat.type == "private" else None
     try:
         await message.answer(
-            "���👋",
+            "👋",
             reply_markup=reply_markup
         )
     except Exception as e:
-        logger.error(f"��❌ Failed to send handshake: {e}")
+        logger.error(f"❌ Failed to send handshake: {e}")
 
     # 2. Интерактивное меню (Inline)
     text = Visuals.start_menu(message.from_user.first_name)
@@ -155,9 +155,9 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
             parse_mode="HTML",
             reply_markup=get_start_keyboard(message.from_user.id)
         )
-        logger.info(f"��✅ Start menu sent to {message.from_user.id}")
+        logger.info(f"✅ Start menu sent to {message.from_user.id}")
     except Exception as e:
-        logger.error(f"��❌ Failed to send start menu: {e}")
+        logger.error(f"❌ Failed to send start menu: {e}")
 
 
 @router.message(Command("upkatana"))
@@ -165,7 +165,7 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
 @router.message(F.text.lower().in_({"ап катана", "\\upkatana"}))
 async def cmd_upkatana(message: Message, container: Container):
     """Команда /upkatana - улучшение катаны."""
-    logger.info(f"���👉 [CMD] cmd_upkatana triggered by {message.from_user.id}")
+    logger.info(f"👉 [CMD] cmd_upkatana triggered by {message.from_user.id}")
     if not message.from_user:
         return
 
@@ -175,7 +175,7 @@ async def cmd_upkatana(message: Message, container: Container):
     except TelegramBadRequest:
         pass
     except Exception as e:
-        logger.warning(f"��⚠��️ Failed to delete trigger message in cmd_upkatana: {e}")
+        logger.warning(f"⚠️ Failed to delete trigger message in cmd_upkatana: {e}")
 
     mention = get_mention(message.from_user)
 
@@ -196,18 +196,18 @@ async def cmd_upkatana(message: Message, container: Container):
         )
 
         await message.answer(f"{mention}\n\n{text}", parse_mode="HTML")
-        logger.info(f"��✅ Upkatana result sent to {message.from_user.id}")
+        logger.info(f"✅ Upkatana result sent to {message.from_user.id}")
 
     except UserNotFoundError:
-        await message.answer(f"{mention}\n\n��❌ Профиль не найдено!")
+        await message.answer(f"{mention}\n\n❌ Профиль не найдено!")
 
     except NoKatanaError:
-        await message.answer(f"{mention}\n\n��❌ У тебя нет катаны! Купи её в /mysensei.")
+        await message.answer(f"{mention}\n\n❌ У тебя нет катаны! Купи её в /mysensei.")
 
     except CooldownError as e:
         await message.answer(
             f"{mention}\n\n"
-            f"��⏳ <b>Мастер устал...</b>\n"
+            f"⏳ <b>Мастер устал...</b>\n"
             f"{e}",
             parse_mode="HTML"
         )
@@ -215,14 +215,14 @@ async def cmd_upkatana(message: Message, container: Container):
     except InsufficientFundsError as e:
         await message.answer(
             f"{mention}\n\n"
-            f"��❌ <b>Не хватает монет!</b>\n"
-            f"Нужно: {e.required:,.0f} �� 💰\n"
-            f"У тебя: {e.available:,.0f} �� 💰",
+            f"❌ <b>Не хватает монет!</b>\n"
+            f"Нужно: {e.required:,.0f}  💰\n"
+            f"У тебя: {e.available:,.0f}  💰",
             parse_mode="HTML"
         )
 
     except Exception as e:
-        logger.error(f"��❌ Error in cmd_upkatana: {e}", exc_info=True)
+        logger.error(f"❌ Error in cmd_upkatana: {e}", exc_info=True)
 
 
 @router.message(Command("mykatana"))
@@ -230,7 +230,7 @@ async def cmd_upkatana(message: Message, container: Container):
 @router.message(F.text.lower().in_({"моя катана"}))
 async def cmd_mykatana(message: Message, container: Container) -> None:
     """Команда /mykatana - информация о катане."""
-    logger.info(f"���👉 [CMD] cmd_mykatana triggered by {message.from_user.id}")
+    logger.info(f"👉 [CMD] cmd_mykatana triggered by {message.from_user.id}")
     if not message.from_user:
         return
 
@@ -239,7 +239,7 @@ async def cmd_mykatana(message: Message, container: Container) -> None:
     try:
         profile = await container.user_service.get_profile(message.from_user.id)
         if not profile or not profile.get("has_katana"):
-            await message.answer(f"{mention}\n\n��❌ У тебя нет катаны! Купи её в магазине.")
+            await message.answer(f"{mention}\n\n❌ У тебя нет катаны! Купи её в магазине.")
             return
 
         length = profile.get("katana_length", 0.0)
@@ -247,9 +247,9 @@ async def cmd_mykatana(message: Message, container: Container) -> None:
         # Визуализация катаны
         text = Visuals.katana_info(length)
         await message.answer(f"{mention}\n\n{text}", parse_mode="HTML")
-        logger.info(f"��✅ Mykatana info sent to {message.from_user.id}")
+        logger.info(f"✅ Mykatana info sent to {message.from_user.id}")
     except Exception as e:
-        logger.error(f"��❌ Error in cmd_mykatana: {e}", exc_info=True)
+        logger.error(f"❌ Error in cmd_mykatana: {e}", exc_info=True)
 
 
 @router.message(Command("senseihelp", "помощь", "help"))
@@ -257,14 +257,14 @@ async def cmd_mykatana(message: Message, container: Container) -> None:
 @router.message(F.text.lower().in_({"сенсей помоги", "сенсей что умеешь?"}))
 async def cmd_help(message: Message):
     """Команда /senseihelp."""
-    logger.info(f"���👉 [CMD] cmd_help triggered by {message.from_user.id}")
+    logger.info(f"👉 [CMD] cmd_help triggered by {message.from_user.id}")
 
     # Check permissions: User can only use in chat (groups), Admin can use everywhere
     is_admin = message.from_user.id in settings.admin_ids
     is_private = message.chat.type == "private"
 
     if is_private and not is_admin:
-        await message.answer("��⚠��️ Эта команда доступна только в групповых чатах.", parse_mode="HTML")
+        await message.answer("⚠️ Эта команда доступна только в групповых чатах.", parse_mode="HTML")
         return
 
     mention = get_mention(message.from_user)
@@ -272,18 +272,18 @@ async def cmd_help(message: Message):
     try:
         text = Visuals.help_card()
         await message.answer(f"{mention}\n\n{text}", parse_mode="HTML")
-        logger.info(f"��✅ Help sent to {message.from_user.id}")
+        logger.info(f"✅ Help sent to {message.from_user.id}")
     except Exception as e:
-        logger.error(f"��❌ Failed to send help: {e}", exc_info=True)
+        logger.error(f"❌ Failed to send help: {e}", exc_info=True)
 
 
 @router.message(Command("mysensei", "профиль", "profile"))
 @router.message(F.text.regexp(r"(?i)(?:^|\s)/mysensei(@\w+)?\b"))
 @router.message(F.text.lower() == "мой сенсей")
-@router.message(F.text == "���👤 Профиль", PrivateChatFilter())
+@router.message(F.text == "👤 Профиль", PrivateChatFilter())
 async def cmd_profile(message: Message, container: Container) -> None:
     """Команда /mysensei - профиль."""
-    logger.info(f"���👉 [CMD] cmd_profile triggered by {message.from_user.id}")
+    logger.info(f"👉 [CMD] cmd_profile triggered by {message.from_user.id}")
     if not message.from_user:
         return
 
@@ -298,7 +298,7 @@ async def cmd_profile(message: Message, container: Container) -> None:
 @router.message(F.text.lower() == "мой балик")
 async def cmd_mycoin(message: Message, container: Container) -> None:
     """Команда /mycoin и 'Мой балик'."""
-    logger.info(f"���👉 [CMD] cmd_mycoin triggered by {message.from_user.id}")
+    logger.info(f"👉 [CMD] cmd_mycoin triggered by {message.from_user.id}")
     if not message.from_user:
         return
 
@@ -306,7 +306,7 @@ async def cmd_mycoin(message: Message, container: Container) -> None:
     profile = await container.user_service.get_profile(user_id)
 
     if not profile:
-        await message.answer("��❌ Профиль не найден. Напиши /start", parse_mode="HTML")
+        await message.answer("❌ Профиль не найден. Напиши /start", parse_mode="HTML")
         return
 
     coins = profile["coins"]
@@ -316,8 +316,8 @@ async def cmd_mycoin(message: Message, container: Container) -> None:
 
     text = (
         f"{mention}\n\n"
-        f"���💰 <b>Твой баланс:</b> {int(coins):,} COIN\n"
-        f"���💱 <b>Оценка:</b> ≈ {usdt_value:,.2f} USDT"
+        f"💰 <b>Твой баланс:</b> {int(coins):,} COIN\n"
+        f"💱 <b>Оценка:</b> ≈ {usdt_value:,.2f} USDT"
     ).replace(",", " ")
 
     await message.answer(text, parse_mode="HTML")
@@ -326,7 +326,7 @@ async def cmd_mycoin(message: Message, container: Container) -> None:
 @router.message(Command("senseitop", "топ", "top", "рейтинг"))
 async def cmd_top(message: Message, container: Container):
     """Команда /senseitop - топы."""
-    logger.info(f"���👉 [CMD] cmd_top triggered by {message.from_user.id}")
+    logger.info(f"👉 [CMD] cmd_top triggered by {message.from_user.id}")
     mention = get_mention(message.from_user)
 
     try:
@@ -334,22 +334,22 @@ async def cmd_top(message: Message, container: Container):
 
         text = Visuals.top_table(
             title="ТОП ПО XP",
-            emoji="��⚡",
+            emoji="⚡",
             items=top_xp,
             value_key="xp"
         )
 
         await message.answer(f"{mention}\n\n{text}", parse_mode="HTML", reply_markup=get_top_keyboard(user_id=message.from_user.id))
-        logger.info(f"��✅ Top sent to {message.from_user.id}")
+        logger.info(f"✅ Top sent to {message.from_user.id}")
     except Exception as e:
-        logger.error(f"��❌ Error in cmd_top: {e}", exc_info=True)
+        logger.error(f"❌ Error in cmd_top: {e}", exc_info=True)
 
 
 @router.message(Command("topkatana"))
 @router.message(F.text.regexp(r"(?i)(?:^|\s)/topkatana(@\w+)?\b"))
 async def cmd_topkatana(message: Message, container: Container):
     """Команда /topkatana - топ катан с артами."""
-    logger.info(f"���👉 [CMD] cmd_topkatana triggered by {message.from_user.id}")
+    logger.info(f"👉 [CMD] cmd_topkatana triggered by {message.from_user.id}")
     mention = get_mention(message.from_user)
 
     try:
@@ -365,7 +365,7 @@ async def cmd_topkatana(message: Message, container: Container):
 
         text = Visuals.top_katana_table(
             title="ТОП КАТАН",
-            emoji="���🗡��️",
+            emoji="🗡️",
             items=items,
             offset=offset
         )
@@ -377,30 +377,30 @@ async def cmd_topkatana(message: Message, container: Container):
             reply_markup = None
 
         await message.answer(f"{mention}\n\n{text}", parse_mode="HTML", reply_markup=reply_markup)
-        logger.info(f"��✅ Top katana sent to {message.from_user.id}")
+        logger.info(f"✅ Top katana sent to {message.from_user.id}")
     except Exception as e:
-        logger.error(f"��❌ Error in cmd_topkatana: {e}", exc_info=True)
+        logger.error(f"❌ Error in cmd_topkatana: {e}", exc_info=True)
 
 
 @router.message(Command("senseidaily", "бонус", "daily"))
 @router.message(F.text.regexp(r"(?i)(?:^|\s)/senseidaily(@\w+)?\b"))
 @router.message(F.text.lower().in_({"ежа", "фарм", "фармить", "фарма", "ферма"}))
-@router.message(F.text == "���🎁 Бонус", PrivateChatFilter())
+@router.message(F.text == "🎁 Бонус", PrivateChatFilter())
 async def cmd_daily(message: Message, container: Container):
     """Команда /senseidaily - ежедневный бонус."""
-    logger.info(f"���👉 [CMD] cmd_daily triggered by {message.from_user.id}")
+    logger.info(f"👉 [CMD] cmd_daily triggered by {message.from_user.id}")
     if not message.from_user:
         return
 
     # Delete trigger message (except private chat button which we can't detect easily here but safe to try)
-    # Don't delete if it is "���🎁 Бонус" (button text) in private chat usually, but here we can just try.
-    if message.chat.type != "private" or message.text not in ["���🎁 Бонус"]:
+    # Don't delete if it is "🎁 Бонус" (button text) in private chat usually, but here we can just try.
+    if message.chat.type != "private" or message.text not in ["🎁 Бонус"]:
          try:
             await message.delete()
          except TelegramBadRequest:
             pass
          except Exception as e:
-            logger.warning(f"��⚠��️ Failed to delete trigger message in cmd_daily: {e}")
+            logger.warning(f"⚠️ Failed to delete trigger message in cmd_daily: {e}")
 
     mention = get_mention(message.from_user)
 
@@ -421,7 +421,7 @@ async def cmd_daily(message: Message, container: Container):
             )
 
             # Add hedgehog message
-            hedgehog_msg = "���🦔 <b>Вы погладили ежа!</b>\n\n"
+            hedgehog_msg = "🦔 <b>Вы погладили ежа!</b>\n\n"
             full_text = f"{mention}\n\n{hedgehog_msg}{card}"
 
             # Пытаемся отправить картинку из папки ega
@@ -442,9 +442,9 @@ async def cmd_daily(message: Message, container: Container):
                             parse_mode="HTML"
                         )
                         sent_photo = True
-                        logger.info(f"��✅ Daily photo sent to {message.from_user.id}")
+                        logger.info(f"✅ Daily photo sent to {message.from_user.id}")
                     except Exception as e:
-                        logger.warning(f"��⚠��️ Failed to send daily photo: {e}")
+                        logger.warning(f"⚠️ Failed to send daily photo: {e}")
 
             if not sent_photo:
                 # Используем send_message если фото не удалось отправить
@@ -453,46 +453,46 @@ async def cmd_daily(message: Message, container: Container):
                     text=full_text,
                     parse_mode="HTML"
                 )
-                logger.info(f"��✅ Daily text sent to {message.from_user.id}")
+                logger.info(f"✅ Daily text sent to {message.from_user.id}")
         else:
             await message.bot.send_message(
                 chat_id=message.chat.id,
-                text=f"{mention}\n\n��❌ {result.get('error', 'Ошибка')}",
+                text=f"{mention}\n\n❌ {result.get('error', 'Ошибка')}",
                 parse_mode="HTML"
             )
 
     except DailyAlreadyClaimedError as e:
         await message.answer(
             f"{mention}\n\n"
-            f"��⏰ <b>Бонус уже получен!</b>\n\n"
+            f"⏰ <b>Бонус уже получен!</b>\n\n"
             f"Следующий доступен: {e.next_claim_time}",
             parse_mode="HTML"
         )
     except Exception as e:
-        logger.error(f"��❌ Error in cmd_daily: {e}", exc_info=True)
+        logger.error(f"❌ Error in cmd_daily: {e}", exc_info=True)
 
 
 @router.message(Command("senseiobmen", "обмен", "exchange"))
 @router.message(F.text.regexp(r"(?i)(?:^|\s)/senseiobmen(@\w+)?\b"))
 async def cmd_exchange(message: Message):
     """Команда /senseiobmen - обмен."""
-    logger.info(f"���👉 [CMD] cmd_exchange triggered by {message.from_user.id}")
+    logger.info(f"👉 [CMD] cmd_exchange triggered by {message.from_user.id}")
     mention = get_mention(message.from_user)
 
     try:
         text = Visuals.exchange_info_card()
 
         await message.answer(f"{mention}\n\n{text}", parse_mode="HTML", reply_markup=get_exchange_keyboard(user_id=message.from_user.id))
-        logger.info(f"��✅ Exchange sent to {message.from_user.id}")
+        logger.info(f"✅ Exchange sent to {message.from_user.id}")
     except Exception as e:
-        logger.error(f"��❌ Error in cmd_exchange: {e}", exc_info=True)
+        logger.error(f"❌ Error in cmd_exchange: {e}", exc_info=True)
 
 
 @router.message(Command("senseibank"))
 @router.message(F.text.regexp(r"(?i)(?:^|\s)/senseibank(@\w+)?\b"))
 async def cmd_senseibank(message: Message, container: Container):
     """Команда /senseibank - статистика банка."""
-    logger.info(f"���👉 [CMD] cmd_senseibank triggered by {message.from_user.id}")
+    logger.info(f"👉 [CMD] cmd_senseibank triggered by {message.from_user.id}")
     if not message.from_user:
         return
 
@@ -503,16 +503,16 @@ async def cmd_senseibank(message: Message, container: Container):
 
         text = Visuals.bank_card(stats)
         await message.answer(f"{mention}\n\n{text}", parse_mode="HTML")
-        logger.info(f"��✅ Bank stats sent to {message.from_user.id}")
+        logger.info(f"✅ Bank stats sent to {message.from_user.id}")
     except Exception as e:
-        logger.error(f"��❌ Error in cmd_senseibank: {e}", exc_info=True)
+        logger.error(f"❌ Error in cmd_senseibank: {e}", exc_info=True)
 
 
 @router.message(Command("senseiuser"))
 @router.message(F.text.regexp(r"(?i)(?:^|\s)/senseiuser(@\w+)?\b"))
 async def cmd_senseiuser(message: Message, container: Container):
     """Команда /senseiuser - количество пользователей."""
-    logger.info(f"���👉 [CMD] cmd_senseiuser triggered by {message.from_user.id}")
+    logger.info(f"👉 [CMD] cmd_senseiuser triggered by {message.from_user.id}")
     if not message.from_user:
         return
 
@@ -525,7 +525,7 @@ async def cmd_senseiuser(message: Message, container: Container):
         width = 24
         lines = [
             Visuals.frame_top_left(width),
-            Visuals.frame_line_left("���👥 ПОЛ�ЬЗОВАТЕЛИ", width, "center"),
+            Visuals.frame_line_left("👥 ПОЛЬЗОВАТЕЛИ", width, "center"),
             Visuals.frame_separator_left(width),
             Visuals.frame_line_left(f"Всего: {total_users}", width),
             Visuals.frame_bottom_left(width)
@@ -535,8 +535,8 @@ async def cmd_senseiuser(message: Message, container: Container):
 
         await message.answer(f"{mention}\n\n{text}", parse_mode="HTML")
     except Exception as e:
-        logger.error(f"��❌ Error in cmd_senseiuser: {e}", exc_info=True)
-        await message.answer(f"{mention}\n\n��❌ Ошибка получения данных.", parse_mode="HTML")
+        logger.error(f"❌ Error in cmd_senseiuser: {e}", exc_info=True)
+        await message.answer(f"{mention}\n\n❌ Ошибка получения данных.", parse_mode="HTML")
 
 
 # ========== CALLBACK HANDLERS ==========

@@ -1,5 +1,5 @@
 """
-��⚔��️ Сервис дуэлей (Sensei Duel Logic).
+⚔️ Сервис дуэлей (Sensei Duel Logic).
 Refactored to use MongoDB directly instead of SQLAlchemy/UnitOfWork.
 """
 
@@ -100,7 +100,7 @@ def dir_word(move: Optional[str]) -> str:
 
 def dir_arrow(move: Optional[str]) -> str:
     if not move: return "?"
-    return "��⬅��️" if "_l" in move else "��➡��️"
+    return "⬅️" if "_l" in move else "➡️"
 
 def _name_from_user(user_doc: Optional[dict], fallback_id: int) -> str:
     # user_doc is a MongoDB document (dict) or None
@@ -110,14 +110,14 @@ def _name_from_user(user_doc: Optional[dict], fallback_id: int) -> str:
 
 def narrate_dodge(name: str, dodge: str) -> str:
     gag = random.choice(DODGE_GAGS_L if dodge.endswith("_l") else DODGE_GAGS_R)
-    return f"���🏃 @{name} {gag} {dir_arrow(dodge)}"
+    return f"🏃 @{name} {gag} {dir_arrow(dodge)}"
 
 def narrate_attack(name: str, attack: str) -> str:
     gag = random.choice(ATTACK_GAGS_L if attack.endswith("_l") else ATTACK_GAGS_R)
-    return f"��⚔��️ @{name} {gag} {dir_arrow(attack)}"
+    return f"⚔️ @{name} {gag} {dir_arrow(attack)}"
 
 def narrate_outcome(attacker: str, hit: bool) -> str:
-    return f"���🩸 @{attacker} {random.choice(HIT_GAGS if hit else MISS_GAGS)}"
+    return f"🩸 @{attacker} {random.choice(HIT_GAGS if hit else MISS_GAGS)}"
 
 # ===== Service =====
 
@@ -222,7 +222,7 @@ class DuelService:
                 asyncio.create_task(self._start_round(duel))
                 return "✅ Принято! Смотрите ЛС."
 
-        return "⚠��️ Ошибка."
+        return "⚠️ Ошибка."
 
     async def process_move(self, duel_id: int, user_id: int, move: str) -> str:
         # move is 'hit_l', 'hit_r', 'dodge_l', 'dodge_r'
@@ -259,21 +259,21 @@ class DuelService:
 
             if action == 'open':
                 await self._update_control_dm(duel, user_id)
-                return "���📩 Панель отправлена в ЛС."
+                return "📩 Панель отправлена в ЛС."
 
             if action == 'auto':
                 actions = duel.actions.setdefault(user_id, {"dodge": None, "attack": None})
                 if not actions["dodge"]: actions["dodge"] = random.choice(DODGES)
                 if not actions["attack"]: actions["attack"] = random.choice(HITS)
                 await self._update_control_dm(duel, user_id)
-                return "���🤖 Автоход сделан."
+                return "🤖 Автоход сделан."
 
             if action == 'reset':
                 duel.actions[user_id] = {"dodge": None, "attack": None}
                 await self._update_control_dm(duel, user_id)
-                return "���🔄 Ход сброшен."
+                return "🔄 Ход сброшен."
 
-            return "��❓ Неизвестное действие."
+            return "❓ Неизвестное действие."
 
     async def surrender(self, duel_id: int, user_id: int) -> str:
         duel = self.duels.get(duel_id)
@@ -284,8 +284,8 @@ class DuelService:
             if user_id not in (duel.challenger_id, duel.opponent_id): return "❜ Не вы."
 
             winner_id = duel.opponent_id if user_id == duel.challenger_id else duel.challenger_id
-            await self._finish_duel(duel, winner_id, f"���🏳��️ Игрок {user_id} сдался!")
-            return "���🏳��️ Вы сдались."
+            await self._finish_duel(duel, winner_id, f"🏳️ Игрок {user_id} сдался!")
+            return "🏳️ Вы сдались."
 
     # --- Internal Logic ---
 
@@ -297,7 +297,7 @@ class DuelService:
         duel.actions[duel.challenger_id] = {"dodge": None, "attack": None}
         duel.actions[duel.opponent_id] = {"dodge": None, "attack": None}
 
-        duel.log_lines.append(f"��🔔 <b>Раунд {duel.round_num}</b>")
+        duel.log_lines.append(f"🔔 <b>Раунд {duel.round_num}</b>")
 
         await self._update_arena(duel)
         await self._update_control_dm(duel, duel.challenger_id)
@@ -345,7 +345,7 @@ class DuelService:
                 if not acts["attack"]: acts["attack"] = random.choice(HITS)
 
             if timed_out:
-                duel.log_lines.append("��⏰ Время вышло!")
+                duel.log_lines.append("⏰ Время вышло!")
             await self._resolve_round(duel)
 
     def _all_ready(self, duel: Duel) -> bool:
@@ -388,14 +388,14 @@ class DuelService:
         lines = []
 
         # Visual Summary of Move
-        # �� 👤A: �� 🛡��️��⬅��️ | �� ⚔��️��➡��️
+        #  👤A:  🛡️⬅️ |  ⚔️➡️
         def move_icon(d_move, a_move):
-            d_arrow = "��⬅��️" if d_move and "_l" in d_move else "��➡��️"
-            a_arrow = "��⬅��️" if a_move and "_l" in a_move else "��➡��️"
-            return f"���🛡��️{d_arrow} �� ⚔��️{a_arrow}"
+            d_arrow = "⬅️" if d_move and "_l" in d_move else "➡️"
+            a_arrow = "⬅️" if a_move and "_l" in a_move else "➡️"
+            return f"🛡️{d_arrow}  ⚔️{a_arrow}"
 
-        lines.append(f"���🔴 {name_ch}: {move_icon(ch_acts['dodge'], ch_acts['attack'])}")
-        lines.append(f"���🔵 {name_op}: {move_icon(op_acts['dodge'], op_acts['attack'])}")
+        lines.append(f"🔴 {name_ch}: {move_icon(ch_acts['dodge'], ch_acts['attack'])}")
+        lines.append(f"🔵 {name_op}: {move_icon(op_acts['dodge'], op_acts['attack'])}")
 
         lines.append(narrate_dodge(name_ch, ch_acts["dodge"]))
         lines.append(narrate_dodge(name_op, op_acts["dodge"]))
@@ -403,20 +403,20 @@ class DuelService:
         lines.append(narrate_attack(name_op, op_acts["attack"]))
 
         # Outcome Visual
-        res_ch = "���🩸 ПОПАДАНИЕ!" if ch_hit_success else "���💨 ПРОМАХ!"
-        res_op = "���🩸 ПОПАДАНИЕ!" if op_hit_success else "���💨 ПРОМАХ!"
+        res_ch = "🩸 ПОПАДАНИЕ!" if ch_hit_success else "💨 ПРОМАХ!"
+        res_op = "🩸 ПОПАДАНИЕ!" if op_hit_success else "💨 ПРОМАХ!"
 
-        lines.append(f"���🔴 Атака {name_ch}: {res_ch}")
-        lines.append(f"���🔵 Атака {name_op}: {res_op}")
+        lines.append(f"🔴 Атака {name_ch}: {res_ch}")
+        lines.append(f"🔵 Атака {name_op}: {res_op}")
 
         lines.append(narrate_outcome(name_ch, ch_hit_success))
         lines.append(narrate_outcome(name_op, op_hit_success))
-        lines.append(f"���📊 Счёт: {duel.hits[ch]} : {duel.hits[op]}")
+        lines.append(f"📊 Счёт: {duel.hits[ch]} : {duel.hits[op]}")
 
         duel.log_lines.extend(lines)
 
         # Separator for next round in log
-        duel.log_lines.append("�〰��️�〰��️�〰��️�〰��️�〰��️�〰��️�〰��️�〰��️")
+        duel.log_lines.append("〰️〰️〰️〰️〰️〰️〰️〰️")
 
         await self._update_arena(duel)
 
@@ -430,9 +430,9 @@ class DuelService:
             else:
                 # Tie breaker or Random? User snippet: random if tie
                 winner = random.choice([ch, op])
-                duel.log_lines.append("��⚖��️ Судья закрыл глаза и ткнул случайно пальцем в победителя.")
+                duel.log_lines.append("⚖️ Судья закрыл глаза и ткнул случайно пальцем в победителя.")
 
-            await self._finish_duel(duel, winner, "���🏆 Победа!")
+            await self._finish_duel(duel, winner, "🏆 Победа!")
         else:
             await self._start_round(duel)
 
@@ -465,41 +465,41 @@ class DuelService:
         lines = [Visuals.frame_top_left(w)]
 
         # Header
-        lines.append(Visuals.frame_line_left(f"���🏟��️ {duel.arena_name}", w))
+        lines.append(Visuals.frame_line_left(f"🏟️ {duel.arena_name}", w))
         lines.append(Visuals.frame_separator_left(w))
 
         # Player 1
         hp_c = 2 - duel.hits.get(duel.challenger_id, 0)
-        hp_c_str = "��❤��️" * hp_c + "���🖤" * (2 - hp_c)
-        lines.append(Visuals.frame_line_left(f"���🔴 {c_name}", w))
+        hp_c_str = "❤️" * hp_c + "🖤" * (2 - hp_c)
+        lines.append(Visuals.frame_line_left(f"🔴 {c_name}", w))
         lines.append(Visuals.frame_line_left(f"HP: {hp_c_str}", w))
 
         # Player 2
         lines.append(Visuals.frame_separator_left(w))
         hp_o = 2 - duel.hits.get(duel.opponent_id, 0)
-        hp_o_str = "��❤��️" * hp_o + "���🖤" * (2 - hp_o)
-        lines.append(Visuals.frame_line_left(f"���🔵 {o_name}", w))
+        hp_o_str = "❤️" * hp_o + "🖤" * (2 - hp_o)
+        lines.append(Visuals.frame_line_left(f"🔵 {o_name}", w))
         lines.append(Visuals.frame_line_left(f"HP: {hp_o_str}", w))
 
         lines.append(Visuals.frame_separator_left(w))
 
         # Status / Timer
         if duel.finished:
-             lines.append(Visuals.frame_line_left("���🏁 ДУЭЛ�Ь ЗАВЕРШЕНА", w))
+             lines.append(Visuals.frame_line_left("🏁 ДУЭЛЬ ЗАВЕРШЕНА", w))
         elif not duel.accepted:
-             lines.append(Visuals.frame_line_left(f"��⏳ Ожидание: {left}с", w))
+             lines.append(Visuals.frame_line_left(f"⏳ Ожидание: {left}с", w))
         else:
              # Progress bar for timer
              bar = Visuals.progress_bar(left, DUEL_ROUND_TIMEOUT_SEC, length=8, style="square")
-             lines.append(Visuals.frame_line_left(f"��⏳ {bar}", w))
+             lines.append(Visuals.frame_line_left(f"⏳ {bar}", w))
              lines.append(Visuals.frame_line_left(f"Раунд: {duel.round_num} | Ставка: {duel.bet}", w))
 
              # Readiness indicators (compact)
              c_act = duel.actions.get(duel.challenger_id, {})
              o_act = duel.actions.get(duel.opponent_id, {})
-             c_ready = "✅" if (c_act.get("dodge") and c_act.get("attack")) else "���💭"
-             o_ready = "✅" if (o_act.get("dodge") and o_act.get("attack")) else "���💭"
-             lines.append(Visuals.frame_line_left(f"Статус: �� 🔴{c_ready} vs �� 🔵{o_ready}", w))
+             c_ready = "✅" if (c_act.get("dodge") and c_act.get("attack")) else "💭"
+             o_ready = "✅" if (o_act.get("dodge") and o_act.get("attack")) else "💭"
+             lines.append(Visuals.frame_line_left(f"Статус:  🔴{c_ready} vs  🔵{o_ready}", w))
 
         lines.append(Visuals.frame_bottom_left(w))
 
@@ -507,14 +507,14 @@ class DuelService:
 
         controls_msg = ""
         if duel.accepted and not duel.finished:
-            controls_msg = "\n���📩 <b>Управление боем — в ЛС с ботом!</b>\n<i>(Нажмите «Управление» если потеряли чат)</i>"
+            controls_msg = "\n📩 <b>Управление боем — в ЛС с ботом!</b>\n<i>(Нажмите «Управление» если потеряли чат)</i>"
 
         text = (
             f"<pre>{frame_text}</pre>\n"
             f"<i>{duel.arena_desc}</i>\n"
-            f"⚠��️ {duel.arena_gag}\n"
+            f"⚠️ {duel.arena_gag}\n"
             f"{controls_msg}\n"
-            f"���📜 <b>Хроника:</b>\n"
+            f"📜 <b>Хроника:</b>\n"
             f"<pre>{log_view}</pre>"
         )
 
@@ -522,7 +522,7 @@ class DuelService:
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="���📩 Управление",
+                    text="📩 Управление",
                     callback_data=DuelUtilityCb(id=duel.id, u=0, a='open').pack()
                 )
             ]
@@ -558,7 +558,7 @@ class DuelService:
         left = max(0, int(duel.round_deadline_mono - time.monotonic()))
 
         text = (
-            f"<b>��⚔��️ Дуэль vs {other_name}</b>\n"
+            f"<b>⚔️ Дуэль vs {other_name}</b>\n"
             f"Раунд: {duel.round_num}, Время: {left}с\n"
             f"--------------------\n"
             f"<b>Ваш ход:</b>\n"
@@ -572,19 +572,19 @@ class DuelService:
         did = duel.id
         kb_list = [
             [
-                InlineKeyboardButton(text="���🛡��️ Увернуться влево", callback_data=DuelMoveCb(id=did, u=user_id, m='dodge_l').pack()),
-                InlineKeyboardButton(text="���🛡��️ Увернуться вправо", callback_data=DuelMoveCb(id=did, u=user_id, m='dodge_r').pack())
+                InlineKeyboardButton(text="🛡️ Увернуться влево", callback_data=DuelMoveCb(id=did, u=user_id, m='dodge_l').pack()),
+                InlineKeyboardButton(text="🛡️ Увернуться вправо", callback_data=DuelMoveCb(id=did, u=user_id, m='dodge_r').pack())
             ],
             [
-                InlineKeyboardButton(text="��⚔��️ Ударить влево", callback_data=DuelMoveCb(id=did, u=user_id, m='hit_l').pack()),
-                InlineKeyboardButton(text="��⚔��️ Ударить вправо", callback_data=DuelMoveCb(id=did, u=user_id, m='hit_r').pack())
+                InlineKeyboardButton(text="⚔️ Ударить влево", callback_data=DuelMoveCb(id=did, u=user_id, m='hit_l').pack()),
+                InlineKeyboardButton(text="⚔️ Ударить вправо", callback_data=DuelMoveCb(id=did, u=user_id, m='hit_r').pack())
             ],
             [
-                InlineKeyboardButton(text="���🤖 Автоход", callback_data=DuelUtilityCb(id=did, u=user_id, a='auto').pack()),
-                InlineKeyboardButton(text="���🔄 Сброс", callback_data=DuelUtilityCb(id=did, u=user_id, a='reset').pack())
+                InlineKeyboardButton(text="🤖 Автоход", callback_data=DuelUtilityCb(id=did, u=user_id, a='auto').pack()),
+                InlineKeyboardButton(text="🔄 Сброс", callback_data=DuelUtilityCb(id=did, u=user_id, a='reset').pack())
             ],
             [
-                InlineKeyboardButton(text="���🏳��️ Сдаться", callback_data=DuelSurrenderCb(id=did, u=user_id).pack())
+                InlineKeyboardButton(text="🏳️ Сдаться", callback_data=DuelSurrenderCb(id=did, u=user_id).pack())
             ]
         ]
         kb = InlineKeyboardMarkup(inline_keyboard=kb_list)
@@ -658,14 +658,14 @@ class DuelService:
                 )
 
                 winner_name = _name_from_user(winner_doc, winner_id)
-                duel.log_lines.append(f"��✨ {winner_name} получает +50 XP и +0.01 к катане.")
+                duel.log_lines.append(f"✨ {winner_name} получает +50 XP и +0.01 к катане.")
 
                 if coins_reward > 0:
                     await self.users.update_one(
                         {"id": winner_id},
                         {"$inc": {"coins": coins_reward}}
                     )
-                    duel.log_lines.append(f"���💰 Победитель получает {int(coins_reward)} монет!")
+                    duel.log_lines.append(f"💰 Победитель получает {int(coins_reward)} монет!")
 
                     # Create transaction for winner's winnings
                     tx_doc = {
@@ -696,7 +696,7 @@ class DuelService:
                 )
 
                 loser_name = _name_from_user(loser_doc, loser_id)
-                duel.log_lines.append(f"���💔 {loser_name} теряет -0.01 от катаны.")
+                duel.log_lines.append(f"💔 {loser_name} теряет -0.01 от катаны.")
 
                 # Create transaction for loser's loss (if any coins were lost)
                 # Actually, coins are handled via the escrow system below
@@ -861,7 +861,7 @@ class DuelService:
         duel = self.duels.get(duel_id)
         if duel and not duel.accepted and not duel.finished:
             async with duel.lock:
-                await self._cancel_duel(duel, "��⏰ Время вышло.")
+                await self._cancel_duel(duel, "⏰ Время вышло.")
 
     async def _check_eligibility(self, cid: int, oid: int, bet: int) -> Optional[str]:
         if cid == oid:

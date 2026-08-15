@@ -1,5 +1,5 @@
 """
-���������������������������������������������������������������������������������������������������������������������💰 Сервис криптовалют.
+💰 Сервис криптовалют.
 """
 
 import asyncio
@@ -81,7 +81,7 @@ class CryptoService:
         )
 
         if not top_10_usd:
-            return "��❌ Не удалось получить данные о рынке."
+            return "❌ Не удалось получить данные о рынке."
 
         # Мапа для быстрого поиска цены в рублях для топ-10
         rub_map = {c['id']: c for c in (top_10_rub or [])}
@@ -99,7 +99,7 @@ class CryptoService:
 
         # Заголовок
         lines.append(Visuals.frame_top_left(width))
-        lines.append(Visuals.frame_line_left("���🏆 ТОП-10 КРИПТОВАЛЮТ", width, "center"))
+        lines.append(Visuals.frame_line_left("🏆 ТОП-10 КРИПТОВАЛЮТ", width, "center"))
         lines.append(Visuals.frame_separator_left(width))
 
         # Множество ID, которые уже выведены (чтобы не дублировать в избранном)
@@ -118,14 +118,14 @@ class CryptoService:
             change = coin_usd.get('price_change_percentage_24h', 0)
             price_rub = coin_rub.get('current_price', 0)
 
-            emoji = "���📈" if change >= 0 else "���📉"
+            emoji = "📈" if change >= 0 else "📉"
 
             # Название
             lines.append(Visuals.frame_line_left(f"{idx}. {name} ({symbol})", width))
 
             # Цены (форматирование)
             usd_str = f"${price_usd:,.2f}" if price_usd < 1000 else f"${price_usd:,.0f}"
-            rub_str = f"�₽{price_rub:,.0f}"
+            rub_str = f"₽{price_rub:,.0f}"
 
             lines.append(Visuals.frame_line_left(f"{usd_str} | {rub_str}", width))
             lines.append(Visuals.frame_line_left(f"{emoji} {change:+.2f}%", width))
@@ -138,7 +138,7 @@ class CryptoService:
 
         if missing_favorites:
             lines.append(Visuals.frame_separator_left(width))
-            lines.append(Visuals.frame_line_left("���💎 ИЗБРАННОЕ", width, "center"))
+            lines.append(Visuals.frame_line_left("💎 ИЗБРАННОЕ", width, "center"))
             lines.append(Visuals.frame_separator_left(width))
 
             # Маппинги
@@ -190,11 +190,11 @@ class CryptoService:
                 name = name_map.get(coin_id, coin_id.capitalize())
                 symbol = symbol_map.get(coin_id, "").upper()
 
-                emoji = "���🚀" if change >= 0 else "���🔻"
+                emoji = "🚀" if change >= 0 else "🔻"
 
                 lines.append(Visuals.frame_line_left(f"{name} ({symbol})", width))
-                lines.append(Visuals.frame_line_left(f"���💵 {price_usd:,.2f} $", width))
-                lines.append(Visuals.frame_line_left(f"���💴 {price_rub:,.2f} � ₽", width))
+                lines.append(Visuals.frame_line_left(f"💵 {price_usd:,.2f} $", width))
+                lines.append(Visuals.frame_line_left(f"💴 {price_rub:,.2f}  ₽", width))
                 lines.append(Visuals.frame_line_left(f"{emoji} 24h: {change:+.2f}%", width))
 
                 if i < len(missing_favorites) - 1:
@@ -239,7 +239,7 @@ class CryptoService:
                     change=change,
                     market_cap=None
                 )
-            return f"��❌ Не удалось найти курс для {symbol.upper()}"
+            return f"❌ Не удалось найти курс для {symbol.upper()}"
 
         # CoinGecko результат
         coin = data[coin_id]
@@ -288,20 +288,20 @@ class CryptoService:
                 price_rub = price_usd * rub_rate
 
         if price_rub == 0:
-            return f"��❌ Не удалось найти курс для {symbol.upper()}"
+            return f"❌ Не удалось найти курс для {symbol.upper()}"
 
         total_rub = price_rub * amount
 
         width = 30
         lines = [
             Visuals.frame_top_left(width),
-            Visuals.frame_line_left(f"���🧮 {symbol.upper()} Calculator", width, "center"),
+            Visuals.frame_line_left(f"🧮 {symbol.upper()} Calculator", width, "center"),
             Visuals.frame_separator_left(width),
             Visuals.frame_line_left(f"Кол-во: {amount}", width),
-            Visuals.frame_line_left(f"Курс: {price_rub:,.2f} � ₽", width),
+            Visuals.frame_line_left(f"Курс: {price_rub:,.2f}  ₽", width),
             Visuals.frame_separator_left(width),
             Visuals.frame_line_left(f"Итого:", width),
-            Visuals.frame_line_left(f"���💰 {total_rub:,.2f} � ₽", width),
+            Visuals.frame_line_left(f"💰 {total_rub:,.2f}  ₽", width),
             Visuals.frame_bottom_left(width)
         ]
 

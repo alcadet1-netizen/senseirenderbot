@@ -1,5 +1,5 @@
 """
-���������� Сервис лотереи.
+ Сервис лотереи.
 """
 
 from typing import List, Dict, Optional

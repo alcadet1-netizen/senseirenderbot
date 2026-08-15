@@ -39,7 +39,7 @@ async def cb_check_sub(query: CallbackQuery, container: Container):
     user_id = query.from_user.id
     channel_username = "@SenseiDurova"
 
-    # Always check with Telegram (removed Redis caching)
+    # Always check with Telegram
     try:
         member = await query.bot.get_chat_member(chat_id=channel_username, user_id=user_id)
         is_subscribed = member.status in ("creator", "administrator", "member", "restricted")
