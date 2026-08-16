@@ -276,6 +276,13 @@ class AchievementService:
         reward_coins = ach_def.get("reward_coins", 0.0)
         reward_xp = ach_def.get("reward_xp", 0)
         if reward_coins != 0.0 or reward_xp != 0:
+            # Check bank balance and withdraw if possible
+            bank_balance = await self._get_bank_balance()
+            if bank_balance >= reward_coins:
+                await self._withdraw_from_bank(reward_coins)
+            else:
+                reward_coins = 0  # Not enough in bank
+
             # Get fresh user dict
             user = await self.user_repo.get_by_id(user_id)
             if user:
