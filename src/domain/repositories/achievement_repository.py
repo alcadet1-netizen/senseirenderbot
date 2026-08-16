@@ -88,3 +88,18 @@ class AchievementRepository:
         }
         result = await self.achievements_def.insert_one(achievement)
         return str(result.inserted_id)
+
+    async def add_achievement(self, achievement_id: str, achievement_def: Dict) -> str:
+        """Добавить достижение из словаря определения."""
+        achievement = {
+            "_id": achievement_id,
+            "name": achievement_def.get("name", ""),
+            "description": achievement_def.get("description", ""),
+            "xp_reward": achievement_def.get("reward_xp", 0),
+            "coin_reward": achievement_def.get("reward_coins", 0),
+            "rarity": achievement_def.get("rarity", "common"),
+            "icon": achievement_def.get("icon", "🏆"),
+            "created_at": datetime.now(timezone.utc),
+        }
+        result = await self.achievements_def.insert_one(achievement)
+        return str(result.inserted_id)

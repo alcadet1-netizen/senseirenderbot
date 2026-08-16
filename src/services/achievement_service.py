@@ -241,3 +241,25 @@ class AchievementService:
                 await self.tx_repo.add(tx_doc)
 
         return True
+
+    async def seed_achievements(self) -> int:
+        """Заполнить базу данных определениями достижений, если они еще не существуют.
+        Возвращает количество newly созданных достижений.
+        """
+        seeded_count = 0
+
+        for ach_id, ach_def in ACHIEVEMENTS.items():
+            # Check if achievement already exists
+            existing = await self.achievement_repo.get_achievement(ach_id)
+            if not existing:
+                # Insert the achievement definition
+                await self.achievement_repo.add_achievement(ach_id, ach_def)
+                seeded_count += 1
+                logger.info(f"Seeded achievement: {ach_id}")
+
+        if seeded_count > 0:
+            logger.info(f"✅ Seeded {seeded_count} achievements")
+        else:
+            logger.info("✅ All achievements already seeded")
+
+        return seeded_count
