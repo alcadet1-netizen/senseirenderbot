@@ -772,6 +772,7 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
         container: Container,
         config: Optional[ActivityConfig] = None,
     ):
+        self.container = container
         self.throttle = container.throttle_service
         self.config = config or ActivityConfig()
         self.metrics = ActivityMetrics()
@@ -864,10 +865,10 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
             )
         logger.info(f"[THROTTLE_CHECK] User {user_id} can_reward={can_reward} (throttle_seconds={self.config.throttle_seconds})")
 
-        # Получаем контейнер сервисов
-        container: Container = data.get("container")
+        # Используем контейнер, переданный в конструкторе
+        container = self.container
         if not container:
-            logger.warning(f"Container not found in middleware data for user {user_id}")
+            logger.error(f"Container is not initialized in UserActivityMiddleware for user {user_id}")
             return
 
         # Создаём процессор активности
