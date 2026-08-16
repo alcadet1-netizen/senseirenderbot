@@ -842,6 +842,10 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
         data: MiddlewareData
     ) -> None:
         """Обрабатывает активность пользователя."""
+        # Skip processing for commands to avoid delay in command responses
+        if event.text and event.text.startswith('/'):
+            return
+
         user = event.from_user
         user_id = user.id
         chat_id = event.chat.id
