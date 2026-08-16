@@ -31,8 +31,67 @@ router.callback_query.filter(AdminFilter())
 
 def get_admin_help() -> str:
     """🛡️ Справка для админов"""
-    # Return a simple test string to isolate the issue
-    return "Admin help test"
+    w = 28
+    lines = [
+        Visuals.frame_top_left(w),
+        Visuals.frame_line_left("🛡️ АДМИН-ПАНЕЛЬ v2.3", w, "center"),
+        Visuals.frame_separator_left(w),
+        Visuals.frame_line_left("» СПРАВКА", w),
+        Visuals.frame_line_left("◦ /adminhelp", w),
+        Visuals.frame_line_left("◦ /health (status)", w),
+        Visuals.frame_separator_left(w),
+        Visuals.frame_line_left("» КОНТЕНТ", w),
+        Visuals.frame_line_left("◦ /addquestion", w),
+        Visuals.frame_line_left("◦ /senseiviktorina", w),
+        Visuals.frame_line_left("◦ /stopquiz", w),
+        Visuals.frame_line_left("◦ /senseiboss [time]", w),
+        Visuals.frame_line_left("◦ /killboss", w),
+        Visuals.frame_line_left("◦ /senseivesti", w),
+        Visuals.frame_line_left("◦ /senseivestnik", w),
+        Visuals.frame_line_left("◦ /senseistat", w),
+        Visuals.frame_line_left("◦ /cancel", w),
+        Visuals.frame_separator_left(w),
+        Visuals.frame_line_left("» СОЗЫВ И РАЗДАЧА", w),
+        Visuals.frame_line_left("◦ /senseizov", w),
+        Visuals.frame_line_left("◦ /senseinezov", w),
+        Visuals.frame_line_left("◦ /+fire [сумма]", w),
+        Visuals.frame_line_left("◦ /SENSEISANSARA", w),
+        Visuals.frame_separator_left(w),
+        Visuals.frame_line_left("» НАГРАДЫ", w),
+        Visuals.frame_line_left("◦ /bonussensei", w),
+        Visuals.frame_line_left("◦ /addticket (reply)", w),
+        Visuals.frame_line_left("◦ /addcoin (reply)", w),
+        Visuals.frame_line_left("◦ /addxp (reply)", w),
+        Visuals.frame_line_left("◦ /addkatana (reply)", w),
+        Visuals.frame_line_left("◦ /ticketburn (reply)", w),
+        Visuals.frame_separator_left(w),
+        Visuals.frame_line_left("» КОММУНИКАЦИЯ", w),
+        Visuals.frame_line_left("◦ /govori (лс)", w),
+        Visuals.frame_line_left("◦ /broadcast", w),
+        Visuals.frame_separator_left(w),
+        Visuals.frame_line_left("» МОДЕРАЦИЯ", w),
+        Visuals.frame_line_left("◦ /banlist", w),
+        Visuals.frame_line_left("◦ /бан", w),
+        Visuals.frame_line_left("◦ /unban @username", w),
+        Visuals.frame_line_left("◦ /amnistia", w),
+        Visuals.frame_line_left("◦ /senseimuteon", w),
+        Visuals.frame_line_left("◦ /senseimuteoff", w),
+        Visuals.frame_line_left("◦ /offexit | /onexit", w),
+        Visuals.frame_separator_left(w),
+        Visuals.frame_line_left("» СИСТЕМА", w),
+        Visuals.frame_line_left("◦ /senseichats", w),
+        Visuals.frame_line_left("◦ /senseinewSeasons", w),
+        Visuals.frame_line_left("◦ /topticket", w),
+        Visuals.frame_line_left("◦ /adminstats", w),
+        Visuals.frame_line_left("◦ /senseibank", w),
+        Visuals.frame_line_left("◦ /sensei work [мин]", w),
+        Visuals.frame_line_left("◦ /sensei [fix|deploy]", w),
+        Visuals.frame_line_left("◦ /sensei done", w),
+        Visuals.frame_separator_left(w),
+        Visuals.frame_line_left("⚡ ROOT ACCESS: ENABLED", w, "center"),
+        Visuals.frame_bottom_left(w),
+    ]
+    return "<pre>\n" + "\n".join(lines) + "\n</pre>"
 
 
 @router.message(Command("cancel"))
@@ -163,16 +222,25 @@ async def cmd_admin_help(message: Message) -> None:
         help_text = get_admin_help()
         logger.info(f"[ADMINHELP] Got help text, length={len(help_text)}")
         # First try sending as plain text to avoid HTML issues
-        await message.answer(f"{mention}\n\n{help_text}")
-        logger.info(f"[ADMINHELP] Sent plain text help successfully")
+        start_send = time.perf_counter()
+        await message.answer(f"{mention}\n\n{help_text}")  # plain text
+        end_send = time.perf_counter()
+        logger.info(f"[ADMINHELP] Sent plain text help successfully in {(end_send - start_send)*1000:.2f} ms")
     except Exception as e:
         logger.error(f"[ADMINHELP] Failed to send admin help message (plain text): {e}")
-        # Final fallback: send a minimal message
         try:
-            await message.answer(f"{mention}\n\n/Admin help (error occurred)")
-            logger.info(f"[ADMINHELP] Sent fallback message")
+            help_text_html = Visuals.escape(help_text)
+            start_send_html = time.perf_counter()
+            await message.answer(f"{mention}\n\n{help_text_html}", parse_mode="HTML")
+            end_send_html = time.perf_counter()
+            logger.info(f"[ADMINHELP] Sent HTML help successfully in {(end_send_html - start_send_html)*1000:.2f} ms")
         except Exception as e2:
-            logger.error(f"[ADMINHELP] Failed to send fallback message: {e2}")
+            logger.error(f"[ADMINHELP] Failed to send admin help message (HTML): {e2}")
+            try:
+                await message.answer(f"{mention}\n\n/Admin help (error occurred)")
+                logger.info(f"[ADMINHELP] Sent fallback message")
+            except Exception as e3:
+                logger.error(f"[ADMINHELP] Failed to send fallback message: {e3}")
 
 
 @router.message(Command("adminstats"))
