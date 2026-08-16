@@ -862,6 +862,7 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
                 limit_seconds=self.config.throttle_seconds,
                 scope="message_rewards"
             )
+        logger.info(f"[THROTTLE_CHECK] User {user_id} can_reward={can_reward} (throttle_seconds={self.config.throttle_seconds})")
 
         # Получаем контейнер сервисов
         container: Container = data.get("container")

@@ -28,7 +28,10 @@ class ThrottleService:
 
         Использует фиксированное окно: пытается вставить документ с ключом {scope}:{key}
         и сроком жизни limit_seconds. Если вставка успешна — разрешено, если ошибка дублирования ключа — троттлится.
+        Если limit_seconds <= 0, операция всегда разрешается (отключен троттлинг).
         """
+        if limit_seconds <= 0:
+            return True
         doc_id = f"{scope}:{key}"
         expiry = int(time.time()) + limit_seconds
         doc = {"_id": doc_id, "expiry": expiry}
