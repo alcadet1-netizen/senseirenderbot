@@ -215,15 +215,23 @@ async def cmd_admin_chats(message: Message, container: Container):
 async def cmd_admin_help(message: Message) -> None:
     """Админ меню."""
     username = message.from_user.username
+    user_id = message.from_user.id
     mention = f"@{username}" if username else f"<b>{html.escape(message.from_user.full_name)}</b>"
+    logger.info(f"[ADMINHELP] Start processing for user {user_id}")
     try:
         help_text = get_admin_help()
+        logger.info(f"[ADMINHELP] Got help text, length={len(help_text)}")
         # First try sending as plain text to avoid HTML issues
         await message.answer(f"{mention}\n\n{help_text}")
+        logger.info(f"[ADMINHELP] Sent plain text help successfully")
     except Exception as e:
-        logger.error(f"Failed to send admin help message (plain text): {e}")
+        logger.error(f"[ADMINHELP] Failed to send admin help message (plain text): {e}")
         # Final fallback: send a minimal message
-        await message.answer(f"{mention}\n\n/Admin help (error occurred)")
+        try:
+            await message.answer(f"{mention}\n\n/Admin help (error occurred)")
+            logger.info(f"[ADMINHELP] Sent fallback message")
+        except Exception as e2:
+            logger.error(f"[ADMINHELP] Failed to send fallback message: {e2}")
 
 
 @router.message(Command("adminstats"))
