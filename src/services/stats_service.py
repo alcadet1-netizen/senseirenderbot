@@ -21,7 +21,7 @@ class StatsService:
         self.db = mongo_client.database
         # Collections
         self.users = self.db.users
-        self.bank = self.db.bank  # {_id: "main", balance: X}
+        self.bank = self.db.bank  # {_id: "single", coins: X}
         self.transactions = self.db.transactions
         self.tickets = self.db.tickets
         # Simple in-memory cache for admin stats (Redis replacement)

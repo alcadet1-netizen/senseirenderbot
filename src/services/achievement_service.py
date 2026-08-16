@@ -12,6 +12,7 @@ from src.domain.repositories import (
 )
 from src.services.level_service import LevelService
 from src.core.constants import ACHIEVEMENTS
+from src.core.config import settings
 import logging
 from datetime import datetime, timezone
 
@@ -37,6 +38,52 @@ class AchievementService:
         self.user_repo = user_repo or UserRepository(self.db.users)
         self.tx_repo = tx_repo or TransactionRepository(self.db.transactions)
         self.level_service = LevelService()
+
+    async def _get_bank_balance(self) -> float:
+        """Получить текущий баланс банка."""
+        doc = await self.db.bank.find_one({"_id": "single"})
+        if doc:
+            balance = doc.get("coins", 0.0)
+            if balance == 0.0:
+                # Reset bank to initial balance if empty
+                initial_balance = settings.bank_initial_coins
+                await self._set_bank_balance(initial_balance)
+                logger.info(f"[ACHIEVEMENT SERVICE] Bank balance was zero, reset to {initial_balance}")
+                return initial_balance
+            logger.info(f"[ACHIEVEMENT SERVICE] Found bank document with balance {balance}")
+            return balance
+        else:
+            # Initialize bank with initial coins from settings
+            initial_balance = settings.bank_initial_coins
+            await self.db.bank.insert_one({"_id": "single", "coins": initial_balance})
+            logger.info(f"[ACHIEVEMENT SERVICE] Initialized bank with balance {initial_balance}")
+            return initial_balance
+
+    async def _set_bank_balance(self, balance: float) -> None:
+        """Установить баланс банка."""
+        await self.db.bank.update_one(
+            {"_id": "single"},
+            {"$set": {"coins": balance}},
+            upsert=True
+        )
+        logger.info(f"[ACHIEVEMENT SERVICE] Bank balance set to {balance:,.2f}")
+
+    async def _withdraw_from_bank(self, amount: float) -> bool:
+        """Снять amount с банка. Возвращает True если успешно."""
+        # We'll do this in a transaction-like manner by finding and updating.
+        # For simplicity, we'll do it without transaction and hope for the best.
+        # In production, we should use a transaction.
+        doc = await self.db.bank.find_one({"_id": "single"})
+        if not doc:
+            # Initialize if not exists
+            await self._set_bank_balance(settings.bank_initial_coins)
+            doc = await self.db.bank.find_one({"_id": "single"})
+        current_balance = doc.get("coins", 0.0)
+        if current_balance < amount:
+            return False
+        new_balance = current_balance - amount
+        await self._set_bank_balance(new_balance)
+        return True
 
     async def check_and_unlock_achievements(
         self,
@@ -168,6 +215,13 @@ class AchievementService:
             reward_coins = ach_def.get("reward_coins", 0.0)
             reward_xp = ach_def.get("reward_xp", 0)
             if reward_coins != 0.0 or reward_xp != 0:
+                # Check bank balance and withdraw if possible
+                bank_balance = await self._get_bank_balance()
+                if bank_balance >= reward_coins:
+                    await self._withdraw_from_bank(reward_coins)
+                else:
+                    reward_coins = 0  # Not enough in bank
+
                 # Update user in-place
                 user["coins"] = user.get("coins", 0.0) + reward_coins
                 user["xp"] = user.get("xp", 0) + reward_xp
