@@ -132,6 +132,7 @@ class EconomyService:
         apply_rewards: bool = True
     ) -> dict:
         """Обработать награду за сообщение."""
+        logger.info(f"[ECONOMY] process_message_reward called for user {user_id}, apply_rewards={apply_rewards}")
         lock_key = f"message_reward:{user_id}"
         lock = self._get_lock(lock_key)
         async with lock:
@@ -167,6 +168,7 @@ class EconomyService:
                 await self.users.insert_one(user)
                 # Refresh the user document
                 user = await self.users.find_one({"id": user_id})
+                logger.info(f"[ECONOMY] Created new user {user_id}")
             else:
                 # Update if needed
                 update_data = {}
@@ -181,6 +183,7 @@ class EconomyService:
                     user.update(update_data)
 
             if user.get("is_banned", False):
+                logger.info(f"[ECONOMY] User {user_id} is banned, returning")
                 return {"success": False, "reason": "banned"}
 
             xp_reward = 0
@@ -191,6 +194,7 @@ class EconomyService:
             old_xp = user.get("xp", 0)
 
             if apply_rewards:
+                logger.info(f"[ECONOMY] Applying rewards for user {user_id}")
                 # Increase message count
                 await self.users.update_one(
                     {"id": user_id},
@@ -201,16 +205,21 @@ class EconomyService:
                 # Get total coins in circulation
                 total_circulation = await self._get_total_coins_in_circulation()
                 multiplier = self._calculate_halving_multiplier(total_circulation)
+                logger.info(f"[ECONOMY] User {user_id} total_circulation={total_circulation}, multiplier={multiplier}")
 
                 xp_reward = int(XP_PER_MESSAGE * multiplier)
                 coins_reward = COINS_PER_MESSAGE * multiplier
+                logger.info(f"[ECONOMY] User {user_id} xp_reward={xp_reward}, coins_reward={coins_reward}")
 
                 # Check bank balance and withdraw if possible
                 bank_balance = await self._get_bank_balance()
+                logger.info(f"[ECONOMY] Bank balance={bank_balance}, coins_reward={coins_reward}")
                 if bank_balance >= coins_reward:
                     await self._withdraw_from_bank(coins_reward)
+                    logger.info(f"[ECONOMY] Withdrew {coins_reward} from bank")
                 else:
                     coins_reward = 0  # Not enough in bank
+                    logger.info(f"[ECONOMY] Not enough in bank, setting coins_reward=0")
 
                 # Update user XP and coins
                 await self.users.update_one(
@@ -219,6 +228,7 @@ class EconomyService:
                 )
                 user["xp"] = user.get("xp", 0) + xp_reward
                 user["coins"] = user.get("coins", 0.0) + coins_reward
+                logger.info(f"[ECONOMY] Updated user {user_id}: xp={user['xp']}, coins={user['coins']}")
 
                 # Create transaction record
                 tx_doc = {
@@ -230,6 +240,7 @@ class EconomyService:
                     "created_at": datetime.now(timezone.utc),
                 }
                 await self.transactions.insert_one(tx_doc)
+                logger.info(f"[ECONOMY] Inserted transaction for user {user_id}")
 
                 # Check for ticket award
                 if user["messages_count"] % MESSAGES_PER_TICKET == 0:
@@ -240,12 +251,15 @@ class EconomyService:
                     }
                     result = await self.tickets.insert_one(ticket_doc)
                     ticket_created = str(result.inserted_id)  # Or we can use the code
+                    logger.info(f"[ECONOMY] Ticket created for user {user_id}: {ticket_created}")
 
                 # Check level up
                 level_up = self.level_service.check_level_up(old_xp, user["xp"])
+                if level_up:
+                    logger.info(f"[ECONOMY] Level up for user {user_id}: {level_up}")
 
             # Return the result
-            return {
+            result = {
                 "success": True,
                 "xp_earned": xp_reward,
                 "coins_earned": coins_reward,
@@ -256,6 +270,8 @@ class EconomyService:
                 "new_coins": user.get("coins", 0.0),
                 "messages_count": user.get("messages_count", 0),
             }
+            logger.info(f"[ECONOMY] process_message_reward result for user {user_id}: {result}")
+            return result
 
     async def _get_total_coins_in_circulation(self) -> float:
         """Получить общее количество монет в обращении (сумма монет всех пользователей)."""

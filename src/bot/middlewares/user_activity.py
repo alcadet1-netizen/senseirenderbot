@@ -873,12 +873,14 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
         # Создаём процессор активности
         processor = ActivityProcessor(container, self.config)
 
+        logger.info(f"[USER_ACTIVITY] About to process message for user {user_id}, apply_rewards={can_reward}")
         # Обрабатываем сообщение и получаем уведомления
         notifications = await processor.process_message(
             user=user,
             chat_id=chat_id,
             apply_rewards=can_reward
         )
+        logger.info(f"[USER_ACTIVITY] Finished processing message for user {user_id}, got {len(notifications)} notifications")
 
         # Добавляем уведомления в очередь
         for notification in notifications:
