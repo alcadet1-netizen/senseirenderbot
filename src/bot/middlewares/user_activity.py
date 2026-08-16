@@ -800,6 +800,7 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
             Результат выполнения следующего обработчика
         """
         start_time = time.time()
+        logger.info(f"[USER_ACTIVITY] Start processing message from user {event.from_user.id if event.from_user else 'Unknown'}")
 
         try:
             # Проверяем валидность события
@@ -817,6 +818,8 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
             logger.error(f"Error in activity middleware: {e}", exc_info=True)
 
         # Всегда продолжаем обработку
+        duration_ms = (time.time() - start_time) * 1000
+        logger.info(f"[USER_ACTIVITY] Finished processing message from user {event.from_user.id if event.from_user else 'Unknown'} in {duration_ms:.2f} ms")
         return await handler(event, data)
 
     def _is_valid_event(self, event: Message) -> bool:
