@@ -46,11 +46,11 @@ class StatsService:
             total_users = await self.users.count_documents({})
 
             # Bank stats
-            bank_doc = await self.bank.find_one({"_id": "main"})
-            bank_balance = bank_doc.get("balance", 0) if bank_doc else 0
+            bank_doc = await self.bank.find_one({"_id": "single"})
+            bank_balance = bank_doc.get("coins", 0.0) if bank_doc else 0.0
             bank_stats = {
                 "balance": bank_balance,
-                "initial_coins": getattr(settings, 'bank_initial_coins', 1000000),
+                "initial_coins": getattr(settings, 'bank_initial_coins', 1000000.0),
                 "total_emitted": 0,  # Would need to calculate from transactions
                 "total_withdrawn": 0  # Would need to calculate from transactions
             }
@@ -169,8 +169,8 @@ class StatsService:
 
             # Reset bank balance
             await self.bank.update_one(
-                {"_id": "main"},
-                {"$set": {"balance": getattr(settings, 'bank_initial_coins', 1000000)}},
+                {"_id": "single"},
+                {"$set": {"coins": getattr(settings, 'bank_initial_coins', 1000000.0)}},
                 upsert=True
             )
 
