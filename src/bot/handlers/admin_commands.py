@@ -25,8 +25,8 @@ from src.bot.keyboards.inline import VisualsCb
 from src.texts.phrases import get_random_ban_phrase
 
 router = Router(name="admin_commands")
-router.message.filter(AdminFilter())
-router.callback_query.filter(AdminFilter())
+# router.message.filter(AdminFilter())  # TEMP: disable for diagnosis
+# router.callback_query.filter(AdminFilter())  # TEMP: disable for diagnosis
 
 
 def get_admin_help() -> str:
