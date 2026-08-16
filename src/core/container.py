@@ -37,6 +37,7 @@ class Container:
     _chat_activity_service: Optional["ChatActivityService"] = field(default=None, init=False, repr=False)
     _throttle_service: Optional["ThrottleService"] = field(default=None, init=False, repr=False)
     _popugai_service: Optional["PopugaiService"] = field(default=None, init=False, repr=False)
+    _boss_service: Optional["BossService"] = field(default=None, init=False, repr=False)
 
     @property
     def boss_service(self):
