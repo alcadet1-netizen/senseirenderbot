@@ -3,7 +3,6 @@ Boss resources: phrases, intros, etc.
 """
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from aiogram.filters.callback_data import CallbackData
 from src.core.constants import BOSSES
 
 
@@ -52,19 +51,16 @@ BOSS_PHRASES = {
 }
 
 
-class BossResourceCallback(CallbackData, prefix="boss_resource"):
-    action: str
-    value: str | None = None
-
-
 def get_boss_list_keyboard() -> InlineKeyboardMarkup:
     """Generate keyboard for boss selection."""
     buttons = []
     row = []
     for boss_id, boss_info in BOSSES.items():
+        # Create callback data string matching BossEditorCallback format: boss_edit:set_boss:<boss_id>
+        callback_data = f"boss_edit:set_boss:{boss_id}"
         button = InlineKeyboardButton(
             text=boss_info['name'],
-            callback_data=BossResourceCallback(action="select_boss", value=boss_id).pack()
+            callback_data=callback_data
         )
         row.append(button)
 
@@ -80,7 +76,7 @@ def get_boss_list_keyboard() -> InlineKeyboardMarkup:
     # Add back button
     buttons.append([InlineKeyboardButton(
         text="🔙 Назад",
-        callback_data=BossResourceCallback(action="back").pack()
+        callback_data="boss_edit:back"
     )])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
