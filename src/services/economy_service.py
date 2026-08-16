@@ -80,11 +80,20 @@ class EconomyService:
         """Получить текущий баланс банка."""
         doc = await self.bank.find_one({"_id": "single"})
         if doc:
-            return doc.get("coins", 0.0)
+            balance = doc.get("coins", 0.0)
+            if balance == 0.0:
+                # Reset bank to initial balance if empty
+                initial_balance = settings.bank_initial_coins
+                await self._set_bank_balance(initial_balance)
+                logger.info(f"[BANK] Bank balance was zero, reset to {initial_balance}")
+                return initial_balance
+            logger.info(f"[BANK] Found bank document with balance {balance}")
+            return balance
         else:
             # Initialize bank with initial coins from settings
             initial_balance = settings.bank_initial_coins
             await self.bank.insert_one({"_id": "single", "coins": initial_balance})
+            logger.info(f"[BANK] Initialized bank with balance {initial_balance}")
             return initial_balance
 
     async def _set_bank_balance(self, balance: float) -> None:
@@ -94,6 +103,7 @@ class EconomyService:
             {"$set": {"coins": balance}},
             upsert=True
         )
+        logger.info(f"[BANK] Balance set to {balance:,.2f}")
 
     async def _withdraw_from_bank(self, amount: float) -> bool:
         """Снять amount с банка. Возвращает True если успешно."""
