@@ -857,14 +857,11 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
         can_reward = False
 
         if not is_private:
-            # Temporarily disable throttling for message rewards
-            can_reward = True
-            # Original code (to restore later):
-            # can_reward = await self.throttle.throttle(
-            #     key=str(user_id),
-            #     limit_seconds=self.config.throttle_seconds,
-            #     scope="message_rewards"
-            # )
+            can_reward = await self.throttle.throttle(
+                key=str(user_id),
+                limit_seconds=self.config.throttle_seconds,
+                scope="message_rewards"
+            )
 
         # Получаем контейнер сервисов
         container: Container = data.get("container")
