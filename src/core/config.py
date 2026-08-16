@@ -2,6 +2,7 @@
 🔧 Конфигурация приложения через Pydantic Settings v2.
 """
 
+import logging
 import os
 from functools import lru_cache
 from typing import List
@@ -9,6 +10,8 @@ from pathlib import Path
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -84,7 +87,9 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    logger.info(f"[SETTINGS] Loaded settings: admin_ids_str='{settings.admin_ids_str}', admin_ids={settings.admin_ids}")
+    return settings
 
 
 settings = get_settings()
