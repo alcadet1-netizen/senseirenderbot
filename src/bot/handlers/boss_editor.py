@@ -85,7 +85,7 @@ async def on_choose_boss(query: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(BossEditorCallback.filter(F.action == "set_boss"), BossEditorFSM.choosing_boss)
-async def on_set_boss(query: CallbackQuery, state: FSMContext):
+async def on_set_boss(query: CallbackQuery, container: Container, state: FSMContext):
     """Handle boss selection from the list."""
     # Parse the callback data to get the boss_id
     # The callback data should be in format: boss_edit:set_boss:<boss_id>
@@ -98,7 +98,7 @@ async def on_set_boss(query: CallbackQuery, state: FSMContext):
         boss_name = BOSSES.get(boss_id, {}).get("name", "Неизвестный босс")
 
         await state.set_state(BossEditorFSM.choosing_action)
-        await show_editor(query.message, query.message._bot, state)  # type: ignore
+        await show_editor(query.message, container, state)
         await query.answer(f"✅ Выбран босс: {boss_name}")
     except Exception as e:
         await query.answer(f"❌ Ошибка при выборе босса: {e}", show_alert=True)
