@@ -28,15 +28,15 @@ class ThrottlingMiddleware(BaseMiddleware):
     ) -> Any:
         if not isinstance(event, Message):
             return await handler(event, data)
-        
+
         if not event.from_user:
             return await handler(event, data)
-        
+
         user_id = event.from_user.id
-        
+
         # Проверяем, является ли сообщение командой
         is_command = event.text and event.text.startswith("/")
-        
+
         # Применяем строгий троттлинг только к командам
         if is_command:
             # Основная проверка на частоту команд
@@ -61,10 +61,12 @@ class ThrottlingMiddleware(BaseMiddleware):
                 if should_warn:
                     try:
                         await event.answer("⏳ <b>Слишком быстро!</b>\nПодождите немного.", parse_mode="HTML")
-                    except Exception:
-                        pass
+                        logger.info(f"📤 [THROTTLE] Warning sent to user {user_id}")
+                    except Exception as warn_err:
+                        logger.error(f"⚠️ [THROTTLE] Failed to send warning: {warn_err}")
+                else:
+                    logger.info(f"🔇 [THROTTLE] Warning skipped for user {user_id} (cooldown)")
 
-                # Откладываем выполнение команды вместо блокировки
-                # Отправляем предупреждение, но все равно позволяем команде продолжить выполнение
+                logger.info(f"🔄 [THROTTLE] Proceeding to command handler for user {user_id}")
 
         return await handler(event, data)

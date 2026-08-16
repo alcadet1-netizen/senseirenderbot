@@ -216,7 +216,15 @@ async def cmd_admin_help(message: Message) -> None:
     """Админ меню."""
     username = message.from_user.username
     mention = f"@{username}" if username else f"<b>{html.escape(message.from_user.full_name)}</b>"
-    await message.answer(f"{mention}\n\n{get_admin_help()}", parse_mode="HTML")
+    try:
+        help_text = get_admin_help()
+        # Use Visuals.escape for proper HTML escaping
+        help_text = Visuals.escape(help_text)
+        await message.answer(f"{mention}\n\n{help_text}", parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"Failed to send admin help message: {e}")
+        # Fallback to plain text without HTML formatting
+        await message.answer(f"{mention}\n\n{get_admin_help()}")
 
 
 @router.message(Command("adminstats"))
