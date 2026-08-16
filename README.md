@@ -62,6 +62,19 @@ Available Scripts
 - scripts/verify_deletion.py – verifies correct deletion of users
 - scripts/delete_users.py – deletes test users (as needed)
 
+Bot Commands
+The bot includes various commands for users and administrators. Key commands include:
+- /start - Launch the bot
+- /help - Show help
+- /profile - View your profile
+- /top - View leaderboard
+- /daily - Claim daily bonus
+- /trade - Trading interface
+- /duel - Challenge to duel
+- /bossiks [multiplier] - Admin command to set visual pool multiplier for boss display (e.g., /bossiks 3.5)
+- /senseiboss [hours] - Admin command to launch a boss with specified duration
+- /killboss - Admin command to forcibly kill the current boss (no rewards)
+
 Tests
 Run tests:
    pytest
