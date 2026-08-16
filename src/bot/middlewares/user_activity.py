@@ -844,6 +844,7 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
         """Обрабатывает активность пользователя."""
         # Skip processing for commands to avoid delay in command responses
         if event.text and event.text.startswith('/'):
+            logger.info(f"[USER_ACTIVITY] Skipping processing for command: {event.text}")
             return
 
         user = event.from_user
