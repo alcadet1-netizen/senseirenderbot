@@ -4,6 +4,7 @@
 
 import asyncio
 import random
+import time
 from typing import Optional, List, Tuple
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from src.core.config import settings
@@ -48,6 +49,9 @@ class EconomyService:
         # We'll use a simple dictionary of asyncio locks
         # In a production distributed system, we'd use something like Redis or MongoDB atomic operations.
         # For now, we use asyncio.Lock per key.
+        # Cache for total coins in circulation to avoid heavy aggregation on every message
+        self._total_circulation_cache = (0.0, 0)  # (value, expiry_timestamp)
+        self._cache_ttl = 10.0  # seconds
 
     def _get_lock(self, key: str) -> asyncio.Lock:
         if key not in self._locks:
@@ -74,25 +78,25 @@ class EconomyService:
 
     async def _get_bank_balance(self) -> float:
         """Получить текущий баланс банка."""
-        doc = await self.bank.find_one({})
+        doc = await self.bank.find_one({"_id": "single"})
         if doc:
-            return doc.get("balance", 0.0)
+            return doc.get("coins", 0.0)
         else:
             # Initialize bank with initial coins from settings
             initial_balance = settings.bank_initial_coins
-            await self.bank.insert_one({"_id": "single", "balance": initial_balance})
+            await self.bank.insert_one({"_id": "single", "coins": initial_balance})
             return initial_balance
 
     async def _set_bank_balance(self, balance: float) -> None:
         """Установить баланс банка."""
         await self.bank.update_one(
             {"_id": "single"},
-            {"$set": {"balance": balance}},
+            {"$set": {"coins": balance}},
             upsert=True
         )
 
     async def _withdraw_from_bank(self, amount: float) -> bool:
-        """Снятьamount с банка. Возвращает True если успешно."""
+        """Снять amount с банка. Возвращает True если успешно."""
         # We'll do this in a transaction-like manner by finding and updating.
         # For simplicity, we'll do it without transaction and hope for the best.
         # In production, we should use a transaction.
@@ -101,7 +105,7 @@ class EconomyService:
             # Initialize if not exists
             await self._set_bank_balance(settings.bank_initial_coins)
             doc = await self.bank.find_one({"_id": "single"})
-        current_balance = doc.get("balance", 0.0)
+        current_balance = doc.get("coins", 0.0)
         if current_balance < amount:
             return False
         new_balance = current_balance - amount
@@ -114,7 +118,7 @@ class EconomyService:
         if not doc:
             await self._set_bank_balance(settings.bank_initial_coins)
             doc = await self.bank.find_one({"_id": "single"})
-        current_balance = doc.get("balance", 0.0)
+        current_balance = doc.get("coins", 0.0)
         new_balance = current_balance + amount
         await self._set_bank_balance(new_balance)
 
@@ -255,15 +259,24 @@ class EconomyService:
 
     async def _get_total_coins_in_circulation(self) -> float:
         """Получить общее количество монет в обращении (сумма монет всех пользователей)."""
+        # Check cache first
+        now = time.time()
+        cached_value, expiry = self._total_circulation_cache
+        if now < expiry:
+            return cached_value
+
+        # Cache expired or empty, compute new value
         # We'll use the aggregation pipeline to sum the coins field in users collection
         pipeline = [
             {"$group": {"_id": None, "total": {"$sum": "$coins"}}}
         ]
         cursor = self.users.aggregate(pipeline)
         result = await cursor.to_list(length=1)
-        if result:
-            return result[0].get("total", 0.0)
-        return 0.0
+        total = result[0].get("total", 0.0) if result else 0.0
+
+        # Update cache
+        self._total_circulation_cache = (total, now + self._cache_ttl)
+        return total
 
     async def _generate_ticket_code(self) -> str:
         """Генерировать уникальный код билета."""
