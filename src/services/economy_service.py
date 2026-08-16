@@ -224,12 +224,15 @@ class EconomyService:
                 # Check bank balance and withdraw if possible
                 bank_balance = await self._get_bank_balance()
                 logger.info(f"[ECONOMY] Bank balance={bank_balance}, coins_reward={coins_reward}")
-                if bank_balance >= coins_reward:
-                    await self._withdraw_from_bank(coins_reward)
-                    logger.info(f"[ECONOMY] Withdrew {coins_reward} from bank")
-                else:
-                    coins_reward = 0  # Not enough in bank
-                    logger.info(f"[ECONOMY] Not enough in bank, setting coins_reward=0")
+                if bank_balance < coins_reward:
+                    # If bank doesn't have enough, reset it to initial balance to ensure we can continue
+                    initial_balance = settings.bank_initial_coins
+                    await self._set_bank_balance(initial_balance)
+                    logger.info(f"[ECONOMY] Bank balance was insufficient ({bank_balance}), reset to {initial_balance}")
+                    bank_balance = initial_balance
+                # Now we should have enough
+                await self._withdraw_from_bank(coins_reward)
+                logger.info(f"[ECONOMY] Withdrew {coins_reward} from bank")
 
                 # Update user XP and coins
                 await self.users.update_one(
