@@ -46,6 +46,7 @@ def get_admin_help() -> str:
         Visuals.frame_line_left("◦ /stopquiz", w),
         Visuals.frame_line_left("◦ /senseiboss [time]", w),
         Visuals.frame_line_left("◦ /killboss", w),
+        Visuals.frame_line_left("◦ /bossiks [multiplier]", w),
         Visuals.frame_line_left("◦ /senseivesti", w),
         Visuals.frame_line_left("◦ /senseivestnik", w),
         Visuals.frame_line_left("◦ /senseistat", w),
