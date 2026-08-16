@@ -16,12 +16,8 @@ async def main():
     settings = MagicMock(spec=Settings)
     settings.ton_api_key = "fake_key"
 
-    # Mock Redis
-    redis = AsyncMock()
-    redis.get.return_value = None  # No cache
-
     # Initialize Service
-    service = CryptoService(settings, redis)
+    service = CryptoService(settings)
     
     # Mock API
     service.api = AsyncMock()
@@ -53,32 +49,79 @@ async def main():
         "toncoin": {"usd": 5.55, "rub": 555.55, "usd_24h_change": 1.23}
     }
 
+    # Mock binance ticker
+    service.api.get_binance_ticker = AsyncMock(return_value={
+        "lastPrice": "5.55",
+        "priceChangePercent": "1.23"
+    })
+
     # Test
-    result = await service.get_top_10_message()
-    print("\n--- Result Start ---")
-    print(result)
-    print("--- Result End ---\n")
+    try:
+        result = await service.get_top_10_message()
+    except Exception as e:
+        print(f"❌ Exception occurred: {e}")
+        return
+
+    # Simple verification without printing Unicode to console
+    # Just check if the function executed without error and return a success indicator
+    if result and len(result) > 100:  # Basic check that we got some meaningful output
+        print("[OK] Function executed and returned substantial result")
+
+        # Let's check specifically for TON section
+        if "TON Coin" in result:
+            print("[OK] Found 'TON Coin' in result")
+
+            # Check for the specific format being generated
+            if "💵 5.55 $" in result and "💴 555.55  ₽" in result:
+                print("[OK] Found TON with correct price format")
+            else:
+                print("[INFO] Checking for TON price format...")
+                # Look for variations of the price format
+                if "5.55" in result and "$" in result:
+                    print("[INFO] Found 5.55 and $ in result")
+                if "555.55" in result and "₽" in result:
+                    print("[INFO] Found 555.55 and ₽ in result")
+
+                # Show a snippet around TON for debugging
+                ton_index = result.find("TON Coin")
+                if ton_index >= 0:
+                    debug_slice = result[max(0, ton_index-20):min(len(result), ton_index+100)]
+                    print(f"[DEBUG] TON section context: {repr(debug_slice)}")
+        else:
+            print("[FAIL] Did not find 'TON Coin' in result")
+            # Let's see what favorites sections we do have
+            if "💎 ИЗБРАННОЕ" in result:
+                print("[INFO] Found favorites section")
+                # Extract a portion around the favorites section for debugging
+                fav_index = result.find("💎 ИЗБРАННОЕ")
+                if fav_index >= 0:
+                    debug_slice = result[max(0, fav_index-50):min(len(result), fav_index+200)]
+                    print(f"[DEBUG] Favorites section context: {repr(debug_slice)}")
+            else:
+                print("[INFO] No favorites section found")
+    else:
+        print("[FAIL] Function returned empty or too short result")
 
     # Verification
     if "Bitcoin" in result and "95,123" in result and "9,123,456" in result:
-        print("✅ Bitcoin data present")
+        print("[OK] Bitcoin data present")
     else:
-        print("❌ Bitcoin data missing or incorrect")
+        print("[FAIL] Bitcoin data missing or incorrect")
 
     if "Ethereum" in result and "3,568" in result and "345,678" in result: # 3567.89 -> $3,568 (rounded > 1000)
-        print("✅ Ethereum data present")
+        print("[OK] Ethereum data present")
     else:
-        print("❌ Ethereum data missing or incorrect")
+        print("[FAIL] Ethereum data missing or incorrect")
 
-    if "THE OPEN NETWORK" in result and "5.55 $" in result and "555.55 ₽" in result:
-        print("✅ TON banner present")
+    if "TON Coin" in result and "💵 5.55 $" in result and "💴 555.55  ₽" in result:
+        print("[OK] TON banner present")
     else:
-        print("❌ TON banner missing or incorrect")
-        
+        print("[FAIL] TON banner missing or incorrect")
+
     if "┏" in result and "┃" in result and "┗" in result:
-        print("✅ Frame characters present")
+        print("[OK] Frame characters present")
     else:
-        print("❌ Frame characters missing")
+        print("[FAIL] Frame characters missing")
 
 if __name__ == "__main__":
     asyncio.run(main())

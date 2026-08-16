@@ -119,7 +119,7 @@ class Container:
     def crypto_service(self):
         if self._crypto_service is None:
             from src.services.crypto_service import CryptoService
-            self._crypto_service = CryptoService(self.settings, self.mongo_client)
+            self._crypto_service = CryptoService(self.settings)
         return self._crypto_service
 
     @property
