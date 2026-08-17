@@ -250,6 +250,7 @@ async def on_start_boss(query: CallbackQuery, container: Container, state: FSMCo
     try:
         reward_settings = await container.boss_service.get_reward_settings()
         from src.bot.handlers.boss_commands import launch_boss
+        # Запуск босса с выбранными параметрами
         await launch_boss(
             bot=query.bot,
             chat_id=target_chat_id,
