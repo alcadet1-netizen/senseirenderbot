@@ -24,6 +24,7 @@ class BossEditorFSM(StatesGroup):
     setting_reward_pool = State()
     setting_ton_chance = State()
     choosing_boss = State()
+    setting_duration = State()
 
 
 def get_editor_keyboard(settings: dict):
@@ -37,7 +38,31 @@ def get_editor_keyboard(settings: dict):
             InlineKeyboardButton(text="🎲 Шанс TON", callback_data=BossEditorCallback(action="set_ton_chance").pack()),
             InlineKeyboardButton(text=f"{settings.get('drop_chance', 0) * 100:.1f}%", callback_data=BossEditorCallback(action="noop").pack())
         ],
+        [InlineKeyboardButton(text="⏱ Длительность", callback_data=BossEditorCallback(action="menu_duration").pack())],
         [InlineKeyboardButton(text="▶️ Старт", callback_data=BossEditorCallback(action="start").pack())]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_duration_keyboard():
+    """Get keyboard for duration selection."""
+    buttons = [
+        [
+            InlineKeyboardButton(text="1 час", callback_data=BossEditorCallback(action="set_duration", value="1").pack()),
+            InlineKeyboardButton(text="2 часа", callback_data=BossEditorCallback(action="set_duration", value="2").pack()),
+            InlineKeyboardButton(text="6 часов", callback_data=BossEditorCallback(action="set_duration", value="6").pack()),
+        ],
+        [
+            InlineKeyboardButton(text="12 часов", callback_data=BossEditorCallback(action="set_duration", value="12").pack()),
+            InlineKeyboardButton(text="24 часа", callback_data=BossEditorCallback(action="set_duration", value="24").pack()),
+            InlineKeyboardButton(text="3 дня", callback_data=BossEditorCallback(action="set_duration", value="72").pack()),
+        ],
+        [
+            InlineKeyboardButton(text="1 неделя", callback_data=BossEditorCallback(action="set_duration", value="168").pack()),
+            InlineKeyboardButton(text="∞ Бесконечно", callback_data=BossEditorCallback(action="set_duration", value="0").pack()),
+            InlineKeyboardButton(text="✏️ Ввести вручную", callback_data=BossEditorCallback(action="input_duration").pack()),
+        ],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data=BossEditorCallback(action="noop").pack())]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -148,20 +173,46 @@ async def on_ton_chance_set(message: Message, container: Container, state: FSMCo
 
 @router.callback_query(BossEditorCallback.filter(F.action == "start"), BossEditorFSM.choosing_action)
 async def on_start_boss(query: CallbackQuery, container: Container, state: FSMContext):
+    """Handle start button - show duration selection or launch if already set."""
     data = await state.get_data()
     boss_id = data.get("boss_id")
+    duration = data.get("duration_hours")
 
     if not boss_id:
         await query.answer("⚠️ Сначала выберите босса!", show_alert=True)
         return
 
-    target_chat_id = container.settings.allowed_chats[0] if container.settings.allowed_chats else -1002098194464
+    # If duration not set, show duration selection
+    if duration is None:
+        await state.set_state(BossEditorFSM.setting_duration)
+        await query.message.edit_text(
+            "⏱ <b>Выберите продолжительность босса:</b>\n\n"
+            "Выберите время жизни босса перед запуском:",
+            parse_mode="HTML",
+            reply_markup=get_duration_keyboard()
+        )
+        await query.answer()
+        return
+
+    # Duration is set, proceed with launch
+    target_chat_id = container.settings.allowed_chats[0] if container.settings.allowed_chats else None
+
+    if not target_chat_id:
+        await query.answer(
+            "❌ Не настроены разрешенные чаты. Добавьte ALLOWED_CHATS в .env файл",
+            show_alert=True
+        )
+        return
 
     try:
         reward_settings = await container.boss_service.get_reward_settings()
         from src.bot.handlers.boss_commands import launch_boss
-        await launch_boss(query.bot, target_chat_id, boss_id, container, reward_settings=reward_settings)
-        await query.message.edit_text(f"✅ Босс <b>{BOSSES[boss_id]['name']}</b> успешно призван в чат {target_chat_id}!")
+        await launch_boss(query.bot, target_chat_id, boss_id, container,
+                         duration_hours=duration, reward_settings=reward_settings)
+        await query.message.edit_text(
+            f"✅ Босс <b>{BOSSES[boss_id]['name']}</b> успешно призван в чат {target_chat_id}!\n"
+            f"⏱ Продолжительность: {duration} часов"
+        )
         await state.clear()
     except Exception as e:
         await query.answer(f"❌ Ошибка при запуске босса: {e}", show_alert=True)
@@ -170,3 +221,68 @@ async def on_start_boss(query: CallbackQuery, container: Container, state: FSMCo
 @router.message(BossEditorFSM.choosing_action)
 async def handle_initial_editor_message(message: Message, container: Container, state: FSMContext):
     await show_editor(message, container, state)
+
+
+# Duration selection handlers
+@router.callback_query(BossEditorCallback.filter(F.action == "menu_duration"), BossEditorFSM.choosing_action)
+async def on_menu_duration(query: CallbackQuery, state: FSMContext):
+    """Handle duration menu button - show duration selection."""
+    await state.set_state(BossEditorFSM.setting_duration)
+    await query.message.edit_text(
+        "⏱ <b>Выберите продолжительность босса:</b>\n\n"
+        "Выберите время жизни босса перед запуском:",
+        parse_mode="HTML",
+        reply_markup=get_duration_keyboard()
+    )
+    await query.answer()
+
+
+@router.callback_query(BossEditorCallback.filter(F.action == "set_duration"), BossEditorFSM.setting_duration)
+async def on_set_duration(query: CallbackQuery, state: FSMContext):
+    """Handle duration selection from predefined options."""
+    try:
+        _, value = query.data.split(":")
+        duration = int(value)
+        await state.update_data(duration_hours=duration if duration > 0 else None)
+
+        # Go back to main editor
+        await state.set_state(BossEditorFSM.choosing_action)
+        await show_editor(query.message, container, state)
+        duration_text = f"{duration} часов" if duration > 0 else "бесконечно"
+        await query.answer(f"✅ Продолжительность установлена: {duration_text}")
+    except Exception as e:
+        await query.answer(f"❌ Ошибка: {e}", show_alert=True)
+
+
+@router.message(BossEditorFSM.setting_duration)
+async def on_duration_input(message: Message, container: Container, state: FSMContext):
+    """Handle manual duration input."""
+    try:
+        duration = int(message.text.strip())
+        if duration < 0:
+            await message.answer("⚠️ Продолжительность не может быть отрицательной")
+            return
+
+        await state.update_data(duration_hours=duration if duration > 0 else None)
+        await state.set_state(BossEditorFSM.choosing_action)
+        await show_editor(message, container, state)
+
+        duration_text = f"{duration} часов" if duration > 0 else "бесконечно"
+        await message.answer(f"✅ Продолжительность установлена: {duration_text}")
+    except ValueError:
+        await message.answer("⚠️ Введите корректное число часов")
+
+
+# Helper for input duration state
+@router.callback_query(BossEditorCallback.filter(F.action == "input_duration"), BossEditorFSM.choosing_action)
+async def on_input_duration(query: CallbackQuery, state: FSMContext):
+    """Handle manual duration input request."""
+    await state.set_state(BossEditorFSM.setting_duration)
+    await query.message.edit_text(
+        "✏️ <b>Введите продолжительность в часах:</b>\n\n"
+        "• 0 - бесконечно\n"
+        "• 1-168 - конкретное количество часов\n"
+        "• Например: 2 для 2 часов, 24 для 1 дня",
+        parse_mode="HTML"
+    )
+    await query.answer()
