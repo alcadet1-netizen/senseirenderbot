@@ -3,6 +3,7 @@
 """
 
 import asyncio
+import logging
 import random
 import time
 
@@ -21,6 +22,9 @@ from src.bot.filters import AdminFilter
 from src.core.constants import BOSS_COOLDOWN_MINUTES, BOSSES
 from src.core.container import Container
 from src.core.visuals import Visuals
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 async def safe_answer(callback: CallbackQuery, text: str = None, show_alert: bool = False):
@@ -211,6 +215,12 @@ async def launch_boss(
 
     if msg:
         await boss_service.set_message_data(chat_id, msg.message_id, has_photo=bool(image_path))
+        # Pin the boss message
+        try:
+            await bot.pin_chat_message(chat_id=chat_id, message_id=msg.message_id, disable_notification=True)
+        except Exception as e:
+            # If pinning fails (e.g., no rights), log but don't stop the boss launch
+            logger.warning(f"Failed to pin boss message in chat {chat_id}: {e}")
 
 from aiogram.fsm.context import FSMContext
 from src.bot.handlers.boss_editor import BossEditorFSM
