@@ -25,6 +25,7 @@ class BossEditorFSM(StatesGroup):
     setting_ton_chance = State()
     choosing_boss = State()
     setting_duration = State()
+    choosing_chat = State()
 
 
 def get_editor_keyboard(settings: dict):
@@ -39,6 +40,7 @@ def get_editor_keyboard(settings: dict):
             InlineKeyboardButton(text=f"{settings.get('drop_chance', 0) * 100:.1f}%", callback_data=BossEditorCallback(action="noop").pack())
         ],
         [InlineKeyboardButton(text="⏱ Длительность", callback_data=BossEditorCallback(action="menu_duration").pack())],
+        [InlineKeyboardButton(text="💬 Выбрать чат", callback_data=BossEditorCallback(action="menu_chat").pack())],
         [InlineKeyboardButton(text="▶️ Старт", callback_data=BossEditorCallback(action="start").pack())]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -67,10 +69,30 @@ def get_duration_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def get_chat_keyboard(container: Container):
+    """Get keyboard for chat selection."""
+    buttons = []
+    allowed_chats = container.settings.allowed_chats
+    if allowed_chats:
+        for chat_id in allowed_chats:
+            buttons.append([InlineKeyboardButton(
+                text=f"Чат {chat_id}",
+                callback_data=BossEditorCallback(action="set_chat", value=str(chat_id)).pack()
+            )])
+    else:
+        buttons.append([InlineKeyboardButton(
+            text="Нет настроенных чатов",
+            callback_data=BossEditorCallback(action="noop").pack()
+        )])
+    buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data=BossEditorCallback(action="noop").pack())])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
 async def show_editor(message: Message, container: Container, state: FSMContext):
     """Show the boss editor interface."""
     data = await state.get_data()
     boss_id = data.get("boss_id")
+    duration_hours = data.get("duration_hours")
 
     settings = await container.boss_service.get_reward_settings()
 
@@ -81,7 +103,19 @@ async def show_editor(message: Message, container: Container, state: FSMContext)
 
     if boss_id:
         boss_name = BOSSES.get(boss_id, {}).get("name", "Неизвестный босс")
-        text += f"👹 Текущий босс: <b>{boss_name}</b>\n\n"
+        text += f"👹 Текущий босс: <b>{boss_name}</b>\n"
+    if duration_hours is not None:
+        duration_text = f"{duration_hours} часов" if duration_hours > 0 else "бесконечно"
+        text += f"⏱ Продолжительность: {duration_text}\n"
+    # Show target chat info
+    allowed_chats = container.settings.allowed_chats
+    if allowed_chats:
+        # Use selected chat if set, otherwise use first allowed chat as default
+        target_chat_id = data.get("target_chat_id") or allowed_chats[0]
+        text += f"💬 Чат для запуска: {target_chat_id}\n"
+    else:
+        text += f"⚠️ Чат не настроен! Добавьте ALLOWED_CHATS в .env\n"
+    text += "\n"
 
     await message.answer(
         text,
@@ -115,7 +149,11 @@ async def on_set_boss(query: CallbackQuery, container: Container, state: FSMCont
     # Parse the callback data to get the boss_id
     # The callback data should be in format: boss_edit:set_boss:<boss_id>
     try:
-        _, action, boss_id = query.data.split(":")
+        parts = query.data.split(":")
+        if len(parts) != 3:
+            await query.answer(f"❌ Неверный формат callback данных: {query.data}", show_alert=True)
+            return
+        _, action, boss_id = parts
         await state.update_data(boss_id=boss_id)
 
         # Get boss name for confirmation
@@ -195,11 +233,16 @@ async def on_start_boss(query: CallbackQuery, container: Container, state: FSMCo
         return
 
     # Duration is set, proceed with launch
-    target_chat_id = container.settings.allowed_chats[0] if container.settings.allowed_chats else None
+    data = await state.get_data()
+    target_chat_id = data.get("target_chat_id")
 
-    if not target_chat_id:
+    # Use selected chat or fallback to first allowed chat
+    allowed_chats = container.settings.allowed_chats
+    if not target_chat_id and allowed_chats:
+        target_chat_id = allowed_chats[0]
+    elif not target_chat_id:
         await query.answer(
-            "❌ Не настроены разрешенные чаты. Добавьte ALLOWED_CHATS в .env файл",
+            "❌ Не настроены разрешенные чаты. Добавьте ALLOWED_CHATS в .env файл",
             show_alert=True
         )
         return
@@ -238,10 +281,14 @@ async def on_menu_duration(query: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(BossEditorCallback.filter(F.action == "set_duration"), BossEditorFSM.setting_duration)
-async def on_set_duration(query: CallbackQuery, state: FSMContext):
+async def on_set_duration(query: CallbackQuery, container: Container, state: FSMContext):
     """Handle duration selection from predefined options."""
     try:
-        _, value = query.data.split(":")
+        parts = query.data.split(":")
+        if len(parts) != 3:
+            await query.answer(f"❌ Неверный формат callback данных: {query.data}", show_alert=True)
+            return
+        _, action, value = parts
         duration = int(value)
         await state.update_data(duration_hours=duration if duration > 0 else None)
 
@@ -250,6 +297,8 @@ async def on_set_duration(query: CallbackQuery, state: FSMContext):
         await show_editor(query.message, container, state)
         duration_text = f"{duration} часов" if duration > 0 else "бесконечно"
         await query.answer(f"✅ Продолжительность установлена: {duration_text}")
+    except ValueError as e:
+        await query.answer(f"❌ Ошибка в значении продолжительности: {e}", show_alert=True)
     except Exception as e:
         await query.answer(f"❌ Ошибка: {e}", show_alert=True)
 
@@ -286,3 +335,39 @@ async def on_input_duration(query: CallbackQuery, state: FSMContext):
         parse_mode="HTML"
     )
     await query.answer()
+
+
+# Chat selection handlers
+@router.callback_query(BossEditorCallback.filter(F.action == "menu_chat"), BossEditorFSM.choosing_action)
+async def on_menu_chat(query: CallbackQuery, container: Container, state: FSMContext):
+    """Handle chat menu button - show chat selection."""
+    await state.set_state(BossEditorFSM.choosing_chat)
+    await query.message.edit_text(
+        "💬 <b>Выберите чат для запуска босса:</b>\n\n"
+        "Выберите чат, в котором будет запущен босс:",
+        parse_mode="HTML",
+        reply_markup=get_chat_keyboard(container)
+    )
+    await query.answer()
+
+
+@router.callback_query(BossEditorCallback.filter(F.action == "set_chat"), BossEditorFSM.choosing_chat)
+async def on_set_chat(query: CallbackQuery, container: Container, state: FSMContext):
+    """Handle chat selection."""
+    try:
+        parts = query.data.split(":")
+        if len(parts) != 3:
+            await query.answer(f"❌ Неверный формат callback данных: {query.data}", show_alert=True)
+            return
+        _, action, value = parts
+        chat_id = int(value)
+        await state.update_data(target_chat_id=chat_id)
+
+        # Go back to main editor
+        await state.set_state(BossEditorFSM.choosing_action)
+        await show_editor(query.message, container, state)
+        await query.answer(f"✅ Чат установлен: {chat_id}")
+    except ValueError as e:
+        await query.answer(f"❌ Ошибка в значении чата: {e}", show_alert=True)
+    except Exception as e:
+        await query.answer(f"❌ Ошибка: {e}", show_alert=True)
