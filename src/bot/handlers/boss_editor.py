@@ -371,3 +371,28 @@ async def on_set_chat(query: CallbackQuery, container: Container, state: FSMCont
         await query.answer(f"❌ Ошибка в значении чата: {e}", show_alert=True)
     except Exception as e:
         await query.answer(f"❌ Ошибка: {e}", show_alert=True)
+
+
+# Back button handlers
+@router.callback_query(BossEditorCallback.filter(F.action == "noop"), BossEditorFSM.setting_duration)
+async def on_duration_back(query: CallbackQuery, container: Container, state: FSMContext):
+    """Handle back button from duration selection."""
+    await state.set_state(BossEditorFSM.choosing_action)
+    await show_editor(query.message, container, state)
+    await query.answer()
+
+
+@router.callback_query(BossEditorCallback.filter(F.action == "noop"), BossEditorFSM.choosing_chat)
+async def on_chat_back(query: CallbackQuery, container: Container, state: FSMContext):
+    """Handle back button from chat selection."""
+    await state.set_state(BossEditorFSM.choosing_action)
+    await show_editor(query.message, container, state)
+    await query.answer()
+
+
+@router.callback_query(F.data == "boss_edit:back", BossEditorFSM.choosing_boss)
+async def on_boss_list_back(query: CallbackQuery, container: Container, state: FSMContext):
+    """Handle back button from boss list selection."""
+    await state.set_state(BossEditorFSM.choosing_action)
+    await show_editor(query.message, container, state)
+    await query.answer()
