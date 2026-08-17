@@ -319,7 +319,7 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
     )
     user_db = user_data["user"]
 
-    if not user_db.has_katana:
+    if not user_db.get("has_katana", False):
         msg = "🚫 У тебя нет катаны! (Нужен предмет 'katana')"
         if is_callback:
             return await safe_answer(event, msg, show_alert=True)
@@ -328,7 +328,19 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
             # But usually we shouldn't spam.
             return
 
-    katana_length = user_db.katana_length
+    katana_length = user_db.get("katana_length", 0.0)
+
+    # Check minimum level requirement (from source bot)
+    player_level = container.level_service.get_level(user_db.get("xp", 0))
+    min_level = 5
+    if player_level < min_level:
+        msg = f"🚫 Минимальный уровень для участия в битве с боссом — {min_level}."
+        if is_callback:
+            return await safe_answer(event, msg, show_alert=True)
+        else:
+            sent = await event.answer(msg)
+            asyncio.create_task(delete_message_delayed(sent, 3))
+            return
 
     # Calculate BASE damage
     base_damage = random.randint(10, 20)
@@ -527,7 +539,7 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
 
         # --- xRocket Reward Logic ---
         if actual_dmg >= 20:
-            user_level = container.level_service.get_level(user_db.xp)
+            user_level = container.level_service.get_level(user_db.get("xp", 0))
             if user_level >= 5:
                 # Dynamic Settings
                 reward_settings = await boss_service.get_reward_settings()
