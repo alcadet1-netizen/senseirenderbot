@@ -96,8 +96,8 @@ class LotteryService:
 
             return {
                 "success": True,
-                "user_id": user.id,
-                "username": user.username or user.first_name or f"User {user.id}",
+                "user_id": user["id"],
+                "username": user.get("username") or user.get("first_name") or f"User {user['id']}",
                 "ticket_code": ticket_doc["code"],
             }
         except Exception as e:
