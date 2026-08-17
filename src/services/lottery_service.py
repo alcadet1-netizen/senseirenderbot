@@ -70,30 +70,39 @@ class LotteryService:
 
     async def admin_add_ticket(self, user_id: int, admin_id: int) -> dict:
         """Админ выдаёт билет пользователю."""
-        # Check if user exists
-        user = await self.users.find_one({"id": user_id})
-        if not user:
-            return {"success": False, "error": "User not found"}
+        try:
+            # Check if user exists
+            user = await self.users.find_one({"id": user_id})
+            if not user:
+                return {"success": False, "error": "User not found"}
 
-        # Create ticket
-        last_ticket = await self.tickets.find_one(sort=[("_id", -1)])
-        next_id = (last_ticket.get("_id", 0) + 1) if last_ticket else 1
+            # Generate ticket ID using atomic counter
+            counter_doc = await self.db.counters.find_one_and_update(
+                {"_id": "ticket_id"},
+                {"$inc": {"seq": 1}},
+                upsert=True,
+                return_document=True
+            )
+            next_id = counter_doc["seq"]
 
-        ticket_doc = {
-            "_id": next_id,
-            "user_id": user_id,
-            "code": f"TICKET-{next_id:08d}",  # Simple ticket code
-            "created_at": datetime.now(timezone.utc),
-            "burned": False
-        }
-        await self.tickets.insert_one(ticket_doc)
+            ticket_doc = {
+                "_id": next_id,
+                "user_id": user_id,
+                "code": f"TICKET-{next_id:08d}",
+                "created_at": datetime.now(timezone.utc),
+                "burned": False
+            }
+            await self.tickets.insert_one(ticket_doc)
 
-        return {
-            "success": True,
-            "user_id": user.id,
-            "username": user.username or user.first_name or f"User {user.id}",
-            "ticket_code": ticket_doc["code"],
-        }
+            return {
+                "success": True,
+                "user_id": user.id,
+                "username": user.username or user.first_name or f"User {user.id}",
+                "ticket_code": ticket_doc["code"],
+            }
+        except Exception as e:
+            logger.error(f"Error in admin_add_ticket for user {user_id}: {e}")
+            return {"success": False, "error": "Internal error"}
 
     async def admin_burn_user_tickets(self, user_id: int, admin_id: int) -> dict:
         """Админ сжигает все билеты пользователя."""
