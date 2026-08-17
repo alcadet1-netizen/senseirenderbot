@@ -71,7 +71,6 @@ The bot includes various commands for users and administrators. Key commands inc
 - /daily - Claim daily bonus
 - /trade - Trading interface
 - /duel - Challenge to duel
-- /bossiks [multiplier] - Admin command to set visual pool multiplier for boss display (e.g., /bossiks 3.5)
 - /senseiboss [hours] - Admin command to launch a boss with specified duration
 - /killboss - Admin command to forcibly kill the current boss (no rewards)
 
