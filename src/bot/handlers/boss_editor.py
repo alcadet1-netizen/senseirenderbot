@@ -251,7 +251,7 @@ async def on_start_boss(query: CallbackQuery, container: Container, state: FSMCo
         reward_settings = await container.boss_service.get_reward_settings()
         from src.bot.handlers.boss_commands import launch_boss
         await launch_boss(query.bot, target_chat_id, boss_id, container,
-                         duration_hours=duration, reward_settings=reward_settings)
+                         duration=duration, reward_settings=reward_settings)
         await query.message.edit_text(
             f"✅ Босс <b>{BOSSES[boss_id]['name']}</b> успешно призван в чат {target_chat_id}!\n"
             f"⏱ Продолжительность: {duration} часов"
