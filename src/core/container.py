@@ -39,6 +39,7 @@ class Container:
     _popugai_service: Optional["PopugaiService"] = field(default=None, init=False, repr=False)
     _boss_service: Optional["BossService"] = field(default=None, init=False, repr=False)
     _banzai_service: Optional["BanzaiService"] = field(default=None, init=False, repr=False)
+    _xrocket_service: Optional["XRocketService"] = field(default=None, init=False, repr=False)
 
     @property
     def boss_service(self):
