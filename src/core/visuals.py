@@ -289,6 +289,22 @@ class Visuals:
         return f"{int(amount):,.0f}".replace(",", " ")
 
     @staticmethod
+    def cross() -> str:
+        return "❌"
+
+    @staticmethod
+    def wait_raw() -> str:
+        return "⏳"
+
+    @staticmethod
+    def trophy_raw() -> str:
+        return "🏆"
+
+    @staticmethod
+    def fire_raw() -> str:
+        return "🔥"
+
+    @staticmethod
     def escape(text: str) -> str:
         """Экранирование HTML-спецсимволов."""
         if text is None:
