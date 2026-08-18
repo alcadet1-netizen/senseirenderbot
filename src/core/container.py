@@ -54,6 +54,19 @@ class Container:
         return self._xrocket_service
 
     @property
+    def banzai_service(self):
+        if self._banzai_service is None:
+            from src.services.banzai_service import BanzaiService
+            self._banzai_service = BanzaiService(
+                self.mongo_client,
+                self.chat_activity_service,
+                self.lottery_service,
+                self.economy_service,
+                self.xrocket_service,
+            )
+        return self._banzai_service
+
+    @property
     def user_service(self):
         if self._user_service is None:
             from src.services.user_service import UserService

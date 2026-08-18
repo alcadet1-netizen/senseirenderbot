@@ -71,6 +71,11 @@ async def on_startup(bot: Bot, container: Container) -> None:
     await container.chat_activity_service.start_monitoring(bot)
     logger.info("✅ Chat activity monitoring started")
 
+    # Восстанавливаем активные игры БАНЗАЙ
+    restored = await container.banzai_service.restore_workers(bot)
+    if restored > 0:
+        logger.info(f"✅ Restored {restored} Banzai workers")
+
     # Устанавливаем команды
     await setup_bot_commands(bot)
     logger.info("✅ Bot commands set")

@@ -5,6 +5,7 @@
 from aiogram import Router
 
 from src.bot.handlers.user_commands import router as user_router
+from src.bot.handlers.banzai import router as banzai_router
 from src.bot.handlers.callbacks import router as callbacks_router
 from src.bot.handlers.admin_commands import router as admin_router
 from src.bot.handlers.triggers import router as triggers_router
@@ -31,16 +32,17 @@ from src.bot.handlers.draw import router as draw_router
 def setup_routers() -> Router:
     """Настройка и объединение всех роутеров."""
     main_router = Router(name="main")
-    
+
     # Порядок важен!
     # user_router должен быть первым, чтобы команды обрабатывались приоритетно
     main_router.include_router(user_router)
+    main_router.include_router(banzai_router)  # Banzai game handler
     main_router.include_router(music_router)
     main_router.include_router(boss_router)
     main_router.include_router(boss_admin_router)
     main_router.include_router(boss_editor_router)
     main_router.include_router(draw_router)
-    
+
     main_router.include_router(errors_router)
     main_router.include_router(maintenance_router)
     main_router.include_router(admin_router)
@@ -54,12 +56,12 @@ def setup_routers() -> Router:
     main_router.include_router(digest_router)
     main_router.include_router(zov_router)
     main_router.include_router(referral_router)
-    
+
     # Callbacks and triggers (low priority)
     main_router.include_router(callbacks_router)
     main_router.include_router(triggers_router)
     main_router.include_router(events_router)
-    
+
     return main_router
 
 

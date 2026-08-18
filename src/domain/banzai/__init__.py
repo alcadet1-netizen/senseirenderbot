@@ -1,0 +1,3 @@
+"""
+Banzai game domain module.
+"""

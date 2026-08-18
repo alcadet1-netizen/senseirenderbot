@@ -31,6 +31,8 @@ class ChatActivityMiddleware(BaseMiddleware):
                 if container:
                     # Обновляем время активности в фоне, чтобы не блокировать обработку
                     await container.chat_activity_service.update_activity(event.chat.id)
+                    # Также обновляем активность для игры БАНЗАЙ
+                    await container.banzai_service.update_user_activity(event.chat.id, event.from_user.id)
         duration_ms = (time.time() - start) * 1000
         logger.info(f"[CHAT_ACTIVITY] Finished processing chat_id={event.chat.id} in {duration_ms:.2f} ms")
         return await handler(event, data)
