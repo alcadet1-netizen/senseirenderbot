@@ -33,8 +33,8 @@ class UserService:
             if not user:
                 return None
 
-            # Count tickets
-            tickets_count = await self.tickets.count_documents({"user_id": user_id})
+            # Count tickets (only non-burned)
+            tickets_count = await self.tickets.count_documents({"user_id": user_id, "burned": False})
             # Count achievements
             achievements_count = await self.achievements.count_documents({"user_id": user_id})
 

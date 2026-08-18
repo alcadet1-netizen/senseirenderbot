@@ -68,8 +68,8 @@ class StatsService:
             # Circulation would be user coins
             circulation = total_user_coins
 
-            # Total active tickets
-            total_tickets = await self.tickets.count_documents({})
+            # Total active (non-burned) tickets
+            total_tickets = await self.tickets.count_documents({"burned": False})
 
             # Transaction stats by type
             pipeline = [
