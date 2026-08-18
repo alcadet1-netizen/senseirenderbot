@@ -19,7 +19,7 @@ from src.bot.presenters.banzai_presenter import BanzaiPresenter
 from src.core.visuals import Visuals
 from datetime import datetime, timezone
 from aiogram import Bot
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardMessage
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 logger = logging.getLogger(__name__)
 
