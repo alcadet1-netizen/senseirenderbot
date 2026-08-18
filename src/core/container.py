@@ -38,6 +38,7 @@ class Container:
     _throttle_service: Optional["ThrottleService"] = field(default=None, init=False, repr=False)
     _popugai_service: Optional["PopugaiService"] = field(default=None, init=False, repr=False)
     _boss_service: Optional["BossService"] = field(default=None, init=False, repr=False)
+    _banzai_service: Optional["BanzaiService"] = field(default=None, init=False, repr=False)
 
     @property
     def boss_service(self):
