@@ -57,10 +57,16 @@ class BanzaiCommandParser:
                 # Поэтому мы будем считать, что если указано start, то это тоже запуск с параметрами
                 action = BanzaiActionType.START
 
-        # Если действие не распознано, но указаны минуты и/или награда, то считаем, что это запуск игры
+        # If action_str looks like a number, treat it as minutes (e.g., user entered "5" without action)
+        if action == BanzaiActionType.UNKNOWN and action_str and action_str.isdigit():
+            action = BanzaiActionType.SET_TIME
+            minutes_str = action_str  # reuse the action_str as minutes
+            action_str = None  # clear action_str so it doesn't interfere
+
+        # Если действие не распознано, но указаны минуты и/или награда, то считаем, что это установка времени и запуск игры
         if action == BanzaiActionType.UNKNOWN:
             if minutes_str is not None or reward_str is not None:
-                action = BanzaiActionType.START
+                action = BanzaiActionType.SET_TIME
 
         # Преобразуем минуты и награду в числа, если они есть
         minutes = int(minutes_str) if minutes_str else None
