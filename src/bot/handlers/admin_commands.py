@@ -59,7 +59,7 @@ def get_admin_help() -> str:
         Visuals.frame_separator_left(w),
         Visuals.frame_line_left("» НАГРАДЫ", w),
         Visuals.frame_line_left("◦ /bonussensei", w),
-        Visuals.frame_line_left("◦ /addticket (reply)", w),
+        Visuals.frame_line_left("◦ /addticket [количество] (reply)", w),
         Visuals.frame_line_left("◦ /addcoin (reply)", w),
         Visuals.frame_line_left("◦ /addxp (reply)", w),
         Visuals.frame_line_left("◦ /addkatana (reply)", w),
