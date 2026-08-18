@@ -18,6 +18,7 @@ from src.services.xrocket_service import XRocketService
 from src.bot.presenters.banzai_presenter import BanzaiPresenter
 from src.core.visuals import Visuals
 from datetime import datetime, timezone
+from aiogram import Bot
 
 logger = logging.getLogger(__name__)
 
