@@ -135,6 +135,20 @@ class LotteryService:
             "burned_count": burned_count
         }
 
+    async def add_ticket(self, user_id: int, source: str = "system") -> dict:
+        """Добавить билет пользователю (для системных наград, таких как выигрыш в играх).
+
+        Args:
+            user_id: ID пользователя
+            source: Источник получения билета (для информации)
+
+        Returns:
+            Dict с результатом операции
+        """
+        # Для системных наград используем специальный системный admin_id = 0
+        # В реальной системе можно создать отдельный системный аккаунт
+        return await self.admin_add_ticket(user_id, 0)
+
     async def get_lottery_stats(self) -> dict:
         """Статистика для лотереи."""
         # Total active (not burned) tickets

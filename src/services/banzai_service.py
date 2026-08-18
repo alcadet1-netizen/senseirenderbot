@@ -19,7 +19,7 @@ from src.bot.presenters.banzai_presenter import BanzaiPresenter
 from src.core.visuals import Visuals
 from datetime import datetime, timezone
 from aiogram import Bot
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardMessage
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +211,11 @@ class BanzaiService:
         await self.banzai_games.delete_one({"_id": chat_id})
         await self.banzai_chat_activity.delete_many({"chat_id": chat_id})
 
-        # Очищаем кэш интерфейса
+        # Очищаем кэш интерфейса и открепляем сообщение
+        message_id = await self.get_game_message_id(chat_id)
+        if message_id and bot is not None:
+            await self.unpin_game_message(chat_id, message_id, bot)
+
         self._last_ui_text.pop(chat_id, None)
         self._last_ui_edit_ts.pop(chat_id, None)
         self._last_taunt_ts.pop(chat_id, None)
@@ -397,6 +401,26 @@ class BanzaiService:
         game = await self.banzai_games.find_one({"_id": chat_id})
         return game.get("message_id") if game else None
 
+    async def pin_game_message(self, chat_id: int, message_id: int, bot: Bot) -> bool:
+        """Закрепляет сообщение игры в чате."""
+        try:
+            await bot.pin_chat_message(chat_id, message_id, disable_notification=True)
+            logger.debug(f"Пinned Banzai message {message_id} in chat {chat_id}")
+            return True
+        except Exception as e:
+            logger.debug(f"Failed to pin Banzai message in chat {chat_id}: {e}")
+            return False
+
+    async def unpin_game_message(self, chat_id: int, message_id: int, bot: Bot) -> bool:
+        """Открепляет сообщение игры в чате."""
+        try:
+            await bot.unpin_chat_message(chat_id, message_id)
+            logger.debug(f"Unpinned Banzai message {message_id} in chat {chat_id}")
+            return True
+        except Exception as e:
+            logger.debug(f"Failed to unpin Banzai message in chat {chat_id}: {e}")
+            return False
+
     async def _game_worker(self, chat_id: int, bot: Bot, duration_minutes: int):
         """Основной рабочий цикл игры."""
         logger.info(f"🚨 Banzai worker started for chat {chat_id}")
@@ -507,6 +531,7 @@ class BanzaiService:
                         duration_minutes=duration_minutes,
                         leader_name=last_known_leader_name,
                         is_finished=False,
+                        silence_seconds=silence_duration,
                     )
 
                 # Отправляем уведомление за 1 минуту до конца
@@ -780,3 +805,8 @@ class BanzaiService:
             winner_name=winner_name,
             force=True,
         )
+
+        # Unpin the game message when game finishes
+        message_id = await self.get_game_message_id(chat_id)
+        if message_id:
+            await self.unpin_game_message(chat_id, message_id, bot)

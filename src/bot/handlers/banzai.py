@@ -279,6 +279,8 @@ async def _handle_start_game_command(message: Message, service, cmd_obj, chat_id
             reply_markup=service.get_game_keyboard(chat_id, active=True),
         )
         await service.set_game_message_id(chat_id, msg.message_id)
+        # Pin the game message
+        await service.pin_game_message(chat_id, msg.message_id, message.bot)
         await service.refresh_window(chat_id, message.bot, force=True)
     else:
         await message.answer("⚠️ Игра уже идет!")
