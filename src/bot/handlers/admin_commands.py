@@ -440,7 +440,7 @@ async def cmd_add_xp(message: Message, container: Container):
 
 @router.message(Command("addticket"))
 async def cmd_add_ticket(message: Message, container: Container):
-    """Выдать билет пользователю."""
+    """Выдать билет(ы) пользователю."""
     username = message.from_user.username
     mention = f"@{username}" if username else f"<b>{message.from_user.full_name}</b>"
 
@@ -450,21 +450,52 @@ async def cmd_add_ticket(message: Message, container: Container):
 
     target_user = message.reply_to_message.from_user
 
-    result = await container.lottery_service.admin_add_ticket(
-        user_id=target_user.id,
-        admin_id=message.from_user.id
-    )
+    # Parse count argument (default to 1)
+    args = message.text.split()
+    count = 1
+    if len(args) > 1:
+        try:
+            count = int(args[1])
+            if count <= 0:
+                await message.answer(f"{mention}\n\n⚠️ Укажите положительное число: /addticket 5", parse_mode="HTML")
+                return
+            if count > 100:  # Reasonable limit to prevent abuse
+                await message.answer(f"{mention}\n\n⚠️ Слишком большое количество билетов (макс. 100)", parse_mode="HTML")
+                return
+        except ValueError:
+            await message.answer(f"{mention}\n\n⚠️ Укажите корректное число: /addticket 5", parse_mode="HTML")
+            return
 
-    if result["success"]:
-        target_username = target_user.username
-        target_mention = f"@{target_username}" if target_username else f"<b>{target_user.full_name}</b>"
+    # Issue tickets one by one
+    issued_tickets = []
+    for i in range(count):
+        result = await container.lottery_service.admin_add_ticket(
+            user_id=target_user.id,
+            admin_id=message.from_user.id
+        )
+
+        if not result["success"]:
+            # If any ticket fails, report error and stop
+            await message.answer(f"{mention}\n\n❌ {result.get('error', 'Ошибка выдачи билета')}", parse_mode="HTML")
+            return
+
+        issued_tickets.append(result["ticket_code"])
+
+    # Success - report how many tickets were issued
+    target_username = target_user.username
+    target_mention = f"@{target_username}" if target_username else f"<b>{target_user.full_name}</b>"
+
+    if count == 1:
         await message.answer(
-            f"{mention}\n\n✅ Выдан билет <code>{result['ticket_code']}</code> "
+            f"{mention}\n\n✅ Выдан билет <code>{issued_tickets[0]}</code> "
             f"пользователю {target_mention}",
             parse_mode="HTML"
         )
     else:
-        await message.answer(f"{mention}\n\n❌ {result.get('error', 'Ошибка')}", parse_mode="HTML")
+        await message.answer(
+            f"{mention}\n\n✅ Выдано <b>{count}</b> билетов пользователю {target_mention}",
+            parse_mode="HTML"
+        )
 
 
 @router.message(Command("addkatana"))
