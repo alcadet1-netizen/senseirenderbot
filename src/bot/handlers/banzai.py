@@ -107,7 +107,7 @@ async def is_admin_user(chat_id: int, user_id: int, bot: Bot) -> bool:
 # COMMAND HANDLERS
 # ============================================================================
 
-@router.message(Command("banzai", "banzazi"))
+@router.message(Command("banzai", "банзай", "banzazi", "банзази"))
 async def cmd_banzai(message: Message, command: CommandObject, container: Container, state: FSMContext):
     """Handle /banzai command - group and PM logic."""
     # 1. PM Logic - only show help, no settings
@@ -116,16 +116,16 @@ async def cmd_banzai(message: Message, command: CommandObject, container: Contai
             "🥷 БАНЗАЙ — ИГРА ТИШИНЫ",
             Visuals.frame_separator_left(DISPLAY_WIDTH),
             "📜 Использование в чате:",
-            "/banzai [мин] — запустить игру",
+            "/банзай [мин] — запустить игру",
             "",
             "Примеры:",
-            "/banzai 5  — игра на 5 минут",
-            "/banzai 10 — игра на 10 минут",
+            "/банзай 5  — игра на 5 минут",
+            "/банзай 10 — игра на 10 минут",
             "",
             "⚙️ Команды:",
-            "/banzai stop   — остановить",
-            "/banzai status — статус",
-            "/banzai rules  — правила",
+            "/банзай stop   — остановить",
+            "/банзай status — статус",
+            "/банзай rules  — правила",
             "",
             "💡 Кнопки в чате:",
             "➕/➖ — изменить время",
