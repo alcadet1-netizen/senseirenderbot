@@ -157,7 +157,7 @@ class Container:
     def trade_service(self):
         if self._trade_service is None:
             from src.services.trade_service import TradeService
-            self._trade_service = TradeService(self)
+            self._trade_service = TradeService(self.mongo_client)
         return self._trade_service
 
     @property

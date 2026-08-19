@@ -11,6 +11,7 @@ from typing import Optional, List, Tuple
 from aiogram import Router, F
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message, CallbackQuery
+from aiogram.enums import ChatType
 
 from src.core.config import settings
 from src.core.container import Container
@@ -32,14 +33,25 @@ async def safe_edit_msg(message: Message, text: str, reply_markup=None):
 async def cmd_trade(message: Message, command: CommandObject, container: Container):
     """
     💹 Крипто-трейдинг симулятор.
-    
+
     Usage:
         /trade [ставка]
     """
+    if not message.from_user:
+        return
+
     user_id = message.from_user.id
     username = message.from_user.username
     mention = f"@{username}" if username else f"<b>{html.escape(message.from_user.full_name)}</b>"
-    
+
+    if message.chat.type != ChatType.PRIVATE:
+        await message.answer(f"{mention}\n\n⚠️ Трейдинг доступен только в личных сообщениях боту.", parse_mode="HTML")
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        return
+
     # 1. Parse bet
     bet = settings.trade_cost
     if command.args:
@@ -47,11 +59,11 @@ async def cmd_trade(message: Message, command: CommandObject, container: Contain
             bet_arg = int(command.args.strip())
             # Basic validation
             if bet_arg < 1:
-                await message.answer(f"{mention}\n\n❌ Ставка должна быть больше 0!", parse_mode="HTML")
+                await message.answer(f"{mention}\n\n{Visuals.cross()} Ставка должна быть больше 0!", parse_mode="HTML")
                 return
             bet = bet_arg
         except ValueError:
-            await message.answer(f"{mention}\n\n❌ Неверный формат ставки! Используй: /trade 100", parse_mode="HTML")
+            await message.answer(f"{mention}\n\n{Visuals.cross()} Неверный формат ставки! Используй: /trade 100", parse_mode="HTML")
             return
 
     # Delete user command message
