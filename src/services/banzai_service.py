@@ -162,6 +162,39 @@ class BanzaiService:
         task = asyncio.create_task(self._game_worker(chat_id, bot, duration_minutes))
         self._workers[chat_id] = task
 
+        # Небольшая задержка, чтобы убедиться, что воркер запустился успешно
+        # Это предотвращает ситуацию, когда start_game() возвращает True,
+        # но воркер немедленно падает из-за ошибки инициализации
+        try:
+            await asyncio.sleep(0.1)  # Даем воркеру время на инициализацию
+            # Проверяем, что задача всё ещё выполняется (не завершилась с ошибкой)
+            if task.done():
+                # Если задача завершилась, проверяем, не была ли она отменена или завершилась с исключением
+                if task.cancelled():
+                    logger.warning(f"Banzai worker for chat {chat_id} was cancelled during startup")
+                elif task.exception():
+                    logger.warning(f"Banzai worker for chat {chat_id} failed during startup: {task.exception()}")
+                # В любом случае, если задача завершилась, игра не запустилась успешно
+                # Очищаем и возвращаем False
+                if chat_id in self._workers:
+                    del self._workers[chat_id]
+                if chat_id in self._deletion_tasks:
+                    self._cleanup_deletion_tasks(chat_id)
+                return False
+            # Дополнительная проверка: убеждаемся, что документ игры всё ещё существует и активен
+            game = await self.banzai_games.find_one({"_id": chat_id})
+            if not game or not game.get("active", False):
+                logger.warning(f"Banzai game document for chat {chat_id} was removed during worker startup")
+                return False
+        except Exception as e:
+            logger.warning(f"Error during Banzai worker startup verification: {e}")
+            # Если что-то пошло не так во время проверки, считаем запуск неудачным
+            if chat_id in self._workers:
+                del self._workers[chat_id]
+            if chat_id in self._deletion_tasks:
+                self._cleanup_deletion_tasks(chat_id)
+            return False
+
         return True
 
     async def update_duration(self, chat_id: int, new_minutes: int) -> bool:
