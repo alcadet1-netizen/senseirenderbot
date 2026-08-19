@@ -99,6 +99,8 @@ async def on_shutdown(bot: Bot, container: Container | None = None) -> None:
     logger.info("👋 Goodbye!")
 
 
+import time
+
 async def main() -> None:
     """Главная функция."""
     # Создаём бота и диспетчер
@@ -116,6 +118,8 @@ async def main() -> None:
         settings=settings,
         mongo_client=mongo_client,
     )
+    # Set start time for uptime calculation
+    container.start_time = time.time()
 
     # Start web server for health checks
     app = web.Application()

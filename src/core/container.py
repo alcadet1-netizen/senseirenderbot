@@ -15,6 +15,7 @@ class Container:
 
     settings: Settings
     mongo_client: MongoClient
+    start_time: float = field(default_factory=lambda: 0.0)
 
     _user_service: Optional["UserService"] = field(default=None, init=False, repr=False)
     _economy_service: Optional["EconomyService"] = field(default=None, init=False, repr=False)
