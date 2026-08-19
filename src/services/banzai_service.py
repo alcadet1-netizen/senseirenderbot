@@ -70,6 +70,12 @@ class BanzaiService:
         }
         await self.banzai_chat_activity.insert_one(doc)
 
+        # Also update the game document's last_activity if the game is active
+        await self.banzai_games.update_one(
+            {"_id": chat_id, "active": True},
+            {"$set": {"last_activity": int(time.time())}}
+        )
+
     async def _ensure_indexes(self):
         """Создать необходимые индексы в MongoDB."""
         try:
@@ -492,41 +498,30 @@ class BanzaiService:
                     duration_minutes = int(duration_raw)
                     duration_seconds = duration_minutes * 60
 
-                # Получаем последнюю активность
+                # Получаем последнюю активность из игры (обновляется в update_user_activity)
                 last_activity_ts = game.get("last_activity")
                 if last_activity_ts is None:
                     last_activity_ts = started_at_ts
 
-                # Получаем текущего лидера (последнего пользователя)
+                # Получаем текущего лидера (последнего пользователя) и его timestamp
                 current_leader_id, current_leader_ts = await self._get_last_user_and_ts(chat_id)
 
-                # Игнорируем лидеров из до начала игры
+                # Игнорируем лидеров из до начала игры (для отображения лидера)
                 if current_leader_ts and current_leader_ts < started_at_ts:
                     current_leader_id = None
 
-                # Проверяем на сброс (новое сообщение)
-                if last_activity_ts and prev_activity_ts and last_activity_ts > prev_activity_ts:
-                    if last_activity_ts >= started_at_ts:
-                        # Увеличиваем счетчик сбросов
-                        await self.banzai_games.update_one(
-                            {"_id": chat_id},
-                            {"$inc": {"resets": 1}}
-                        )
-                        # Отслеживаем пользователя, сделавшего сброс
-                        if current_leader_id:
-                            await self.banzai_games.update_one(
-                                {"_id": chat_id},
-                                {"$addToSet": {"reset_makers": current_leader_id}}
-                            )
-
+                # Обновляем предыдущий timestamp активности для обнаружения сброса
                 if last_activity_ts:
                     prev_activity_ts = last_activity_ts
 
-                # Вычисляем оставшееся время
-                last_time = max(float(last_activity_ts or started_at_ts), float(started_at_ts))
-                silence_duration = time.time() - last_time
+                # Вычисляем оставшееся время: silenz считается с момента последней активности,
+                # но если последняя активность до начала игры, то засчитываем с начала игры
+                if last_activity_ts < started_at_ts:
+                    effective_last_ts = started_at_ts
+                else:
+                    effective_last_ts = last_activity_ts
+                silence_duration = time.time() - effective_last_ts
                 remaining_seconds = max(0, duration_seconds - int(silence_duration))
-
                 # Обновляем кэш имени лидера при изменении
                 if current_leader_id != last_known_leader_id:
                     # Новый Король!
