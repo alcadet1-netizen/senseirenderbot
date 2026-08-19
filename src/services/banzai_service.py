@@ -628,6 +628,7 @@ class BanzaiService:
         is_finished: bool = False,
         winner_name: str = None,
         force: bool = False,
+        silence_seconds: int | None = None,
     ):
         """Обновляет интерфейс игры в чате."""
         msg_id = await self.get_game_message_id(chat_id)
