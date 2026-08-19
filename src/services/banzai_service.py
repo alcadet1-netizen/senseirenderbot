@@ -233,6 +233,7 @@ class BanzaiService:
                 is_finished=True,
                 winner_name="Остановлен сенсеем",
                 force=True,
+                silence_seconds=0,
             )
 
         # Отменяем воркер
@@ -419,6 +420,7 @@ class BanzaiService:
             leader_name=str(state.get("leader_name") or "-"),
             is_finished=False,
             force=force,
+            silence_seconds=int(state.get("silence_seconds") or 0),
         )
         return True
 
@@ -838,6 +840,7 @@ class BanzaiService:
             is_finished=True,
             winner_name=winner_name,
             force=True,
+            silence_seconds=0,
         )
 
         # Unpin the game message when game finishes
