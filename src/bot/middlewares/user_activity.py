@@ -852,6 +852,15 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
         user_id = user.id
         chat_id = event.chat.id
 
+        # Используем контейнер, переданный в конструкторе
+        container = self.container
+        if not container:
+            logger.error(f"Container is not initialized in UserActivityMiddleware for user {user_id}")
+            return
+
+        # Update user activity in chat
+        await container.chat_activity_service.update_user_activity(chat_id, user_id)
+
         # Проверяем throttle для наград
         # Награды начисляем только в групповых чатах (не в лс)
         is_private = event.chat.type == "private"
@@ -864,12 +873,6 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
                 scope="message_rewards"
             )
         logger.info(f"[THROTTLE_CHECK] User {user_id} can_reward={can_reward} (throttle_seconds={self.config.throttle_seconds})")
-
-        # Используем контейнер, переданный в конструкторе
-        container = self.container
-        if not container:
-            logger.error(f"Container is not initialized in UserActivityMiddleware for user {user_id}")
-            return
 
         # Создаём процессор активности
         processor = ActivityProcessor(container, self.config)

@@ -23,8 +23,10 @@ class ChatActivityService:
     def __init__(self, mongo_client: MongoClient):
         self.mongo_client = mongo_client
         self.db = mongo_client.database
-        # Collection for storing chat last activity times
+        # Collection for storing chat last activity times (for inactivity monitoring)
         self.chat_activities = self.db.chat_activities  # {chat_id: X, last_activity: timestamp, updated_at: timestamp}
+        # Collection for storing per-user last activity in chats
+        self.chat_user_activities = self.db.chat_user_activities  # {chat_id: X, user_id: Y, last_activity: timestamp}
         self._monitoring_task: asyncio.Task | None = None
         self._inactivity_threshold = 60 * 60  # 60 minutes in seconds
         self._check_interval = 60  # Check every minute
@@ -159,3 +161,30 @@ class ChatActivityService:
     async def remove_chat(self, chat_id: int) -> None:
         """Remove a chat from monitoring."""
         await self.chat_activities.delete_one({"chat_id": chat_id})
+        # Also remove user activities for this chat
+        await self.chat_user_activities.delete_many({"chat_id": chat_id})
+
+    async def update_user_activity(self, chat_id: int, user_id: int) -> None:
+        """Update the last activity time for a user in a chat."""
+        now = int(time.time())
+        await self.chat_user_activities.update_one(
+            {"chat_id": chat_id, "user_id": user_id},
+            {"$set": {"last_activity": now}},
+            upsert=True
+        )
+
+    async def get_active_user_ids(self, chat_id: int, since_hours: float = 720, limit: int = 1000) -> Set[int]:
+        """Get set of user IDs active in the chat within the last since_hours hours."""
+        now = int(time.time())
+        min_timestamp = now - int(since_hours * 3600)
+
+        cursor = self.chat_user_activities.find(
+            {
+                "chat_id": chat_id,
+                "last_activity": {"$gte": min_timestamp}
+            },
+            {"user_id": 1, "_id": 0}
+        ).limit(limit)
+
+        docs = await cursor.to_list(length=None)
+        return {doc["user_id"] for doc in docs}
