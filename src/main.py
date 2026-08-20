@@ -29,6 +29,7 @@ from src.bot.middlewares.cleanup import CommandCleanupMiddleware
 from src.core.config import settings
 from src.core.container import Container
 from src.core.logger import setup_logging
+from src.core.visuals import Visuals
 from src.infra.mongo.client import MongoClient
 
 
@@ -65,7 +66,7 @@ async def on_startup(bot: Bot, container: Container) -> None:
 
     # Загружаем настройку визуала из MongoDB
     try:
-        doc = await container.db.settings.find_one({"_id": "visual_style"})
+        doc = await container.mongo_client.database.settings.find_one({"_id": "visual_style"})
         if doc and "value" in doc:
             Visuals.STYLE = doc["value"]
             logger.info(f"✅ Loaded visual style from DB: {Visuals.STYLE}")
