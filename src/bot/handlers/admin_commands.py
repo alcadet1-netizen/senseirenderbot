@@ -1094,7 +1094,7 @@ async def cb_visuals(query: CallbackQuery, callback_data: VisualsCb):
     # Save to MongoDB
     try:
         container = query.bot.container
-        await container.db.settings.update_one(
+        await container.mongo_client.database.settings.update_one(
             {"_id": "visual_style"},
             {"$set": {"value": Visuals.STYLE}},
             upsert=True

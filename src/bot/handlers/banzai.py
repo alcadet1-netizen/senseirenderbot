@@ -211,13 +211,21 @@ async def _handle_status_command(message: Message, service, chat_id: int) -> Non
 
 
 async def _handle_rules_command(message: Message) -> None:
-    """Show game rules."""
-    lines = [
-        "1. Жди тишины в чате.",
-        "2. Кто последний написал — WIN.",
-        "3. Лутай призы!"
-    ]
-    text = _create_frame("📜 ПРАВИЛА БАНЗАЙ", lines)
+    """Show game rules for players."""
+    rules_text = (
+        "📜 <b>ПРАВИЛА БАНЗАЙ (для игроков)</b>\n\n"
+        "🤫 <b>Цель:</b> Держать тишину в чате N минут.\n\n"
+        "✍️ <b>Как играть:</b>\n"
+        "• После последнего сообщения начинается отсчёт тишины.\n"
+        "• Каждое новое сообщение сбрасывает таймер.\n"
+        "• Победит тот, чьё сообщение было последним до конца отсчёта.\n\n"
+        "🏆 <b>Победитель получает:</b>\n"
+        "• 500 Coins\n"
+        "• 1 Билет в лотерею\n"
+        "• Бонусную награду (если указана)\n\n"
+        "💡 Совет: Не пишите ничего, пока не закончится время!"
+    )
+    text = _create_frame("📜 ПРАВИЛА БАНЗАЙ (ИГРОКИ)", [rules_text])
     await message.answer(text, parse_mode="HTML")
     await _delete_trigger_safe(message)
 
@@ -404,18 +412,43 @@ async def process_set_chat(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "banzai_rules", StateFilter(BanzaiStates.settings))
 async def cb_rules(callback: CallbackQuery, state: FSMContext):
-    """Show rules in settings menu."""
-    lines = [
-        "1. Жди тишины в чате.",
-        "2. Кто последний написал — WIN.",
-        "3. Лутай призы!"
-    ]
-    text = _create_frame("📜 ПРАВИЛА БАНЗАЙ", lines)
+    """Show rules in settings menu (admin-oriented)."""
+    rules_text = (
+        "📜 <b>ПРАВИЛА БАНЗАЙ (для администратора)</b>\n\n"
+        "🎮 <b>Об игре:</b>\n"
+        "Банзай — игра на выдержку: нужно сохранить тишину в чате N минут.\n"
+        "Каждое сообщение сбрасывает таймер.\n"
+        "Побеждает тот, кто отправил последнее сообщение до окончания отсчёта.\n\n"
+        "⚙️ <b>Настройки (доступны только в ЛС боту):</b>\n"
+        "• Изменение длительности игры\n"
+        "• Изменение награды в TON\n"
+        "• Выбор чата для запуска (если не задан MAIN_CHAT_ID)\n"
+        "• Запуск и остановка игры\n\n"
+        "🛠 <b>Команды админа в чате:</b>\n"
+        "/банзай [мин] — запустить игру с указанной длительностью\n"
+        "/банзай stop — остановить игру\n"
+        "/банзай status — проверить статус\n"
+        "/банзай rules — показать эти правила\n\n"
+        "💡 <b>Подсказка:</b>\n"
+        "Настройки доступны только через меню в личных сообщениях боту.\n"
+        "В групповом чате отображаются только кнопки обновить и правила."
+    )
+    text = _create_frame("📜 ПРАВИЛА БАНЗАЙ (АДМИН)", [rules_text])
     await callback.message.answer(text, parse_mode="HTML")
-    # Show settings menu again
+    # Provide simple back button to settings (no settings keyboard shown in rules view)
+    back_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Назад в настройки", callback_data="banzai_back_to_settings")]
+    ])
+    await callback.message.answer("⚙️ Вернуться в настройки:", reply_markup=back_kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "banzai_back_to_settings", StateFilter(BanzaiStates.settings))
+async def cb_back_to_settings(callback: CallbackQuery, state: FSMContext):
+    """Return to settings menu from rules view."""
     data = await state.get_data()
     kb = await get_banzai_keyboard(data)
-    await callback.message.answer("⚙️ Настройки:", reply_markup=kb)
+    await callback.message.edit_text("⚙️ Настройки:", reply_markup=kb)
     await callback.answer()
 
 
@@ -569,16 +602,19 @@ async def _action_status(callback: CallbackQuery, service, chat_id: int) -> None
 
 
 async def _action_rules(callback: CallbackQuery) -> None:
-    """Show game rules."""
+    """Show game rules for players."""
     rules_text = (
-        "📜 <b>ПРАВИЛА БАНЗАЙ</b>\n\n"
-        "🤫 <b>Цель:</b> Хранить тишину в чате ровно N минут.\n\n"
-        "✍️ <b>Как это работает:</b>\n"
-        "• Тишина начинает отсчёт с нуля\n"
-        "• Каждое сообщение = сброс таймера\n"
-        "• Чьё сообщение будет ПОСЛЕДНИМ = ТОТ ПОБЕДИЛ\n\n"
-        "🏆 <b>Победитель:</b> Игрок, чьё сообщение выдержало тишину до конца отсчёта\n\n"
-        "💰 <b>Награда:</b> 500 Coins + 1 Билет + Бонусная награда"
+        "📜 <b>ПРАВИЛА БАНЗАЙ (для игроков)</b>\n\n"
+        "🤫 <b>Цель:</b> Держать тишину в чате N минут.\n\n"
+        "✍️ <b>Как играть:</b>\n"
+        "• После последнего сообщения начинается отсчёт тишины.\n"
+        "• Каждое новое сообщение сбрасывает таймер.\n"
+        "• Победит тот, чьё сообщение было последним до конца отсчёта.\n\n"
+        "🏆 <b>Победитель получает:</b>\n"
+        "• 500 Coins\n"
+        "• 1 Билет в лотерею\n"
+        "• Бонусную награду (если указана)\n\n"
+        "💡 Совет: Не пишите ничего, пока не закончится время!"
     )
     await _safe_callback_answer(callback, rules_text, show_alert=True)
 
