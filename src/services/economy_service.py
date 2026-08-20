@@ -654,3 +654,109 @@ class EconomyService:
             await self._deposit_to_bank(total_collected)
 
         return {"success": True, "count": processed_count, "total_collected": total_collected}
+
+    async def process_game_win(
+        self,
+        user_id: int,
+        coins: float = 0.0,
+        xp: int = 0,
+        description: str = "Game Win"
+    ) -> dict:
+        """Process a game win reward for a user."""
+        lock_key = f"game_win:{user_id}"
+        lock = self._get_lock(lock_key)
+        async with lock:
+            # Get or create user
+            user = await self.users.find_one({"id": user_id})
+            if user is None:
+                # Create new user
+                user = {
+                    "id": user_id,
+                    "username": None,
+                    "first_name": "",
+                    "last_name": None,
+                    "is_bot": False,
+                    "xp": 0,
+                    "coins": 0.0,
+                    "messages_count": 0,
+                    "wins": 0,
+                    "losses": 0,
+                    "daily_streak": 0,
+                    "last_daily": None,
+                    "is_banned": False,
+                    "ban_reason": None,
+                    "is_muted": False,
+                    "mute_until": None,
+                    "has_katana": False,
+                    "katana_length": 0.0,
+                    "last_katana_up": None,
+                    "referrer_id": None,
+                    "referral_count": 0,
+                    "can_receive_broadcast": True,
+                    "created_at": datetime.now(timezone.utc),
+                }
+                await self.users.insert_one(user)
+                # Refresh the user document
+                user = await self.users.find_one({"id": user_id})
+                logger.info(f"[ECONOMY] Created new user {user_id}")
+            else:
+                # Update if needed - but for game win we don't typically update username/name
+                pass
+
+            if user.get("is_banned", False):
+                logger.info(f"[ECONOMY] User {user_id} is banned, returning")
+                return {"success": False, "reason": "banned"}
+
+            # Apply rewards
+            logger.info(f"[ECONOMY] Applying game win reward for user {user_id}: coins={coins}, xp={xp}")
+
+            # Check bank balance and withdraw if possible
+            bank_balance = await self._get_bank_balance()
+            logger.info(f"[ECONOMY] Bank balance={bank_balance}, coins_reward={coins}")
+            if bank_balance < coins:
+                # If bank doesn't have enough, reset it to initial balance to ensure we can continue
+                initial_balance = settings.bank_initial_coins
+                await self._set_bank_balance(initial_balance)
+                logger.info(f"[ECONOMY] Bank balance was insufficient ({bank_balance}), reset to {initial_balance}")
+                bank_balance = initial_balance
+            # Now we should have enough
+            await self._withdraw_from_bank(coins)
+            logger.info(f"[ECONOMY] Withdrew {coins} from bank")
+
+            # Update user XP and coins
+            await self.users.update_one(
+                {"id": user_id},
+                {"$inc": {"xp": xp, "coins": coins}}
+            )
+            user["xp"] = user.get("xp", 0) + xp
+            user["coins"] = user.get("coins", 0.0) + coins
+            logger.info(f"[ECONOMY] Updated user {user_id}: xp={user['xp']}, coins={user['coins']}")
+
+            # Create transaction record
+            tx_doc = {
+                "user_id": user_id,
+                "tx_type": "game_win",
+                "xp_change": xp,
+                "coins_change": coins,
+                "description": description,
+                "created_at": datetime.now(timezone.utc),
+            }
+            await self.transactions.insert_one(tx_doc)
+            logger.info(f"[ECONOMY] Inserted transaction for user {user_id}")
+
+            # Check level up
+            level_up = self.level_service.check_level_up(user["xp"] - xp, user["xp"]) if xp > 0 else None
+            if level_up:
+                logger.info(f"[ECONOMY] Level up for user {user_id}: {level_up}")
+
+            # Return the result
+            result = {
+                "success": True,
+                "xp_earned": xp,
+                "coins_earned": coins,
+                "new_xp": user.get("xp", 0),
+                "new_coins": user.get("coins", 0.0),
+                "level_up": level_up
+            }
+            logger.info(f"[ECONOMY] process_game_win result for user {user_id}: {result}")
+            return result

@@ -111,33 +111,12 @@ async def is_admin_user(chat_id: int, user_id: int, bot: Bot) -> bool:
 @router.message(Command("banzai", "банзай", "banzazi", "банзази"))
 async def cmd_banzai(message: Message, command: CommandObject, container: Container, state: FSMContext):
     """Handle /banzai command - group and PM logic."""
-    # 1. PM Logic - only show help, no settings
+    # 1. PM Logic - show settings menu
     if message.chat.type == "private":
-        lines = [
-            "🥷 БАНЗАЙ — ИГРА ТИШИНЫ",
-            Visuals.frame_separator_left(DISPLAY_WIDTH),
-            "📜 Использование в чате:",
-            "/банзай [мин] — запустить игру",
-            "",
-            "Примеры:",
-            "/банзай 5  — игра на 5 минут",
-            "/банзай 10 — игра на 10 минут",
-            "",
-            "⚙️ Команды:",
-            "/банзай stop   — остановить",
-            "/банзай status — статус",
-            "/банзай rules  — правила",
-            "",
-            "💡 Кнопки в чате:",
-            "➕/➖ — изменить время",
-            "🔄/🧭 — обновить/статус",
-            "📜 — правила, 🛑 — стоп",
-            "",
-            "🤫 Как выиграть:",
-            "Последний, чьё сообщение выдержало тишину — победил",
-        ]
-        text = "<pre>\n" + "\n".join([Visuals.frame_top_left(DISPLAY_WIDTH)] + [Visuals.frame_line_left(s, DISPLAY_WIDTH) for s in lines] + [Visuals.frame_bottom_left(DISPLAY_WIDTH)]) + "\n</pre>"
-        await message.answer(text, parse_mode="HTML")
+        await state.set_state(BanzaiStates.settings)
+        data = await state.get_data() or {}
+        kb = await get_banzai_keyboard(data)
+        await message.answer("⚙️ Настройки БАНЗАЙ:", reply_markup=kb)
         return
 
     # 2. Group Logic - check admin rights
@@ -446,7 +425,7 @@ async def cb_rules(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "banzai_back_to_settings", StateFilter(BanzaiStates.settings))
 async def cb_back_to_settings(callback: CallbackQuery, state: FSMContext):
     """Return to settings menu from rules view."""
-    data = await state.get_data()
+    data = await state.get_data() or {}
     kb = await get_banzai_keyboard(data)
     await callback.message.edit_text("⚙️ Настройки:", reply_markup=kb)
     await callback.answer()
