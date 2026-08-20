@@ -616,7 +616,18 @@ async def _action_rules(callback: CallbackQuery) -> None:
         "• Бонусную награду (если указана)\n\n"
         "💡 Совет: Не пишите ничего, пока не закончится время!"
     )
-    await _safe_callback_answer(callback, rules_text, show_alert=True)
+    try:
+        # Send rules as a separate message
+        if callback.message:
+            await callback.message.answer(rules_text, parse_mode="HTML")
+        # Answer the callback to remove the "loading" state
+        await callback.answer()
+    except Exception as e:
+        logging.getLogger(__name__).error(f"Error in _action_rules: {e}")
+        try:
+            await callback.answer("Ошибка при показе правил", show_alert=True)
+        except:
+            pass
 
 
 async def _action_stop(callback: CallbackQuery, service, chat_id: int) -> None:
