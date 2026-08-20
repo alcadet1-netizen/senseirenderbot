@@ -76,6 +76,7 @@ async def get_banzai_keyboard(data: dict) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=f"📍 Чат: {chat_label}", callback_data="banzai_set_chat")],
         [InlineKeyboardButton(text=f"⏱ Длительность: {minutes} мин", callback_data="banzai_set_time")],
         [InlineKeyboardButton(text=f"💎 Награда: {reward} TON", callback_data="banzai_set_reward")],
+        [InlineKeyboardButton(text="📜 Правила", callback_data="banzai_rules")],
         [InlineKeyboardButton(text="🚀 СТАРТ", callback_data="banzai_start")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=kb)
@@ -276,7 +277,7 @@ async def _handle_start_game_command(message: Message, service, cmd_obj, chat_id
         msg = await message.answer(
             text,
             parse_mode="HTML",
-            reply_markup=service.get_game_keyboard(chat_id, active=True),
+            reply_markup=service.get_game_keyboard(chat_id, active=True, is_private=False),
         )
         await service.set_game_message_id(chat_id, msg.message_id)
         # Pin the game message
@@ -399,6 +400,23 @@ async def process_set_chat(message: Message, state: FSMContext):
         parse_mode="HTML",
         reply_markup=kb
     )
+
+
+@router.callback_query(F.data == "banzai_rules", StateFilter(BanzaiStates.settings))
+async def cb_rules(callback: CallbackQuery, state: FSMContext):
+    """Show rules in settings menu."""
+    lines = [
+        "1. Жди тишины в чате.",
+        "2. Кто последний написал — WIN.",
+        "3. Лутай призы!"
+    ]
+    text = _create_frame("📜 ПРАВИЛА БАНЗАЙ", lines)
+    await callback.message.answer(text, parse_mode="HTML")
+    # Show settings menu again
+    data = await state.get_data()
+    kb = await get_banzai_keyboard(data)
+    await callback.message.answer("⚙️ Настройки:", reply_markup=kb)
+    await callback.answer()
 
 
 @router.callback_query(F.data == "banzai_start", StateFilter(BanzaiStates.settings))

@@ -17,7 +17,18 @@ class BanzaiPresenter:
     """
 
     @staticmethod
-    def get_game_keyboard(chat_id: int, active: bool = True) -> InlineKeyboardMarkup:
+    def get_game_keyboard(chat_id: int, active: bool = True, is_private: bool = False) -> InlineKeyboardMarkup:
+        # In group chats, only show refresh and rules buttons (no settings)
+        if not is_private:
+            kb = [
+                [
+                    InlineKeyboardButton(text="🔄 Обновить", callback_data=f"banzai:refresh:{chat_id}"),
+                    InlineKeyboardButton(text="📜 Правила", callback_data=f"banzai:rules:{chat_id}"),
+                ]
+            ]
+            return InlineKeyboardMarkup(inline_keyboard=kb)
+
+        # In private chats, show full keyboard based on game state
         if active:
             kb = [
                 [
