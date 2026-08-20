@@ -325,7 +325,7 @@ class BanzaiService:
 
     def get_game_keyboard(self, chat_id: int, active: bool = True) -> InlineKeyboardMarkup:
         """Возвращает клавиатуру для игры."""
-        return BanzaiPresenter.get_game_keyboard(chat_id, active=active)
+        return BanzaiPresenter.get_game_keyboard(chat_id, active=active, is_private=False)
 
     async def _get_user_display(self, chat_id: int, bot: Bot, user_id: int) -> str:
         """Получает отображаемое имя пользователя с кэшированием."""

@@ -63,6 +63,19 @@ async def on_startup(bot: Bot, container: Container) -> None:
     if count > 0:
         logger.info(f"✅ Seeded {count} achievements")
 
+    # Загружаем настройку визуала из MongoDB
+    try:
+        doc = await container.db.settings.find_one({"_id": "visual_style"})
+        if doc and "value" in doc:
+            Visuals.STYLE = doc["value"]
+            logger.info(f"✅ Loaded visual style from DB: {Visuals.STYLE}")
+        else:
+            Visuals.STYLE = "classic"
+            logger.info("✅ Visual style set to default: classic")
+    except Exception as e:
+        logger.warning(f"Failed to load visual style from DB, using default: {e}")
+        Visuals.STYLE = "classic"
+
     # Загружаем кэш модерации (if needed)
     # TODO: implement muted users cache in MongoDB
     logger.info("✅ Moderation cache loaded (placeholder)")
@@ -120,6 +133,8 @@ async def main() -> None:
     )
     # Set start time for uptime calculation
     container.start_time = time.time()
+    # Attach container to bot for access in handlers
+    bot.container = container
 
     # Start web server for health checks
     app = web.Application()

@@ -1091,6 +1091,17 @@ async def cb_visuals(query: CallbackQuery, callback_data: VisualsCb):
         Visuals.STYLE = "crypto"
         style_name = "Crypto Bot (Mobile)"
 
+    # Save to MongoDB
+    try:
+        container = query.bot.container
+        await container.db.settings.update_one(
+            {"_id": "visual_style"},
+            {"$set": {"value": Visuals.STYLE}},
+            upsert=True
+        )
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Failed to save visual style to DB: {e}")
+
     await query.answer(f"✅ Стиль изменен на: {style_name}")
 
     # Update message
