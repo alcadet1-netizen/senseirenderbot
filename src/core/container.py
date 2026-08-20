@@ -164,7 +164,7 @@ class Container:
     def slots_service(self):
         if self._slots_service is None:
             from src.services.slots_service import SlotsService
-            self._slots_service = SlotsService(self)
+            self._slots_service = SlotsService(self.mongo_client)
         return self._slots_service
 
     @property
