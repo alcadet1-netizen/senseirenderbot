@@ -81,7 +81,7 @@ class CryptoService:
         )
 
         if not top_10_usd:
-            return "❌ Не удалось получить данные о рынке."
+            top_10_usd = []
 
         # Мапа для быстрого поиска цены в рублях для топ-10
         rub_map = {c['id']: c for c in (top_10_rub or [])}
@@ -232,14 +232,15 @@ class CryptoService:
 
                 price_rub = price * rub_rate
 
-                return Visuals.crypto_price_card(
+                base = Visuals.crypto_price_card(
                     symbol=symbol,
                     usd=price,
                     rub=price_rub,
                     change=change,
                     market_cap=None
                 )
-            return f"❌ Не удалось найти курс для {symbol.upper()}"
+                return await self._attach_arbitrage(base, symbol)
+            return f"{Visuals.cross()} Не удалось найти курс для {symbol.upper()}"
 
         # CoinGecko результат
         coin = data[coin_id]
@@ -250,7 +251,7 @@ class CryptoService:
 
         market_cap_rub = market_cap * (rub / usd) if usd > 0 else 0
 
-        return Visuals.crypto_price_card(
+        base = Visuals.crypto_price_card(
             symbol=symbol,
             usd=usd,
             rub=rub,
@@ -258,6 +259,8 @@ class CryptoService:
             market_cap=market_cap,
             market_cap_rub=market_cap_rub
         )
+
+        return await self._attach_arbitrage(base, symbol)
 
     async def get_calculator_message(self, symbol: str, amount: float) -> str:
         """Рассчитать стоимость монет в рублях."""
@@ -306,6 +309,55 @@ class CryptoService:
         ]
 
         return "<pre>\n" + "\n".join(lines) + "\n</pre>"
+
+    async def _attach_arbitrage(self, base_message: str, symbol: str) -> str:
+        supported = {"TON", "BTC", "ETH", "DOGE", "TRX", "SUI", "TRUMP", "SOL", "XRP"}
+        sym = symbol.upper()
+
+        if sym not in supported:
+            return base_message
+
+        prices = await self.api.get_symbol_usd_orderbooks(sym)
+        if not prices:
+            return base_message
+
+        arb_exchanges = ["Binance", "Bybit", "OKX", "MEXC", "Gate.io", "KuCoin"]
+        valid = {k: v for k, v in prices.items() if k in arb_exchanges}
+
+        if len(valid) < 2:
+            return base_message
+
+        best_buy = min(valid.items(), key=lambda x: x[1]["ask"])
+        best_sell = max(valid.items(), key=lambda x: x[1]["bid"])
+
+        buy_ex, buy_data = best_buy
+        sell_ex, sell_data = best_sell
+
+        buy_price = buy_data["ask"]
+        sell_price = sell_data["bid"]
+
+        if buy_price <= 0 or sell_price <= 0:
+            return base_message
+
+        profit = ((sell_price - buy_price) / buy_price) * 100
+        profit_emoji = "🟢" if profit > 0 else "🔴"
+
+        w = Visuals.FRAME_W_PROFILE
+        lines = [
+            Visuals.frame_top_left(w),
+            Visuals.frame_line_left(f"💱 {sym}/USDT Арбитраж", w, "center"),
+            Visuals.frame_separator_left(w),
+            Visuals.frame_line_left(f"📉 Купить: {buy_ex}", w),
+            Visuals.frame_line_left(f"   {buy_price:.4f} $", w),
+            Visuals.frame_line_left(f"📈 Продать: {sell_ex}", w),
+            Visuals.frame_line_left(f"   {sell_price:.4f} $", w),
+            Visuals.frame_separator_left(w),
+            Visuals.frame_line_left(f"{profit_emoji} Спред: {profit:+.2f}%", w),
+            Visuals.frame_bottom_left(w),
+        ]
+
+        arb_block = "<pre>\n" + "\n".join(lines) + "\n</pre>"
+        return base_message + "\n" + arb_block
 
     # Legacy method compatibility (if needed by other parts of the code, though I think I can remove it if I update usage)
     async def format_price_message(self, crypto: str = "TON") -> str:
