@@ -323,9 +323,9 @@ class BanzaiService:
             logger.error(f"Не удалось восстановить работников Banzai: {e}", exc_info=True)
         return restored
 
-    def get_game_keyboard(self, chat_id: int, active: bool = True) -> InlineKeyboardMarkup:
+    def get_game_keyboard(self, chat_id: int, active: bool = True, is_private: bool = False) -> InlineKeyboardMarkup:
         """Возвращает клавиатуру для игры."""
-        return BanzaiPresenter.get_game_keyboard(chat_id, active=active, is_private=False)
+        return BanzaiPresenter.get_game_keyboard(chat_id, active=active, is_private=is_private)
 
     async def _get_user_display(self, chat_id: int, bot: Bot, user_id: int) -> str:
         """Получает отображаемое имя пользователя с кэшированием."""
@@ -682,7 +682,7 @@ class BanzaiService:
             silence_seconds=silence_seconds,
         )
 
-        kb = BanzaiPresenter.get_game_keyboard(chat_id, active=not is_finished, is_private=False)
+        kb = self.get_game_keyboard(chat_id, active=not is_finished, is_private=False)
 
         prev_text = self._last_ui_text.get(chat_id)
         if prev_text == text and not force:
