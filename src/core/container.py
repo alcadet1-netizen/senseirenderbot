@@ -16,6 +16,7 @@ class Container:
     settings: Settings
     mongo_client: MongoClient
     start_time: float = field(default_factory=lambda: 0.0)
+    _redis: Optional[object] = field(default=None, init=False, repr=False)
 
     _user_service: Optional["UserService"] = field(default=None, init=False, repr=False)
     _economy_service: Optional["EconomyService"] = field(default=None, init=False, repr=False)
@@ -231,6 +232,39 @@ class Container:
             from src.services.popugai_service import PopugaiService
             self._popugai_service = PopugaiService(self.mongo_client)
         return self._popugai_service
+
+    @property
+    def sensei_check_service(self):
+        if self._sensei_check_service is None:
+            from src.services.sensei_check_service import SenseiCheckService
+            self._sensei_check_service = SenseiCheckService(
+                self.mongo_client,
+                self.redis,
+                self.xrocket_service,
+            )
+        return self._sensei_check_service
+
+    @property
+    def redis(self):
+        """MongoDB-backed Redis-compatible storage for temporary data."""
+        if self._redis is None:
+            from src.core.mongo_redis import MongoRedis
+            db = self.mongo_client.database
+            collection = db.get_collection("sensei_check_redis")
+            self._redis = MongoRedis(collection)
+            # Ensure TTL index exists
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # We are already in an async context, create task
+                    loop.create_task(self._redis.ensure_indexes())
+                else:
+                    loop.run_until_complete(self._redis.ensure_indexes())
+            except Exception:
+                # If we can't run async now, we'll rely on first use to create indexes
+                pass
+        return self._redis
 
 
 # Type hints for lazy imports

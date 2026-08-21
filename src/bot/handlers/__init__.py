@@ -23,10 +23,11 @@ from src.bot.handlers.broadcast import router as broadcast_router
 from src.bot.handlers.music import router as music_router
 from src.bot.handlers.boss_commands import router as boss_router
 from src.bot.handlers.boss_admin import router as boss_admin_router
-from src.bot.handlers.boss_editor import router as boss_editor_router
+from src.bot.handlers.boss_editor import router as boss_admin_router
 from src.bot.handlers.maintenance import router as maintenance_router
 from src.bot.handlers.chat_settings import router as chat_settings_router
 from src.bot.handlers.draw import router as draw_router
+from src.bot.handlers.sensei_check import router as sensei_check_router
 
 
 def setup_routers() -> Router:
@@ -56,6 +57,9 @@ def setup_routers() -> Router:
     main_router.include_router(digest_router)
     main_router.include_router(zov_router)
     main_router.include_router(referral_router)
+
+    # SenseiCheck
+    main_router.include_router(sensei_check_router)
 
     # Callbacks and triggers (low priority)
     main_router.include_router(callbacks_router)
