@@ -24,7 +24,7 @@ router = Router(name="sensei_check_admin")
 
 # ==================== MENU & NAVIGATION ====================
 
-@router.message(Command("senseicheck"), AdminFilter(), PrivateChatFilter())
+@router.message(Command("senseicheck"), AdminFilter())
 async def cmd_senseicheck(message: Message, state: FSMContext) -> None:
     """Главное меню (Ultimate)."""
     await state.clear()
