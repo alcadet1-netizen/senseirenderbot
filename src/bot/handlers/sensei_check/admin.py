@@ -563,10 +563,38 @@ async def cb_list_checks(query: CallbackQuery, container: Container) -> None:
 async def cb_reflinks(query: CallbackQuery, container: Container) -> None:
     if not query.message: return
     offset = int(query.data.split(":")[-1])
+    limit = 3
     try:
         all_checks = await container.sensei_check_service.get_all_checks()
-        text = await SenseiCheckPresenter.render_reflinks_list(query.bot, query.from_user.id, all_checks, offset, 3)
-        kb = SenseiCheckPresenter.reflinks_kb(len(all_checks), offset, 3)
+        total = len(all_checks)
+        # Build text header
+        text = (
+            f"🔗 <b>РЕФЕРАЛЬНЫЕ ССЫЛКИ</b>\n\n"
+            f"Всего: {total}\n\n"
+            f"<i>Нажмите на ссылку, чтобы открыть её.</i>"
+        )
+        # Build keyboard with buttons for each link
+        builder = InlineKeyboardBuilder()
+        for check in all_checks[offset:offset+limit]:
+            code = check.get("code", "?")
+            me = await query.bot.get_me()
+            bot_username = me.username
+            ref_link = f"https://t.me/{bot_username}?start=check_{code}_{query.from_user.id}"
+            # Create button showing short link
+            short_ref = ref_link[:35] + "..." if len(ref_link) > 35 else ref_link
+            builder.button(text=f"🔗 {short_ref}", url=ref_link)
+        builder.adjust(1)  # Each button on its own row
+        # Navigation
+        nav_row = []
+        if offset > 0:
+            nav_row.append(InlineKeyboardButton(text="◀ Назад", callback_data=f"scheckult:reflinks:{max(0, offset-limit)}"))
+        if offset + limit < total:
+            nav_row.append(InlineKeyboardButton(text="Далее ▶", callback_data=f"scheckult:reflinks:{offset+limit}"))
+        if nav_row:
+            builder.row(*nav_row)
+        # Menu button
+        builder.row(InlineKeyboardButton(text="↩️ В меню", callback_data="scheckult:menu"))
+        kb = builder.as_markup()
         await query.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     except Exception:
         pass
