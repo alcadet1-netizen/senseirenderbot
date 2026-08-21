@@ -363,6 +363,14 @@ class Visuals:
         return "❌"
 
     @staticmethod
+    def check() -> str:
+        return "✅"
+
+    @staticmethod
+    def check_raw() -> str:
+        return "✅"
+
+    @staticmethod
     def wait_raw() -> str:
         return "⏳"
 
