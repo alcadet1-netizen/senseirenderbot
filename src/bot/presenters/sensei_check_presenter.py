@@ -270,6 +270,7 @@ class SenseiCheckPresenter:
 
     @classmethod
     def channels_kb(cls, channels: list[str]) -> InlineKeyboardMarkup:
+        """Клавиатура управления каналами."""
         rows: list[list[InlineKeyboardButton]] = []
         if channels:
             for idx, ch in enumerate(channels[:15]):
