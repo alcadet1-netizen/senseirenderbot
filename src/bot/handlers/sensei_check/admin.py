@@ -171,11 +171,22 @@ async def step_preset_channels(message: Message, state: FSMContext, container: C
         parse_mode="HTML"
     )
 
+@router.callback_query(F.data.startswith("scheckult:preset:view:"))
+async def cb_preset_view(query: CallbackQuery, container: Container) -> None:
+    if not query.message: return
+    preset_id = query.data.split(":")[-1]
+    preset = await container.sensei_check_service.get_channel_preset(preset_id)
+    if preset:
+        text = f"Пресет: {preset['name']}\nКаналы: {', '.join(preset['channels'])}"
+        await query.answer(text, show_alert=True)
+    else:
+        await query.answer("Пресет не найден", show_alert=True)
+
 @router.callback_query(F.data.startswith("scheckult:preset:del:"))
 async def cb_preset_del(query: CallbackQuery, container: Container, state: FSMContext) -> None:
     if not query.from_user or query.from_user.id not in settings.admin_ids:
         return
-    pid = int(query.data.split(":")[-1])
+    pid = query.data.split(":")[-1]  # Keep as string
     await container.sensei_check_service.delete_channel_preset(pid)
     await query.answer("🗑 Пресет удален")
     await cb_presets_list(query, container, state)
@@ -515,7 +526,7 @@ def _presets_list_kb(presets: list[dict]) -> InlineKeyboardMarkup:
         for p in presets:
             builder.button(text=f"📂 {p['name']}", callback_data=f"scheckult:preset:view:{p['id']}")
             builder.button(text="❌", callback_data=f"scheckult:preset:del:{p['id']}")
-    
+
     builder.button(text="➕ Добавить пресет", callback_data="scheckult:preset:add")
     builder.button(text="↩️ В меню", callback_data="scheckult:menu")
     builder.adjust(2 if presets else 1)

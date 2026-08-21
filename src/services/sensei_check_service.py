@@ -709,16 +709,94 @@ class SenseiCheckService:
         checks, _ = await self._repo.get_all_checks(only_active=False)
         return checks
 
-    # ==================== Presets (DISABLED to avoid migrations) ====================
+    # ==================== Presets (now enabled) ====================
+
+    async def _get_presets_collection(self):
+        """Get or create the presets collection."""
+        db = self.mongo_client.database
+        return db.get_collection("sensei_check_presets")
 
     async def create_channel_preset(self, name: str, channels: list[str]) -> dict:
-        return {"id": 0, "name": name, "channels": channels}
+        """Create a new channel preset and return it with generated ID."""
+        collection = await self._get_presets_collection()
+        preset_doc = {
+            "name": name,
+            "channels": channels,
+            "created_at": datetime.now(timezone.utc)
+        }
+        result = await collection.insert_one(preset_doc)
+        preset_doc["id"] = str(result.inserted_id)  # Store as string for ease of use
+        # Remove the internal MongoDB _id if we don't want to expose it, or keep it.
+        # We'll return a dict with id, name, channels as expected by the handler.
+        return {"id": preset_doc["id"], "name": name, "channels": channels}
 
-    async def delete_channel_preset(self, preset_id: int) -> bool:
-        return True
+    async def delete_channel_preset(self, preset_id: str) -> bool:
+        """Delete a channel preset by its string ID (ObjectId as string)."""
+        from bson import ObjectId
+        try:
+            obj_id = ObjectId(preset_id)
+        except Exception:
+            return False
+        collection = await self._get_presets_collection()
+        result = await collection.delete_one({"_id": obj_id})
+        return result.deleted_count > 0
+        #
+        # Let's edit the service to return string ID, and then we'll edit the handler in a separate step.
+        #
+        # We'll change the service to return string ID (the ObjectId as string).
+        # And we'll change the handler to expect string ID and not convert to int.
+        #
+        # Let's proceed with the service edit first, then we'll edit the handler.
+        #
+        # For delete, we'll accept preset_id as string.
+        #
+        collection = await self._get_presets_collection()
+        result = await collection.delete_one({"_id": ObjectId(preset_id)}) if isinstance(preset_id, str) and len(preset_id) == 24 else collection.delete_one({"id": preset_id})
+        # We'll store with _id as ObjectId and also an "id" field as string? Let's just use _id.
+        # We'll store the document with _id as ObjectId, and when returning we convert to string.
+        # For delete, we use the ObjectId.
+        #
+        # Let's redesign:
+        #   When inserting, we let MongoDB generate _id.
+        #   We return a dict with "id": str(inserted_id), "name": name, "channels": channels.
+        #   For delete, we expect the string id, convert to ObjectId and delete by _id.
+        #
+        # We'll need to import ObjectId from bson.
+        #
+        from bson import ObjectId
+        try:
+            obj_id = ObjectId(preset_id)
+        except Exception:
+            return False
+        result = await collection.delete_one({"_id": obj_id})
+        return result.deleted_count > 0
 
     async def get_channel_presets(self) -> list[dict]:
-        return []
+        """Return list of all presets, each as dict with id, name, channels."""
+        collection = await self._get_presets_collection()
+        cursor = collection.find({})
+        presets = []
+        async for doc in cursor:
+            presets.append({
+                "id": str(doc["_id"]),
+                "name": doc.get("name"),
+                "channels": doc.get("channels", [])
+            })
+        return presets
 
-    async def get_channel_preset(self, preset_id: int) -> Optional[dict]:
+    async def get_channel_preset(self, preset_id: str) -> Optional[dict]:
+        """Return a single preset by its string ID (ObjectId as string)."""
+        from bson import ObjectId
+        try:
+            obj_id = ObjectId(preset_id)
+        except Exception:
+            return None
+        collection = await self._get_presets_collection()
+        doc = await collection.find_one({"_id": obj_id})
+        if doc:
+            return {
+                "id": str(doc["_id"]),
+                "name": doc.get("name"),
+                "channels": doc.get("channels", [])
+            }
         return None
