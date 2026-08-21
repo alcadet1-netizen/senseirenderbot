@@ -493,7 +493,7 @@ class SenseiCheckPresenter:
             return Visuals._render_block(lines)
         
         for i, check in enumerate(checks[offset:offset+limit], 1):
-            code = check.get("code", "?")[:8]
+            code = str(check.get("code", "?"))[:8]
             amount = check.get("amount_ton", "?")
             remaining = check.get("activation_limit", 0) - check.get("activations_used", 0)
             is_active = "✅" if check.get("is_active") else "🔴"
