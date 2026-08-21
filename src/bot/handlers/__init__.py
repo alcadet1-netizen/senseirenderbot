@@ -23,7 +23,7 @@ from src.bot.handlers.broadcast import router as broadcast_router
 from src.bot.handlers.music import router as music_router
 from src.bot.handlers.boss_commands import router as boss_router
 from src.bot.handlers.boss_admin import router as boss_admin_router
-from src.bot.handlers.boss_editor import router as boss_admin_router
+from src.bot.handlers.boss_editor import router as boss_editor_router
 from src.bot.handlers.maintenance import router as maintenance_router
 from src.bot.handlers.chat_settings import router as chat_settings_router
 from src.bot.handlers.draw import router as draw_router
