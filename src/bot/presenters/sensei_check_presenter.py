@@ -487,6 +487,10 @@ class SenseiCheckPresenter:
             Visuals.frame_separator_left(w),
         ]
 
+        # Handle case where checks is not a list (e.g., if it's an integer due to bug)
+        if not isinstance(checks, list):
+            checks = []
+
         if not checks:
             lines.append(Visuals.frame_line_left("Нет чеков", w, align="center"))
             lines.append(Visuals.frame_bottom_left(w))
