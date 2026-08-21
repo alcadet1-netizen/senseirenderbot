@@ -273,7 +273,7 @@ class SenseiCheckPresenter:
         rows: list[list[InlineKeyboardButton]] = []
         if channels:
             for idx, ch in enumerate(channels[:15]):
-                rows.append([InlineKeyboardButton(text=f"{Visuals.cross_raw()} {ch}", callback_data=f"scheckadm:chdel:{idx}"))
+                rows.append([InlineKeyboardButton(text=f"{Visuals.cross_raw()} {ch}", callback_data=f"scheckadm:chdel:{idx}")])
             if len(channels) > 15:
                 rows.append([InlineKeyboardButton(text=f"… ещё {len(channels) - 15}", callback_data="scheckadm:noop")])
 
