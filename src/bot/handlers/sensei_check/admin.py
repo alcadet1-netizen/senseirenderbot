@@ -8,7 +8,6 @@ from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from sqlalchemy.exc import IntegrityError
 
 from src.bot.filters import AdminFilter, PrivateChatFilter
 from src.bot.states.sensei_check import SenseiCheckCreateStates, SenseiCheckPresetStates
