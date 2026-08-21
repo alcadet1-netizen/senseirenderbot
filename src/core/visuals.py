@@ -359,6 +359,10 @@ class Visuals:
         return "❌"
 
     @staticmethod
+    def cross_raw() -> str:
+        return "❌"
+
+    @staticmethod
     def wait_raw() -> str:
         return "⏳"
 

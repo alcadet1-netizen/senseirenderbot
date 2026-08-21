@@ -550,10 +550,10 @@ async def cb_list_checks(query: CallbackQuery, container: Container) -> None:
     if not query.message: return
     offset = int(query.data.split(":")[-1])
     try:
-        all_checks = await container.sensei_check_service.admin_get_all_checks()
+        all_checks, _ = await container.sensei_check_service.get_all_checks()
         text = SenseiCheckPresenter.render_checks_list(all_checks, offset, 5)
         kb = SenseiCheckPresenter.checks_list_kb(len(all_checks), offset, 5)
-        
+
         await query.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     except Exception as e:
         logger.error(f"List error: {e}")

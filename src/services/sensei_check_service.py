@@ -701,6 +701,14 @@ class SenseiCheckService:
     async def admin_delete_check(self, code: str) -> bool:
         return await self.admin_deactivate(code)
 
+    # ==================== Admin: List All Checks ====================
+
+    async def get_all_checks(self) -> list[dict]:
+        """Get all checks (for admin listing). Returns list of check dicts."""
+        await self._ensure_repo()
+        checks, _ = await self._repo.get_all_checks(only_active=False)
+        return checks
+
     # ==================== Presets (DISABLED to avoid migrations) ====================
 
     async def create_channel_preset(self, name: str, channels: list[str]) -> dict:
