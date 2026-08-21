@@ -597,6 +597,10 @@ class SenseiCheckPresenter:
     @classmethod
     def checks_list_kb(cls, checks: list, total: int, offset: int = 0, limit: int = 5) -> InlineKeyboardMarkup:
         """Клавиатура списка чеков с пагинацией и выбором"""
+        # Handle case where checks is not a list (e.g., if it's an integer due to bug)
+        if not isinstance(checks, list):
+            checks = []
+
         builder = InlineKeyboardBuilder()
 
         # Select option from list

@@ -552,7 +552,7 @@ async def cb_list_checks(query: CallbackQuery, container: Container) -> None:
     try:
         all_checks = await container.sensei_check_service.get_all_checks()
         text = SenseiCheckPresenter.render_checks_list(all_checks, offset, 5)
-        kb = SenseiCheckPresenter.checks_list_kb(len(all_checks), offset, 5)
+        kb = SenseiCheckPresenter.checks_list_kb(all_checks, len(all_checks), offset, 5)
 
         await query.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     except Exception as e:
