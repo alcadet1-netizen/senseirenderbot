@@ -207,54 +207,47 @@ class CryptoService:
         return result
 
     async def get_price_message(self, symbol: str) -> str:
-        """Получить курс валюты в RUB и USDT."""
+        """Получить курс валюты в RUB и USDT с улучшенной надёжностью."""
         symbol_lower = symbol.lower()
         coin_id = self.SYMBOL_MAP.get(symbol_lower, symbol_lower)
 
-        # Пробуем CoinGecko
-        data = await self.api.get_coingecko_price(coin_id, "usd,rub")
+        # Получить цены в USD и RUB с использованием fallback механизма
+        price_usd = await self._get_price_with_fallbacks(coin_id, symbol, "usd")
+        price_rub = await self._get_price_with_fallbacks(coin_id, symbol, "rub")
 
-        if not data or coin_id not in data:
-            # Если не нашли в CoinGecko, пробуем Binance (только USDT)
-            binance_data = await self.api.get_binance_ticker(symbol)
-            if binance_data:
-                price = float(binance_data.get("lastPrice", 0))
-                change = float(binance_data.get("priceChangePercent", 0))
+        if price_usd is None or price_usd == 0:
+            return f"{Visuals.cross()} Не удалось найти курс для {symbol.upper()}. Пожалуйста, попробуйте позже или используйте другой символ."
 
-                # Пытаемся получить курс USDT/RUB для конвертации
-                rub_rate = 0
-                try:
-                    usdt_data = await self.api.get_coingecko_price("tether", "rub")
-                    if usdt_data and "tether" in usdt_data:
-                        rub_rate = usdt_data["tether"].get("rub", 0)
-                except Exception:
-                    pass
+        # Расчёт изменения цены за 24h (попытка получить с основного источника)
+        change = 0.0
+        try:
+            # Попробуем получить изменение с CoinGecko как основной источник
+            data = await self.api.get_coingecko_price(coin_id, "usd")
+            if data and coin_id in data:
+                change = data[coin_id].get("usd_24h_change", 0.0)
+                if change is None:
+                    change = 0.0
+        except Exception:
+            pass  # Если не удалось получить изменение, оставляем 0
 
-                price_rub = price * rub_rate
-
-                base = Visuals.crypto_price_card(
-                    symbol=symbol,
-                    usd=price,
-                    rub=price_rub,
-                    change=change,
-                    market_cap=None
-                )
-                return await self._attach_arbitrage(base, symbol)
-            return f"{Visuals.cross()} Не удалось найти курс для {symbol.upper()}"
-
-        # CoinGecko результат
-        coin = data[coin_id]
-        usd = coin.get("usd", 0)
-        rub = coin.get("rub", 0)
-        change = coin.get("usd_24h_change", 0)
-        market_cap = coin.get("usd_market_cap", 0)
-
-        market_cap_rub = market_cap * (rub / usd) if usd > 0 else 0
+        # Расчёт рыночной капитализации (если доступна)
+        market_cap = 0
+        market_cap_rub = 0
+        try:
+            data = await self.api.get_coingecko_price(coin_id, "usd")
+            if data and coin_id in data:
+                market_cap = data[coin_id].get("usd_market_cap", 0)
+                if market_cap is None:
+                    market_cap = 0
+                if price_usd > 0:
+                    market_cap_rub = market_cap * (price_rub / price_usd)
+        except Exception:
+            pass  # Если не удалось получить рыночную капитализацию, оставляем 0
 
         base = Visuals.crypto_price_card(
             symbol=symbol,
-            usd=usd,
-            rub=rub,
+            usd=price_usd,
+            rub=price_rub,
             change=change,
             market_cap=market_cap,
             market_cap_rub=market_cap_rub
@@ -263,45 +256,18 @@ class CryptoService:
         return await self._attach_arbitrage(base, symbol)
 
     async def get_calculator_message(self, symbol: str, amount: float) -> str:
-        """Рассчитать стоимость монет в рублях."""
+        """Рассчитать стоимость монет в рублях с улучшенной надёжностью."""
         logging.info(f"[CRYPTO] get_calculator_message called with symbol={symbol}, amount={amount}")
         symbol_lower = symbol.lower()
         coin_id = self.SYMBOL_MAP.get(symbol_lower, symbol_lower)
         logging.info(f"[CRYPTO] symbol_lower={symbol_lower}, coin_id={coin_id}")
 
-        data = await self.api.get_coingecko_price(coin_id, "rub")
-        logging.info(f"[CRYPTO] CoinGecko response for {coin_id}: {data}")
+        # Попробовать получить цену с множественными источниками и кэшированием
+        price_rub = await self._get_price_with_fallbacks(coin_id, symbol, "rub")
 
-        price_rub = 0
-
-        if data and coin_id in data:
-            price_rub = data[coin_id].get("rub", 0)
-            logging.info(f"[CRYPTO] Found price_rub from CoinGecko: {price_rub}")
-        else:
-            logging.info(f"[CRYPTO] Not found in CoinGecko, trying Binance for symbol={symbol}")
-            # Если не нашли в CoinGecko, пробуем Binance (только USDT)
-            binance_data = await self.api.get_binance_ticker(symbol)
-            logging.info(f"[CRYPTO] Binance response: {binance_data}")
-            if binance_data:
-                price_usd = float(binance_data.get("lastPrice", 0))
-                logging.info(f"[CRYPTO] Binance price_usd: {price_usd}")
-
-                # Пытаемся получить курс USDT/RUB для конвертации
-                rub_rate = 90.0 # Fallback
-                try:
-                    usdt_data = await self.api.get_coingecko_price("tether", "rub")
-                    logging.info(f"[CRYPTO] USDT/RUB data: {usdt_data}")
-                    if usdt_data and "tether" in usdt_data:
-                        rub_rate = usdt_data["tether"].get("rub", 90.0)
-                except Exception as e:
-                    logging.error(f"[CRYPTO] Error fetching USDT/RUB: {e}")
-
-                price_rub = price_usd * rub_rate
-                logging.info(f"[CRYPTO] Calculated price_rub from Binance: {price_rub}")
-
-        if price_rub == 0:
-            msg = f"❌ Не удалось найти курс для {symbol.upper()}"
-            logging.info(f"[CRYPTO] Returning error message: {msg}")
+        if price_rub is None or price_rub == 0:
+            msg = f"❌ Не удалось найти курс для {symbol.upper()}. Пожалуйста, попробуйте позже или используйте другой символ (например, BTC, ETH, TON)."
+            logging.info(f"[CRYPTO] All price sources failed for {symbol}. Returning error message: {msg}")
             return msg
 
         total_rub = price_rub * amount
@@ -323,6 +289,237 @@ class CryptoService:
         result = "<pre>\n" + "\n".join(lines) + "\n</pre>"
         logging.info(f"[CRYPTO] Returning result: {result}")
         return result
+
+    async def _get_price_with_fallbacks(self, coin_id: str, symbol: str, vs_currency: str = "rub") -> Optional[float]:
+        """
+        Получить цену с множественными источниками с резервными вариантами и повторными попытками.
+        Возвращает цену в указанной валюте или None если все источники недоступны.
+        """
+        # Попробовать получить из кэша сначала (если есть недавние данные)
+        cache_key = f"price:{coin_id}:{vs_currency}"
+        cached_price = await self.cache.get(cache_key)
+        if cached_price is not None and cached_price > 0:
+            logging.info(f"[CRYPTO] Using cached price for {coin_id}: {cached_price}")
+            return cached_price
+
+        # Список источников для попытки в порядке приоритета
+        sources = [
+            ("CoinGecko", self._try_coingecko),
+            ("Binance", self._try_binance),
+            ("Bybit", self._try_bybit),
+            ("OKX", self._try_okx),
+            ("MEXC", self._try_mexc),
+            ("Gate.io", self._try_gateio),
+            ("KuCoin", self._try_kucoin),
+            ("CoinMarketCap", self._try_coinmarketcap),
+        ]
+
+        # Попробовать каждый источник с повторными попытками
+        for source_name, source_func in sources:
+            logging.info(f"[CRYPTO] Trying {source_name} for {coin_id}")
+
+            # Повторные попытки с экспоненциальной задержкой
+            for attempt in range(3):
+                try:
+                    price = await source_func(coin_id, vs_currency)
+                    if price is not None and price > 0:
+                        # Сохранить в кэш на 5 минут
+                        await self.cache.set(cache_key, price, ttl=300)
+                        logging.info(f"[CRYPTO] {source_name} returned price for {coin_id}: {price}")
+                        return price
+                except Exception as e:
+                    logging.warning(f"[CRYPTO] {source_name} attempt {attempt + 1} failed for {coin_id}: {e}")
+
+                # Если это не последняя попытка, подождать перед следующей
+                if attempt < 2:  # Не ждать после последней попытки
+                    await asyncio.sleep(2 ** attempt)  # 1s, 2s, 4s
+
+            logging.info(f"[CRYPTO] {source_name} failed after 3 attempts for {coin_id}")
+
+        logging.error(f"[CRYPTO] All price sources failed for {coin_id}")
+        return None
+
+    async def _try_coingecko(self, coin_id: str, vs_currency: str) -> Optional[float]:
+        """Получить цену с CoinGecko."""
+        data = await self.api.get_coingecko_price(coin_id, vs_currency)
+        if data and coin_id in data:
+            price = data[coin_id].get(vs_currency)
+            if price is not None and price > 0:
+                return float(price)
+        return None
+
+    async def _try_binance(self, symbol: str, vs_currency: str) -> Optional[float]:
+        """Получить цену с Binance (только для пар с USDT, затем конвертировать)."""
+        if vs_currency != "rub":
+            # Для простоты, если нужен не RUB, возвращаем None и позволяем другим источникам справиться
+            return None
+
+        # Получить цену в USDT
+        ticker_data = await self.api.get_binance_ticker(symbol)
+        if ticker_data:
+            price_usdt = float(ticker_data.get("lastPrice", 0))
+            if price_usdt > 0:
+                # Конвертировать USDT в RUB через курс USDT/RUB
+                try:
+                    usdt_rub_data = await self.api.get_coingecko_price("tether", "rub")
+                    if usdt_rub_data and "tether" in usdt_rub_data:
+                        usdt_rub_rate = usdt_rub_data["tether"].get("rub", 0)
+                        if usdt_rub_rate > 0:
+                            return price_usdt * usdt_rub_rate
+                except Exception:
+                    pass
+
+                # Fallback: использовать приблизительный курс 90
+                return price_usdt * 90.0
+        return None
+
+    async def _try_bybit(self, symbol: str, vs_currency: str) -> Optional[float]:
+        """Получить цену с Bybit."""
+        if vs_currency != "rub":
+            return None
+
+        ticker_data = await self.api.get_bybit_ticker(symbol)
+        if ticker_data:
+            try:
+                item = ticker_data.get("result", {}).get("list", [{}])[0]
+                price_usdt = float(item.get("lastPrice", 0))
+                if price_usdt > 0:
+                    # Конвертировать через USDT/RUB
+                    try:
+                        usdt_rub_data = await self.api.get_coingecko_price("tether", "rub")
+                        if usdt_rub_data and "tether" in usdt_rub_data:
+                            usdt_rub_rate = usdt_rub_data["tether"].get("rub", 0)
+                            if usdt_rub_rate > 0:
+                                return price_usdt * usdt_rub_rate
+                    except Exception:
+                        pass
+                    return price_usdt * 90.0  # Fallback
+            except Exception:
+                pass
+        return None
+
+    async def _try_okx(self, symbol: str, vs_currency: str) -> Optional[float]:
+        """Получить цену с OKX."""
+        if vs_currency != "rub":
+            return None
+
+        ticker_data = await self.api.get_okx_ticker(symbol)
+        if ticker_data:
+            try:
+                item = ticker_data.get("data", [{}])[0]
+                price_usdt = float(item.get("last", 0))
+                if price_usdt > 0:
+                    # Конвертировать через USDT/RUB
+                    try:
+                        usdt_rub_data = await self.api.get_coingecko_price("tether", "rub")
+                        if usdt_rub_data and "tether" in usdt_rub_data:
+                            usdt_rub_rate = usdt_rub_data["tether"].get("rub", 0)
+                            if usdt_rub_rate > 0:
+                                return price_usdt * usdt_rub_rate
+                    except Exception:
+                        pass
+                    return price_usdt * 90.0  # Fallback
+            except Exception:
+                pass
+        return None
+
+    async def _try_mexc(self, symbol: str, vs_currency: str) -> Optional[float]:
+        """Получить цену с MEXC."""
+        if vs_currency != "rub":
+            return None
+
+        ticker_data = await self.api.get_mexc_ticker(symbol)
+        if ticker_data:
+            try:
+                price_usdt = float(ticker_data.get("lastPrice", 0))
+                if price_usdt > 0:
+                    # Конвертировать через USDT/RUB
+                    try:
+                        usdt_rub_data = await self.api.get_coingecko_price("tether", "rub")
+                        if usdt_rub_data and "tether" in usdt_rub_data:
+                            usdt_rub_rate = usdt_rub_data["tether"].get("rub", 0)
+                            if usdt_rub_rate > 0:
+                                return price_usdt * usdt_rub_rate
+                    except Exception:
+                        pass
+                    return price_usdt * 90.0  # Fallback
+            except Exception:
+                pass
+        return None
+
+    async def _try_gateio(self, symbol: str, vs_currency: str) -> Optional[float]:
+        """Получить цену с Gate.io."""
+        if vs_currency != "rub":
+            return None
+
+        ticker_data = await self.api.get_gateio_ticker(symbol)
+        if ticker_data and isinstance(ticker_data, list) and len(ticker_data) > 0:
+            try:
+                item = ticker_data[0]
+                price_usdt = float(item.get("last", 0))
+                if price_usdt > 0:
+                    # Конвертировать через USDT/RUB
+                    try:
+                        usdt_rub_data = await self.api.get_coingecko_price("tether", "rub")
+                        if usdt_rub_data and "tether" in usdt_rub_data:
+                            usdt_rub_rate = usdt_rub_data["tether"].get("rub", 0)
+                            if usdt_rub_rate > 0:
+                                return price_usdt * usdt_rub_rate
+                    except Exception:
+                        pass
+                    return price_usdt * 90.0  # Fallback
+            except Exception:
+                pass
+        return None
+
+    async def _try_kucoin(self, symbol: str, vs_currency: str) -> Optional[float]:
+        """Получить цену с KuCoin."""
+        if vs_currency != "rub":
+            return None
+
+        ticker_data = await self.api.get_kucoin_ticker(symbol)
+        if ticker_data:
+            try:
+                data = ticker_data.get("data", {})
+                price_usdt = float(data.get("last", 0))
+                if price_usdt > 0:
+                    # Конвертировать через USDT/RUB
+                    try:
+                        usdt_rub_data = await self.api.get_coingecko_price("tether", "rub")
+                        if usdt_rub_data and "tether" in usdt_rub_data:
+                            usdt_rub_rate = usdt_rub_data["tether"].get("rub", 0)
+                            if usdt_rub_rate > 0:
+                                return price_usdt * usdt_rub_rate
+                    except Exception:
+                        pass
+                    return price_usdt * 90.0  # Fallback
+            except Exception:
+                pass
+        return None
+
+    async def _try_coinmarketcap(self, symbol: str, vs_currency: str) -> Optional[float]:
+        """Получить цену с CoinMarketCap."""
+        if vs_currency != "rub":
+            return None
+
+        quote_data = await self.api.get_quote(symbol)
+        if quote_data:
+            try:
+                price_usd = float(quote_data.get("quote", {}).get("USD", {}).get("price", 0))
+                if price_usd > 0:
+                    # Конвертировать USD в RUB
+                    try:
+                        usd_rub_data = await self.api.get_coingecko_price("tether", "rub")
+                        if usd_rub_data and "tether" in usd_rub_data:
+                            usdt_rub_rate = usd_rub_data["tether"].get("rub", 0)  # USDT ~ USD
+                            if usdt_rub_rate > 0:
+                                return price_usd * usdt_rub_rate
+                    except Exception:
+                        pass
+                    return price_usd * 90.0  # Fallback
+            except Exception:
+                pass
+        return None
 
     async def _attach_arbitrage(self, base_message: str, symbol: str) -> str:
         supported = {"TON", "BTC", "ETH", "DOGE", "TRX", "SUI", "TRUMP", "SOL", "XRP"}
