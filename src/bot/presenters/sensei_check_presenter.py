@@ -130,7 +130,7 @@ class SenseiCheckPresenter:
         )
 
         builder.adjust(1, 1)
-        return builder.build()
+        return builder.as_markup()
 
     @classmethod
     def share_direct_kb(cls, ref_link: str, code: str) -> InlineKeyboardMarkup:
@@ -147,7 +147,7 @@ class SenseiCheckPresenter:
         builder.button(text="📋 СКОПИРОВАТЬ ССЫЛКУ", callback_data=f"scheck:copy:{code}")
 
         builder.adjust(1)
-        return builder.build()
+        return builder.as_markup()
 
     @classmethod
     def profiles_kb(cls) -> InlineKeyboardMarkup:
@@ -640,7 +640,7 @@ class SenseiCheckPresenter:
         builder.button(text="↩️ В меню", callback_data="scheckult:menu")
 
         builder.adjust(1)
-        return builder.build()
+        return builder.as_markup()
 
     @classmethod
     def reflinks_kb(cls, total: int, offset: int = 0, limit: int = 5) -> InlineKeyboardMarkup:
@@ -657,7 +657,7 @@ class SenseiCheckPresenter:
 
         builder.button(text="↩️ В меню", callback_data="scheckult:menu")
 
-        return builder.build()
+        return builder.as_markup()
 
     @classmethod
     def render_referral_earned(cls, amount: float, referral_percent: int, ref_link: str) -> str:
@@ -707,7 +707,7 @@ class SenseiCheckPresenter:
         builder.button(text="✅ ЗАКРЫТЬ", callback_data=f"scheck:close")
 
         builder.adjust(1)
-        return builder.build()
+        return builder.as_markup()
 
     @classmethod
     def render_activation_success(cls, amount: float, is_referral: bool = False, ref_amount: float | None = None) -> str:
