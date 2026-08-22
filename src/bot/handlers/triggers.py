@@ -18,6 +18,8 @@ from src.core.exceptions import DailyAlreadyClaimedError
 from src.core.visuals import Visuals
 from src.texts.phrases import get_random_phrase, check_easter_egg, get_random_pour_phrase, ERROR_COOLDOWN
 
+logger = logging.getLogger(__name__)
+
 router = Router(name="triggers")
 
 # Cooldown storage
