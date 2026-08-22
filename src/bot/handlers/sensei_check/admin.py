@@ -656,4 +656,9 @@ async def cb_del(query: CallbackQuery, container: Container) -> None:
     code = query.data.split(":")[-1]
     await container.sensei_check_service.admin_delete_check(code)
     await query.answer("Чек удален")
-    await cb_list_checks(query, container)
+    # После удаления показываем список чеков с начала
+    if query.message:
+        all_checks = await container.sensei_check_service.get_all_checks()
+        text = SenseiCheckPresenter.render_checks_list(all_checks, 0, 5)
+        kb = SenseiCheckPresenter.checks_list_kb(all_checks, len(all_checks), 0, 5)
+        await query.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
