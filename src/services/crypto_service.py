@@ -188,8 +188,8 @@ class CryptoService:
         logger.info(f"[CRYPTO_SERVICE] CoinGecko top_10 result: {len(top_10) if top_10 else 0}")
 
         if not top_10:
-            # Fallback to Binance for popular coins if CoinGecko fails
-            logger.info("[CRYPTO_SERVICE] CoinGecko returned empty, falling back to Binance")
+            # Fallback to multiple sources for popular coins if CoinGecko fails
+            logger.info("[CRYPTO_SERVICE] CoinGecko returned empty, falling back to multiple sources")
             popular_coins = ["BTC", "ETH", "USDT", "BNB", "SOL", "XRP", "ADA", "DOGE", "TRX", "DOT"]
             lines = []
             width = 32
@@ -198,19 +198,21 @@ class CryptoService:
             lines.append(Visuals.frame_separator_left(width))
 
             for i, symbol in enumerate(popular_coins, 1):
-                ticker = await self.api.get_binance_ticker(symbol)
-                if ticker is None:
-                    logger.info(f"[CRYPTO_SERVICE] Binance ticker for {symbol} returned None")
-                else:
-                    logger.info(f"[CRYPTO_SERVICE] Binance ticker for {symbol} OK")
-                    price = float(ticker.get("lastPrice", 0))
-                    change = float(ticker.get("priceChangePercent", 0))
+                coin_id = self.SYMBOL_MAP.get(symbol.lower(), symbol.lower())
+                price_usdt = await self._fetch_price_with_fallback(coin_id, symbol, "usdt")
+                if price_usdt is not None and price_usdt > 0:
+                    logger.info(f"[CRYPTO_SERVICE] Fallback price for {symbol} via multiple sources: {price_usdt}")
+                    # We don't have change and market cap in this fallback, set to 0
+                    change = 0.0
+                    market_cap = 0
                     emoji = "📈" if change >= 0 else "📉"
                     lines.append(Visuals.frame_line_left(f"{i}. {symbol}", width))
-                    lines.append(Visuals.frame_line_left(f"💵 ${price:,.4f}", width))
+                    lines.append(Visuals.frame_line_left(f"💵 ${price_usdt:,.4f}", width))
                     lines.append(Visuals.frame_line_left(f"{emoji} {change:+.2f}%", width))
                     if i < len(popular_coins):
                         lines.append(Visuals.frame_separator_left(width))
+                else:
+                    logger.info(f"[CRYPTO_SERVICE] All sources failed for {symbol}")
 
             lines.append(Visuals.frame_bottom_left(width))
             result = f"<pre>{chr(10).join(lines)}</pre>"
