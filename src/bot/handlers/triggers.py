@@ -43,7 +43,7 @@ async def trigger_help(message: Message):
     """Триггер на 'сенсей помоги/помощь'."""
     if message.text == "ℹ️ Помощь" and message.chat.type != "private":
         return
-    
+
     text = Visuals.help_card()
     await message.answer(text, parse_mode="HTML")
 
@@ -55,7 +55,7 @@ async def trigger_pour(message: Message, container: Container):
     chat_id = message.chat.id
     current_time = time.time()
     last_time = pour_cooldowns.get(chat_id, 0)
-    
+
     if current_time - last_time < 4:
         remaining = int(4 - (current_time - last_time))
         if remaining < 1: remaining = 1
@@ -65,20 +65,20 @@ async def trigger_pour(message: Message, container: Container):
     pour_cooldowns[chat_id] = current_time
 
     user_data = await container.user_service.get_random_user()
-    
+
     if not user_data:
         await message.answer("В додзё пусто... Некому налить. 😔")
         return
-        
+
     phrase = get_random_pour_phrase()
-    
+
     # Формируем упоминание
     if user_data["username"]:
         mention = f"@{user_data['username']}"
     else:
         name = user_data["first_name"]
         mention = f'<a href="tg://user?id={user_data["id"]}">{name}</a>'
-        
+
     await message.answer(f"{mention}, {phrase}", parse_mode="HTML")
 
 
@@ -95,7 +95,7 @@ async def trigger_daily(message: Message, container: Container):
         pass
     except Exception as e:
         logging.warning(f"⚠️ Failed to delete trigger message in trigger_daily: {e}")
-    
+
     try:
         result = await container.daily_service.claim_daily(
             user_id=message.from_user.id,
@@ -103,11 +103,11 @@ async def trigger_daily(message: Message, container: Container):
             first_name=message.from_user.first_name or "",
             is_bot=message.from_user.is_bot or False
         )
-        
+
         if result["success"]:
             username = message.from_user.username
             mention = f"@{username}" if username else f"<b>{message.from_user.full_name}</b>"
-            
+
             card = Visuals.daily_reward(
                 xp=result["xp"],
                 coins=result["coins"],
@@ -116,7 +116,7 @@ async def trigger_daily(message: Message, container: Container):
                 bonus_coins=result["bonus_coins"],
             )
             await message.answer(f"{mention}\n\n{card}", parse_mode="HTML")
-    
+
     except DailyAlreadyClaimedError as e:
         username = message.from_user.username
         mention = f"@{username}" if username else f"<b>{html.escape(message.from_user.full_name)}</b>"
@@ -130,8 +130,17 @@ async def trigger_daily(message: Message, container: Container):
 @router.message(F.text.regexp(CRYPTO_TOP_PATTERN))
 async def trigger_crypto_top(message: Message, container: Container):
     """Триггер на 'сенсей дай курс'."""
-    text = await container.crypto_service.get_top_10_message()
-    await message.answer(text, parse_mode="HTML")
+    try:
+        text = await container.crypto_service.get_top_10_message()
+        logger.info(f"[CRYPTO_TOP] Fetched text length: {len(text) if text else 0}")
+        await message.answer(text, parse_mode="HTML")
+        logger.info(f"[CRYPTO_TOP] Message sent successfully")
+    except Exception as e:
+        logger.error(f"[CRYPTO_TOP] Failed to fetch or send data: {e}", exc_info=True)
+        try:
+            await message.answer("⚠️ Не удалось получить курс криптовалют. Попробуйте позже.", parse_mode=None)
+        except Exception:
+            pass  # Fallback failed too
 
 
 @router.message(F.text.regexp(CRYPTO_CALC_PATTERN))
@@ -139,20 +148,29 @@ async def trigger_crypto_calc(message: Message, container: Container):
     """Триггер на 'курс № TON № 100'."""
     if not message.text:
         return
-        
+
     match = CRYPTO_CALC_PATTERN.search(message.text)
     if not match:
         return
 
     symbol = match.group(1)
     amount_str = match.group(2).replace(',', '.')
-    
+
     try:
         amount = float(amount_str)
         text = await container.crypto_service.get_calculator_message(symbol, amount)
+        logger.info(f"[TRIGGER_CRYPTO_CALC] Processing symbol={symbol}, amount={amount}")
         await message.answer(text, parse_mode="HTML")
+        logger.info(f"[TRIGGER_CRYPTO_CALC] Message sent")
     except ValueError:
         await message.answer("❌ Некорректное число.")
+        logging.info(f"[TRIGGER_CRYPTO_CALC] ValueError for amount_str={amount_str}")
+    except Exception as e:
+        logging.error(f"[TRIGGER_CRYPTO_CALC] Unexpected error: {e}", exc_info=True)
+        try:
+            await message.answer("❌ Произошла ошибка при обработке запроса.")
+        except Exception:
+            pass
 
 
 @router.message(F.text.regexp(CRYPTO_AMOUNT_PATTERN))
@@ -170,16 +188,16 @@ async def trigger_crypto_amount(message: Message, container: Container):
 
     try:
         amount = float(amount_str)
-        logging.info(f"[TRIGGER_CRYPTO] Processing symbol={symbol}, amount={amount}")
+        logger.info(f"[TRIGGER_CRYPTO_AMOUNT] Processing symbol={symbol}, amount={amount}")
         text = await container.crypto_service.get_calculator_message(symbol, amount)
-        logging.info(f"[TRIGGER_CRYPTO] Got response: {text}")
+        logger.info(f"[TRIGGER_CRYPTO_AMOUNT] Got response: {text}")
         await message.answer(text, parse_mode="HTML")
-        logging.info(f"[TRIGGER_CRYPTO] Message sent")
+        logger.info(f"[TRIGGER_CRYPTO_AMOUNT] Message sent")
     except ValueError:
         await message.answer("❌ Некорректное число.")
-        logging.info(f"[TRIGGER_CRYPTO] ValueError for amount_str={amount_str}")
+        logger.info(f"[TRIGGER_CRYPTO_AMOUNT] ValueError for amount_str={amount_str}")
     except Exception as e:
-        logging.error(f"[TRIGGER_CRYPTO] Unexpected error: {e}", exc_info=True)
+        logger.error(f"[TRIGGER_CRYPTO_AMOUNT] Unexpected error: {e}", exc_info=True)
         try:
             await message.answer("❌ Произошла ошибка при обработке запроса.")
         except Exception:
@@ -191,19 +209,28 @@ async def trigger_crypto_price(message: Message, container: Container):
     """Триггер на 'курс TON/BTC'."""
     if not message.text:
         return
-    
+
     match = CRYPTO_PRICE_PATTERN.search(message.text)
     if not match:
         return
-        
+
     symbol = match.group(1)
-    
+
     # Игнорируем если это часть калькулятора (хотя порядок роутеров должен решать, но на всякий случай)
     if "№" in message.text:
         return
 
-    text = await container.crypto_service.get_price_message(symbol)
-    await message.answer(text, parse_mode="HTML")
+    try:
+        text = await container.crypto_service.get_price_message(symbol)
+        logger.info(f"[CRYPTO_PRICE] Fetched text for {symbol}: length {len(text) if text else 0}")
+        await message.answer(text, parse_mode="HTML")
+        logger.info(f"[CRYPTO_PRICE] Message sent successfully for {symbol}")
+    except Exception as e:
+        logger.error(f"[CRYPTO_PRICE] Failed to fetch or send data for {symbol}: {e}", exc_info=True)
+        try:
+            await message.answer(f"⚠️ Не удалось получить курс для {symbol.upper()}. Попробуйте позже.", parse_mode=None)
+        except Exception:
+            pass  # Fallback failed too
 
 
 @router.message(F.text.regexp(SAGE_QUESTION_PATTERN))
@@ -211,22 +238,22 @@ async def trigger_sage_question(message: Message, container: Container):
     """Триггер на 'мудрец сенсей [вопрос]'."""
     if not message.text:
         return
-        
+
     match = SAGE_QUESTION_PATTERN.search(message.text)
     if not match:
         return
 
     question = match.group(1)
-    
+
     # Отправляем "печатает..."
     await message.bot.send_chat_action(message.chat.id, "typing")
-    
+
     try:
         answer = await container.digest_service.ask_sage(question)
         # Gemini возвращает Markdown, но без экранирования для V2 это опасно.
         # Используем обычный текст или пробуем Markdown, если уверены.
         # Для безопасности пока оставим без parse_mode или Markdown
-        await message.reply(answer) 
+        await message.reply(answer)
     except Exception as e:
         logging.error(f"Sage error: {e}")
         await message.reply("🧘‍♂️ Сенсей ушел в астрал. Попробуй позже.")
@@ -237,7 +264,7 @@ async def trigger_vanga(message: Message, container: Container):
     """Триггер на 'сенсей вангуй'."""
     # Проверяем, просит ли пользователь предсказание для себя
     is_me = re.search(r'\bмне\b', message.text, re.IGNORECASE)
-    
+
     if is_me:
         # Используем данные отправителя
         user = message.from_user
@@ -249,30 +276,30 @@ async def trigger_vanga(message: Message, container: Container):
     else:
         # Получаем случайного пользователя
         user_data = await container.user_service.get_random_user()
-    
+
     if not user_data:
         await message.answer("В додзё пусто... Некому гадать. 😔")
         return
-        
+
     # Формируем имя для промпта
     if user_data["username"]:
         username = f"@{user_data['username']}"
     else:
         username = user_data["first_name"]
-        
+
     # Отправляем "печатает..."
     await message.bot.send_chat_action(message.chat.id, "typing")
-    
+
     try:
         prediction = await container.digest_service.get_vanga_prediction(username)
-        
+
         # Формируем упоминание для ответа
         if user_data["username"]:
             mention = f"@{user_data['username']}"
         else:
             name = html.escape(user_data["first_name"])
             mention = f'<a href="tg://user?id={user_data["id"]}">{name}</a>'
-            
+
         await message.reply(f"{mention}, {prediction}", parse_mode="HTML")
     except Exception as e:
         logging.error(f"Vanga error: {e}")
@@ -284,13 +311,13 @@ async def trigger_sensei(message: Message):
     """Триггер на 'сенсей'."""
     if not message.text:
         return
-    
+
     text = message.text.lower()
-    
+
     # Пропускаем если это помощь или курс
     if "помо" in text or "курс" in text:
         return
-    
+
     phrase = get_random_phrase()
     await message.answer(phrase, parse_mode="HTML")
 
@@ -301,7 +328,6 @@ async def check_easter_eggs_handler(message: Message):
     response = check_easter_egg(message.text)
     if response:
         await message.answer(response, parse_mode="HTML")
-
 
 
 @router.message()
