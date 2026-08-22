@@ -208,37 +208,24 @@ class CryptoService:
         return result
 
     async def get_price_message(self, symbol: str) -> str:
-        """Получить курс валюты в RUB и USDT с улучшенной надёжностью."""
+        """Получить курс валюты в USDT с улучшенной надёжностью."""
         symbol_lower = symbol.lower()
         coin_id = self.SYMBOL_MAP.get(symbol_lower, symbol_lower)
 
-        # Сначала попробуем получить цену в USD (более универсальнеly доступна)
-        price_usd = await self._get_price_with_fallbacks(coin_id, symbol, "usd")
+        # Попробуем получить цену в USDT (универсальная и стабильная валюта)
+        price_usdt = await self._get_price_with_fallbacks(coin_id, symbol, "usdt")
 
-        if price_usd is None or price_usd == 0:
-            return f"{Visuals.cross()} Не удалось найти курс для {symbol.upper()}. Пожалуйста, попробуйте позже или используйте другой символ."
+        if price_usdt is None or price_usdt == 0:
+            return f"{Visuals.cross()} Не удалось найти курс для {symbol.upper()}. Пожалуйста, попробуйте позже или используйте другой символ (например, BTC, ETH, TON)."
 
-        # Попробуем получить цену в RUB напрямую
-        price_rub = await self._get_price_with_fallbacks(coin_id, symbol, "rub")
+        # Для обратной совместимости и дополнительной информации получим цену в USD
+        # USDT цена почти идентична USD цене (1 USDT ≈ 1 USD)
+        price_usd = price_usdt
 
-        # Если не удалось получить RUB цену напрямую, посчитаем её через USDT/RUB
-        if price_rub is None or price_rub == 0:
-            try:
-                # Получить курс USDT/RUB
-                usdt_rub_data = await self.api.get_coingecko_price("tether", "rub")
-                if usdt_rub_data and "tether" in usdt_rub_data:
-                    usdt_rub_rate = usdt_rub_data["tether"].get("rub", 0)
-                    if usdt_rub_rate > 0:
-                        price_rub = price_usd * usdt_rub_rate
-                    else:
-                        # Fallback к историческому курсу
-                        price_rub = price_usd * 90.0
-                else:
-                    # Fallback к историческому курсу
-                    price_rub = price_usd * 90.0
-            except Exception:
-                # Если все попытки не удались, используем fallback курс
-                price_rub = price_usd * 90.0
+        # Попробуем получить точную цену в USD для более точных данных об изменении и рыночной капитализации
+        price_usd_exact = await self._get_price_with_fallbacks(coin_id, symbol, "usd")
+        if price_usd_exact is not None and price_usd_exact > 0:
+            price_usd = price_usd_exact
 
         # Расчёт изменения цены за 24h (попытка получить с основного источника)
         change = 0.0
@@ -254,17 +241,30 @@ class CryptoService:
 
         # Расчёт рыночной капитализации (если доступна)
         market_cap = 0
-        market_cap_rub = 0
         try:
             data = await self.api.get_coingecko_price(coin_id, "usd")
             if data and coin_id in data:
                 market_cap = data[coin_id].get("usd_market_cap", 0)
                 if market_cap is None:
                     market_cap = 0
-                if price_usd > 0 and price_rub > 0:
-                    market_cap_rub = market_cap * (price_rub / price_usd)
         except Exception:
             pass  # Если не удалось получить рыночную капитализацию, оставляем 0
+
+        # Расчёт эквивалента в рублях для справки (опционально)
+        price_rub = 0
+        try:
+            # Получить курс USDT/RUB
+            usdt_rub_data = await self.api.get_coingecko_price("tether", "rub")
+            if usdt_rub_data and "tether" in usdt_rub_data:
+                usdt_rub_rate = usdt_rub_data["tether"].get("rub", 0)
+                if usdt_rub_rate > 0:
+                    price_rub = price_usdt * usdt_rub_rate
+            else:
+                # Fallback к историческому курсу
+                price_rub = price_usdt * 90.0
+        except Exception:
+            # Если все попытки не удались, используем fallback курс
+            price_rub = price_usdt * 90.0
 
         base = Visuals.crypto_price_card(
             symbol=symbol,
@@ -272,28 +272,28 @@ class CryptoService:
             rub=price_rub,
             change=change,
             market_cap=market_cap,
-            market_cap_rub=market_cap_rub
+            market_cap_rub=market_cap * (price_rub / price_usd) if price_usd > 0 else 0
         )
 
         return await self._attach_arbitrage(base, symbol)
 
     async def get_calculator_message(self, symbol: str, amount: float) -> str:
-        """Рассчитать стоимость монет в рублях с улучшенной надёжностью."""
+        """Рассчитать стоимость монет в USDT с улучшенной надёжностью."""
         logging.info(f"[CRYPTO] get_calculator_message called with symbol={symbol}, amount={amount}")
         symbol_lower = symbol.lower()
         coin_id = self.SYMBOL_MAP.get(symbol_lower, symbol_lower)
         logging.info(f"[CRYPTO] symbol_lower={symbol_lower}, coin_id={coin_id}")
 
         # Попробовать получить цену с множественными источниками и кэшированием
-        price_rub = await self._get_price_with_fallbacks(coin_id, symbol, "rub")
+        price_usdt = await self._get_price_with_fallbacks(coin_id, symbol, "usdt")
 
-        if price_rub is None or price_rub == 0:
+        if price_usdt is None or price_usdt == 0:
             msg = f"❌ Не удалось найти курс для {symbol.upper()}. Пожалуйста, попробуйте позже или используйте другой символ (например, BTC, ETH, TON)."
             logging.info(f"[CRYPTO] All price sources failed for {symbol}. Returning error message: {msg}")
             return msg
 
-        total_rub = price_rub * amount
-        logging.info(f"[CRYPTO] total_rub: {total_rub}")
+        total_usdt = price_usdt * amount
+        logging.info(f"[CRYPTO] total_usdt: {total_usdt}")
 
         width = 30
         lines = [
@@ -301,10 +301,10 @@ class CryptoService:
             Visuals.frame_line_left(f"🧮 {symbol.upper()} Calculator", width, "center"),
             Visuals.frame_separator_left(width),
             Visuals.frame_line_left(f"Кол-во: {amount}", width),
-            Visuals.frame_line_left(f"Курс: {price_rub:,.2f} руб", width),
+            Visuals.frame_line_left(f"Курс: {price_usdt:,.4f} USDT", width),
             Visuals.frame_separator_left(width),
             Visuals.frame_line_left(f"Итого:", width),
-            Visuals.frame_line_left(f"💰 {total_rub:,.2f} руб", width),
+            Visuals.frame_line_left(f"💰 {total_usdt:,.4f} USDT", width),
             Visuals.frame_bottom_left(width)
         ]
 
