@@ -4,9 +4,11 @@
 
 import asyncio
 import re
+import time
 from typing import Optional
 
 from src.core.config import Settings
+from src.core.cache import SimpleCache
 from src.core.visuals import Visuals
 from src.api.crypto_api import CryptoAPI
 
@@ -31,6 +33,150 @@ class CryptoService:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.api = CryptoAPI(settings.ton_api_key)
+        # Cache for prices: key -> (price, expiry_timestamp)
+        self._price_cache = SimpleCache()
+        self._price_cache_ttl = 10  # seconds
+
+    async def _get_cached_price(self, coin_id: str, vs_currency: str) -> Optional[float]:
+        """Get cached price if available and not expired."""
+        key = f"{coin_id}:{vs_currency}"
+        cached = await self._price_cache.get(key)
+        if cached is not None:
+            try:
+                return float(cached)
+            except ValueError:
+                pass
+        return None
+
+    async def _set_cached_price(self, coin_id: str, vs_currency: str, price: float):
+        """Cache price with TTL."""
+        key = f"{coin_id}:{vs_currency}"
+        await self._price_cache.set(key, str(price), ex=self._price_cache_ttl)
+
+    async def _fetch_price_from_coingecko(self, coin_id: str, vs_currency: str) -> Optional[float]:
+        """Fetch price from CoinGecko."""
+        try:
+            data = await self.api.get_coingecko_price(coin_id, vs_currency)
+            if data and coin_id in data:
+                price = data[coin_id].get(vs_currency)
+                if price is not None:
+                    return float(price)
+        except Exception:
+            pass
+        return None
+
+    async def _fetch_price_from_binance(self, symbol: str) -> Optional[float]:
+        """Fetch price from Binance ticker."""
+        try:
+            ticker = await self.api.get_binance_ticker(symbol)
+            if ticker:
+                price = ticker.get("lastPrice")
+                if price is not None:
+                    return float(price)
+        except Exception:
+            pass
+        return None
+
+    async def _fetch_price_from_bybit(self, symbol: str) -> Optional[float]:
+        """Fetch price from Bybit ticker."""
+        try:
+            ticker = await self.api.get_bybit_ticker(symbol)
+            if ticker:
+                # Bybit response: {'result': {'list': [{'lastPrice': '...'}]}}
+                result = ticker.get("result", {})
+                if isinstance(result, dict):
+                    lst = result.get("list", [])
+                    if lst and isinstance(lst, list):
+                        price = lst[0].get("lastPrice")
+                        if price is not None:
+                            return float(price)
+                elif isinstance(result, list) and result:
+                    price = result[0].get("lastPrice")
+                    if price is not None:
+                        return float(price)
+        except Exception:
+            pass
+        return None
+
+    async def _fetch_price_from_okx(self, symbol: str) -> Optional[float]:
+        """Fetch price from OKX ticker."""
+        try:
+            ticker = await self.api.get_okx_ticker(f"{symbol}-USDT")
+            if ticker:
+                # OKX response: {'data': [{'last': '...'}]}
+                data = ticker.get("data", [])
+                if data and isinstance(data, list):
+                    price = data[0].get("last")
+                    if price is not None:
+                        return float(price)
+        except Exception:
+            pass
+        return None
+
+    async def _fetch_price_from_coinmarketcap(self, symbol: str) -> Optional[float]:
+        """Fetch price from CoinMarketCap (requires API key)."""
+        try:
+            if not self.settings.ton_api_key:  # Actually CoinMarketCap uses a different key, but we don't have it in settings.
+                # We don't have a CoinMarketCap API key in settings, so skip.
+                return None
+            quote = await self.api.get_quote(symbol)
+            if quote:
+                # Quote structure: {'USD': {'price': '...'}}
+                usd = quote.get("quote", {}).get("USD", {})
+                price = usd.get("price")
+                if price is not None:
+                    return float(price)
+        except Exception:
+            pass
+        return None
+
+    async def _fetch_price_with_fallback(self, coin_id: str, symbol: str, vs_currency: str = "usdt") -> Optional[float]:
+        """
+        Fetch price with fallback sources.
+        Order: CoinGecko -> Binance -> Bybit -> OKX -> CoinMarketCap (if configured)
+        """
+        # Try cache first
+        cached = await self._get_cached_price(coin_id, vs_currency)
+        if cached is not None:
+            return cached
+
+        # Try each source in order
+        price = None
+        # 1. CoinGecko
+        price = await self._fetch_price_from_coingecko(coin_id, vs_currency)
+        if price is not None and price > 0:
+            await self._set_cached_price(coin_id, vs_currency, price)
+            return price
+
+        # 2. Binance
+        price = await self._fetch_price_from_binance(symbol)
+        if price is not None and price > 0:
+            await self._set_cached_price(coin_id, vs_currency, price)
+            return price
+
+        # 3. Bybit
+        price = await self._fetch_price_from_bybit(symbol)
+        if price is not None and price > 0:
+            await self._set_cached_price(coin_id, vs_currency, price)
+            return price
+
+        # 4. OKX
+        price = await self._fetch_price_from_okx(symbol)
+        if price is not None and price > 0:
+            await self._set_cached_price(coin_id, vs_currency, price)
+            return price
+
+        # 5. CoinMarketCap (if API key available)
+        # Note: We don't have a separate API key for CoinMarketCap in settings.
+        # If we wanted to use it, we would need to add a setting.
+        # For now, we skip because we don't have the key.
+        # price = await self._fetch_price_from_coinmarketcap(symbol)
+        # if price is not None and price > 0:
+        #     await self._set_cached_price(coin_id, vs_currency, price)
+        #     return price
+
+        # If all sources fail, return None
+        return None
 
     async def get_top_10_message(self) -> str:
         """Получить ТОП-10 криптовалют в USDT."""
@@ -89,59 +235,38 @@ class CryptoService:
         symbol_lower = symbol.lower()
         coin_id = self.SYMBOL_MAP.get(symbol_lower, symbol_lower)
 
-        # Пробуем CoinGecko для цены в USDT
-        data = await self.api.get_coingecko_price(coin_id, "usdt")
+        # Try to get price with fallback sources
+        price_usdt = await self._fetch_price_with_fallback(coin_id, symbol, "usdt")
 
-        if data and coin_id in data:
-            price_usdt = data[coin_id].get("usdt")
-            if price_usdt is not None and price_usdt > 0:
-                # Attempt to get additional data (change, market cap) from USD pair
-                change = 0.0
-                market_cap = 0
-                try:
-                    data_usd = await self.api.get_coingecko_price(coin_id, "usd")
-                    if data_usd and coin_id in data_usd:
-                        coin_data = data_usd[coin_id]
-                        usd_24h_change = coin_data.get("usd_24h_change")
-                        if usd_24h_change is not None:
-                            change = float(usd_24h_change)
-                        market_cap = coin_data.get("usd_market_cap", 0) or 0
-                except Exception:
-                    # If we can't get additional data, that's OK - we still have the price
-                    pass
+        if price_usdt is not None and price_usdt > 0:
+            # Attempt to get additional data (change, market cap) from USD pair
+            change = 0.0
+            market_cap = 0
+            try:
+                # We try to get change and market cap from CoinGecko USD pair
+                data_usd = await self.api.get_coingecko_price(coin_id, "usd")
+                if data_usd and coin_id in data_usd:
+                    coin_data = data_usd[coin_id]
+                    usd_24h_change = coin_data.get("usd_24h_change")
+                    if usd_24h_change is not None:
+                        change = float(usd_24h_change)
+                    market_cap = coin_data.get("usd_market_cap", 0) or 0
+            except Exception:
+                # If we can't get additional data, that's OK - we still have the price
+                pass
 
-                base = Visuals.crypto_price_card(
-                    symbol=symbol,
-                    usd=price_usdt,  # USDT ≈ USD
-                    rub=0,  # Not showing RUB as requested
-                    change=change,
-                    market_cap=market_cap,
-                    market_cap_rub=0
-                )
+            base = Visuals.crypto_price_card(
+                symbol=symbol,
+                usd=price_usdt,  # USDT ≈ USD
+                rub=0,  # Not showing RUB as requested
+                change=change,
+                market_cap=market_cap,
+                market_cap_rub=0
+            )
 
-                # Remove RUB line from output since we don't want to show it
-                base = self._remove_rub_line(base)
-                return await self._attach_arbitrage(base, symbol)
-
-        # Если CoinGecko не сработал, пробуем Binance
-        binance_data = await self.api.get_binance_ticker(symbol)
-        if binance_data:
-            price_usdt = float(binance_data.get("lastPrice", 0))
-            if price_usdt > 0:
-                change = float(binance_data.get("priceChangePercent", 0))
-
-                base = Visuals.crypto_price_card(
-                    symbol=symbol,
-                    usd=price_usdt,  # USDT ≈ USD
-                    rub=0,  # Not showing RUB as requested
-                    change=change,
-                    market_cap=0,  # Binance ticker doesn't provide market cap simply
-                    market_cap_rub=0
-                )
-
-                # Remove RUB line from output since we don't want to show it
-                base = self._remove_rub_line(base)
-                return await self._attach_arbitrage(base, symbol)
+            # Remove RUB line from output since we don't want to show it
+            base = self._remove_rub_line(base)
+            return await self._attach_arbitrage(base, symbol)
 
         # Если все источники не сработали
         return f"{Visuals.cross()} Не удалось найти курс для {symbol.upper()} в USDT. Пожалуйста, попробуйте позже или используйте другой символ (например, BTC, ETH, TON)."
@@ -215,18 +340,8 @@ class CryptoService:
         symbol_lower = symbol.lower()
         coin_id = self.SYMBOL_MAP.get(symbol_lower, symbol_lower)
 
-        # Пробуем CoinGecko для цены в USDT
-        data = await self.api.get_coingecko_price(coin_id, "usdt")
-
-        price_usdt = 0
-        if data and coin_id in data:
-            price_usdt = data[coin_id].get("usdt", 0)
-
-        # Если CoinGecko не сработал, пробуем Binance
-        if price_usdt == 0:
-            binance_data = await self.api.get_binance_ticker(symbol)
-            if binance_data:
-                price_usdt = float(binance_data.get("lastPrice", 0))
+        # Try to get price with fallback sources
+        price_usdt = await self._fetch_price_with_fallback(coin_id, symbol, "usdt")
 
         if price_usdt == 0:
             return f"{Visuals.cross()} Не удалось найти курс для {symbol.upper()} в USDT"
