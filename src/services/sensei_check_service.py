@@ -235,7 +235,7 @@ class SenseiCheckService:
                 await self._repo.create(
                     code=code,
                     created_by=created_by,
-                    amount_ton=amount,
+                    amount_ton=float(amount),
                     activation_limit=activation_limit,
                     channels=channels,
                     referral_percent=referral_percent,
