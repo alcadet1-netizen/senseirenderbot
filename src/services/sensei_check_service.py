@@ -107,7 +107,7 @@ class SenseiCheckService:
     def _generate_transfer_id(self, *parts) -> str:
         """Генерация ID транзакции."""
         data = ":".join(str(p) for p in parts)
-        return hashlib.sha256(data.encode()).hexdigest()[:32]
+        return hashlib.sha256(data.encode()).hexdigest()[:20]
 
     def _parse_channels(self, channels_json: str) -> list[str]:
         """Парсинг JSON каналов."""
