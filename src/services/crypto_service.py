@@ -20,7 +20,8 @@ class CryptoService:
     """Сервис для получения курсов криптовалют в USDT."""
 
     SYMBOL_MAP = {
-        "ton": "toncoin",
+        "gram": "toncoin",
+        "ton": "toncoin",   # backward compatibility
         "btc": "bitcoin",
         "eth": "ethereum",
         "usdt": "tether",

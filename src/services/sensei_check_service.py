@@ -211,7 +211,11 @@ class SenseiCheckService:
     ) -> str:
         """Создать новый чек."""
         await self._ensure_repo()
-        amount = Decimal(str(amount_ton))
+        try:
+            amount = Decimal(str(amount_ton))
+        except Exception as e:
+            logger.error(f"Failed to convert amount_ton to Decimal: {e}")
+            raise ValueError("Неверный формат суммы чека")
 
         # Валидация
         if amount < self.MIN_PAYOUT_AMOUNT:
@@ -497,15 +501,28 @@ class SenseiCheckService:
                     final_referrer_id = user["referrer_id"]
 
         # Рассчитываем суммы
-        payout_amount = Decimal(str(check.get("amount_ton", 0.0)))
+        try:
+            payout_amount = Decimal(str(check.get("amount_ton", 0.0)))
+        except Exception as e:
+            logger.error(f"Failed to convert check amount_ton to Decimal: {e}")
+            return ActivationResult(success=False, error=ActivationError.PAYOUT_FAILED)
         referral_amount = Decimal("0")
 
         if final_referrer_id and check.get("referral_percent", 0) > 0:
-            referral_amount = payout_amount * Decimal(check["referral_percent"]) / 100
+            try:
+                referral_amount = payout_amount * Decimal(check["referral_percent"]) / 100
+            except Exception as e:
+                logger.error(f"Failed to calculate referral amount: {e}")
+                referral_amount = Decimal("0")
 
         # Проверяем минимальную сумму
-        if payout_amount < Decimal("0.0065"):
-            return ActivationResult(success=False, error=ActivationError.AMOUNT_TOO_SMALL)
+        try:
+            min_amount = Decimal("0.0065")
+            if payout_amount < min_amount:
+                return ActivationResult(success=False, error=ActivationError.AMOUNT_TOO_SMALL)
+        except Exception as e:
+            logger.error(f"Failed to compare payout_amount with minimum: {e}")
+            return ActivationResult(success=False, error=ActivationError.PAYOUT_FAILED)
 
         # Создаём или обновляем активацию
         if existing:
@@ -535,11 +552,10 @@ class SenseiCheckService:
 
         logger.info(f"💸 [Check:{code}] Attempting payout {payout_amount} TON to {user_id} (TransferID: {user_transfer_id})")
 
-        user_payout_ok = await self.xrocket_service.transfer_ton(
-            user_id_to=user_id,
+        user_payout_ok = await self.xrocket_service.transfer(
+            user_id=user_id,
+            currency="TON",
             amount=float(payout_amount),
-            transfer_id=user_transfer_id,
-            description=f"SenseiCheck: {code}",
         )
 
         if not user_payout_ok:
@@ -626,12 +642,10 @@ class SenseiCheckService:
         await self._repo.deactivate(check)
 
         if refund_ton > 0:
-            transfer_id = self._generate_transfer_id("refund", code, str(time.time()))
-            success = await self.xrocket_service.transfer_ton(
-                user_id_to=admin_id,
-                amount=refund_ton,
-                transfer_id=transfer_id,
-                description=f"Refund SenseiCheck: {code}"
+            success = await self.xrocket_service.transfer(
+                user_id=admin_id,
+                currency="TON",
+                amount=refund_ton
             )
             if not success:
                 logger.error(f"Failed to refund {refund_ton} TON for check {code}")
