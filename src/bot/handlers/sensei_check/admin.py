@@ -420,20 +420,20 @@ async def sc_edit_field(query: CallbackQuery, state: FSMContext) -> None:
     
     if field == "amount":
         await state.set_state(SenseiCheckCreateStates.waiting_amount)
-        await _ui_render(state, query.message, SenseiCheckPresenter.render_amount_prompt(), SenseiCheckPresenter.amount_kb())
+        await _ui_render(state=state, anchor=query.message, text=SenseiCheckPresenter.render_amount_prompt(), reply_markup=SenseiCheckPresenter.amount_kb())
     elif field == "activations":
         await state.set_state(SenseiCheckCreateStates.waiting_activations)
-        await _ui_render(state, query.message, SenseiCheckPresenter.render_activations_prompt(), SenseiCheckPresenter.activations_kb())
+        await _ui_render(state=state, anchor=query.message, text=SenseiCheckPresenter.render_activations_prompt(), reply_markup=SenseiCheckPresenter.activations_kb())
     elif field == "channels":
         await _ask_channels(query.message, state)
     elif field == "password":
         await _ask_password(query.message, state)
     elif field == "referral":
         await state.set_state(SenseiCheckCreateStates.waiting_referral)
-        await _ui_render(state, query.message, SenseiCheckPresenter.render_referral_prompt(), SenseiCheckPresenter.referral_kb())
+        await _ui_render(state=state, anchor=query.message, text=SenseiCheckPresenter.render_referral_prompt(), reply_markup=SenseiCheckPresenter.referral_kb())
     elif field == "text":
         await state.set_state(SenseiCheckCreateStates.waiting_text)
-        await _ui_render(state, query.message, SenseiCheckPresenter.render_text_prompt(), SenseiCheckPresenter.nav_kb(skip="scheckadm:skip:text", cancel="scheckadm:cancel"))
+        await _ui_render(state=state, anchor=query.message, text=SenseiCheckPresenter.render_text_prompt(), reply_markup=SenseiCheckPresenter.nav_kb(skip="scheckadm:skip:text", cancel="scheckadm:cancel"))
     elif field == "settings":
         await _show_dashboard(query.message, state)
 
