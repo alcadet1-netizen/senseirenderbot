@@ -264,36 +264,48 @@ class CryptoService:
 
     async def get_calculator_message(self, symbol: str, amount: float) -> str:
         """Рассчитать стоимость монет в рублях."""
+        logging.info(f"[CRYPTO] get_calculator_message called with symbol={symbol}, amount={amount}")
         symbol_lower = symbol.lower()
         coin_id = self.SYMBOL_MAP.get(symbol_lower, symbol_lower)
+        logging.info(f"[CRYPTO] symbol_lower={symbol_lower}, coin_id={coin_id}")
 
         data = await self.api.get_coingecko_price(coin_id, "rub")
+        logging.info(f"[CRYPTO] CoinGecko response for {coin_id}: {data}")
 
         price_rub = 0
 
         if data and coin_id in data:
             price_rub = data[coin_id].get("rub", 0)
+            logging.info(f"[CRYPTO] Found price_rub from CoinGecko: {price_rub}")
         else:
+            logging.info(f"[CRYPTO] Not found in CoinGecko, trying Binance for symbol={symbol}")
             # Если не нашли в CoinGecko, пробуем Binance (только USDT)
             binance_data = await self.api.get_binance_ticker(symbol)
+            logging.info(f"[CRYPTO] Binance response: {binance_data}")
             if binance_data:
                 price_usd = float(binance_data.get("lastPrice", 0))
+                logging.info(f"[CRYPTO] Binance price_usd: {price_usd}")
 
                 # Пытаемся получить курс USDT/RUB для конвертации
                 rub_rate = 90.0 # Fallback
                 try:
                     usdt_data = await self.api.get_coingecko_price("tether", "rub")
+                    logging.info(f"[CRYPTO] USDT/RUB data: {usdt_data}")
                     if usdt_data and "tether" in usdt_data:
                         rub_rate = usdt_data["tether"].get("rub", 90.0)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.error(f"[CRYPTO] Error fetching USDT/RUB: {e}")
 
                 price_rub = price_usd * rub_rate
+                logging.info(f"[CRYPTO] Calculated price_rub from Binance: {price_rub}")
 
         if price_rub == 0:
-            return f"❌ Не удалось найти курс для {symbol.upper()}"
+            msg = f"❌ Не удалось найти курс для {symbol.upper()}"
+            logging.info(f"[CRYPTO] Returning error message: {msg}")
+            return msg
 
         total_rub = price_rub * amount
+        logging.info(f"[CRYPTO] total_rub: {total_rub}")
 
         width = 30
         lines = [
@@ -308,7 +320,9 @@ class CryptoService:
             Visuals.frame_bottom_left(width)
         ]
 
-        return "<pre>\n" + "\n".join(lines) + "\n</pre>"
+        result = "<pre>\n" + "\n".join(lines) + "\n</pre>"
+        logging.info(f"[CRYPTO] Returning result: {result}")
+        return result
 
     async def _attach_arbitrage(self, base_message: str, symbol: str) -> str:
         supported = {"TON", "BTC", "ETH", "DOGE", "TRX", "SUI", "TRUMP", "SOL", "XRP"}

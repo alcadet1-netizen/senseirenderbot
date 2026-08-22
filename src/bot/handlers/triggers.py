@@ -160,20 +160,30 @@ async def trigger_crypto_amount(message: Message, container: Container):
     """Триггер на 'курс 123 TON'."""
     if not message.text:
         return
-        
+
     match = CRYPTO_AMOUNT_PATTERN.search(message.text)
     if not match:
         return
 
     amount_str = match.group(1).replace(',', '.')
     symbol = match.group(2)
-    
+
     try:
         amount = float(amount_str)
+        logging.info(f"[TRIGGER_CRYPTO] Processing symbol={symbol}, amount={amount}")
         text = await container.crypto_service.get_calculator_message(symbol, amount)
+        logging.info(f"[TRIGGER_CRYPTO] Got response: {text}")
         await message.answer(text, parse_mode="HTML")
+        logging.info(f"[TRIGGER_CRYPTO] Message sent")
     except ValueError:
         await message.answer("❌ Некорректное число.")
+        logging.info(f"[TRIGGER_CRYPTO] ValueError for amount_str={amount_str}")
+    except Exception as e:
+        logging.error(f"[TRIGGER_CRYPTO] Unexpected error: {e}", exc_info=True)
+        try:
+            await message.answer("❌ Произошла ошибка при обработке запроса.")
+        except Exception:
+            pass
 
 
 @router.message(F.text.regexp(CRYPTO_PRICE_PATTERN))
