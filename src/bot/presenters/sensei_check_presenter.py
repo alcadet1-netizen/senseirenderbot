@@ -15,7 +15,7 @@ class SenseiCheckPresenter:
         lines = [
             "🎁 <b>SENSEI CHECK</b>",
             "",
-            f"💰 <b>{amount} TON</b>",
+            f"💰 <b>{amount} GRAM</b>",
         ]
 
         if remaining is not None:
@@ -36,7 +36,7 @@ class SenseiCheckPresenter:
     @classmethod
     def get_activation_keyboard(cls, url: str, amount: float) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"💰 ЗАБРАТЬ {amount} TON", url=url)]
+            [InlineKeyboardButton(text=f"💰 ЗАБРАТЬ {amount} GRAM", url=url)]
         ])
 
     @classmethod
@@ -54,7 +54,7 @@ class SenseiCheckPresenter:
         results.append(
             InlineQueryResultArticle(
                 id=secrets.token_hex(4),
-                title=f"🎁 Чек на {amount} TON",
+                title=f"🎁 Чек на {amount} GRAM",
                 description=f"{Visuals.fire_raw()} Осталось: {remaining} • Реф: {view.get('referral_percent', 0)}%",
                 input_message_content=InputTextMessageContent(
                     message_text=caption,
@@ -76,9 +76,9 @@ class SenseiCheckPresenter:
 
         return (
             "⚡ <b>БЫСТРОЕ СОЗДАНИЕ ЧЕКА</b>\n\n"
-            f"💰 Сумма: <b>{amount} TON</b>\n"
+            f"💰 Сумма: <b>{amount} GRAM</b>\n"
             f"👥 Активаций: <b>{count}</b>\n"
-            f"💳 Итого к оплате: <b>{total:.4f} TON</b>\n\n"
+            f"💳 Итого к оплате: <b>{total:.4f} GRAM</b>\n\n"
             "👇 Нажми <b>Создать</b> для подтверждения."
         )
 
@@ -97,7 +97,7 @@ class SenseiCheckPresenter:
         lines = [
             "🎁 <b>ПОДЕЛИСЬ И ЗАРАБОТАЙ</b>",
             "",
-            f"💰 <b>{amount} TON</b> за каждого приглашенного",
+            f"💰 <b>{amount} GRAM</b> за каждого приглашенного",
             f"{Visuals.fire()} Осталось чеков: <b>{remaining}</b>",
         ]
 
@@ -198,7 +198,7 @@ class SenseiCheckPresenter:
         draw.text((60, 30), title_text, font=font_title, fill=(255, 255, 255))
 
         # Main amount
-        draw.text((60, 140), f"💰 {amount} TON", font=font_text, fill=accent_color)
+        draw.text((60, 140), f"💰 {amount} GRAM", font=font_text, fill=accent_color)
 
         if is_referral and remaining > 0:
             draw.text((60, 200), f"{Visuals.fire_raw()} {remaining} осталось", font=font_sub, fill=(255, 200, 100))
@@ -246,7 +246,7 @@ class SenseiCheckPresenter:
         builder = InlineKeyboardBuilder()
         presets = ["0.001", "0.01", "0.05", "0.1", "0.5", "1", "5", "10"]
         for p in presets:
-            builder.button(text=f"{p} TON", callback_data=f"scheckadm:amt:{p}")
+            builder.button(text=f"{p} GRAM", callback_data=f"scheckadm:amt:{p}")
         builder.adjust(4)
 
         nav = cls.nav_kb(back="scheckadm:back:dashboard", cancel="scheckadm:cancel")
@@ -303,7 +303,7 @@ class SenseiCheckPresenter:
         amount = data.get("amount_ton") or "?"
         limit = data.get("activation_limit") or "?"
 
-        builder.button(text=f"💰 {amount} TON", callback_data="scheckadm:edit:amount")
+        builder.button(text=f"💰 {amount} GRAM", callback_data="scheckadm:edit:amount")
         builder.button(text=f"👥 {limit} шт.", callback_data="scheckadm:edit:activations")
 
         channels = data.get("channels") or []
@@ -357,7 +357,7 @@ class SenseiCheckPresenter:
         return (
             "📌 <b>SenseiCheck</b>\n\n"
             "💰 <b>Сумма одного чека</b>\n"
-            "Введи сумму в TON (например, <code>0.1</code>) или выбери из списка:"
+            "Введи сумму в GRAM (например, <code>0.1</code>) или выбери из списка:"
         )
 
     @classmethod
@@ -445,7 +445,7 @@ class SenseiCheckPresenter:
 
         return (
             f"⚡️ <b>СОЗДАНИЕ ЧЕКА</b>\n\n"
-            f"💰 <b>Сумма 1 активации:</b> {amount} TON\n"
+            f"💰 <b>Сумма 1 активации:</b> {amount} GRAM\n"
             f"👥 <b>Количество активаций:</b> {limit}\n\n"
             f"⚙️ <b>НАСТРОЙКИ:</b>\n"
             f"├ 📣 <b>Каналы:</b> {ch_display}\n"
@@ -453,7 +453,7 @@ class SenseiCheckPresenter:
             f"├ 🛡 <b>Капча:</b> {cpt_display}\n"
             f"├ 🤝 <b>Реферальные:</b> {ref_pct}%\n"
             f"└ 💬 <b>Медиа и текст:</b> {content_txt}\n\n"
-            f"💎 <b>ИТОГО: {total} TON</b>\n\n"
+            f"💎 <b>ИТОГО: {total} GRAM</b>\n\n"
             f"<i>Настройте чек с помощью кнопок или сразу жмите «Создать».</i>"
         )
     # ==================== ULTIMATE МЕНЮ ====================
@@ -504,7 +504,7 @@ class SenseiCheckPresenter:
 
             lines.append(Visuals.frame_line_left("", w))
             lines.append(Visuals.frame_line_left(f"{is_active} Чек #{i}", w))
-            lines.append(Visuals.frame_line_left(f"Сумма: {amount} TON", w))
+            lines.append(Visuals.frame_line_left(f"Сумма: {amount} GRAM", w))
             lines.append(Visuals.frame_line_left(f"Осталось: {remaining}", w))
             lines.append(Visuals.frame_line_left(f"Код: {code}...", w))
 
@@ -539,8 +539,8 @@ class SenseiCheckPresenter:
             Visuals.frame_separator_left(w),
             Visuals.frame_line_left("", w),
             Visuals.frame_line_left(f"Статус: {status}", w),
-            Visuals.frame_line_left(f"Сумма: {amount} TON", w),
-            Visuals.frame_line_left(f"Итого: {float(amount) * total_limit} TON", w),
+            Visuals.frame_line_left(f"Сумма: {amount} GRAM", w),
+            Visuals.frame_line_left(f"Итого: {float(amount) * total_limit} GRAM", w),
             Visuals.frame_line_left("", w),
             Visuals.frame_line_left(f"📊 Статистика:", w),
             Visuals.frame_line_left(f"  Всего: {total_limit} чеков", w),
@@ -671,14 +671,14 @@ class SenseiCheckPresenter:
             Visuals.frame_separator_left(w),
             Visuals.frame_line_left("", w),
             Visuals.frame_line_left("Ты получил:", w, align="left"),
-            Visuals.frame_line_left(f"  💰 {amount} TON за активацию чека", w, align="left"),
+            Visuals.frame_line_left(f"  💰 {amount} GRAM за активацию чека", w, align="left"),
             Visuals.frame_line_left("", w),
             Visuals.frame_line_left("✨ А ТЕПЕРЬ ЗАРАБОТАЙ БОЛЬШЕ ✨", w, align="center"),
             Visuals.frame_line_left("", w),
             Visuals.frame_line_left(f"Каждая активация по твоей ссылке:", w, align="left"),
-            Visuals.frame_line_left(f"  💸 +{earned_amount:.6f} TON ({referral_percent}%)", w, align="left"),
+            Visuals.frame_line_left(f"  💸 +{earned_amount:.6f} GRAM ({referral_percent}%)", w, align="left"),
             Visuals.frame_line_left("", w),
-            Visuals.frame_line_left(f"🔗 ТВОЯ РЕФЕРАЛЬНАЯ ССЫЛКА 🔗", w, align="center"),
+            Visuals.frame_line_left(f"🔗 ТВОЯ РЕФЕРАЛЬНАя ССЫЛКА 🔗", w, align="center"),
             Visuals.frame_line_left("", w),
             Visuals.frame_line_left(f"{ref_link[:45]}...", w, align="center"),
             Visuals.frame_line_left("", w),
@@ -715,13 +715,13 @@ class SenseiCheckPresenter:
         lines = [
             "🎉 <b>ОТЛИЧНО! АКТИВИРОВАНО!</b>",
             "",
-            f"✅ Выплачено: <b>{amount} TON</b>",
+            f"✅ Выплачено: <b>{amount} GRAM</b>",
             "🚀 Средства зачислены в xRocket",
         ]
 
         if is_referral and ref_amount:
             lines.append("")
-            lines.append(f"💸 Реф. выплата: <b>+{ref_amount:.6f} TON</b>")
+            lines.append(f"💸 Реф. выплата: <b>+{ref_amount:.6f} GRAM</b>")
 
         lines.append("")
         lines.append("⏱️ <i>Оплата придёт в течение 5 минут</i>")
@@ -781,7 +781,7 @@ class SenseiCheckPresenter:
                 ref_link = f"https://t.me/{bot_username}?start=check_{code}_{user_id}"
 
                 lines.append(Visuals.frame_line_left("", w))
-                lines.append(Visuals.frame_line_left(f"💰 {amount} TON | Осталось: {remaining}", w))
+                lines.append(Visuals.frame_line_left(f"💰 {amount} GRAM | Осталось: {remaining}", w))
 
                 # Short ref link display
                 short_ref = ref_link[:35] + "..." if len(ref_link) > 35 else ref_link

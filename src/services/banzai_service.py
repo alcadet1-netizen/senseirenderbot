@@ -794,10 +794,11 @@ class BanzaiService:
 
                 if reward_ton > 0 and self.xrocket_service:
                     tid = f"banzai:{chat_id}:{int(winner_id)}:{int(time.time()*1000)}"
-                    await self.xrocket_service.transfer_ton(
-                        user_id_to=int(winner_id),
+                    await self.xrocket_service.transfer(
+                        user_id=int(winner_id),
+                        currency="GRAM",
                         amount=reward_ton,
-                        transfer_id=tid,
+                        transferId=tid,
                         description="Banzai Reward"
                     )
 

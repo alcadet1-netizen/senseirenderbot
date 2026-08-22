@@ -640,7 +640,7 @@ async def cb_burn(query: CallbackQuery, container: Container) -> None:
     success, msg, refund_ton = await container.sensei_check_service.burn_check(code, query.from_user.id)
     
     if success:
-        await query.answer(f"🔥 Чек сожжен! Возвращено {refund_ton:.4f} TON.", show_alert=True)
+        await query.answer(f"🔥 Чек сожжен! Возвращено {refund_ton:.4f} GRAM.", show_alert=True)
         # Return to main list
         try:
              await cb_list_checks(query, container)

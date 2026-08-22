@@ -561,13 +561,13 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
                     # Check pool
                     if await boss_service.check_pool_availability(reward_amount):
                         try:
-                            success = await container.xrocket_service.transfer(user_id, "TONCOIN", reward_amount)
+                            success = await container.xrocket_service.transfer(user_id, "GRAM", reward_amount)
                             if success:
                                 await boss_service.increment_pool_used(reward_amount)
-                                alert_text += f"\n💎 <b>LUCKY HIT!</b> +{reward_amount} TON (xRocket)"
+                                alert_text += f"\n💎 <b>LUCKY HIT!</b> +{reward_amount} GRAM (xRocket)"
 
                                 # Public notification
-                                notification_text = f"💎 {user.first_name} выбил <b>{reward_amount} TON</b> с Босса!"
+                                notification_text = f"💎 {user.first_name} выбил <b>{reward_amount} GRAM</b> с Босса!"
                                 msg = await event.bot.send_message(chat_id, notification_text, parse_mode="HTML")
                                 asyncio.create_task(delete_message_delayed(msg, 10))
                         except Exception as e:

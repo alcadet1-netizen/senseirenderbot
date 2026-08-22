@@ -94,7 +94,7 @@ async def _handle_activation_response(
             )
             try:
                 if query and query.message.via_bot:
-                     await query.answer(f"✅ Активировано! +{res.amount_ton} TON", show_alert=True)
+                     await query.answer(f"✅ Активировано! +{res.amount_ton} GRAM", show_alert=True)
                 else:
                      await message.answer(text, parse_mode="HTML")
                      if query: await query.answer()
