@@ -8,7 +8,7 @@ import logging
 import secrets
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional, List, Dict, Any, Union
 from enum import Enum
@@ -225,7 +225,7 @@ class SenseiCheckService:
 
         expires_at = None
         if expires_in_hours and expires_in_hours > 0:
-            expires_at = datetime.utcnow() + timedelta(hours=expires_in_hours)
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)
 
         code = self._generate_code()
 
@@ -738,36 +738,6 @@ class SenseiCheckService:
         except Exception:
             return False
         collection = await self._get_presets_collection()
-        result = await collection.delete_one({"_id": obj_id})
-        return result.deleted_count > 0
-        #
-        # Let's edit the service to return string ID, and then we'll edit the handler in a separate step.
-        #
-        # We'll change the service to return string ID (the ObjectId as string).
-        # And we'll change the handler to expect string ID and not convert to int.
-        #
-        # Let's proceed with the service edit first, then we'll edit the handler.
-        #
-        # For delete, we'll accept preset_id as string.
-        #
-        collection = await self._get_presets_collection()
-        result = await collection.delete_one({"_id": ObjectId(preset_id)}) if isinstance(preset_id, str) and len(preset_id) == 24 else collection.delete_one({"id": preset_id})
-        # We'll store with _id as ObjectId and also an "id" field as string? Let's just use _id.
-        # We'll store the document with _id as ObjectId, and when returning we convert to string.
-        # For delete, we use the ObjectId.
-        #
-        # Let's redesign:
-        #   When inserting, we let MongoDB generate _id.
-        #   We return a dict with "id": str(inserted_id), "name": name, "channels": channels.
-        #   For delete, we expect the string id, convert to ObjectId and delete by _id.
-        #
-        # We'll need to import ObjectId from bson.
-        #
-        from bson import ObjectId
-        try:
-            obj_id = ObjectId(preset_id)
-        except Exception:
-            return False
         result = await collection.delete_one({"_id": obj_id})
         return result.deleted_count > 0
 
