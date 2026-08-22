@@ -5,12 +5,15 @@
 import asyncio
 import re
 import time
-from typing import Optional
+import logging
+from typing import Optional, List, Any
 
 from src.core.config import Settings
 from src.core.cache import SimpleCache
 from src.core.visuals import Visuals
 from src.api.crypto_api import CryptoAPI
+
+logger = logging.getLogger(__name__)
 
 
 class CryptoService:
@@ -182,9 +185,11 @@ class CryptoService:
         """Получить ТОП-10 криптовалют в USDT."""
         # Получаем топ-10 в USDT
         top_10 = await self.api.get_coingecko_top_10("usdt")
+        logger.info(f"[CRYPTO_SERVICE] CoinGecko top_10 result: {len(top_10) if top_10 else 0}")
 
         if not top_10:
             # Fallback to Binance for popular coins if CoinGecko fails
+            logger.info("[CRYPTO_SERVICE] CoinGecko returned empty, falling back to Binance")
             popular_coins = ["BTC", "ETH", "USDT", "BNB", "SOL", "XRP", "ADA", "DOGE", "TRX", "DOT"]
             lines = []
             width = 32
@@ -194,7 +199,10 @@ class CryptoService:
 
             for i, symbol in enumerate(popular_coins, 1):
                 ticker = await self.api.get_binance_ticker(symbol)
-                if ticker:
+                if ticker is None:
+                    logger.info(f"[CRYPTO_SERVICE] Binance ticker for {symbol} returned None")
+                else:
+                    logger.info(f"[CRYPTO_SERVICE] Binance ticker for {symbol} OK")
                     price = float(ticker.get("lastPrice", 0))
                     change = float(ticker.get("priceChangePercent", 0))
                     emoji = "📈" if change >= 0 else "📉"
@@ -205,7 +213,9 @@ class CryptoService:
                         lines.append(Visuals.frame_separator_left(width))
 
             lines.append(Visuals.frame_bottom_left(width))
-            return f"<pre>{chr(10).join(lines)}</pre>"
+            result = f"<pre>{chr(10).join(lines)}</pre>"
+            logger.info(f"[CRYPTO_SERVICE] Fallback result length: {len(result)}")
+            return result
 
         width = 32
         lines = []
@@ -228,7 +238,9 @@ class CryptoService:
                 lines.append(Visuals.frame_separator_left(width))
 
         lines.append(Visuals.frame_bottom_left(width))
-        return f"<pre>{chr(10).join(lines)}</pre>"
+        result = f"<pre>{chr(10).join(lines)}</pre>"
+        logger.info(f"[CRYPTO_SERVICE] CoinGecko result length: {len(result)}")
+        return result
 
     async def get_price_message(self, symbol: str) -> str:
         """Получить курс валюты в USDT."""
