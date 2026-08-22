@@ -2,6 +2,7 @@
 💰 API для криптовалют.
 """
 
+import asyncio
 import aiohttp
 from typing import Optional, Dict, Any
 
