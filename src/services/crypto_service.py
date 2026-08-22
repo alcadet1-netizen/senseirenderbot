@@ -41,7 +41,8 @@ class SimpleCache:
 
     async def delete(self, key: str):
         async with self._lock:
-            self._cache.pop(key, None)
+            if key in self._cache:
+                del self._cache[key]
 
 
 class CryptoService:
@@ -211,12 +212,33 @@ class CryptoService:
         symbol_lower = symbol.lower()
         coin_id = self.SYMBOL_MAP.get(symbol_lower, symbol_lower)
 
-        # Получить цены в USD и RUB с использованием fallback механизма
+        # Сначала попробуем получить цену в USD (более универсальнеly доступна)
         price_usd = await self._get_price_with_fallbacks(coin_id, symbol, "usd")
-        price_rub = await self._get_price_with_fallbacks(coin_id, symbol, "rub")
 
         if price_usd is None or price_usd == 0:
             return f"{Visuals.cross()} Не удалось найти курс для {symbol.upper()}. Пожалуйста, попробуйте позже или используйте другой символ."
+
+        # Попробуем получить цену в RUB напрямую
+        price_rub = await self._get_price_with_fallbacks(coin_id, symbol, "rub")
+
+        # Если не удалось получить RUB цену напрямую, посчитаем её через USDT/RUB
+        if price_rub is None or price_rub == 0:
+            try:
+                # Получить курс USDT/RUB
+                usdt_rub_data = await self.api.get_coingecko_price("tether", "rub")
+                if usdt_rub_data and "tether" in usdt_rub_data:
+                    usdt_rub_rate = usdt_rub_data["tether"].get("rub", 0)
+                    if usdt_rub_rate > 0:
+                        price_rub = price_usd * usdt_rub_rate
+                    else:
+                        # Fallback к историческому курсу
+                        price_rub = price_usd * 90.0
+                else:
+                    # Fallback к историческому курсу
+                    price_rub = price_usd * 90.0
+            except Exception:
+                # Если все попытки не удались, используем fallback курс
+                price_rub = price_usd * 90.0
 
         # Расчёт изменения цены за 24h (попытка получить с основного источника)
         change = 0.0
@@ -239,7 +261,7 @@ class CryptoService:
                 market_cap = data[coin_id].get("usd_market_cap", 0)
                 if market_cap is None:
                     market_cap = 0
-                if price_usd > 0:
+                if price_usd > 0 and price_rub > 0:
                     market_cap_rub = market_cap * (price_rub / price_usd)
         except Exception:
             pass  # Если не удалось получить рыночную капитализацию, оставляем 0
@@ -279,10 +301,10 @@ class CryptoService:
             Visuals.frame_line_left(f"🧮 {symbol.upper()} Calculator", width, "center"),
             Visuals.frame_separator_left(width),
             Visuals.frame_line_left(f"Кол-во: {amount}", width),
-            Visuals.frame_line_left(f"Курс: {price_rub:,.2f}  ₽", width),
+            Visuals.frame_line_left(f"Курс: {price_rub:,.2f} руб", width),
             Visuals.frame_separator_left(width),
             Visuals.frame_line_left(f"Итого:", width),
-            Visuals.frame_line_left(f"💰 {total_rub:,.2f}  ₽", width),
+            Visuals.frame_line_left(f"💰 {total_rub:,.2f} руб", width),
             Visuals.frame_bottom_left(width)
         ]
 
@@ -361,6 +383,7 @@ class CryptoService:
             if price_usdt > 0:
                 # Конвертировать USDT в RUB через курс USDT/RUB
                 try:
+                    # Прямой вызов API без использования fallback механизма чтобы избежать рекурсии
                     usdt_rub_data = await self.api.get_coingecko_price("tether", "rub")
                     if usdt_rub_data and "tether" in usdt_rub_data:
                         usdt_rub_rate = usdt_rub_data["tether"].get("rub", 0)
@@ -386,6 +409,7 @@ class CryptoService:
                 if price_usdt > 0:
                     # Конвертировать через USDT/RUB
                     try:
+                        # Прямой вызов API без использования fallback механизма чтобы избежать рекурсии
                         usdt_rub_data = await self.api.get_coingecko_price("tether", "rub")
                         if usdt_rub_data and "tether" in usdt_rub_data:
                             usdt_rub_rate = usdt_rub_data["tether"].get("rub", 0)
@@ -411,6 +435,7 @@ class CryptoService:
                 if price_usdt > 0:
                     # Конвертировать через USDT/RUB
                     try:
+                        # Прямой вызов API без использования fallback механизма чтобы избежать рекурсии
                         usdt_rub_data = await self.api.get_coingecko_price("tether", "rub")
                         if usdt_rub_data and "tether" in usdt_rub_data:
                             usdt_rub_rate = usdt_rub_data["tether"].get("rub", 0)
@@ -435,6 +460,7 @@ class CryptoService:
                 if price_usdt > 0:
                     # Конвертировать через USDT/RUB
                     try:
+                        # Прямой вызов API без использования fallback механизма чтобы избежать рекурсии
                         usdt_rub_data = await self.api.get_coingecko_price("tether", "rub")
                         if usdt_rub_data and "tether" in usdt_rub_data:
                             usdt_rub_rate = usdt_rub_data["tether"].get("rub", 0)
@@ -460,6 +486,7 @@ class CryptoService:
                 if price_usdt > 0:
                     # Конвертировать через USDT/RUB
                     try:
+                        # Прямой вызов API без использования fallback механизма чтобы избежать рекурсии
                         usdt_rub_data = await self.api.get_coingecko_price("tether", "rub")
                         if usdt_rub_data and "tether" in usdt_rub_data:
                             usdt_rub_rate = usdt_rub_data["tether"].get("rub", 0)
@@ -485,6 +512,7 @@ class CryptoService:
                 if price_usdt > 0:
                     # Конвертировать через USDT/RUB
                     try:
+                        # Прямой вызов API без использования fallback механизма чтобы избежать рекурсии
                         usdt_rub_data = await self.api.get_coingecko_price("tether", "rub")
                         if usdt_rub_data and "tether" in usdt_rub_data:
                             usdt_rub_rate = usdt_rub_data["tether"].get("rub", 0)
