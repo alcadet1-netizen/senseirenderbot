@@ -195,18 +195,30 @@ async def cb_preset_del(query: CallbackQuery, container: Container, state: FSMCo
 
 @router.callback_query(F.data == "scheckult:create")
 async def cb_create_start(query: CallbackQuery, state: FSMContext) -> None:
+    logger.info("cb_create_start triggered")
     await state.clear()
     await state.update_data(channels=[], referral_percent=0)
     await state.set_state(SenseiCheckCreateStates.waiting_amount)
-    
-    if not query.message: return
-    
-    await _ui_render(
-        state=state,
-        anchor=query.message,
-        text=SenseiCheckPresenter.render_amount_prompt(),
-        reply_markup=SenseiCheckPresenter.amount_kb()
-    )
+
+    if not query.message:
+        logger.warning("cb_create_start: query.message is None")
+        return
+
+    try:
+        await _ui_render(
+            state=state,
+            anchor=query.message,
+            text=SenseiCheckPresenter.render_amount_prompt(),
+            reply_markup=SenseiCheckPresenter.amount_kb()
+        )
+        logger.info("cb_create_start: _ui_render completed")
+    except Exception as e:
+        logger.exception(f"cb_create_start: error in _ui_render: {e}")
+        # Try to answer the callback query to avoid hanging
+        try:
+            await query.answer("❌ Внутренняя ошибка", show_alert=True)
+        except:
+            pass
 
 # --- Amount ---
 @router.callback_query(SenseiCheckCreateStates.waiting_amount, F.data.startswith("scheckadm:amt:"))
