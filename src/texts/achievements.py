@@ -22,7 +22,7 @@ ACHIEVEMENTS = [
     {
         "code": "rich",
         "name": "Богатей",
-        "description": "Накопить 1000 монет",
+        "description": "Накопить 3000 монет",
         "xp": 50,
         "coins": 0,
         "icon": "💰"

@@ -27,7 +27,7 @@ class ExchangeService:
         self.tickets = self.db.tickets  # For ticket tracking
 
     async def coins_to_ticket(self, user_id: int) -> dict:
-        """Обменять монеты на билет. 1000 монет → 1 билет"""
+        """Обменять монеты на билет. 3000 монет → 1 билет"""
         # Get user
         user = await self.users.find_one({"id": user_id})
         if not user:
@@ -89,7 +89,7 @@ class ExchangeService:
             return {"success": False, "error": "Internal error"}
 
     async def ticket_to_coins(self, user_id: int) -> dict:
-        """Обменять билет на монеты. 1 билет → 900 монет"""
+        """Обменять билет на монеты. 1 билет → 2600 монет"""
         # Get user
         user = await self.users.find_one({"id": user_id})
         if not user:
