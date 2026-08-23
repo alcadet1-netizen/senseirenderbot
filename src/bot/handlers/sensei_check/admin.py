@@ -471,7 +471,9 @@ async def sc_create_confirm(query: CallbackQuery, state: FSMContext, container: 
             message_text=data.get("message_text"),
             photo_file_id=data.get("photo_file_id"),
             video_file_id=data.get("video_file_id"),
-            password=data.get("password")
+            password=data.get("password"),
+            title=data.get("title"),
+            expires_at=data.get("expires_at")
         )
         
         # Success

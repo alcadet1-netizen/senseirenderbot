@@ -69,7 +69,11 @@ class SenseiCheckService:
         message_text: Optional[str] = None,
         password: Optional[str] = None,
         requires_captcha: bool = False,
-        channels: Optional[List[str]] = None
+        channels: Optional[List[str]] = None,
+        photo_file_id: Optional[str] = None,
+        video_file_id: Optional[str] = None,
+        title: Optional[str] = None,
+        expires_at: Optional[datetime] = None
     ) -> str:
         """Создать новый чек и вернуть его код."""
 
@@ -104,7 +108,10 @@ class SenseiCheckService:
             message_text=message_text,
             password=password,
             requires_captcha=requires_captcha,
-            # photo_file_id, video_file_id, title, expires_at are not provided by the service -> default to None in the repository
+            photo_file_id=photo_file_id,
+            video_file_id=video_file_id,
+            title=title,
+            expires_at=expires_at
         )
 
         # Кешируем чек
