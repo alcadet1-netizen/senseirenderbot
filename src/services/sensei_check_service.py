@@ -344,3 +344,9 @@ class SenseiCheckService:
     async def _cache_delete(self, key: str):
         """Удалить значение из кэша."""
         await self.mongo.delete_cache(key)
+
+    async def get_all_checks(self) -> List[Dict[str, Any]]:
+        """Получить все чеки (для админского списка)."""
+        await self._ensure_repo()
+        checks, _ = await self._repo.get_all_checks()
+        return checks
