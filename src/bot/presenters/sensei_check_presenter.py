@@ -41,30 +41,58 @@ class SenseiCheckPresenter:
 
     @classmethod
     def build_inline_results(cls, view: dict, amount: float, url: str) -> list:
-        remaining = None
-        if "activation_limit" in view and "activations_used" in view:
-             remaining = max(0, int(view["activation_limit"]) - int(view["activations_used"]))
+        # Handle case where view might not have a callable .get method
+        if hasattr(view, 'get') and callable(getattr(view, 'get')):
+            remaining = None
+            if "activation_limit" in view and "activations_used" in view:
+                 remaining = max(0, int(view["activation_limit"]) - int(view["activations_used"]))
 
-        # Render clean caption
-        caption = cls.render_checked_announcement(amount, view.get("message_text"), remaining, view.get("referral_percent"))
-        kb = cls.get_activation_keyboard(url, amount)
-        results = []
+            # Render clean caption
+            caption = cls.render_checked_announcement(amount, view.get("message_text"), remaining, view.get("referral_percent"))
+            kb = cls.get_activation_keyboard(url, amount)
+            results = []
 
-        # Add "Share" option via Article
-        results.append(
-            InlineQueryResultArticle(
-                id=secrets.token_hex(4),
-                title=f"🎁 Чек на {amount} GRAM",
-                description=f"{Visuals.fire_raw()} Осталось: {remaining} • Реф: {view.get('referral_percent', 0)}%",
-                input_message_content=InputTextMessageContent(
-                    message_text=caption,
-                    parse_mode="HTML"
-                ),
-                reply_markup=kb,
-                thumbnail_url="https://emojigraph.org/media/apple/money-bag_1f4b0.png", # Optional: neat icon
+            # Add "Share" option via Article
+            results.append(
+                InlineQueryResultArticle(
+                    id=secrets.token_hex(4),
+                    title=f"🎁 Чек на {amount} GRAM",
+                    description=f"{Visuals.fire_raw()} Осталось: {remaining} • Реф: {view.get('referral_percent', 0)}%",
+                    input_message_content=InputTextMessageContent(
+                        message_text=caption,
+                        parse_mode="HTML"
+                    ),
+                    reply_markup=kb,
+                    thumbnail_url="https://emojigraph.org/media/apple/money-bag_1f4b0.png", # Optional: neat icon
+                )
             )
-        )
-        return results
+            return results
+        else:
+            # Fallback for objects without callable get method
+            remaining = None
+            if hasattr(view, 'activation_limit') and hasattr(view, 'activations_used'):
+                 remaining = max(0, int(getattr(view, 'activation_limit', 0))) - int(getattr(view, 'activations_used', 0))
+
+            # Render clean caption
+            caption = cls.render_checked_announcement(amount, getattr(view, "message_text", None), remaining, getattr(view, "referral_percent", None))
+            kb = cls.get_activation_keyboard(url, amount)
+            results = []
+
+            # Add "Share" option via Article
+            results.append(
+                InlineQueryResultArticle(
+                    id=secrets.token_hex(4),
+                    title=f"🎁 Чек на {amount} GRAM",
+                    description=f"{Visuals.fire_raw()} Осталось: {remaining} • Реф: {getattr(view, 'referral_percent', 0)}%",
+                    input_message_content=InputTextMessageContent(
+                        message_text=caption,
+                        parse_mode="HTML"
+                    ),
+                    reply_markup=kb,
+                    thumbnail_url="https://emojigraph.org/media/apple/money-bag_1f4b0.png", # Optional: neat icon
+                )
+            )
+            return results
 
     @classmethod
     def render_fast_confirm(cls, amount: str, count: int) -> str:
@@ -497,14 +525,14 @@ class SenseiCheckPresenter:
             return Visuals._render_block(lines)
 
         for i, check in enumerate(checks[offset:offset+limit], 1):
-            # Handle case where check might not be a dict with callable .get method
-            if isinstance(check, dict):
+            # Handle case where check might not have a callable .get method
+            if hasattr(check, 'get') and callable(getattr(check, 'get')):
                 code = str(check.get("code", "?"))[:8]
                 amount = check.get("amount_ton", "?")
                 remaining = check.get("activation_limit", 0) - check.get("activations_used", 0)
                 is_active = "✅" if check.get("is_active") else "🔴"
             else:
-                # Fallback for non-dict objects (e.g., if check is an ORM model)
+                # Fallback for objects without callable get method (e.g., if check is an ORM model)
                 code = str(getattr(check, "code", "?"))[:8]
                 amount = getattr(check, "amount_ton", "?")
                 remaining = getattr(check, "activation_limit", 0) - getattr(check, "activations_used", 0)
@@ -529,14 +557,32 @@ class SenseiCheckPresenter:
     @classmethod
     def render_check_detail(cls, check: dict, ref_link: str = None) -> str:
         """Детальная информация о чеке с реферальной ссылкой"""
-        code = check.get("code", "?")
-        amount = check.get("amount_ton", "?")
-        total_limit = check.get("activation_limit", 0)
-        used = check.get("activations_used", 0)
-        remaining = total_limit - used
-        is_active = check.get("is_active", False)
-        created = check.get("created_at", "?")
-        ref_percent = check.get("referral_percent", 0)
+        # Handle case where check might not have a callable .get method
+        if hasattr(check, 'get') and callable(getattr(check, 'get')):
+            code = check.get("code", "?")
+            amount = check.get("amount_ton", "?")
+            total_limit = check.get("activation_limit", 0)
+            used = check.get("activations_used", 0)
+            remaining = total_limit - used
+            is_active = check.get("is_active", False)
+            created = check.get("created_at", "?")
+            ref_percent = check.get("referral_percent", 0)
+            views = check.get("views_count")
+            dropoff = check.get("dropoff_subs", 0) if views is not None else 0
+            recent = check.get("recent_claims", [])
+        else:
+            # Fallback for objects without callable get method
+            code = getattr(check, "code", "?")
+            amount = getattr(check, "amount_ton", "?")
+            total_limit = getattr(check, "activation_limit", 0)
+            used = getattr(check, "activations_used", 0)
+            remaining = total_limit - used
+            is_active = getattr(check, "is_active", False)
+            created = getattr(check, "created_at", "?")
+            ref_percent = getattr(check, "referral_percent", 0)
+            views = getattr(check, "views_count", None)
+            dropoff = getattr(check, "dropoff_subs", 0) if views is not None else 0
+            recent = getattr(check, "recent_claims", [])
 
         status = "✅ Активен" if is_active else "🔴 Деактивирован"
 
@@ -556,14 +602,11 @@ class SenseiCheckPresenter:
             Visuals.frame_line_left(f"  Осталось: {remaining}", w),
         ]
 
-        views = check.get("views_count")
         if views is not None:
-            dropoff = check.get("dropoff_subs", 0)
             lines.append(Visuals.frame_line_left(f"  Просмотров: {views}", w))
             if dropoff > 0:
                 lines.append(Visuals.frame_line_left(f"  Отвалились на подписке: {dropoff}", w))
 
-        recent = check.get("recent_claims", [])
         if recent:
             lines.append(Visuals.frame_line_left("", w))
             lines.append(Visuals.frame_line_left(f"👥 Последние активации:", w))
@@ -613,9 +656,11 @@ class SenseiCheckPresenter:
 
         # Select option from list
         for i, check in enumerate(checks[offset:offset+limit], 1):
-            if isinstance(check, dict):
+            # Handle case where check might not have a callable .get method
+            if hasattr(check, 'get') and callable(getattr(check, 'get')):
                 builder.button(text=f"👁 Чек #{i}", callback_data=f"scheckult:view:{check.get('code')}")
             else:
+                # Fallback for objects without callable get method (e.g., if check is an ORM model)
                 builder.button(text=f"👁 Чек #{i}", callback_data=f"scheckult:view:{getattr(check, 'code', None)}")
 
         pages_amount = len(checks[offset:offset+limit])
@@ -782,9 +827,16 @@ class SenseiCheckPresenter:
             lines.append(Visuals.frame_line_left("Нет чеков", w, align="center"))
         else:
             for i, check in enumerate(all_checks[offset:offset+limit], 1):
-                code = check.get("code", "?")
-                amount = check.get("amount_ton", "?")
-                remaining = check.get("activation_limit", 0) - check.get("activations_used", 0)
+                # Handle case where check might not have a callable .get method
+                if hasattr(check, 'get') and callable(getattr(check, 'get')):
+                    code = check.get("code", "?")
+                    amount = check.get("amount_ton", "?")
+                    remaining = check.get("activation_limit", 0) - check.get("activations_used", 0)
+                else:
+                    # Fallback for objects without callable get method
+                    code = getattr(check, "code", "?")
+                    amount = getattr(check, "amount_ton", "?")
+                    remaining = getattr(check, "activation_limit", 0) - getattr(check, "activations_used", 0)
 
                 # Generate ref link
                 me = await bot.get_me()

@@ -235,7 +235,6 @@ class Container:
         return self._popugai_service
 
     @property
-    @property
     def sensei_check_service(self):
         if self._sensei_check_service is None:
             from src.services.sensei_check_service import SenseiCheckService
