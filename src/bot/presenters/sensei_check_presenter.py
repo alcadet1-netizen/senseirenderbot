@@ -613,7 +613,10 @@ class SenseiCheckPresenter:
 
         # Select option from list
         for i, check in enumerate(checks[offset:offset+limit], 1):
-             builder.button(text=f"👁 Чек #{i}", callback_data=f"scheckult:view:{check.get('code')}")
+            if isinstance(check, dict):
+                builder.button(text=f"👁 Чек #{i}", callback_data=f"scheckult:view:{check.get('code')}")
+            else:
+                builder.button(text=f"👁 Чек #{i}", callback_data=f"scheckult:view:{getattr(check, 'code', None)}")
 
         pages_amount = len(checks[offset:offset+limit])
         if pages_amount > 0:
