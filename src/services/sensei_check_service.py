@@ -233,7 +233,7 @@ class SenseiCheckService:
         # Уведомляем создателя чека об активации
         await self._notify_creator(
             bot=bot,
-            creator_id=check["creator_id"],
+            creator_id=check["created_by"],
             user_id=user_id,
             code=code,
             amount=float(payout_amount)
@@ -307,7 +307,7 @@ class SenseiCheckService:
         if not check:
             return False, "Чек не найден", 0.0
 
-        if check["creator_id"] != user_id:
+        if check["created_by"] != user_id:
             return False, "Вы не являетесь создателем этого чека", 0.0
 
         if not check.get("is_active", False):
