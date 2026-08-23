@@ -463,7 +463,7 @@ async def sc_create_confirm(query: CallbackQuery, state: FSMContext, container: 
     
     try:
         code = await container.sensei_check_service.create_check(
-            created_by=query.from_user.id,
+            creator_id=query.from_user.id,
             channels=data.get("channels"),
             amount_ton=data.get("amount_ton"),
             activation_limit=data.get("activation_limit"),
