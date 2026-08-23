@@ -385,6 +385,36 @@ class SenseiCheckService:
         info.link = link
         return info
 
+    async def get_check_public_view(self, bot: Bot, code: str) -> Optional[Dict[str, Any]]:
+        """
+        Возвращает словарь с публично доступной информацией о чеке для детального просмотра.
+        Включает основные поля чека и некоторые дополнительные для отображения.
+        """
+        check = await self._get_check(code)
+        if not check:
+            return None
+        # Create a copy to avoid modifying the original cached dict
+        view = check.copy()
+        # Ensure we have the fields expected by the presenter
+        # If any are missing, provide defaults
+        view.setdefault("views_count", None)
+        view.setdefault("dropoff_subs", 0)
+        view.setdefault("recent_claims", [])
+        # Convert datetime to ISO string for JSON serialization if needed (but presenter expects datetime?)
+        # The presenter uses the values directly; we keep them as they are (datetime objects)
+        # However, if they are going to be cached again, we need them serializable.
+        # We'll leave them as is; the presenter uses them for display, not for caching again.
+        return view
+
+    async def get_advanced_stats(self, code: str) -> Dict[str, Any]:
+        """
+        Возвращает дополнительную статистику по чеку.
+        Для простоты возвращаем пустой словарь; можно расширить при необходимости.
+        """
+        # In a full implementation, we would query the activations collection
+        # to compute views, dropoffs, recent claims, etc.
+        return {}
+
     def _json_serial(self, obj):
         """JSON serializer for objects not serializable by default json code"""
         if isinstance(obj, datetime):
