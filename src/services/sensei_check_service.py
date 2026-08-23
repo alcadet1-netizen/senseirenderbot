@@ -181,7 +181,7 @@ class SenseiCheckService:
         user_payout_ok = await self.xrocket_service.transfer(
             user_id=user_id,
             currency="GRAM",
-            amount=float(payout_amount),
+            amount=float(payout_amount)
         )
 
         if not user_payout_ok:
@@ -205,7 +205,7 @@ class SenseiCheckService:
             referral_payout_ok = await self.xrocket_service.transfer(
                 user_id=referral_user_id,
                 currency="GRAM",
-                amount=float(referral_amount),
+                amount=float(referral_amount)
             )
 
             if referral_payout_ok:
@@ -345,4 +345,5 @@ class SenseiCheckService:
     async def get_all_checks(self) -> List[Dict[str, Any]]:
         """Получить все чеки (для админского списка)."""
         checks, _ = await self._repo.get_all_checks()
-        return checks
+        # Convert to plain dictionaries to avoid issues with decorated objects
+        return [dict(check) if not isinstance(check, dict) else check for check in checks]
