@@ -334,7 +334,25 @@ class SenseiCheckService:
         """Получить все чеки (для админского списка)."""
         checks, _ = await self._repo.get_all_checks()
         # Ensure we return plain dictionaries with proper .get method
-        return [{k: v for k, v in check.items()} for check in checks]
+        result = []
+        for check in checks:
+            if isinstance(check, dict):
+                # Create a new plain dictionary to avoid any issues with property conflicts
+                plain_check = {}
+                for key, value in check.items():
+                    plain_check[key] = value
+                result.append(plain_check)
+            else:
+                # If it's not a dict, try to convert it to one
+                if hasattr(check, '__dict__'):
+                    plain_check = {}
+                    for key, value in vars(check).items():
+                        plain_check[key] = value
+                    result.append(plain_check)
+                else:
+                    # Last resort: create a dict with string representation
+                    result.append({"_str_": str(check)})
+        return result
 
     async def _cache_set(self, key: str, value: str, ex: int = 3600):
         """Установить значение в кэш."""
