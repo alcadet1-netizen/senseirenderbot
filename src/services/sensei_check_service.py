@@ -252,7 +252,7 @@ class SenseiCheckService:
         if cached:
             return cached
 
-        check = await self._repo.get_check(code)
+        check = await self._repo.get_by_code(code)
         if check:
             await self._cache_set(f"scheck:info:{code}", check, ex=3600)
         return check
