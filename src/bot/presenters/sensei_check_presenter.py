@@ -497,10 +497,18 @@ class SenseiCheckPresenter:
             return Visuals._render_block(lines)
 
         for i, check in enumerate(checks[offset:offset+limit], 1):
-            code = str(check.get("code", "?"))[:8]
-            amount = check.get("amount_ton", "?")
-            remaining = check.get("activation_limit", 0) - check.get("activations_used", 0)
-            is_active = "✅" if check.get("is_active") else "🔴"
+            # Handle case where check might not be a dict with callable .get method
+            if isinstance(check, dict):
+                code = str(check.get("code", "?"))[:8]
+                amount = check.get("amount_ton", "?")
+                remaining = check.get("activation_limit", 0) - check.get("activations_used", 0)
+                is_active = "✅" if check.get("is_active") else "🔴"
+            else:
+                # Fallback for non-dict objects (e.g., if check is an ORM model)
+                code = str(getattr(check, "code", "?"))[:8]
+                amount = getattr(check, "amount_ton", "?")
+                remaining = getattr(check, "activation_limit", 0) - getattr(check, "activations_used", 0)
+                is_active = "✅" if getattr(check, "is_active", False) else "🔴"
 
             lines.append(Visuals.frame_line_left("", w))
             lines.append(Visuals.frame_line_left(f"{is_active} Чек #{i}", w))

@@ -333,8 +333,8 @@ class SenseiCheckService:
     async def get_all_checks(self) -> List[Dict[str, Any]]:
         """Получить все чеки (для админского списка)."""
         checks, _ = await self._repo.get_all_checks()
-        # Convert to plain dictionaries to avoid issues with decorated objects
-        return [dict(check) if not isinstance(check, dict) else check for check in checks]
+        # Ensure we return plain dictionaries with proper .get method
+        return [{k: v for k, v in check.items()} for check in checks]
 
     async def _cache_set(self, key: str, value: str, ex: int = 3600):
         """Установить значение в кэш."""
