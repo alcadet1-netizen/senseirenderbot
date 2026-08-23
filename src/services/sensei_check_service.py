@@ -361,6 +361,30 @@ class SenseiCheckService:
                     result.append({"_str_": str(check)})
         return result
 
+    async def get_check_info(self, bot: Bot, code: str):
+        """
+        Возвращает объект с информацией о чеке, необходимой для отображения после создания.
+        Объект имеет атрибуты:
+          - amount_ton: float
+          - link: str (реферальная ссылка для partage)
+        """
+        check = await self._get_check(code)
+        if not check:
+            return None
+        try:
+            me = await bot.get_me()
+            bot_username = me.username
+        except Exception:
+            # Fallback if we cannot get bot info
+            bot_username = "unknown"
+        link = f"https://t.me/{bot_username}?start=check_{code}_{check['created_by']}"
+        # Using SimpleNamespace to allow attribute access
+        from types import SimpleNamespace
+        info = SimpleNamespace()
+        info.amount_ton = float(check["amount_ton"])
+        info.link = link
+        return info
+
     def _json_serial(self, obj):
         """JSON serializer for objects not serializable by default json code"""
         if isinstance(obj, datetime):
