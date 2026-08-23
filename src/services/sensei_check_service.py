@@ -115,7 +115,7 @@ class SenseiCheckService:
         )
 
         # Кешируем чек
-        await self._cache_set(f"scheck:info:{code}", json.dumps(check), ex=3600)
+        await self._cache_set(f"scheck:info:{code}", check, ex=3600)
 
         return code
 
@@ -250,14 +250,11 @@ class SenseiCheckService:
         """Получить чек по коду из кэша или БД."""
         cached = await self._cache_get(f"scheck:info:{code}")
         if cached:
-            try:
-                return json.loads(cached)
-            except Exception:
-                pass
+            return cached
 
         check = await self._repo.get_check(code)
         if check:
-            await self._cache_set(f"scheck:info:{code}", json.dumps(check), ex=3600)
+            await self._cache_set(f"scheck:info:{code}", check, ex=3600)
         return check
 
     async def _check_subscriptions(self, user_id: int, channels: List[str]) -> List[str]:
@@ -433,12 +430,8 @@ class SenseiCheckService:
 
     async def _cache_set(self, key: str, value: Any, ex: int = 3600):
         """Установить значение в кэш."""
-        if isinstance(value, (str, bytes, int, float, bool)) or value is None:
-            # For primitive types, store as is
-            await self.redis.set(key, json.dumps(value), ex)
-        else:
-            # For complex objects (like dict), use custom serializer
-            await self.redis.set(key, json.dumps(value, default=self._json_serial), ex)
+        # Always use custom serializer to handle datetime objects
+        await self.redis.set(key, json.dumps(value, default=self._json_serial), ex)
 
     async def _cache_get(self, key: str) -> Optional[Any]:
         """Получить значение из кэша."""
