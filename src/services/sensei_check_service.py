@@ -361,13 +361,41 @@ class SenseiCheckService:
                     result.append({"_str_": str(check)})
         return result
 
-    async def _cache_set(self, key: str, value: str, ex: int = 3600):
-        """Установить значение в кэш."""
-        await self.redis.set(key, value, ex)
+    def _json_serial(self, obj):
+        """JSON serializer for objects not serializable by default json code"""
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        raise TypeError(f"Type {type(obj)} not serializable")
 
-    async def _cache_get(self, key: str) -> Optional[str]:
+    def _json_deserial(self, dct):
+        """JSON hook to convert ISO format strings back to datetime"""
+        for k, v in dct.items():
+            if isinstance(v, str):
+                try:
+                    dct[k] = datetime.fromisoformat(v)
+                except ValueError:
+                    pass
+        return dct
+
+    async def _cache_set(self, key: str, value: Any, ex: int = 3600):
+        """Установить значение в кэш."""
+        if isinstance(value, (str, bytes, int, float, bool)) or value is None:
+            # For primitive types, store as is
+            await self.redis.set(key, json.dumps(value), ex)
+        else:
+            # For complex objects (like dict), use custom serializer
+            await self.redis.set(key, json.dumps(value, default=self._json_serial), ex)
+
+    async def _cache_get(self, key: str) -> Optional[Any]:
         """Получить значение из кэша."""
-        return await self.redis.get(key)
+        cached = await self.redis.get(key)
+        if cached is None:
+            return None
+        try:
+            return json.loads(cached, object_hook=self._json_deserial)
+        except Exception:
+            # If not JSON, return as string (fallback)
+            return cached.decode() if isinstance(cached, bytes) else cached
 
     async def _cache_delete(self, key: str):
         """Удалить значение из кэша."""
