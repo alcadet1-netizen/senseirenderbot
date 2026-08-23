@@ -18,6 +18,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.domain.repositories.sensei_check_repository import SenseiCheckRepository
 from src.infra.mongo.client import MongoClient
+from src.core.visuals import Visuals
 
 logger = logging.getLogger(__name__)
 
@@ -53,14 +54,11 @@ class ActivationResult:
 class SenseiCheckService:
     MIN_PAYOUT_AMOUNT = Decimal("0.007")  # Минимальная сумма для выплаты
 
-    def __init__(self, mongo: MongoClient, repo: SenseiCheckRepository, xrocket_service):
+    def __init__(self, mongo: MongoClient, repo: SenseiCheckRepository, xrocket_service, redis):
         self.mongo = mongo
         self._repo = repo
         self.xrocket_service = xrocket_service
-
-    async def _ensure_repo(self):
-        if not self._repo.initialized:
-            await self._repo.initialize()
+        self.redis = redis
 
     async def create_check(
         self,
@@ -74,7 +72,6 @@ class SenseiCheckService:
         channels: Optional[List[str]] = None
     ) -> str:
         """Создать новый чек и вернуть его код."""
-        await self._ensure_repo()
 
         # Конвертируем в Decimal для точных расчетов
         try:
@@ -88,7 +85,7 @@ class SenseiCheckService:
             raise ValueError(f"Минимальная сумма: {self.MIN_PAYOUT_AMOUNT} GRAM")
 
         if activation_limit <= 0:
-            raise ValueError("Лимит активаций должен быть pozitivным")
+            raise ValueError("Лимит активаций должен быть positifным")
 
         if not 0 <= referral_percent <= 100:
             raise ValueError("Процент реферала должен быть от 0 до 100")
@@ -96,39 +93,35 @@ class SenseiCheckService:
         # Генерируем уникальный код чека
         code = self._generate_check_code()
 
-        # Сохраняем чек в базе данных
-        check_data = {
-            "_id": code,
-            "creator_id": creator_id,
-            "amount_ton": float(amount),
-            "activation_limit": activation_limit,
-            "activations_used": 0,
-            "referral_percent": referral_percent,
-            "message_text": message_text,
-            "password": password,
-            "requires_captcha": requires_captcha,
-            "channels": channels or [],
-            "is_active": True,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "views_count": 0,
-            "dropoff_subs": 0,
-            "recent_claims": []
-        }
+        # Сохраняем чек в базе данных через репозиторий
+        check = await self._repo.create(
+            code=code,
+            created_by=creator_id,
+            amount_ton=float(amount),
+            activation_limit=activation_limit,
+            channels=channels or [],
+            referral_percent=referral_percent,
+            message_text=message_text,
+            password=password,
+            requires_captcha=requires_captcha,
+            # photo_file_id, video_file_id, title, expires_at are not provided by the service -> default to None in the repository
+        )
 
-        await self._repo.create_check(check_data)
-        await self._cache_set(f"scheck:info:{code}", json.dumps(check_data), ex=3600)
+        # Кешируем чек
+        await self._cache_set(f"scheck:info:{code}", json.dumps(check), ex=3600)
 
         return code
 
     async def activate_check(
         self,
+        bot: Bot,
         code: str,
         user_id: int,
-        password_attempt: Optional[str] = None
+        password: Optional[str] = None,
+        referrer_id: Optional[int] = None,
+        captcha_solved: bool = False
     ) -> ActivationResult:
         """Активировать чек пользователем."""
-        await self._ensure_repo()
-
         # Получаем чек из кэша или БД
         check = await self._get_check(code)
         if not check:
@@ -144,8 +137,12 @@ class SenseiCheckService:
 
         # Проверяем пароль, если он установлен
         if check.get("password"):
-            if not password_attempt or password_attempt != check["password"]:
+            if not password or password != check["password"]:
                 return ActivationResult(success=False, error=ActivationError.WRONG_PASSWORD)
+
+        # Проверяем каптчу, если требуется
+        if check.get("requires_captcha") and not captcha_solved:
+            return ActivationResult(success=False, error=ActivationError.CAPTCHA_REQUIRED)
 
         # Проверяем подписку на каналы
         missing_channels = await self._check_subscriptions(user_id, check.get("channels", []))
@@ -157,29 +154,27 @@ class SenseiCheckService:
                 all_channels=check.get("channels", [])
             )
 
-        # Проверяем каптчу, если требуется
-        if check.get("requires_captcha"):
-            # В реальной реализации здесь должна быть проверка каптчи
-            # Для простоты предполагаем, что каптча пройдена
-            pass
-
         # Вычисляем суммы выплат
         amount = Decimal(str(check["amount_ton"]))
         payout_amount = amount
         referral_amount = amount * Decimal(str(check["referral_percent"])) / Decimal("100")
 
-        # Увеличиваем счетчик активаций
-        await self._repo.increment_activations(code)
+        # Создаем активацию (это увеличивает счетчик использованных активаций чека)
+        # Для реферального бонуса используем переданный referrer_id (если он не None и не равен user_id)
+        referral_user_id = None
+        if referrer_id is not None and referrer_id != user_id:
+            referral_user_id = referrer_id
 
-        # Получаем обновленные данные чека
-        updated_check = await self._get_check(code)
-        if not updated_check:
-            # Если чек исчез, возвращаем слот
-            await self._repo.decrement_activations(code)
-            return ActivationResult(success=False, error=ActivationError.NOT_FOUND)
+        activation = await self._repo.create_activation(
+            check=check,
+            user_id=user_id,
+            payout_amount=float(payout_amount),
+            referral_user_id=referral_user_id,
+            referral_amount=float(referral_amount)
+        )
 
-        # Выполняем выплаты
-        user_transfer_id = self._generate_transfer_id("user", updated_check.get("_id", ""), user_id)
+        # Выполняем выплаты пользователю
+        user_transfer_id = self._generate_transfer_id("user", check["_id"], user_id)
 
         logger.info(f"💸 [Check:{code}] Attempting payout {payout_amount} GRAM to {user_id} (TransferID: {user_transfer_id})")
 
@@ -191,8 +186,8 @@ class SenseiCheckService:
 
         if not user_payout_ok:
             logger.error(f"{Visuals.cross()} [Check:{code}] Payout FAILED for {user_id}")
-            # Отмечаем активацию как неуспешную и возвращаем слот
-            await self._repo.mark_failed(updated_check, check)
+            # Отмечаем активацию как неуспешную (это вернет слот, уменьшив счетчик использованных активаций)
+            await self._repo.mark_failed(activation, check)
             return ActivationResult(success=False, error=ActivationError.PAYOUT_FAILED)
 
         logger.info(f"✅ [Check:{code}] Payout SUCCESS for {user_id}")
@@ -200,34 +195,37 @@ class SenseiCheckService:
         # Реферальная выплата
         referral_paid = False
         referral_amount_ton = 0.0
-        final_referrer_id = None
+        referral_transfer_id = None
 
-        if check["referral_percent"] > 0:
-            # Ищем рефовода по цепочке приглашений (упрощенно)
-            # В реальной реализации здесь должна быть логика поиска рефовода
-            # Для простоты предполагаем, что рефовод - создатель чека
-            final_referrer_id = check["creator_id"]
-            if final_referrer_id != user_id:  # Не выплачиваем себе
-                referral_transfer_id = self._generate_transfer_id("referral", updated_check.get("_id", ""), final_referrer_id)
+        if check["referral_percent"] > 0 and referral_user_id is not None:
+            referral_transfer_id = self._generate_transfer_id("referral", check["_id"], referral_user_id)
 
-                logger.info(f"🤝 [Check:{code}] Attempting referral bonus {referral_amount} GRAM to {final_referrer_id} (TransferID: {referral_transfer_id})")
+            logger.info(f"🤝 [Check:{code}] Attempting referral bonus {referral_amount} GRAM to {referral_user_id} (TransferID: {referral_transfer_id})")
 
-                referral_payout_ok = await self.xrocket_service.transfer(
-                    user_id=final_referrer_id,
-                    currency="GRAM",
-                    amount=float(referral_amount),
-                )
+            referral_payout_ok = await self.xrocket_service.transfer(
+                user_id=referral_user_id,
+                currency="GRAM",
+                amount=float(referral_amount),
+            )
 
-                if referral_payout_ok:
-                    logger.info(f"✅ [Check:{code}] Referral bonus SUCCESS for {final_referrer_id}")
-                    referral_paid = True
-                    referral_amount_ton = float(referral_amount)
-                else:
-                    logger.error(f"❌ [Check:{code}] Referral bonus FAILED for {final_referrer_id}")
+            if referral_payout_ok:
+                logger.info(f"✅ [Check:{code}] Referral bonus SUCCESS for {referral_user_id}")
+                referral_paid = True
+                referral_amount_ton = float(referral_amount)
+            else:
+                logger.error(f"❌ [Check:{code}] Referral bonus FAILED for {referral_user_id}")
+
+        # Отмечаем активацию как успешную
+        await self._repo.mark_success(
+            activation,
+            user_transfer_id=user_transfer_id,
+            referral_transfer_id=referral_transfer_id,
+            referral_paid=referral_paid
+        )
 
         # Уведомляем создателя чека об активации
         await self._notify_creator(
-            bot=None,  # Будет передан из хэндлера
+            bot=bot,
             creator_id=check["creator_id"],
             user_id=user_id,
             code=code,
@@ -300,7 +298,6 @@ class SenseiCheckService:
 
     async def burn_check(self, code: str, user_id: int) -> tuple[bool, str, float]:
         """Сжечь чек (вернуть средств создателю)."""
-        await self._ensure_repo()
 
         check = await self._get_check(code)
         if not check:
@@ -335,18 +332,17 @@ class SenseiCheckService:
 
     async def _cache_set(self, key: str, value: str, ex: int = 3600):
         """Установить значение в кэш."""
-        await self.mongo.set_cache(key, value, ex)
+        await self.redis.set(key, value, ex)
 
     async def _cache_get(self, key: str) -> Optional[str]:
         """Получить значение из кэша."""
-        return await self.mongo.get_cache(key)
+        return await self.redis.get(key)
 
     async def _cache_delete(self, key: str):
         """Удалить значение из кэша."""
-        await self.mongo.delete_cache(key)
+        await self.redis.delete(key)
 
     async def get_all_checks(self) -> List[Dict[str, Any]]:
         """Получить все чеки (для админского списка)."""
-        await self._ensure_repo()
         checks, _ = await self._repo.get_all_checks()
         return checks

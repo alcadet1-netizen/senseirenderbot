@@ -237,13 +237,17 @@ class Container:
         return self._popugai_service
 
     @property
+    @property
     def sensei_check_service(self):
         if self._sensei_check_service is None:
             from src.services.sensei_check_service import SenseiCheckService
+            from src.domain.repositories.sensei_check_repository import SenseiCheckRepository
+            repo = SenseiCheckRepository(self.mongo_client.database)
             self._sensei_check_service = SenseiCheckService(
                 self.mongo_client,
-                self.redis,
+                repo,
                 self.xrocket_service,
+                self.redis,
             )
         return self._sensei_check_service
 

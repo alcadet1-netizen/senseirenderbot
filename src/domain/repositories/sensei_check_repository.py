@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Tuple, Dict, Any
 
-from motor.motor_asyncio import AsyncIOMotorCollection
+from motor.motor_asyncio import AsyncIOMotorCollection, AsyncIOMotorDatabase
 
 from src.domain.repositories.base import BaseRepository
 
@@ -15,16 +15,11 @@ from src.domain.repositories.base import BaseRepository
 class SenseiCheckRepository(BaseRepository):
     """Репозиторий для работы с чеками SenseiCheck на MongoDB."""
 
-    def __init__(self, collection: AsyncIOMotorCollection):
-        super().__init__(collection)
+    def __init__(self, database: AsyncIOMotorDatabase):
+        super().__init__(database["sensei_checks"])
         # Мы также будем нуждаться в коллекции активаций
-        self.activation_collection = None  # будет установлено внешне
-
-    # Позволяем инициализировать с дополнительной коллекцией активаций
-    async def init(self, db):
-        """Инициализировать ссылки на коллекции."""
-        self.collection = db["sensei_checks"]
-        self.activation_collection = db["sensei_check_activations"]
+        self.activation_collection = database["sensei_check_activations"]
+        self.initialized = True
 
     # ==================== CRUD для чеков ====================
 

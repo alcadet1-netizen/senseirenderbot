@@ -1,0 +1,2 @@
+- [Solution for cryptocurrency rate output not working](crypto-rate-fix.md) - Comprehensive fix for intermittent API failures causing silent bot responses
+- [Fixed SenseiCheck service MongoRedis initialization error](sensei_check_fix.md) - Fixed the error "'MongoRedis' object has no attribute 'initialized'" by properly initializing the repository and adjusting dependencies.
