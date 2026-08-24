@@ -251,9 +251,44 @@ class AchievementService:
 
         return newly_unlocked
 
-    async def get_user_achievements(self, user_id: int) -> List[Dict]:
-        """Получить список достижений пользователя."""
-        return await self.achievement_repo.get_user_achievements(user_id)
+    async def get_user_achievements(self, user_id: int) -> Dict:
+        """Получить достижения пользователя, разделенные на открытые и закрытые."""
+        # Get all achievement definitions
+        all_achievements = ACHIEVEMENTS
+
+        # Get user's unlocked achievement IDs
+        unlocked_ids = await self.achievement_repo.get_user_achievement_ids(user_id)
+
+        # Separate into unlocked and locked
+        unlocked = []
+        locked = []
+
+        for ach_id, ach_def in all_achievements.items():
+            # Create achievement dict for display
+            ach_display = {
+                "id": ach_id,
+                "name": ach_def["name"],
+                "description": ach_def["description"],
+                "xp_reward": ach_def["xp_reward"],
+                "coin_reward": ach_def["coin_reward"],
+                "rarity": ach_def["rarity"],
+                "icon": ach_def["icon"]
+            }
+
+            if ach_id in unlocked_ids:
+                unlocked.append(ach_display)
+            else:
+                locked.append(ach_display)
+
+        # Sort by some criteria (e.g., rarity, then ID) for consistent display
+        # For now, we'll keep the order from ACHIEVEMENTS
+
+        return {
+            "unlocked": unlocked,
+            "locked": locked,
+            "total": len(all_achievements),
+            "unlocked_count": len(unlocked)
+        }
 
     async def unlock_achievement(self, user_id: int, achievement_id: str) -> bool:
         """Разблокировать достижение для пользователя, если еще не разблокировано."""
