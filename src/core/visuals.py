@@ -8,6 +8,8 @@ import random
 import hashlib
 from typing import List, Dict, Any, Tuple, Sequence, Optional
 
+from src.core.constants import EXCHANGE_COINS_TO_TICKET, EXCHANGE_TICKET_TO_COINS
+
 
 def _clamp_int(n: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, n))
@@ -588,8 +590,8 @@ class Visuals:
             cls.frame_separator_left(w),
             cls.frame_line_left("Курсы обмена:", w),
             cls.frame_line_left("", w),
-            cls.frame_line_left("💰 1000 -> 🎫 1", w),
-            cls.frame_line_left("🎫 1 -> 💰 900", w),
+            cls.frame_line_left(f"💰 {EXCHANGE_COINS_TO_TICKET} -> 🎫 1", w),
+            cls.frame_line_left(f"🎫 1 -> 💰 {EXCHANGE_TICKET_TO_COINS}", w),
             cls.frame_bottom_left(w),
         ]
         return cls._render_block(lines)
