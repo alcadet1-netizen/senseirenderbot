@@ -131,6 +131,26 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
              except Exception as e:
                 logger.error(f"❌ Failed to send referral message: {e}")
 
+    # Обработка ссылки на активацию чека
+    elif args and args.startswith("check_"):
+        try:
+            # Формат: check_{check_code}_{referrer_id}
+            parts = args.split("_")
+            if len(parts) >= 3:
+                check_code = parts[1]
+                referrer_id = int(parts[2])
+
+                # Сохраняем referrer_id в Redis для текущего пользователя
+                # Это понадобится при активации чека через callback
+                await container.redis.set(
+                    f"user:{message.from_user.id}:check_referrer",
+                    str(referrer_id),
+                    ex=3600  # Истекает через 1 час
+                )
+                logger.info(f"🔗 Set check referrer for user {message.from_user.id}: {referrer_id} for check {check_code}")
+        except (ValueError, IndexError) as e:
+            logger.warning(f"Failed to parse check activation link args '{args}': {e}")
+
     mention = get_mention(message.from_user)
 
     # 1. Основное меню (Reply)
