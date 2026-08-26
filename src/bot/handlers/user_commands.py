@@ -135,10 +135,12 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
     elif args and args.startswith("check_"):
         try:
             # Формат: check_{check_code}_{referrer_id}
+            # check_code имеет формат sc_<16 hex chars> например: sc_8a4f7161657fec2d
             parts = args.split("_")
-            if len(parts) >= 3:
-                check_code = parts[1]
-                referrer_id = int(parts[2])
+            if len(parts) >= 4 and parts[0] == "check" and parts[1] == "sc":
+                # check_code = sc_<16 hex chars> = parts[1] + "_" + parts[2]
+                check_code = f"{parts[1]}_{parts[2]}"
+                referrer_id = int(parts[3])
 
                 # Сохраняем referrer_id в Redis для текущего пользователя
                 # Это понадобится при активации чека через callback
@@ -148,6 +150,8 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
                     ex=3600  # Истекает через 1 час
                 )
                 logger.info(f"🔗 Set check referrer for user {message.from_user.id}: {referrer_id} for check {check_code}")
+            else:
+                logger.warning(f"Unexpected check link format: {args}")
         except (ValueError, IndexError) as e:
             logger.warning(f"Failed to parse check activation link args '{args}': {e}")
 
