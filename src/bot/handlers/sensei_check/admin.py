@@ -591,7 +591,7 @@ def _channels_kb_with_presets(channels: list[str]) -> InlineKeyboardMarkup:
     
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
-@router.callback_query(F.data.startswith("scheckult:list:"))
+@router.callback_query(F.data.startswith("scheckult:list:"), AdminFilter())
 async def cb_list_checks(query: CallbackQuery, container: Container) -> None:
     if not query.message: return
     offset = int(query.data.split(":")[-1])
@@ -605,7 +605,7 @@ async def cb_list_checks(query: CallbackQuery, container: Container) -> None:
         logger.error(f"List error: {e}")
         await query.answer("Error")
 
-@router.callback_query(F.data.startswith("scheckult:reflinks:"))
+@router.callback_query(F.data.startswith("scheckult:reflinks:"), AdminFilter())
 async def cb_reflinks(query: CallbackQuery, container: Container) -> None:
     if not query.message: return
     offset = int(query.data.split(":")[-1])
@@ -645,7 +645,7 @@ async def cb_reflinks(query: CallbackQuery, container: Container) -> None:
     except Exception:
         pass
 
-@router.callback_query(F.data.startswith("scheckult:view:"))
+@router.callback_query(F.data.startswith("scheckult:view:"), AdminFilter())
 async def cb_view_check(query: CallbackQuery, container: Container) -> None:
     if not query.message: return
     code = query.data.split(":")[-1]
