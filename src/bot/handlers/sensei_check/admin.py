@@ -193,7 +193,7 @@ async def cb_preset_del(query: CallbackQuery, container: Container, state: FSMCo
 
 # ==================== CHECK CREATION WIZARD ====================
 
-@router.callback_query(F.data == "scheckult:create")
+@router.callback_query(F.data == "scheckult:create", AdminFilter())
 async def cb_create_start(query: CallbackQuery, state: FSMContext) -> None:
     logger.info("cb_create_start triggered")
     await state.clear()
