@@ -188,7 +188,8 @@ class SenseiCheckService:
         user_payout_ok = await self.xrocket_service.transfer(
             user_id=user_id,
             currency="GRAM",
-            amount=float(payout_amount)
+            amount=float(payout_amount),
+            transfer_id=user_transfer_id
         )
 
         if not user_payout_ok:
@@ -212,7 +213,8 @@ class SenseiCheckService:
             referral_payout_ok = await self.xrocket_service.transfer(
                 user_id=referral_user_id,
                 currency="GRAM",
-                amount=float(referral_amount)
+                amount=float(referral_amount),
+                transfer_id=referral_transfer_id
             )
 
             if referral_payout_ok:
@@ -322,10 +324,12 @@ class SenseiCheckService:
         await self._repo.deactivate(check)
 
         if refund_ton > 0:
+            transfer_id = self._generate_transfer_id("burn", check["_id"], user_id)
             success = await self.xrocket_service.transfer(
                 user_id=user_id,
                 currency="GRAM",
-                amount=float(refund_ton)
+                amount=float(refund_ton),
+                transfer_id=transfer_id
             )
             if not success:
                 logger.error(f"Failed to refund {refund_ton} GRAM for check {code}")
@@ -411,6 +415,12 @@ class SenseiCheckService:
         # In a full implementation, we would query the activations collection
         # to compute views, dropoffs, recent claims, etc.
         return {}
+
+    async def admin_delete_check(self, code: str) -> bool:
+        """
+        Админское удаление чека (деактивация).
+        """
+        return await self._repo.admin_delete_check(code)
 
     def _json_serial(self, obj):
         """JSON serializer for objects not serializable by default json code"""

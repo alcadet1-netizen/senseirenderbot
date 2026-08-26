@@ -21,7 +21,7 @@ class XRocketService:
             "Content-Type": "application/json"
         }
 
-    async def transfer(self, user_id: int, currency: str, amount: float) -> bool:
+    async def transfer(self, user_id: int, currency: str, amount: float, transfer_id: Optional[str] = None) -> bool:
         """
         Перевод средств пользователю Telegram.
         """
@@ -30,8 +30,9 @@ class XRocketService:
             return False
 
         url = f"{self.BASE_URL}/transfer"
-        transfer_id = str(uuid.uuid4())
-        
+        if transfer_id is None:
+            transfer_id = str(uuid.uuid4())
+
         payload = {
             "tgUserId": user_id,
             "currency": currency,
