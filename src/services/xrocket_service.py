@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class XRocketService:
     """Сервис для работы с xRocket Pay API."""
-    
+
     BASE_URL = "https://pay.xrocket.tg/app"
 
     def __init__(self, api_key: str):
@@ -40,7 +40,7 @@ class XRocketService:
             "transferId": transfer_id,
             "description": "Boss Battle Reward from Sensei"
         }
-        
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, json=payload, headers=self.headers) as response:
@@ -51,7 +51,7 @@ class XRocketService:
                         if data.get("success") is False:
                             logger.error(f"XRocket transfer failed: {data}")
                             return False
-                        
+
                         logger.info(f"XRocket transfer success: {user_id} {amount} {currency}")
                         return True
                     else:
@@ -61,3 +61,32 @@ class XRocketService:
         except Exception as e:
             logger.error(f"XRocket connection error: {e}")
             return False
+
+    async def get_balance(self) -> float:
+        """Get the app balance in GRAM."""
+        if not self.api_key:
+            logger.warning("xRocket API key is missing")
+            return 0.0
+        url = f"{self.BASE_URL}/balance"
+        payload = {}
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload, headers=self.headers) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        # Assume response format: {"success": true, "balance": 123.45}
+                        if data.get("success"):
+                            balance = data.get("balance", 0.0)
+                            # Ensure float
+                            return float(balance)
+                        else:
+                            logger.error(f"XRocket balance error: {data}")
+                            return 0.0
+                    else:
+                        text = await response.text()
+                        logger.error(f"XRocket API Error {response.status}: {text}")
+                        return 0.0
+        except Exception as e:
+            logger.error(f"XRocket connection error: {e}")
+            return 0.0

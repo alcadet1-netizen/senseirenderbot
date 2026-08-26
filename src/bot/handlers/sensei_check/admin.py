@@ -469,10 +469,31 @@ async def _show_dashboard(anchor: Message, state: FSMContext) -> None:
 @router.callback_query(SenseiCheckCreateStates.confirm, F.data == "scheckadm:create")
 async def sc_create_confirm(query: CallbackQuery, state: FSMContext, container: Container) -> None:
     if not query.message: return
-    
+
     data = await state.get_data()
     ui_mid = data.get("ui_mid")
-    
+
+    # Check xRocket balance before creating check
+    amount_str = data.get("amount_ton")
+    limit_str = data.get("activation_limit")
+    if amount_str is not None and limit_str is not None:
+        try:
+            amount = Decimal(amount_str)
+            limit = int(limit_str)
+            total_needed = amount * limit
+            balance = await container.xrocket_service.get_balance()
+            if balance < float(total_needed):
+                await query.answer(
+                    f"❌ Недостаточно средств в xRocket для создания чека.\n"
+                    f"Требуется: {total_needed:.4f} GRAM\n"
+                    f"Доступно: {balance:.4f} GRAM",
+                    show_alert=True
+                )
+                return
+        except Exception as e:
+            logger.warning(f"Failed to check xRocket balance: {e}")
+            # If balance check fails, we still allow creation to proceed (maybe log and continue)
+
     try:
         code = await container.sensei_check_service.create_check(
             creator_id=query.from_user.id,
@@ -487,18 +508,18 @@ async def sc_create_confirm(query: CallbackQuery, state: FSMContext, container: 
             title=data.get("title"),
             expires_at=data.get("expires_at")
         )
-        
+
         # Success
         info = await container.sensei_check_service.get_check_info(query.bot, code)
         if not info: raise Exception("Check not found after creation")
-        
+
         # Cleanup UI
         if ui_mid:
             try:
                 await query.bot.delete_message(chat_id=query.message.chat.id, message_id=int(ui_mid))
             except:
                 pass
-        
+
         # Show result
         await query.message.answer(
             f"✅ <b>Чек создан!</b>\n\nКод: <code>{code}</code>\nСсылка: {info.link}",
@@ -506,7 +527,7 @@ async def sc_create_confirm(query: CallbackQuery, state: FSMContext, container: 
             parse_mode="HTML"
         )
         await state.clear()
-        
+
     except Exception as e:
         logger.error(f"Failed to create check: {e}")
         await query.answer(f"{Visuals.cross()} Ошибка: {e}", show_alert=True)
