@@ -33,10 +33,10 @@ def get_editor_keyboard(settings: dict):
         [InlineKeyboardButton(text="👹 Выбрать Босса", callback_data=BossEditorCallback(action="choose_boss").pack())],
         [
             InlineKeyboardButton(text="💰 Пул наград", callback_data=BossEditorCallback(action="set_reward").pack()),
-            InlineKeyboardButton(text=f"{settings.get('reward_min', 0)}-{settings.get('reward_max', 0)} TON", callback_data=BossEditorCallback(action="noop").pack())
+            InlineKeyboardButton(text=f"{settings.get('reward_min', 0)}-{settings.get('reward_max', 0)} GRAM", callback_data=BossEditorCallback(action="noop").pack())
         ],
         [
-            InlineKeyboardButton(text="🎲 Шанс TON", callback_data=BossEditorCallback(action="set_ton_chance").pack()),
+            InlineKeyboardButton(text="🎲 Шанс GRAM", callback_data=BossEditorCallback(action="set_ton_chance").pack()),
             InlineKeyboardButton(text=f"{settings.get('drop_chance', 0) * 100:.1f}%", callback_data=BossEditorCallback(action="noop").pack())
         ],
         [InlineKeyboardButton(text="⏱ Длительность", callback_data=BossEditorCallback(action="menu_duration").pack())],
@@ -177,7 +177,7 @@ async def on_reward_set(message: Message, container: Container, state: FSMContex
         await container.boss_service.update_setting("reward_min", min_val)
         await container.boss_service.update_setting("reward_max", max_val)
 
-        await message.answer(f"✅ Диапазон награды установлен: {min_val} - {max_val} TON")
+        await message.answer(f"✅ Диапазон награды установлен: {min_val} - {max_val} GRAM")
 
     except (ValueError, TypeError):
         await message.answer("⚠️ Неверный формат. Введите два числа через пробел.")
@@ -200,7 +200,7 @@ async def on_ton_chance_set(message: Message, container: Container, state: FSMCo
             raise ValueError("Значение должно быть между 0.0 и 1.0")
 
         await container.boss_service.update_setting("drop_chance", val)
-        await message.answer(f"✅ Шанс выпадения TON установлен: {val * 100:.1f}%")
+        await message.answer(f"✅ Шанс выпадения GRAM установлен: {val * 100:.1f}%")
 
     except (ValueError, TypeError):
         await message.answer("⚠️ Неверный формат. Введите число от 0.0 до 1.0")

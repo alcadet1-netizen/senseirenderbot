@@ -43,8 +43,8 @@ class BanzaiPresenter:
                     InlineKeyboardButton(text="📜 Правила", callback_data=f"banzai:rules:{chat_id}"),
                 ],
                 [
-                    InlineKeyboardButton(text="💎 +0.1 TON", callback_data=f"banzai:reward:add:0.1:{chat_id}"),
-                    InlineKeyboardButton(text="💎 -0.1 TON", callback_data=f"banzai:reward:sub:0.1:{chat_id}"),
+                    InlineKeyboardButton(text="💎 +0.1 GRAM", callback_data=f"banzai:reward:add:0.1:{chat_id}"),
+                    InlineKeyboardButton(text="💎 -0.1 GRAM", callback_data=f"banzai:reward:sub:0.1:{chat_id}"),
                 ],
             ]
         else:
@@ -154,7 +154,7 @@ class BanzaiPresenter:
         ])
 
         if reward_ton > 0:
-            lines.append(Visuals.frame_line_left(f"💎 {reward_ton} TON", width))
+            lines.append(Visuals.frame_line_left(f"💎 {reward_ton} GRAM", width))
 
         lines.append(Visuals.frame_bottom_left(width))
 

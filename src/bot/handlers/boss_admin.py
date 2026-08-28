@@ -20,9 +20,9 @@ async def cmd_boss_settings(message: Message, container: Container):
     lines = [
         "⚙️ <b>Настройки наград Босса (xRocket):</b>",
         f"🎲 Шанс выпадения: {settings['drop_chance'] * 100:.1f}%",
-        f"💰 Награда: {settings['reward_min']} - {settings['reward_max']} TON",
-        f"🏦 Лимит пула: {settings['pool_limit']} TON",
-        f"📊 Использовано: {settings['pool_used']:.4f} TON",
+        f"💰 Награда: {settings['reward_min']} - {settings['reward_max']} GRAM",
+        f"🏦 Лимит пула: {settings['pool_limit']} GRAM",
+        f"📊 Использовано: {settings['pool_used']:.4f} GRAM",
         "",
         "<b>Команды для изменения:</b>",
         "/boss_chance <0.0-1.0> - шанс выпадения",
@@ -67,7 +67,7 @@ async def cmd_boss_reward(message: Message, command: CommandObject, container: C
         await container.boss_service.update_setting("reward_min", min_val)
         await container.boss_service.update_setting("reward_max", max_val)
         
-        await message.answer(f"✅ Диапазон награды установлен: {min_val} - {max_val} TON")
+        await message.answer(f"✅ Диапазон награды установлен: {min_val} - {max_val} GRAM")
         
     except ValueError as e:
         await message.answer(f"⚠️ Ошибка: {str(e)}")

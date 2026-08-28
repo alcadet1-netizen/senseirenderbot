@@ -131,9 +131,9 @@ class BossPresenter:
                     icon = "🩸"
                     dmg_text = f"-{entry['dmg']}!"
 
-                if entry.get("is_ton_reward"):
-                    amount = entry.get("ton_amount", 0)
-                    lines.append(Visuals.frame_line_left(f"💎 {user_name}: +{amount} TON", width))
+                if entry.get("is_gram_reward"):
+                    amount = entry.get("gram_amount", 0)
+                    lines.append(Visuals.frame_line_left(f"💎 {user_name}: +{amount} GRAM", width))
                 else:
                     lines.append(Visuals.frame_line_left(f"{icon} {user_name} {dmg_text}", width))
 

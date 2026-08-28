@@ -121,7 +121,7 @@ class BossService:
         self.DEFAULT_DROP_CHANCE = 0.05
         self.DEFAULT_REWARD_MIN = 0.006
         self.DEFAULT_REWARD_MAX = 0.02
-        self.DEFAULT_POOL_LIMIT = 1.0  # TON
+        self.DEFAULT_POOL_LIMIT = 1.0  # GRAM
 
         # Ensure indexes
         asyncio.create_task(self._ensure_indexes())
@@ -235,7 +235,7 @@ class BossService:
             await self.boss_settings.update_one(
                 {},
                 {"$set": {
-                    "drop_chance": reward_settings.get("ton_chance", self.DEFAULT_DROP_CHANCE),
+                    "drop_chance": reward_settings.get("drop_chance", self.DEFAULT_DROP_CHANCE),
                     "reward_min": reward_settings.get("reward_min", self.DEFAULT_REWARD_MIN),
                     "reward_max": reward_settings.get("reward_max", self.DEFAULT_REWARD_MAX),
                     "pool_limit": reward_settings.get("reward_pool", self.DEFAULT_POOL_LIMIT),

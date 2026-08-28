@@ -783,7 +783,7 @@ class BanzaiService:
                 # 2. Монеты
                 await self.economy_service.process_game_win(int(winner_id), coins=500.0, xp=0, description="Banzai Win")
 
-                # 3. TON (если есть)
+                # 3. GRAM (если есть)
                 reward_ton = 0.0
                 try:
                     rt = await self.banzai_games.find_one({"_id": chat_id}, {"reward_ton": 1})
@@ -817,7 +817,7 @@ class BanzaiService:
                         Visuals.frame_line_left("💰 +500 Coins", w),
                     ]
                     if reward_ton > 0:
-                        lines.append(Visuals.frame_line_left(f"💎 +{reward_ton} TON", w))
+                        lines.append(Visuals.frame_line_left(f"💎 +{reward_ton} GRAM", w))
                     lines.append(Visuals.frame_bottom_left(w))
                     text = "<pre>\n" + "\n".join(lines) + "\n</pre>"
                     await bot.send_message(int(winner_id), text, parse_mode="HTML")

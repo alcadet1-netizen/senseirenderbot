@@ -75,7 +75,7 @@ async def get_banzai_keyboard(data: dict) -> InlineKeyboardMarkup:
     kb = [
         [InlineKeyboardButton(text=f"📍 Чат: {chat_label}", callback_data="banzai_set_chat")],
         [InlineKeyboardButton(text=f"⏱ Длительность: {minutes} мин", callback_data="banzai_set_time")],
-        [InlineKeyboardButton(text=f"💎 Награда: {reward} TON", callback_data="banzai_set_reward")],
+        [InlineKeyboardButton(text=f"💎 Награда: {reward} GRAM", callback_data="banzai_set_reward")],
         [InlineKeyboardButton(text="📜 Правила", callback_data="banzai_rules")],
         [InlineKeyboardButton(text="🚀 СТАРТ", callback_data="banzai_start")]
     ]
@@ -180,7 +180,7 @@ async def _handle_status_command(message: Message, service, chat_id: int) -> Non
 
     lines = [
         f"⏱ До победы: {remain_min:02d}:{remain_s:02d}",
-        f"💎 TON: {status.get('reward_ton', 0)}",
+        f"💎 GRAM: {status.get('reward_ton', 0)}",
         "🔄 Окно игры обновляется"
     ]
     text = _create_frame("⏳ БАНЗАЙ АКТИВЕН", lines)
@@ -216,7 +216,7 @@ async def _handle_active_game_command(message: Message, service, cmd_obj, chat_i
 
     if cmd_obj.action == BanzaiActionType.SET_REWARD and cmd_obj.reward is not None:
         if await service.update_reward(chat_id, cmd_obj.reward):
-            await message.answer(f"💎 Награда обновлена: {cmd_obj.reward} TON")
+            await message.answer(f"💎 Награда обновлена: {cmd_obj.reward} GRAM")
             await service.refresh_window(chat_id, message.bot, force=True)
         else:
             await message.answer("⚠️ Не удалось обновить награду.")
@@ -306,7 +306,7 @@ async def process_set_time(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "banzai_set_reward", StateFilter(BanzaiStates.settings))
 async def cb_set_reward(callback: CallbackQuery, state: FSMContext):
-    await callback.message.answer("💎 Введите сумму награды в TON (например 0.1):")
+    await callback.message.answer("💎 Введите сумму награды в GRAM (например 0.1):")
     await state.set_state(BanzaiStates.set_reward)
     await callback.answer()
 
@@ -400,7 +400,7 @@ async def cb_rules(callback: CallbackQuery, state: FSMContext):
         "Побеждает тот, кто отправил последнее сообщение до окончания отсчёта.\n\n"
         "⚙️ <b>Настройки (доступны только в ЛС боту):</b>\n"
         "• Изменение длительности игры\n"
-        "• Изменение награды в TON\n"
+        "• Изменение награды в GRAM\n"
         "• Выбор чата для запуска (если не задан MAIN_CHAT_ID)\n"
         "• Запуск и остановка игры\n\n"
         "🛠 <b>Команды админа в чате:</b>\n"
@@ -458,7 +458,7 @@ async def cb_start(callback: CallbackQuery, state: FSMContext, container: Contai
                 f"🚀 <b>БАНЗАЙ ЗАПУЩЕН!</b>\n"
                 f"📍 Чат: {chat_id}\n"
                 f"⏱ Время: {minutes} мин\n"
-                f"💎 Награда: {reward} TON",
+                f"💎 Награда: {reward} GRAM",
                 parse_mode="HTML"
             )
 
@@ -533,7 +533,7 @@ async def _handle_time_op(callback: CallbackQuery, parts: list[str], container: 
 
 
 async def _handle_reward_op(callback: CallbackQuery, parts: list[str], container: Container) -> bool:
-    """Handle reward TON adjustment operations (add/sub). Returns True if handled."""
+    """Handle reward GRAM adjustment operations (add/sub). Returns True if handled."""
     if parts[1] != "reward" or len(parts) < 5:
         return False
     try:
@@ -558,7 +558,7 @@ async def _handle_reward_op(callback: CallbackQuery, parts: list[str], container
     new_reward = max(0.0, round(current + delta, 2))
     if await service.update_reward(chat_id, new_reward):
         await service.refresh_window(chat_id, callback.bot, force=True)
-        await _safe_callback_answer(callback, f"💎 Награда: {new_reward} TON")
+        await _safe_callback_answer(callback, f"💎 Награда: {new_reward} GRAM")
     else:
         await _safe_callback_answer(callback, "Ошибка обновления награды", show_alert=True)
     return True
