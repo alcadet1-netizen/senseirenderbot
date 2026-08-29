@@ -31,7 +31,8 @@ class XRocketService:
 
         url = f"{self.BASE_URL}/transfer"
         if transfer_id is None:
-            transfer_id = str(uuid.uuid4())
+            # Generate a short transfer ID (<=20 chars) to satisfy API limits
+            transfer_id = uuid.uuid4().hex[:10]  # 10 hex characters
 
         payload = {
             "tgUserId": user_id,
