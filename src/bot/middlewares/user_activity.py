@@ -34,7 +34,7 @@ from typing import (
 )
 
 from aiogram import BaseMiddleware, Bot
-from aiogram.types import Message, User
+from aiogram.types import Message, User, CallbackQuery
 
 from src.core.constants import RANDOM_MESSAGE_CHANCE, THROTTLE_RATE_LIMIT_MESSAGES
 from src.core.container import Container
@@ -48,7 +48,7 @@ from src.texts.phrases import get_random_phrase
 logger: Final[logging.Logger] = logging.getLogger(__name__)
 
 # Type aliases
-HandlerType: TypeAlias = Callable[[Message, Dict[str, Any]], Awaitable[Any]]
+HandlerType: TypeAlias = Callable[[Union[Message, CallbackQuery], Dict[str, Any]], Awaitable[Any]]
 MiddlewareData: TypeAlias = Dict[str, Any]
 
 
@@ -786,7 +786,7 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
     async def __call__(
         self,
         handler: HandlerType,
-        event: Message,
+        event: Union[Message, CallbackQuery],
         data: MiddlewareData,
     ) -> Any:
         """
@@ -823,34 +823,46 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
         logger.info(f"[USER_ACTIVITY] Finished processing message from user {event.from_user.id if event.from_user else 'Unknown'} in {duration_ms:.2f} ms")
         return await handler(event, data)
 
-    def _is_valid_event(self, event: Message) -> bool:
+    def _is_valid_event(self, event: Union[Message, CallbackQuery]) -> bool:
         """Проверяет валидность события для обработки."""
-        if not isinstance(event, Message):
+        # Get the underlying Message object
+        message = event.message if isinstance(event, CallbackQuery) else event
+
+        if not isinstance(message, Message):
             return False
 
-        if not event.from_user:
+        if not message.from_user:
             return False
 
         # Игнорируем служебные сообщения
-        if event.content_type and event.content_type in ["migrate_to_chat_id", "migrate_from_chat_id"]:
+        if message.content_type and message.content_type in ["migrate_to_chat_id", "migrate_from_chat_id"]:
             return False
 
         return True
 
     async def _process_user_activity(
         self,
-        event: Message,
+        event: Union[Message, CallbackQuery],
         data: MiddlewareData
     ) -> None:
         """Обрабатывает активность пользователя."""
+        # Extract message and user info based on event type
+        if isinstance(event, CallbackQuery):
+            message = event.message
+            user = event.from_user
+            bot = event.bot
+        else:
+            message = event
+            user = event.from_user
+            bot = event.bot
+
         # Skip processing for commands to avoid delay in command responses
-        if event.text and event.text.startswith('/'):
-            logger.info(f"[USER_ACTIVITY] Skipping processing for command: {event.text}")
+        if message.text and message.text.startswith('/'):
+            logger.info(f"[USER_ACTIVITY] Skipping processing for command: {message.text}")
             return
 
-        user = event.from_user
         user_id = user.id
-        chat_id = event.chat.id
+        chat_id = message.chat.id
 
         # Используем контейнер, переданный в конструкторе
         container = self.container
@@ -863,7 +875,8 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
 
         # Проверяем throttle для наград
         # Награды начисляем только в групповых чатах (не в лс)
-        is_private = event.chat.type == "private"
+        # Для callback queries проверяем чат сообщения, на которое пришел callback
+        is_private = message.chat.type == "private"
         can_reward = False
 
         if not is_private:
@@ -891,11 +904,11 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
             self._notification_queue.add(notification)
 
         # Отправляем уведомления
-        await self._send_notifications(event.bot)
+        await self._send_notifications(bot)
 
         # Обрабатываем случайные фразы
         if self.config.enable_random_phrases and random.random() < self.config.random_phrase_chance:
-            await self._handle_random_phrase(event, user, chat_id)
+            await self._handle_random_phrase(message, user, chat_id)
 
     async def _send_notifications(self, bot: Bot) -> None:
         """Отправляет накопленные уведомления."""
@@ -937,11 +950,14 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
 
     async def _handle_random_phrase(
         self,
-        event: Message,
+        event: Union[Message, CallbackQuery],
         user: User,
         chat_id: int
     ) -> None:
         """Обрабатывает отправку случайной фразы."""
+        # Extract message for getting the bot
+        message = event.message if isinstance(event, CallbackQuery) else event
+
         try:
             phrase = get_random_phrase()
             if phrase:
@@ -955,7 +971,7 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
                 )
 
                 if self._sender:
-                    await self._sender.send(event.bot, notification)
+                    await self._sender.send(message.bot, notification)
 
         except Exception as e:
             logger.debug(f"Failed to send random phrase: {e}")

@@ -347,40 +347,45 @@ class BossService:
                     raise ValueError(f"Кулдаун: {remaining} сек.")
 
             # --- Evasion Mechanic ---
-            # REMOVED: Boss no longer evades attacks
-            # if not is_ult and random.random() < 0.10: ...
-
-            # --- Weakness Mechanic (Apply) ---
-            is_weakness_active = False
-            weakness_until = state.get("weakness_until", 0)
-            if now < weakness_until:
-                is_weakness_active = True
-                damage = int(damage * 2.0)
-
-            # --- Global Combo Mechanic ---
-            combo_window = 10.0  # seconds
-            last_combo = state.get("last_combo_time", 0)
-            combo_count = state.get("combo_count", 0)
-
-            if now - last_combo < combo_window:
-                combo_count += 1
+            # Boss has a chance to evade attacks (except ultimates)
+            is_evaded = False
+            is_weakness_active = False  # Initialize for evasion case
+            if not is_ult and random.random() < 0.10:
+                is_evaded = True
+                actual_damage = 0
+                # When evaded, we skip weakness and combo
             else:
-                combo_count = 1  # Reset or Start new
+                # --- Weakness Mechanic (Apply) ---
+                is_weakness_active = False
+                weakness_until = state.get("weakness_until", 0)
+                if now < weakness_until:
+                    is_weakness_active = True
+                    damage = int(damage * 2.0)
 
-            # Cap combo multiplier at 2.0x (approx 50 hits)
-            combo_multiplier = 1.0 + (min(combo_count, 50) * 0.02)
+                # --- Global Combo Mechanic ---
+                combo_window = 10.0  # seconds
+                last_combo = state.get("last_combo_time", 0)
+                combo_count = state.get("combo_count", 0)
 
-            state["combo_count"] = combo_count
-            state["last_combo_time"] = now
+                if now - last_combo < combo_window:
+                    combo_count += 1
+                else:
+                    combo_count = 1  # Reset or Start new
 
-            # Apply Combo Multiplier
-            damage = int(damage * combo_multiplier)
+                # Cap combo multiplier at 2.0x (approx 50 hits)
+                combo_multiplier = 1.0 + (min(combo_count, 50) * 0.02)
 
-            # Apply damage
-            current_hp = state["hp"]
-            max_hp = state["max_hp"]
-            actual_damage = min(current_hp, damage)
-            state["hp"] -= actual_damage
+                state["combo_count"] = combo_count
+                state["last_combo_time"] = now
+
+                # Apply Combo Multiplier
+                damage = int(damage * combo_multiplier)
+
+                # Apply damage
+                current_hp = state["hp"]
+                max_hp = state["max_hp"]
+                actual_damage = min(current_hp, damage)
+                state["hp"] -= actual_damage
 
             # Check thresholds
             event = None
@@ -424,7 +429,7 @@ class BossService:
                 "dmg": actual_damage,
                 "is_ult": is_ult,
                 "crit": actual_damage > 18 and not is_ult,  # Simple heuristic for crit
-                "evaded": False,
+                "evaded": is_evaded,
                 "is_weakness": is_weakness_active
             }
             current_log = state.get("battle_log", [])
