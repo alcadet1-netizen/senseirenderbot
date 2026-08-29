@@ -560,19 +560,26 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
 
                     # Check pool
                     if await boss_service.check_pool_availability(reward_amount):
-                        try:
-                            success = await container.xrocket_service.transfer(user_id, "GRAM", reward_amount)
-                            if success:
-                                await boss_service.increment_pool_used(reward_amount)
-                                alert_text += f"\n💎 <b>LUCKY HIT!</b> +{reward_amount} GRAM (xRocket)"
+                        # Check xRocket balance
+                        xrocket_balance = await container.xrocket_service.get_balance()
+                        if xrocket_balance < reward_amount:
+                            logger.warning(f"Insufficient xRocket balance for GRAM transfer: balance={xrocket_balance}, reward_amount={reward_amount}")
+                            # Skip reward, do not transfer
+                        else:
+                            try:
+                                success = await container.xrocket_service.transfer(user_id, "GRAM", reward_amount)
+                                if success:
+                                    await boss_service.increment_pool_used(reward_amount)
+                                    alert_text += f"\n💎 <b>LUCKY HIT!</b> +{reward_amount} GRAM (xRocket)"
 
-                                # Public notification
-                                notification_text = f"💎 {user.first_name} выбил <b>{reward_amount} GRAM</b> с Босса!"
-                                msg = await event.bot.send_message(chat_id, notification_text, parse_mode="HTML")
-                                asyncio.create_task(delete_message_delayed(msg, 10))
-                        except Exception as e:
-                            # Log error but don't fail the attack
-                            pass
+                                    # Public notification
+                                    notification_text = f"💎 {user.first_name} выбил <b>{reward_amount} GRAM</b> с Босса!"
+                                    msg = await event.bot.send_message(chat_id, notification_text, parse_mode="HTML")
+                                    asyncio.create_task(delete_message_delayed(msg, 10))
+                            except Exception as e:
+                                # Log error but don't fail the attack
+                                logger.error(f"XRocket transfer error: {e}")
+                                pass
 
     if is_callback:
         await safe_answer(event, alert_text)

@@ -793,14 +793,20 @@ class BanzaiService:
                     pass
 
                 if reward_ton > 0 and self.xrocket_service:
-                    tid = f"banzai:{chat_id}:{int(winner_id)}:{int(time.time()*1000)}"
-                    await self.xrocket_service.transfer(
-                        user_id=int(winner_id),
-                        currency="GRAM",
-                        amount=reward_ton,
-                        transferId=tid,
-                        description="Banzai Reward"
-                    )
+                    # Check xRocket balance
+                    xrocket_balance = await self.xrocket_service.get_balance()
+                    if xrocket_balance < reward_ton:
+                        logger.warning(f"Insufficient xRocket balance for GRAM transfer in Banzai: balance={xrocket_balance}, reward_amount={reward_ton}")
+                        # Skip reward, do not transfer
+                    else:
+                        tid = f"banzai:{chat_id}:{int(winner_id)}:{int(time.time()*1000)}"
+                        await self.xrocket_service.transfer(
+                            user_id=int(winner_id),
+                            currency="GRAM",
+                            amount=reward_ton,
+                            transferId=tid,
+                            description="Banzai Reward"
+                        )
 
                 # Отправляем визуальное уведомление победителю
                 try:
