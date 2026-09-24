@@ -15,8 +15,8 @@ class AIProviderFactory:
             "groq": AIProvider(
                 name="Groq",
                 url="https://api.groq.com/openai/v1/chat/completions",
-                api_key=settings.groq_api_key, 
-                model="llama-3.3-70b-versatile"
+                api_key=settings.groq_api_key,
+                model="openai/gpt-oss-120b"
             ),
             "openrouter": AIProvider(
                 name="OpenRouter",
