@@ -28,6 +28,9 @@ from src.bot.handlers.maintenance import router as maintenance_router
 from src.bot.handlers.chat_settings import router as chat_settings_router
 from src.bot.handlers.draw import router as draw_router
 from src.bot.handlers.sensei_check import router as sensei_check_router
+from src.bot.handlers.roulette import router as roulette_router
+from src.bot.handlers.bomb import router as bomb_router
+from src.bot.handlers.wave import router as wave_router
 
 
 def setup_routers() -> Router:
@@ -60,6 +63,9 @@ def setup_routers() -> Router:
 
     # SenseiCheck
     main_router.include_router(sensei_check_router)
+    main_router.include_router(roulette_router)
+    main_router.include_router(bomb_router)
+    main_router.include_router(wave_router)
 
     # Callbacks and triggers (low priority)
     main_router.include_router(callbacks_router)
