@@ -19,8 +19,6 @@ from src.core.visuals import Visuals
 from src.bot.handlers.roulette import cmd_senseiroulette as roulette_handler
 from src.texts.phrases import get_random_phrase, check_easter_egg, get_random_pour_phrase, ERROR_COOLDOWN
 
-from src.bot.handlers.roulette import cmd_senseiroulette as roulette_handler
-
 logger = logging.getLogger(__name__)
 
 router = Router(name="triggers")
@@ -310,6 +308,12 @@ async def trigger_vanga(message: Message, container: Container):
     except Exception as e:
         logging.error(f"Vanga error: {e}")
         await message.reply("🔮 Шар судьбы треснул. Попробуй позже.")
+
+
+@router.message(F.text.regexp(RULE_PATTERN))
+async def trigger_roulette(message: Message, container: Container):
+    """Триггер на 'руля'."""
+    await roulette_handler(message, container)
 
 
 @router.message(F.text.regexp(SENSEI_PATTERN))
