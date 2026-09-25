@@ -236,10 +236,8 @@ async def cmd_fire(message: Message, container: Container):
     coins_int = int(round(coins))
 
     import time
-    # Вычисляем время с момента запуска бота
-    since_launch_hours = (time.time() - container.start_time) / 3600.0
-    # Ищем активных за период с момента запуска (минимум 1 минута, чтобы не потерять тех кто только что написал)
-    search_window = max(since_launch_hours, 1/60.0)
+    # Используем фиксированный период активности: 24 часа
+    search_window = 24.0
 
     try:
         # Сначала ищем тех, кто активничал с момента запуска
