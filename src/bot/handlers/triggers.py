@@ -16,7 +16,10 @@ from src.core.container import Container
 from src.core.constants import RANDOM_MESSAGE_CHANCE
 from src.core.exceptions import DailyAlreadyClaimedError
 from src.core.visuals import Visuals
+from src.bot.handlers.roulette import cmd_senseiroulette as roulette_handler
 from src.texts.phrases import get_random_phrase, check_easter_egg, get_random_pour_phrase, ERROR_COOLDOWN
+
+from src.bot.handlers.roulette import cmd_senseiroulette as roulette_handler
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +41,7 @@ CRYPTO_AMOUNT_PATTERN = re.compile(r'курс\s+(\d+(?:[.,]\d+)?)\s+([a-zA-Z0-9]
 CRYPTO_PRICE_PATTERN = re.compile(r'курс\s+([a-zA-Z0-9]+)', re.IGNORECASE)
 SAGE_QUESTION_PATTERN = re.compile(r'мудрец\s+сенсей\s+(.+)', re.IGNORECASE)
 VANGA_PATTERN = re.compile(r'(сенсей\s+вангуй)', re.IGNORECASE)
+RULE_PATTERN = re.compile(r'^\s*руля\s*$', re.IGNORECASE)
 
 
 @router.message(F.text.regexp(HELP_PATTERN))
