@@ -39,7 +39,6 @@ CRYPTO_AMOUNT_PATTERN = re.compile(r'курс\s+(\d+(?:[.,]\d+)?)\s+([a-zA-Z0-9]
 CRYPTO_PRICE_PATTERN = re.compile(r'курс\s+([a-zA-Z0-9]+)', re.IGNORECASE)
 SAGE_QUESTION_PATTERN = re.compile(r'мудрец\s+сенсей\s+(.+)', re.IGNORECASE)
 VANGA_PATTERN = re.compile(r'(сенсей\s+вангуй)', re.IGNORECASE)
-RULE_PATTERN = re.compile(r'^\s*руля\s*$', re.IGNORECASE)
 
 
 @router.message(F.text.regexp(HELP_PATTERN))
@@ -310,7 +309,7 @@ async def trigger_vanga(message: Message, container: Container):
         await message.reply("🔮 Шар судьбы треснул. Попробуй позже.")
 
 
-@router.message(F.text.regexp(RULE_PATTERN))
+@router.message(F.text.lower().strip() == "руля")
 async def trigger_roulette(message: Message, container: Container):
     """Триггер на 'руля'."""
     await roulette_handler(message, container)
