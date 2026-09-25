@@ -316,6 +316,8 @@ async def trigger_roulette(message: Message, container: Container):
     await roulette_handler(message, container)
 
 
+
+
 @router.message(F.text.regexp(SENSEI_PATTERN))
 async def trigger_sensei(message: Message):
     """Триггер на 'сенсей'."""
