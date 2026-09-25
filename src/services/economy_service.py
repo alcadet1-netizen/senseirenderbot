@@ -760,3 +760,88 @@ class EconomyService:
             }
             logger.info(f"[ECONOMY] process_game_win result for user {user_id}: {result}")
             return result
+
+    async def fire_drop(
+        self,
+        sender_id: int,
+        amount: float,
+        recipients_data: List[Tuple[int, Optional[str], int]],
+        is_admin: bool
+    ) -> dict:
+        """Process a fire drop: distribute coins from sender (or bank if admin) to recipients."""
+        logger.info(f"[ECONOMY] fire_drop called: sender_id={sender_id}, amount={amount}, is_admin={is_admin}, recipients={len(recipients_data)}")
+
+        # Use a lock for the sender to prevent concurrent modifications
+        lock_key = f"fire_drop:{sender_id}"
+        lock = self._get_lock(lock_key)
+        async with lock:
+            if is_admin:
+                # Admin uses bank funds
+                bank_balance = await self._get_bank_balance()
+                if bank_balance < amount:
+                    return {
+                        "success": False,
+                        "reason": "insufficient_funds_bank",
+                        "balance": bank_balance
+                    }
+                # Withdraw from bank
+                success = await self._withdraw_from_bank(amount)
+                if not success:
+                    return {"success": False, "reason": "bank_withdraw_failed"}
+                # Create transaction for bank withdrawal
+                tx_doc = {
+                    "user_id": None,  # Bank transaction
+                    "tx_type": "fire_drop_bank_withdraw",
+                    "coins_change": -amount,
+                    "description": f"Fire drop bank withdrawal for sender {sender_id}",
+                    "created_at": datetime.now(timezone.utc),
+                }
+                await self.transactions.insert_one(tx_doc)
+                logger.info(f"[ECONOMY] Fire drop: withdrew {amount} from bank")
+            else:
+                # Non-admin uses personal balance
+                sender = await self.users.find_one({"id": sender_id})
+                if not sender:
+                    return {"success": False, "reason": "sender_not_found"}
+                sender_balance = sender.get("coins", 0.0)
+                if sender_balance < amount:
+                    return {
+                        "success": False,
+                        "reason": "insufficient_funds",
+                        "balance": sender_balance
+                    }
+                # Deduct from sender
+                await self.users.update_one(
+                    {"id": sender_id},
+                    {"$inc": {"coins": -amount}}
+                )
+                # Create transaction for sender deduction
+                tx_doc = {
+                    "user_id": sender_id,
+                    "tx_type": "fire_drop_sent",
+                    "coins_change": -amount,
+                    "description": f"Fire drop sent to {len(recipients_data)} recipients",
+                    "created_at": datetime.now(timezone.utc),
+                }
+                await self.transactions.insert_one(tx_doc)
+                logger.info(f"[ECONOMY] Fire drop: deducted {amount} from sender {sender_id}")
+
+            # Distribute to recipients
+            for recipient_id, _, amt in recipients_data:
+                # Note: recipients_data tuples are (user_id, username, amount)
+                await self.users.update_one(
+                    {"id": recipient_id},
+                    {"$inc": {"coins": amt}}
+                )
+                # Create transaction for each recipient
+                tx_doc = {
+                    "user_id": recipient_id,
+                    "tx_type": "fire_drop_received",
+                    "coins_change": amt,
+                    "description": f"Fire drop received from sender {sender_id}",
+                    "created_at": datetime.now(timezone.utc),
+                }
+                await self.transactions.insert_one(tx_doc)
+
+            logger.info(f"[ECONOMY] Fire drop: distributed {amount} to {len(recipients_data)} recipients")
+            return {"success": True}
