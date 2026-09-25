@@ -176,7 +176,7 @@ def build_fire_drop_html(sender: str, is_admin: bool, source: str,
     total_usdt = total * 0.0002
     tx = f"{secrets.token_hex(2).upper()}-{secrets.token_hex(2).upper()}"
 
-    fire_header = Visuals.fire()
+    fire_header = Visuals.fire_raw()
 
     lines = [
         f"{fire_header} SENSEI FIRE DROP",
