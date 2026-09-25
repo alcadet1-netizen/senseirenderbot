@@ -26,9 +26,6 @@ from aiogram.exceptions import TelegramBadRequest
 from src.core.config import settings
 from src.core.container import Container
 from src.core.visuals import Visuals
-from src.infra.database.uow import UnitOfWork
-from src.domain.repositories import UserRepository, BankRepository, TransactionRepository
-from src.infra.database.models import TransactionType
 
 router = Router(name="bomb")
 logger = logging.getLogger(__name__)
@@ -404,29 +401,31 @@ async def cmd_senseibomb(message: Message, container: Container):
     per_user = total // max_winners
     logger.info(f"👉 [BOMB] Step 6a: total={total}, max_winners={max_winners}, per_user={per_user}")
     
-    # Проверяем и резервируем средства в банке
+    # Проверяем и резервируем средства в банке через сервис экономики
     logger.info(f"👉 [BOMB] Step 7: Checking bank balance")
     try:
-        uow = UnitOfWork(container.session_factory)
-        async with uow:
-            bank_repo = BankRepository(uow.session)
-            balance = await bank_repo.get_balance()
-            logger.info(f"👉 [BOMB] Step 7a: Bank balance = {balance}, needed = {total}")
-            if balance < total:
-                logger.info(f"👉 [BOMB] Step 7b: Insufficient funds!")
-                await message.answer(
-                    f"⚠️ <b>КАЗНА ПУСТА!</b>\n"
-                    f"💰 Нужно: {total:,}\n"
-                    f"📉 В банке: {balance:,.0f}\n"
-                    f"Пополните банк через БД или /addmoney",
-                    parse_mode="HTML"
-                )
-                return
-            
-            logger.info(f"👉 [BOMB] Step 7c: Withdrawing {total} from bank")
-            await bank_repo.withdraw(total)
-            await uow.commit()
-            logger.info(f"👉 [BOMB] Step 7d: Bank transaction committed!")
+        economy_service = container.economy_service
+        balance = await economy_service.get_bank_balance()
+        logger.info(f"👉 [BOMB] Step 7a: Bank balance = {balance}, needed = {total}")
+        if balance < total:
+            logger.info(f"👉 [BOMB] Step 7b: Insufficient funds!")
+            await message.answer(
+                f"⚠️ <b>КАЗНА ПУСТА!</b>\n"
+                f"💰 Нужно: {total:,}\n"
+                f"📉 В банке: {balance:,.0f}\n"
+                f"Пополните банк через БД или /addmoney",
+                parse_mode="HTML"
+            )
+            return
+
+        logger.info(f"👉 [BOMB] Step 7c: Withdrawing {total} from bank")
+        success = await economy_service._withdraw_from_bank(total)
+        if not success:
+            # This should not happen if we checked balance, but just in case
+            logger.error(f"👉 [BOMB] Withdrawal failed despite sufficient balance")
+            await message.answer(f"{Visuals.cross()} Ошибка банка при снятии средств!", parse_mode="HTML")
+            return
+        logger.info(f"👉 [BOMB] Step 7d: Bank transaction committed!")
     except Exception as e:
         logger.error(f"👉 [BOMB] Step 7e: Bank error: {e}", exc_info=True)
         await message.answer(f"{Visuals.cross()} Ошибка банка: {e}")
@@ -546,42 +545,34 @@ async def _finish_bomb(bot: Bot, chat_id: int, container: Container, is_timeout:
     # Кулдаун
     _bomb_cooldowns[chat_id] = time.time() + BOMB_COOLDOWN
     
-    # Начисляем награды и возвращаем остаток
+    # Начисляем награды и возвращаем остаток через сервис экономики
     try:
-        uow = UnitOfWork(container.session_factory)
-        async with uow:
-            user_repo = UserRepository(uow.session)
-            tx_repo = TransactionRepository(uow.session)
-            bank_repo = BankRepository(uow.session)
-            
-            # 1. Раздача
-            for winner in winners:
-                user = await user_repo.get_for_update(winner["user_id"])
-                if user:
-                    bonus = winner["bonus"]
-                    user.coins += bonus
-                    
-                    position = winner.get("position", 0)
-                    desc = f"Бонус-бомба #{position}"
-                    
-                    await tx_repo.create(
-                        user_id=winner["user_id"],
-                        tx_type=TransactionType.BOMB_WIN,
-                        coins_change=bonus,
-                        description=desc
-                    )
-            
-            # 2. Возврат остатка
-            refund = bomb["total"] - total_distributed
-            if refund > 0:
-                await bank_repo.deposit(refund)
-                logger.info(f"Refunding {refund} to bank")
-                
-            await uow.commit()
-            
-            if refund > 0:
-                await bot.send_message(chat_id, f"🏦 Неразыгранные {refund:,} монет вернулись в банк!", parse_mode="HTML")
-             
+        economy_service = container.economy_service
+
+        # 1. Раздача победителям
+        for winner in winners:
+            user_id = winner["user_id"]
+            bonus = winner["bonus"]
+            position = winner.get("position", 0)
+            desc = f"Бонус-бомба #{position}"
+
+            result = await economy_service.process_game_win(
+                user_id=user_id,
+                coins=bonus,
+                xp=0,  # Бомба не дает XP
+                description=desc
+            )
+            if not result["success"]:
+                logger.error(f"Failed to award bomb prize to user {user_id}: {result}")
+
+        # 2. Возврат остатка в банк
+        refund = bomb["total"] - total_distributed
+        if refund > 0:
+            # Депозит в банк через экономический сервис
+            await economy_service._deposit_to_bank(refund)
+            logger.info(f"Refunding {refund} to bank")
+            await bot.send_message(chat_id, f"🏦 Неразыгранные {refund:,} монет вернулись в банк!", parse_mode="HTML")
+
     except Exception as e:
         logger.error(f"Error processing bomb rewards: {e}")
     

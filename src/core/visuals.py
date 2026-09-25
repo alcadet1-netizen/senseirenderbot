@@ -385,6 +385,18 @@ class Visuals:
         return "🔥"
 
     @staticmethod
+    def fire() -> str:
+        return "🔥"
+
+    @staticmethod
+    def bomb() -> str:
+        return "💣"
+
+    @staticmethod
+    def error_raw() -> str:
+        return "⚠️"
+
+    @staticmethod
     def escape(text: str) -> str:
         """Экранирование HTML-спецсимволов."""
         if text is None:

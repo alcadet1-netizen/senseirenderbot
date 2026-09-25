@@ -658,40 +658,24 @@ async def check_roulette_response(message: Message, container: Container):
     name = roulette.get("username") or roulette.get("first_name", "???")
     _add_to_history(chat_id, name, reward, is_jackpot)
     
-    # Начисляем награду
+    # Начисляем награду через сервис экономики
     try:
-        from src.infra.database.uow import UnitOfWork
-        from src.domain.repositories import UserRepository, BankRepository, TransactionRepository
-        from src.infra.database.models import TransactionType
-        
-        uow = UnitOfWork(container.session_factory)
-        async with uow:
-            user_repo = UserRepository(uow.session)
-            bank_repo = BankRepository(uow.session)
-            tx_repo = TransactionRepository(uow.session)
-            
-            # ATOMIC ECONOMY CHECK
-            balance = await bank_repo.get_balance()
-            if balance < reward:
-                await message.answer(f"⚠️ <b>Казна пуста!</b> ({balance} < {reward})\nНаграда не выдана.", parse_mode="HTML")
-                return
+        economy_service = container.economy_service
+        result = await economy_service.process_game_win(
+            user_id=user_id,
+            coins=reward,
+            xp=0,  # Рулетка не дает XP
+            description=f"Рулетка: {'ДЖЕКПОТ!' if is_jackpot else 'победа'}"
+        )
+        if not result["success"]:
+            # Обработка ошибок от сервиса
+            if "bank" in str(result.get("error", "")).lower() or "insufficient" in str(result.get("error", "")).lower():
+                await message.answer(f"⚠️ <b>Казна пуста!</b> Награда не выдана.", parse_mode="HTML")
+            else:
+                await message.answer(f"{Visuals.cross()} Ошибка при начислении награды!", parse_mode="HTML")
+            return
 
-            await bank_repo.withdraw(reward)
-            
-            user = await user_repo.get_for_update(user_id) # Safer
-            if user:
-                user.coins += reward
-                
-                desc = f"Рулетка: {'ДЖЕКПОТ!' if is_jackpot else 'победа'}"
-                await tx_repo.create(
-                    user_id=user_id,
-                    tx_type=TransactionType.ROULETTE_WIN,
-                    coins_change=reward,
-                    description=desc
-                )
-                
-                await uow.commit()
-                logger.info(f"🎰 Roulette WIN: user {user_id} got {reward} coins")
+        logger.info(f"🎰 Roulette WIN: user {user_id} got {reward} coins")
     except Exception as e:
         logger.exception(f"Error awarding roulette prize: {e}")
         await message.answer(f"{Visuals.cross()} Ошибка при начислении награды!")

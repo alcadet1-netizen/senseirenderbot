@@ -27,9 +27,6 @@ from aiogram.exceptions import TelegramBadRequest
 from src.core.config import settings
 from src.core.container import Container
 from src.core.visuals import Visuals
-from src.infra.database.uow import UnitOfWork
-from src.domain.repositories import UserRepository, BankRepository, TransactionRepository
-from src.infra.database.models import TransactionType
 
 router = Router(name="wave")
 logger = logging.getLogger(__name__)
@@ -749,41 +746,24 @@ async def _finish_wave(bot: Bot, chat_id: int, container: Container):
             desc = f"Волна #{new_streak}" + (f" ({rank_desc})" if rank_desc else "")
             rewards_data.append((user_id, reward, desc))
             
-        # Начисление (АТОМАРНО)
+        # Начисление через сервис экономики
         try:
-            uow = UnitOfWork(container.session_factory)
-            async with uow:
-                user_repo = UserRepository(uow.session)
-                bank_repo = BankRepository(uow.session)
-                tx_repo = TransactionRepository(uow.session)
-                
-                # Проверка банка
-                bank_balance = await bank_repo.get_balance()
-                if bank_balance < total_needed:
-                    await bot.send_message(
-                        chat_id, 
-                        f"⚠️ <b>ОШИБКА КАЗНЫ!</b>\nНедостаточно средств для выплат.\n💰 Нужно: {total_needed:,.0f}\n📉 Есть: {bank_balance:,.0f}",
-                        parse_mode="HTML"
-                    )
-                    return
+            economy_service = container.economy_service
 
-                # Снимаем общую сумму
-                await bank_repo.withdraw(total_needed)
-                
-                # Раздаем
-                for uid, rew, desc in rewards_data:
-                    user = await user_repo.get_for_update(uid)
-                    if user:
-                        user.coins += rew
-                        await tx_repo.create(
-                            user_id=uid,
-                            tx_type=TransactionType.WAVE_WIN,
-                            coins_change=rew,
-                            description=desc
-                        )
-                
-                await uow.commit()
-                
+            # Депозит общей суммы из банка
+            await economy_service._withdraw_from_bank(total_needed)
+
+            # Раздаем награды участникам
+            for uid, rew, desc in rewards_data:
+                result = await economy_service.process_game_win(
+                    user_id=uid,
+                    coins=rew,
+                    xp=0,  # Волна не дает XP напрямую через это (но можно добавить если нужно)
+                    description=desc
+                )
+                if not result["success"]:
+                    logger.error(f"Failed to award wave prize to user {uid}: {result}")
+
         except Exception as e:
             logger.error(f"Error rewarding wave participants: {e}")
         
