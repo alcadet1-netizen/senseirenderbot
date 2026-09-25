@@ -313,7 +313,7 @@ async def cmd_fire(message: Message, container: Container):
         result = await container.economy_service.fire_drop(
             sender_id=user_id,
             amount=coins_int,
-            recipients_data=recipients_data,
+            recipients_data=tags,
             is_admin=is_admin
         )
 
