@@ -681,6 +681,9 @@ class DuelService:
                 # Fall back to sending a new message
                 msg = await duel.bot.send_message(user_id, text, reply_markup=kb, parse_mode="HTML")
                 duel.control_message_ids[user_id] = msg.message_id
+            else:
+                # message not modified, ignore
+                pass
         except Exception as e:
             logger.exception(f"Duel {duel.id}: Control update for {user_id} failed critically")
 
@@ -697,157 +700,166 @@ class DuelService:
 
         duel.log_lines.append(f"<b>{reason}</b>")
 
-        if winner_id and loser_id:
-            # Get fresh user documents
-            winner_doc = await self.users.find_one({"id": winner_id})
-            loser_doc = await self.users.find_one({"id": loser_id})
-
-            if winner_doc and loser_doc:
-                coins_reward = float(duel.bet * 2) if duel.bet > 0 else 0.0
-
-                # Update winner wins and xp using $inc (no document fetch needed for these)
-                await self.users.update_one(
-                    {"id": winner_id},
-                    {"$inc": {"wins": 1, "xp": 50}}
-                )
-
-                # Fetch winner document for katana-related updates and name
+        try:
+            if winner_id and loser_id:
+                # Get fresh user documents
                 winner_doc = await self.users.find_one({"id": winner_id})
-                if winner_doc:
-                    winner_name = _name_from_user(winner_doc, winner_id)
-                    # Update katana length if winner has one
-                    if winner_doc.get("has_katana", False):
-                        new_katana_length = round((winner_doc.get("katana_length", 0.0) or 0.0) + 0.01, 2)
-                        await self.users.update_one(
-                            {"id": winner_id},
-                            {"$set": {"katana_length": new_katana_length}}
-                        )
-                        duel.log_lines.append(f"✨ {winner_name} получает +50 XP и +0.01 к катане.")
-                    else:
-                        duel.log_lines.append(f"✨ {winner_name} получает +50 XP.")
-                else:
-                    logger.warning(f"Winner document not found for user {winner_id} in duel {duel.id}. Awarded XP/wins but skipped katana update and name lookup.")
-                    duel.log_lines.append(f"✨ Пользователь {winner_id} получает +50 XP (документ не найден).")
+                loser_doc = await self.users.find_one({"id": loser_id})
 
-                if coins_reward > 0:
+                if winner_doc and loser_doc:
+                    coins_reward = float(duel.bet * 2) if duel.bet > 0 else 0.0
+
+                    # Update winner wins and xp using $inc (no document fetch needed for these)
                     await self.users.update_one(
                         {"id": winner_id},
-                        {"$inc": {"coins": coins_reward}}
+                        {"$inc": {"wins": 1, "xp": 50}}
                     )
-                    duel.log_lines.append(f"💰 Победитель получает {int(coins_reward)} монет!")
 
-                    # Create transaction for winner's winnings
-                    tx_doc = {
+                    # Fetch winner document for katana-related updates and name
+                    winner_doc = await self.users.find_one({"id": winner_id})
+                    if winner_doc:
+                        winner_name = _name_from_user(winner_doc, winner_id)
+                        # Update katana length if winner has one
+                        if winner_doc.get("has_katana", False):
+                            new_katana_length = round((winner_doc.get("katana_length", 0.0) or 0.0) + 0.01, 2)
+                            await self.users.update_one(
+                                {"id": winner_id},
+                                {"$set": {"katana_length": new_katana_length}}
+                            )
+                            duel.log_lines.append(f"✨ {winner_name} получает +50 XP и +0.01 к катане.")
+                        else:
+                            duel.log_lines.append(f"✨ {winner_name} получает +50 XP.")
+                    else:
+                        logger.warning(f"Winner document not found for user {winner_id} in duel {duel.id}. Awarded XP/wins but skipped katana update and name lookup.")
+                        duel.log_lines.append(f"✨ Пользователь {winner_id} получает +50 XP (документ не найден).")
+
+                    if coins_reward > 0:
+                        await self.users.update_one(
+                            {"id": winner_id},
+                            {"$inc": {"coins": coins_reward}}
+                        )
+                        duel.log_lines.append(f"💰 Победитель получает {int(coins_reward)} монет!")
+
+                        # Create transaction for winner's winnings
+                        tx_doc = {
+                            "user_id": winner_id,
+                            "tx_type": "duel_win",
+                            "coins_change": coins_reward,
+                            "xp_change": 50,
+                            "description": f"Победа в дуэли #{duel.id} против {loser_id}",
+                            "created_at": datetime.now(timezone.utc),
+                        }
+                        await self.transactions.insert_one(tx_doc)
+
+                    # Update loser losses using $inc (no document fetch needed for this)
+                    await self.users.update_one(
+                        {"id": loser_id},
+                        {"$inc": {"losses": 1}}
+                    )
+
+                    # Fetch loser document for katana-related updates and name
+                    loser_doc = await self.users.find_one({"id": loser_id})
+                    if loser_doc:
+                        loser_name = _name_from_user(loser_doc, loser_id)
+                        # Update katana length if loser has one
+                        if loser_doc.get("has_katana", False):
+                            new_katana_length = round(max(0.0, (loser_doc.get("katana_length", 0.0) or 0.0) - 0.01), 2)
+                            await self.users.update_one(
+                                {"id": loser_id},
+                                {"$set": {"katana_length": new_katana_length}}
+                            )
+                            duel.log_lines.append(f"💔 {loser_name} теряет -0.01 от катаны.")
+                        else:
+                            duel.log_lines.append(f"💔 {loser_name} не имеет катаны для потери.")
+                    else:
+                        logger.warning(f"Loser document not found for user {loser_id} in duel {duel.id}. Awarded loss but skipped katana update and name lookup.")
+                        duel.log_lines.append(f"💔 Пользователь {loser_id} терпит поражение (документ не найден).")
+
+                    # Create transaction for loser's loss (if any coins were lost)
+                    # Actually, coins are handled via the escrow system below
+
+                    # Create transaction records for XP changes
+                    winner_tx_doc = {
                         "user_id": winner_id,
                         "tx_type": "duel_win",
-                        "coins_change": coins_reward,
                         "xp_change": 50,
-                        "description": f"Победа в дуэли #{duel.id} против {loser_id}",
+                        "coins_change": 0,  # Coins handled separately
+                        "description": f"Победа в дуэли #{duel.id} (XP only)",
                         "created_at": datetime.now(timezone.utc),
                     }
-                    await self.transactions.insert_one(tx_doc)
+                    await self.transactions.insert_one(winner_tx_doc)
 
-                # Update loser losses using $inc (no document fetch needed for this)
-                await self.users.update_one(
-                    {"id": loser_id},
-                    {"$inc": {"losses": 1}}
-                )
+                    loser_tx_doc = {
+                        "user_id": loser_id,
+                        "tx_type": "duel_loss",
+                        "xp_change": 0,
+                        "coins_change": 0,
+                        "description": f"Поражение в дуэли #{duel.id}",
+                        "created_at": datetime.now(timezone.utc),
+                    }
+                    await self.transactions.insert_one(loser_tx_doc)
 
-                # Fetch loser document for katana-related updates and name
-                loser_doc = await self.users.find_one({"id": loser_id})
-                if loser_doc:
-                    loser_name = _name_from_user(loser_doc, loser_id)
-                    # Update katana length if loser has one
-                    if loser_doc.get("has_katana", False):
-                        new_katana_length = round(max(0.0, (loser_doc.get("katana_length", 0.0) or 0.0) - 0.01), 2)
-                        await self.users.update_one(
-                            {"id": loser_id},
-                            {"$set": {"katana_length": new_katana_length}}
-                        )
-                        duel.log_lines.append(f"💔 {loser_name} теряет -0.01 от катаны.")
-                    else:
-                        duel.log_lines.append(f"💔 {loser_name} не имеет катаны для потери.")
-                else:
-                    logger.warning(f"Loser document not found for user {loser_id} in duel {duel.id}. Awarded loss but skipped katana update and name lookup.")
-                    duel.log_lines.append(f"💔 Пользователь {loser_id} терпит поражение (документ не найден).")
-
-                # Create transaction for loser's loss (if any coins were lost)
-                # Actually, coins are handled via the escrow system below
-
-                # Create transaction records for XP changes
-                winner_tx_doc = {
-                    "user_id": winner_id,
-                    "tx_type": "duel_win",
-                    "xp_change": 50,
-                    "coins_change": 0,  # Coins handled separately
-                    "description": f"Победа в дуэли #{duel.id} (XP only)",
-                    "created_at": datetime.now(timezone.utc),
-                }
-                await self.transactions.insert_one(winner_tx_doc)
-
-                loser_tx_doc = {
-                    "user_id": loser_id,
-                    "tx_type": "duel_loss",
-                    "xp_change": 0,
-                    "coins_change": 0,
-                    "description": f"Поражение в дуэли #{duel.id}",
-                    "created_at": datetime.now(timezone.utc),
-                }
-                await self.transactions.insert_one(loser_tx_doc)
-
-                logger.info(
-                    "Duel finished: id=%s winner=%s loser=%s bet=%s reason=%s",
-                    duel.id,
-                    winner_id,
-                    loser_id,
-                    duel.bet,
-                    reason,
-                )
+                    logger.info(
+                        "Duel finished: id=%s winner=%s loser=%s bet=%s reason=%s",
+                        duel.id,
+                        winner_id,
+                        loser_id,
+                        duel.bet,
+                        reason,
+                    )
+        except Exception as e:
+            logger.exception(f"Duel {duel.id}: Error during _finish_duel processing: {e}")
 
         # Handle escrow/refund of bets
-        if duel.bet > 0:
-            if winner_id and loser_id:
-                # Transfer bet*2 from escrow to winner
-                await self.users.update_one(
-                    {"id": winner_id},
-                    {"$inc": {"coins": float(duel.bet * 2)}}
-                )
+        try:
+            if duel.bet > 0:
+                if winner_id and loser_id:
+                    # Transfer bet*2 from escrow to winner
+                    await self.users.update_one(
+                        {"id": winner_id},
+                        {"$inc": {"coins": float(duel.bet * 2)}}
+                    )
 
-                # Create transaction for the bet transfer
-                tx_doc = {
-                    "user_id": winner_id,
-                    "tx_type": "duel_bet_payout",
-                    "coins_change": float(duel.bet * 2),
-                    "xp_change": 0,
-                    "description": f"Выигрыш ставки в дуэли #{duel.id}",
-                    "created_at": datetime.now(timezone.utc),
-                }
-                await self.transactions.insert_one(tx_doc)
-            else:
-                # Refund both players if no winner (shouldn't happen in practice, but safe)
-                await self.users.update_one(
-                    {"id": duel.challenger_id},
-                    {"$inc": {"coins": float(duel.bet)}}
-                )
-                await self.users.update_one(
-                    {"id": duel.opponent_id},
-                    {"$inc": {"coins": float(duel.bet)}}
-                )
-
-                # Create refund transactions
-                for uid in (duel.challenger_id, duel.opponent_id):
+                    # Create transaction for the bet transfer
                     tx_doc = {
-                        "user_id": uid,
-                        "tx_type": "duel_bet_refund",
-                        "coins_change": float(duel.bet),
+                        "user_id": winner_id,
+                        "tx_type": "duel_bet_payout",
+                        "coins_change": float(duel.bet * 2),
                         "xp_change": 0,
-                        "description": f"Возврат ставки в дуэли #{duel.id}",
+                        "description": f"Выигрыш ставки в дуэли #{duel.id}",
                         "created_at": datetime.now(timezone.utc),
                     }
                     await self.transactions.insert_one(tx_doc)
+                else:
+                    # Refund both players if no winner (shouldn't happen in practice, but safe)
+                    await self.users.update_one(
+                        {"id": duel.challenger_id},
+                        {"$inc": {"coins": float(duel.bet)}}
+                    )
+                    await self.users.update_one(
+                        {"id": duel.opponent_id},
+                        {"$inc": {"coins": float(duel.bet)}}
+                    )
+
+                    # Create refund transactions
+                    for uid in (duel.challenger_id, duel.opponent_id):
+                        tx_doc = {
+                            "user_id": uid,
+                            "tx_type": "duel_bet_refund",
+                            "coins_change": float(duel.bet),
+                            "xp_change": 0,
+                            "description": f"Возврат ставки в дуэли #{duel.id}",
+                            "created_at": datetime.now(timezone.utc),
+                        }
+                        await self.transactions.insert_one(tx_doc)
+        except Exception as e:
+            logger.exception(f"Duel {duel.id}: Error during escrow handling: {e}")
 
         # Final update
-        await self._update_arena(duel)
+        try:
+            await self._update_arena(duel)
+        except Exception as e:
+            logger.exception(f"Duel {duel.id}: Failed to update arena after finish: {e}")
 
         # Cleanup PMs
         for uid in (duel.challenger_id, duel.opponent_id):
