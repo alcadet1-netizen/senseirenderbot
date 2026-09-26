@@ -459,7 +459,39 @@ class DuelService:
         left = max(0, int(duel.round_deadline_mono - time.monotonic())) if duel.accepted else DUEL_ACCEPT_TIMEOUT_SEC
 
         if duel.finished:
-            log_view = "\n".join(duel.log_lines) if duel.log_lines else "..."
+            # Determine winner and loser for short result
+            ch = duel.challenger_id
+            op = duel.opponent_id
+            ch_hits = duel.hits.get(ch, 0)
+            op_hits = duel.hits.get(op, 0)
+            if ch_hits > op_hits:
+                winner_id = ch
+                loser_id = op
+                winner_name = c_name
+                loser_name = o_name
+            elif op_hits > ch_hits:
+                winner_id = op
+                loser_id = ch
+                winner_name = o_name
+                loser_name = c_name
+            else:
+                winner_id = random.choice([ch, op])
+                loser_id = op if winner_id == ch else ch
+                winner_name = c_name if winner_id == ch else o_name
+                loser_name = o_name if winner_id == ch else c_name
+
+            coins_reward = float(duel.bet * 2) if duel.bet > 0 else 0.0
+            xp_reward = 50
+
+            result_lines = [
+                f"🏁 ДУЭЛЬ ЗАВЕРШЕНА",
+                f"Победитель: @{winner_name}",
+                f"Счёт: {ch_hits} : {op_hits}",
+                f"Награда победителю: +{xp_reward} XP"
+            ]
+            if coins_reward > 0:
+                result_lines.append(f", +{int(coins_reward)} монет")
+            log_view = "\n".join(result_lines)
         else:
             # Show full log always, as requested by user ("лог в чате полный всех трех раундов")
             # Telegram limit is 4096, 3 rounds should fit (~50 lines max).
