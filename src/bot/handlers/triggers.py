@@ -40,6 +40,10 @@ CRYPTO_PRICE_PATTERN = re.compile(r'курс\s+([a-zA-Z0-9]+)', re.IGNORECASE)
 SAGE_QUESTION_PATTERN = re.compile(r'мудрец\s+сенсей\s+(.+)', re.IGNORECASE)
 VANGA_PATTERN = re.compile(r'(сенсей\s+вангуй)', re.IGNORECASE)
 
+# Admin trigger patterns
+PASSPORT_PATTERN = re.compile(r'^(паспорт|доки)$', re.IGNORECASE)
+RULYA_PATTERN = re.compile(r'^руля$', re.IGNORECASE)
+
 
 @router.message(F.text.regexp(HELP_PATTERN))
 async def trigger_help(message: Message):
@@ -309,9 +313,22 @@ async def trigger_vanga(message: Message, container: Container):
         await message.reply("🔮 Шар судьбы треснул. Попробуй позже.")
 
 
-@router.message(F.text.lower().strip() == "руля")
-async def trigger_roulette(message: Message, container: Container):
-    """Триггер на 'руля'."""
+@router.message(F.text.regexp(RULYA_PATTERN))
+async def trigger_rulya(message: Message, container: Container):
+    """Триггер 'Руля' - запускает рулетку (все пользователи с кулдауном)."""
+    # Проверяем, что это групповой чат
+    if message.chat.type not in ("group", "supergroup"):
+        return
+
+    # Удаляем триггерное сообщение
+    try:
+        await message.delete()
+    except TelegramBadRequest:
+        pass
+    except Exception as e:
+        logging.warning(f"⚠️ Failed to delete trigger message: {e}")
+
+    # Используем уже импортированный обработчик
     await roulette_handler(message, container)
 
 
