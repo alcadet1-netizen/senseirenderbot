@@ -316,29 +316,48 @@ class UserService:
     async def get_ticket_holders_paginated(self, page: int = 0, page_size: int = 20) -> dict:
         """Пагинированный список держателей билетов (без кэша)."""
         try:
-            # Get distinct user_ids that have tickets
-            pipeline = [
+            # First, get the count of distinct users with tickets for pagination
+            total_pipeline = [
                 {"$group": {"_id": "$user_id"}},
+                {"$count": "total"}
+            ]
+            total_cursor = self.tickets.aggregate(total_pipeline)
+            total_result = await total_cursor.to_list(length=1)
+            total = total_result[0]["total"] if total_result else 0
+
+            # Then get the paginated list of users with their ticket counts
+            pipeline = [
+                {"$group": {"_id": "$user_id", "ticket_count": {"$sum": 1}}},
+                {"$sort": {"ticket_count": -1}},  # Sort by ticket count descending
                 {"$skip": page * page_size},
                 {"$limit": page_size},
                 {"$lookup": {
                     "from": "users",
                     "localField": "_id",
                     "foreignField": "id",
-                    "as": "user"
-                }},
-                {"$unwind": "$user"}
+                    "as": "user_info"
+                }}
             ]
+
             cursor = self.tickets.aggregate(pipeline)
             items = []
-            total = await self.tickets.distinct("user_id")
-            total = len(total)
+
             async for doc in cursor:
-                user = doc["user"]
+                user_info = doc.get("user_info", [])
+                user = user_info[0] if user_info else None
+
+                username = "Unknown User"
+                if user:
+                    username = user.get("username") or user.get("first_name") or f"User {user.get('id', doc['_id'])}"
+                else:
+                    username = f"User {doc['_id']}"
+
                 items.append({
-                    "user_id": user["id"],
-                    "username": user.get("username") or user.get("first_name") or f"User {user['id']}",
+                    "user_id": doc["_id"],
+                    "username": username,
+                    "tickets": doc["ticket_count"]
                 })
+
             return {"items": items, "total": total}
         except Exception as e:
             logger.error(f"Error in get_ticket_holders_paginated: {e}")
