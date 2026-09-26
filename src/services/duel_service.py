@@ -212,7 +212,7 @@ class DuelService:
 
                 # Cleanup accept buttons
                 try:
-                    await duel.bot.edit_message_reply_markup(duel.chat_id, duel.challenge_message_id, reply_markup=None)
+                    await duel.bot.edit_message_reply_markup(None, duel.chat_id, duel.challenge_message_id, reply_markup=None)
                 except TelegramBadRequest as e:
                     logger.warning("Duel %s: accept markup cleanup failed: %s", duel.id, e)
                 except Exception:
@@ -638,27 +638,29 @@ class DuelService:
             if winner_doc and loser_doc:
                 coins_reward = float(duel.bet * 2) if duel.bet > 0 else 0.0
 
-                # Update winner
-                winner_wins = winner_doc.get("wins", 0) + 1
-                winner_xp = winner_doc.get("xp", 0) + 50
-                winner_katana_length = winner_doc.get("katana_length", 0.0)
-
-                winner_update = {
-                    "wins": winner_wins,
-                    "xp": winner_xp,
-                }
-
-                if winner_doc.get("has_katana", False):
-                    winner_katana_length = round((winner_katana_length or 0.0) + 0.01, 2)
-                    winner_update["katana_length"] = winner_katana_length
-
+                # Update winner wins and xp using $inc (no document fetch needed for these)
                 await self.users.update_one(
                     {"id": winner_id},
-                    {"$set": winner_update}
+                    {"$inc": {"wins": 1, "xp": 50}}
                 )
 
-                winner_name = _name_from_user(winner_doc, winner_id)
-                duel.log_lines.append(f"✨ {winner_name} получает +50 XP и +0.01 к катане.")
+                # Fetch winner document for katana-related updates and name
+                winner_doc = await self.users.find_one({"id": winner_id})
+                if winner_doc:
+                    winner_name = _name_from_user(winner_doc, winner_id)
+                    # Update katana length if winner has one
+                    if winner_doc.get("has_katana", False):
+                        new_katana_length = round((winner_doc.get("katana_length", 0.0) or 0.0) + 0.01, 2)
+                        await self.users.update_one(
+                            {"id": winner_id},
+                            {"$set": {"katana_length": new_katana_length}}
+                        )
+                        duel.log_lines.append(f"✨ {winner_name} получает +50 XP и +0.01 к катане.")
+                    else:
+                        duel.log_lines.append(f"✨ {winner_name} получает +50 XP.")
+                else:
+                    logger.warning(f"Winner document not found for user {winner_id} in duel {duel.id}. Awarded XP/wins but skipped katana update and name lookup.")
+                    duel.log_lines.append(f"✨ Пользователь {winner_id} получает +50 XP (документ не найден).")
 
                 if coins_reward > 0:
                     await self.users.update_one(
@@ -678,25 +680,29 @@ class DuelService:
                     }
                     await self.transactions.insert_one(tx_doc)
 
-                # Update loser
-                loser_losses = loser_doc.get("losses", 0) + 1
-                loser_katana_length = loser_doc.get("katana_length", 0.0)
-
-                loser_update = {
-                    "losses": loser_losses,
-                }
-
-                if loser_doc.get("has_katana", False):
-                    loser_katana_length = round(max(0.0, (loser_katana_length or 0.0) - 0.01), 2)
-                    loser_update["katana_length"] = loser_katana_length
-
+                # Update loser losses using $inc (no document fetch needed for this)
                 await self.users.update_one(
                     {"id": loser_id},
-                    {"$set": loser_update}
+                    {"$inc": {"losses": 1}}
                 )
 
-                loser_name = _name_from_user(loser_doc, loser_id)
-                duel.log_lines.append(f"💔 {loser_name} теряет -0.01 от катаны.")
+                # Fetch loser document for katana-related updates and name
+                loser_doc = await self.users.find_one({"id": loser_id})
+                if loser_doc:
+                    loser_name = _name_from_user(loser_doc, loser_id)
+                    # Update katana length if loser has one
+                    if loser_doc.get("has_katana", False):
+                        new_katana_length = round(max(0.0, (loser_doc.get("katana_length", 0.0) or 0.0) - 0.01), 2)
+                        await self.users.update_one(
+                            {"id": loser_id},
+                            {"$set": {"katana_length": new_katana_length}}
+                        )
+                        duel.log_lines.append(f"💔 {loser_name} теряет -0.01 от катаны.")
+                    else:
+                        duel.log_lines.append(f"💔 {loser_name} не имеет катаны для потери.")
+                else:
+                    logger.warning(f"Loser document not found for user {loser_id} in duel {duel.id}. Awarded loss but skipped katana update and name lookup.")
+                    duel.log_lines.append(f"💔 Пользователь {loser_id} терпит поражение (документ не найден).")
 
                 # Create transaction for loser's loss (if any coins were lost)
                 # Actually, coins are handled via the escrow system below
