@@ -86,3 +86,26 @@ class MongoRedis:
             upsert=True,
         )
         return val
+
+    async def ttl(self, key: str) -> int:
+        """Get time to live for key in seconds. Returns -1 if key does not exist."""
+        doc = await self.collection.find_one({"_id": key})
+        if not doc:
+            return -1
+
+        expires_at = doc.get("expires_at")
+        if expires_at is None:
+            # No expiry set
+            return -1
+
+        now = datetime.now(timezone.utc)
+        expires_at_utc = expires_at.replace(tzinfo=timezone.utc)
+
+        if expires_at_utc < now:
+            # Key already expired, clean it up
+            await self.collection.delete_one({"_id": key})
+            return -1
+
+        # Calculate remaining TTL in seconds
+        delta = expires_at_utc - now
+        return int(delta.total_seconds())
