@@ -14,7 +14,7 @@ from typing import Optional, Dict, List, Any, Union
 
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
 
 from src.core.container import Container
 from src.core.visuals import Visuals
@@ -212,6 +212,11 @@ class DuelService:
 
                 # Cleanup accept buttons
                 try:
+                    await duel.bot.edit_message_reply_markup(None, duel.chat_id, duel.challenge_message_id, reply_markup=None)
+                except TelegramRetryAfter as e:
+                    logger.warning(f"Duel {duel.id}: Hit flood control on accept markup cleanup, waiting {e.retry_after} seconds")
+                    await asyncio.sleep(e.retry_after)
+                    # Retry once after waiting
                     await duel.bot.edit_message_reply_markup(None, duel.chat_id, duel.challenge_message_id, reply_markup=None)
                 except TelegramBadRequest as e:
                     logger.warning("Duel %s: accept markup cleanup failed: %s", duel.id, e)
@@ -540,6 +545,21 @@ class DuelService:
                     reply_markup=kb,
                     parse_mode="HTML"
                 )
+        except TelegramRetryAfter as e:
+            logger.warning(f"Duel {duel.id}: Hit flood control on arena update, waiting {e.retry_after} seconds")
+            await asyncio.sleep(e.retry_after)
+            # Retry once after waiting
+            if not duel.arena_message_id:
+                msg = await duel.bot.send_message(duel.chat_id, text, reply_markup=kb, parse_mode="HTML")
+                duel.arena_message_id = msg.message_id
+            else:
+                await duel.bot.edit_message_text(
+                    chat_id=duel.chat_id,
+                    message_id=duel.arena_message_id,
+                    text=text,
+                    reply_markup=kb,
+                    parse_mode="HTML"
+                )
         except TelegramBadRequest as e:
             if "message is not modified" not in str(e):
                 logger.warning(f"Duel {duel.id}: Arena update failed: {e}")
@@ -592,6 +612,21 @@ class DuelService:
         # Send/Edit
         msg_id = duel.control_message_ids.get(user_id)
         try:
+            if not msg_id:
+                msg = await duel.bot.send_message(user_id, text, reply_markup=kb, parse_mode="HTML")
+                duel.control_message_ids[user_id] = msg.message_id
+            else:
+                await duel.bot.edit_message_text(
+                    chat_id=user_id,
+                    message_id=msg_id,
+                    text=text,
+                    reply_markup=kb,
+                    parse_mode="HTML"
+                )
+        except TelegramRetryAfter as e:
+            logger.warning(f"Duel {duel.id}: Hit flood control on control DM update for user {user_id}, waiting {e.retry_after} seconds")
+            await asyncio.sleep(e.retry_after)
+            # Retry once after waiting
             if not msg_id:
                 msg = await duel.bot.send_message(user_id, text, reply_markup=kb, parse_mode="HTML")
                 duel.control_message_ids[user_id] = msg.message_id
