@@ -56,6 +56,10 @@ class MongoRedis:
             upsert=True,
         )
 
+    async def setex(self, key: str, seconds: int, value: str) -> None:
+        """Set key to value with expiration time in seconds."""
+        await self.set(key, value, ex=seconds)
+
     async def delete(self, key: str) -> None:
         """Delete key."""
         await self.collection.delete_one({"_id": key})
