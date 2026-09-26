@@ -44,6 +44,7 @@ class Container:
     _banzai_service: Optional["BanzaiService"] = field(default=None, init=False, repr=False)
     _xrocket_service: Optional["XRocketService"] = field(default=None, init=False, repr=False)
     _chat_settings_service: Optional["ChatSettingsService"] = field(default=None, init=False, repr=False)
+    _captcha_service: Optional["CaptchaService"] = field(default=None, init=False, repr=False)
 
     @property
     def boss_service(self):
