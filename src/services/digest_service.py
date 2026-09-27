@@ -758,7 +758,7 @@ class DigestService:
             return await self.ai_factory.generate_text(
                 system, 
                 prompt,
-                max_tokens=300
+                max_tokens=800
             )
         except Exception as e:
             return f"*молча смотрит с разочарованием*\n\nТехнические трудности, ученик. ({str(e)[:50]})"
