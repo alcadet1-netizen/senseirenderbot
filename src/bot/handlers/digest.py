@@ -307,5 +307,8 @@ async def cmd_sage(message: Message, container: Container):
     await message.bot.send_chat_action(message.chat.id, "typing")
 
     answer = await container.digest_service.ask_sensei(question)
+    # Если ответ пустой или состоит только из пробелов, предоставляем ответ по умолчанию
+    if not answer or not answer.strip():
+        answer = "*поправляет очки*\n\nВижу, ты задал вопрос, который даже меня поставил в тупик. Попробуй перефразировать или спросить о чем-то другом, ученик."
 
     await message.reply(f"{mention}\n\n{answer}")
