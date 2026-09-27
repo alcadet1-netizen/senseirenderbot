@@ -37,7 +37,7 @@ CRYPTO_TOP_PATTERN = re.compile(r'(сенсей\s+дай\s+курс|📊 CoinGec
 CRYPTO_CALC_PATTERN = re.compile(r'курс\s+№\s*([a-zA-Z0-9]+)\s*№\s*([\d\.,]+)', re.IGNORECASE)
 CRYPTO_AMOUNT_PATTERN = re.compile(r'курс\s+(\d+(?:[.,]\d+)?)\s+([a-zA-Z0-9]+)', re.IGNORECASE)
 CRYPTO_PRICE_PATTERN = re.compile(r'курс\s+([a-zA-Z0-9]+)', re.IGNORECASE)
-SAGE_QUESTION_PATTERN = re.compile(r'мудрец\s+сенсей\s+(.+)', re.IGNORECASE)
+SAGE_QUESTION_PATTERN = re.compile(r'мудрец\s+(?:сенсей|сэнсей|сансэй|sensei)\s+(.+)', re.IGNORECASE)
 VANGA_PATTERN = re.compile(r'(сенсей\s+вангуй)', re.IGNORECASE)
 
 # Admin trigger patterns
@@ -252,6 +252,10 @@ async def trigger_sage_question(message: Message, container: Container):
 
     question = match.group(1)
 
+    # Формируем упоминание
+    username = message.from_user.username
+    mention = f"@{username}" if username else f"<b>{html.escape(message.from_user.full_name)}</b>"
+
     # Отправляем "печатает..."
     await message.bot.send_chat_action(message.chat.id, "typing")
 
@@ -260,10 +264,10 @@ async def trigger_sage_question(message: Message, container: Container):
         # Gemini возвращает Markdown, но без экранирования для V2 это опасно.
         # Используем обычный текст или пробуем Markdown, если уверены.
         # Для безопасности пока оставим без parse_mode или Markdown
-        await message.reply(answer)
+        await message.reply(f"{mention}\n\n{answer}")
     except Exception as e:
         logging.error(f"Sage error: {e}")
-        await message.reply("🧘‍♂️ Сенсей ушел в астрал. Попробуй позже.")
+        await message.reply(f"{mention}\n\n🧘‍♂️ Сенсей ушел в астрал. Попробуй позже.")
 
 
 @router.message(F.text.regexp(VANGA_PATTERN))
