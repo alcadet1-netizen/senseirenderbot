@@ -1,7 +1,7 @@
 """
 🎨 Генерация изображений через Hugging Face Inference API
 - Использует модель black-forest-labs/FLUX.1-schnell
-- Провайдер: nebius
+- Провайдер: auto
 """
 
 import re
@@ -32,11 +32,11 @@ DRAW_PATTERN = re.compile(
 )
 
 # API Token
-# User provided this token in previous turns. 
+# User provided this token in previous turns.
 # Ideally this should be in os.environ["HF_TOKEN"] but for stability we use the known working key if env is missing.
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
 MODEL_ID = "black-forest-labs/FLUX.1-schnell"
-PROVIDER = "nebius"
+PROVIDER = "auto"
 
 # Инициализация клиента
 client = InferenceClient(
