@@ -120,6 +120,29 @@ async def cmd_uvedomleniaoff(message: Message, bot: Bot, container: Container):
 
     await message.answer("🔕 Уведомления об активности (уровень, билеты, достижения) <b>отключены</b>.", parse_mode="HTML")
 
+@router.message(Command("captchaon"))
+async def cmd_captchaon(message: Message, bot: Bot, container: Container):
+    """Включает капчу для новых участников."""
+    if not await is_admin(message, bot):
+        return
+
+    key = f"chat:{message.chat.id}:captcha_enabled"
+    await container.chat_settings_service.set_setting(message.chat.id, key, "1")
+
+    await message.answer("🔐 Капча для новых участников <b>включена</b>.", parse_mode="HTML")
+
+
+@router.message(Command("captchaoff"))
+async def cmd_captchaoff(message: Message, bot: Bot, container: Container):
+    """Отключает капчу для новых участников."""
+    if not await is_admin(message, bot):
+        return
+
+    key = f"chat:{message.chat.id}:captcha_enabled"
+    await container.chat_settings_service.set_setting(message.chat.id, key, "0")
+
+    await message.answer("🔓 Капча для новых участников <b>отключена</b>.", parse_mode="HTML")
+
 
 @router.message(Command("popugai"))
 async def cmd_popugai(message: Message, command: CommandObject, bot: Bot, container: Container):

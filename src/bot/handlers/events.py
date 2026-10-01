@@ -136,15 +136,28 @@ async def on_new_chat_members(message: Message, container: Container):
     """Обработка входа новых участников (через сообщение)."""
     logging.info(f"📨 New chat members message: {[u.id for u in message.new_chat_members]}")
     for user in message.new_chat_members:
+        # Check if captcha is enabled for this chat
+        captcha_enabled = await container.chat_settings_service.get_setting(
+            message.chat.id, f"chat:{message.chat.id}:captcha_enabled"
+        )
+        if captcha_enabled == "0":
+            continue
         await _initiate_captcha(user, container, message)
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
 async def on_user_join(event: ChatMemberUpdated, container: Container):
     """Обработка входа нового участника (через обновление статуса)."""
     logging.info(f"👤 User join event: {event.new_chat_member.user.id} ({event.new_chat_member.user.username})")
-    
+
     user = event.new_chat_member.user
-    
+
+    # Check if captcha is enabled for this chat
+    captcha_enabled = await container.chat_settings_service.get_setting(
+        event.chat.id, f"chat:{event.chat.id}:captcha_enabled"
+    )
+    if captcha_enabled == "0":
+        return
+
     # ⚠️ КОСТЫЛЬ: Aiogram 3.x иногда не прокидывает container в chat_member handler
     await _initiate_captcha(user, container, event)
 
