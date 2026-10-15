@@ -240,8 +240,9 @@ async def sensei_boss(message: Message, command: CommandObject, container: Conta
         return
 
     await state.set_state(BossEditorFSM.choosing_action)
-    # TODO: Send the actual keyboard with options
-    await message.answer("Добро пожаловать в редактор боссов! (в разработке)")
+    # Import and show the actual boss editor
+    from src.bot.handlers.boss_editor import show_editor
+    await show_editor(message, container, state)
 
 
 @router.message(Command("killboss"), AdminFilter())
