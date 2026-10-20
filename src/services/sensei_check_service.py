@@ -215,18 +215,18 @@ class SenseiCheckService:
             logger.info(f"🤝 [Check:{code}] Attempting referral bonus {referral_amount} GRAM to {referral_user_id} (TransferID: {referral_transfer_id})")
 
             referral_payout_ok = await self.xrocket_service.transfer(
-                    user_id=referral_user_id,
-                    currency="GRAM",
-                    amount=float(referral_amount),
-                    transfer_id=referral_transfer_id
-                )
+                user_id=referral_user_id,
+                currency="GRAM",
+                amount=float(referral_amount),
+                transfer_id=referral_transfer_id
+            )
 
-                if referral_payout_ok:
-                    logger.info(f"✅ [Check:{code}] Referral bonus SUCCESS for {referral_user_id}")
-                    referral_paid = True
-                    referral_amount_ton = float(referral_amount)
-                else:
-                    logger.error(f"❌ [Check:{code}] Referral bonus FAILED for {referral_user_id}")
+            if referral_payout_ok:
+                logger.info(f"✅ [Check:{code}] Referral bonus SUCCESS for {referral_user_id}")
+                referral_paid = True
+                referral_amount_ton = float(referral_amount)
+            else:
+                logger.error(f"❌ [Check:{code}] Referral bonus FAILED for {referral_user_id}")
 
         # Отмечаем активацию как успешную
         await self._repo.mark_success(
