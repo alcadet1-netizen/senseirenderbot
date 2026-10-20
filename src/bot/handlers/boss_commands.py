@@ -554,21 +554,28 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
             if user_level >= 5:
                 # Dynamic Settings
                 reward_settings = await boss_service.get_reward_settings()
+                logger.info(f"[BOSS GRAM] user={user_id} dmg={actual_dmg} level={user_level} settings={reward_settings}")
 
                 # Check chance
                 if random.random() < reward_settings["drop_chance"]:
                     reward_amount = round(random.uniform(reward_settings["reward_min"], reward_settings["reward_max"]), 4)
+                    logger.info(f"[BOSS GRAM] user={user_id} DROP CHANCE PASSED amount={reward_amount}")
 
                     # Check pool
                     if await boss_service.check_pool_availability(reward_amount):
+                        logger.info(f"[BOSS GRAM] user={user_id} pool OK")
+
                         # Check xRocket balance
                         xrocket_balance = await container.xrocket_service.get_balance()
+                        logger.info(f"[BOSS GRAM] user={user_id} xrocket_balance={xrocket_balance}")
+
                         if xrocket_balance < reward_amount:
-                            logger.warning(f"Insufficient xRocket balance for GRAM transfer: balance={xrocket_balance}, reward_amount={reward_amount}")
+                            logger.warning(f"[BOSS GRAM] user={user_id} insufficient xRocket balance {xrocket_balance} < {reward_amount}")
                             # Skip reward, do not transfer
                         else:
                             try:
                                 success = await container.xrocket_service.transfer(user_id, "GRAM", reward_amount)
+                                logger.info(f"[BOSS GRAM] user={user_id} transfer success={success}")
                                 if success:
                                     await boss_service.increment_pool_used(reward_amount)
                                     alert_text += f"\n💎 <b>LUCKY HIT!</b> +{reward_amount} GRAM (xRocket)"
@@ -579,8 +586,16 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
                                     asyncio.create_task(delete_message_delayed(msg, 10))
                             except Exception as e:
                                 # Log error but don't fail the attack
-                                logger.error(f"XRocket transfer error: {e}")
+                                logger.error(f"[BOSS GRAM] user={user_id} XRocket transfer error: {e}")
                                 pass
+                    else:
+                        logger.info(f"[BOSS GRAM] user={user_id} pool NOT available (reward_amount={reward_amount})")
+                else:
+                    logger.info(f"[BOSS GRAM] user={user_id} drop chance NOT passed (drop_chance={reward_settings['drop_chance']})")
+            else:
+                logger.info(f"[BOSS GRAM] user={user_id} level too low: {user_level} < 5")
+        else:
+            logger.info(f"[BOSS GRAM] user={user_id} damage too low: {actual_dmg} < 20")
 
     if is_callback:
         await safe_answer(event, alert_text)
