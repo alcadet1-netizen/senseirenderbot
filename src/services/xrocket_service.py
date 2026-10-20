@@ -45,15 +45,16 @@ class XRocketService:
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, json=payload, headers=self.headers) as response:
-                    if response.status == 200:
+                    if 200 <= response.status < 300:
                         data = await response.json()
                         # Success response usually contains 'success': true or data
                         # xRocket API often returns { "success": true, "data": { ... } }
+                        # Some responses come with status 201 Created but success:true.
                         if data.get("success") is False:
                             logger.error(f"XRocket transfer failed: {data}")
                             return False
 
-                        logger.info(f"XRocket transfer success: {user_id} {amount} {currency}")
+                        logger.info(f"XRocket transfer success: {user_id} {amount} {currency} (status={response.status})")
                         return True
                     else:
                         text = await response.text()
