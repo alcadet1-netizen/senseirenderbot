@@ -69,11 +69,10 @@ class XRocketService:
             logger.warning("xRocket API key is missing")
             return 0.0
         url = f"{self.BASE_URL}/balance"
-        payload = {}
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.post(url, json=payload, headers=self.headers) as response:
+                async with session.get(url, headers=self.headers) as response:
                     if response.status == 200:
                         data = await response.json()
                         # Assume response format: {"success": true, "balance": 123.45}
