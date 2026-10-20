@@ -350,6 +350,12 @@ class BossService:
             # Boss has a chance to evade attacks (except ultimates)
             is_evaded = False
             is_weakness_active = False  # Initialize for evasion case
+            # max_hp is always needed for HP-percent thresholds below, so
+            # assign it unconditionally before the evasion if/else.
+            # When evaded, actual_damage stays 0 and we skip damage application.
+            current_hp = state["hp"]
+            max_hp = state["max_hp"]
+
             if not is_ult and random.random() < 0.10:
                 is_evaded = True
                 actual_damage = 0
@@ -382,8 +388,6 @@ class BossService:
                 damage = int(damage * combo_multiplier)
 
                 # Apply damage
-                current_hp = state["hp"]
-                max_hp = state["max_hp"]
                 actual_damage = min(current_hp, damage)
                 state["hp"] -= actual_damage
 
