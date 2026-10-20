@@ -183,15 +183,8 @@ class SenseiCheckService:
         # Выполняем выплаты пользователю
         user_transfer_id = self._generate_transfer_id("user", check["_id"], user_id)
 
-        # Check xRocket balance
-        xrocket_balance = await self.xrocket_service.get_balance()
-        if xrocket_balance < float(payout_amount):
-            logger.warning(f"Insufficient xRocket balance for user payout: balance={xrocket_balance}, payout_amount={payout_amount}")
-            logger.error(f"{Visuals.cross()} [Check:{code}] Payout FAILED for {user_id} (insufficient xRocket balance)")
-            # Отмечаем активацию как неуспешную (это вернет слот, уменьшив счетчик использованных активаций)
-            await self._repo.mark_failed(activation, check)
-            return ActivationResult(success=False, error=ActivationError.PAYOUT_FAILED)
-
+        # Attempt payout directly — xRocket transfer API is the source of truth
+        # for sufficient funds (get_balance() endpoint returns 404 on pay.xrocket.tg).
         logger.info(f"💸 [Check:{code}] Attempting payout {payout_amount} GRAM to {user_id} (TransferID: {user_transfer_id})")
 
         user_payout_ok = await self.xrocket_service.transfer(
@@ -217,15 +210,11 @@ class SenseiCheckService:
         if check["referral_percent"] > 0 and referral_user_id is not None:
             referral_transfer_id = self._generate_transfer_id("referral", check["_id"], referral_user_id)
 
-            # Check xRocket balance for referral
-            xrocket_balance = await self.xrocket_service.get_balance()
-            if xrocket_balance < float(referral_amount):
-                logger.warning(f"Insufficient xRocket balance for referral payout: balance={xrocket_balance}, referral_amount={referral_amount}")
-                logger.error(f"❌ [Check:{code}] Referral bonus FAILED for {referral_user_id} (insufficient xRocket balance)")
-            else:
-                logger.info(f"🤝 [Check:{code}] Attempting referral bonus {referral_amount} GRAM to {referral_user_id} (TransferID: {referral_transfer_id})")
+            # Attempt referral payout directly — xRocket transfer API is the source of truth
+            # for sufficient funds (get_balance() endpoint returns 404 on pay.xrocket.tg).
+            logger.info(f"🤝 [Check:{code}] Attempting referral bonus {referral_amount} GRAM to {referral_user_id} (TransferID: {referral_transfer_id})")
 
-                referral_payout_ok = await self.xrocket_service.transfer(
+            referral_payout_ok = await self.xrocket_service.transfer(
                     user_id=referral_user_id,
                     currency="GRAM",
                     amount=float(referral_amount),

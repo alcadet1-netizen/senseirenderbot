@@ -473,7 +473,9 @@ async def sc_create_confirm(query: CallbackQuery, state: FSMContext, container: 
     data = await state.get_data()
     ui_mid = data.get("ui_mid")
 
-    # Check xRocket balance before creating check
+    # Check xRocket balance before creating check (informational only — the
+    # get_balance() endpoint returns 404 on pay.xrocket.tg, so the transfer
+    # attempt itself at activation time is the source of truth for funds).
     amount_str = data.get("amount_ton")
     limit_str = data.get("activation_limit")
     if amount_str is not None and limit_str is not None:
@@ -483,16 +485,10 @@ async def sc_create_confirm(query: CallbackQuery, state: FSMContext, container: 
             total_needed = amount * limit
             balance = await container.xrocket_service.get_balance()
             if balance < float(total_needed):
-                await query.answer(
-                    f"❌ Недостаточно средств в xRocket для создания чека.\n"
-                    f"Требуется: {total_needed:.4f} GRAM\n"
-                    f"Доступно: {balance:.4f} GRAM",
-                    show_alert=True
-                )
-                return
+                logger.warning(f"xRocket balance {balance} < needed {total_needed} for check creation, proceeding anyway (transfer is attempted at activation)")
         except Exception as e:
             logger.warning(f"Failed to check xRocket balance: {e}")
-            # If balance check fails, we still allow creation to proceed (maybe log and continue)
+            # Balance check unavailable — allow creation to proceed
 
     try:
         code = await container.sensei_check_service.create_check(

@@ -793,20 +793,17 @@ class BanzaiService:
                     pass
 
                 if reward_ton > 0 and self.xrocket_service:
-                    # Check xRocket balance
-                    xrocket_balance = await self.xrocket_service.get_balance()
-                    if xrocket_balance < reward_ton:
-                        logger.warning(f"Insufficient xRocket balance for GRAM transfer in Banzai: balance={xrocket_balance}, reward_amount={reward_ton}")
-                        # Skip reward, do not transfer
-                    else:
-                        tid = f"banzai:{chat_id}:{int(winner_id)}:{int(time.time()*1000)}"
-                        await self.xrocket_service.transfer(
-                            user_id=int(winner_id),
-                            currency="GRAM",
-                            amount=reward_ton,
-                            transferId=tid,
-                            description="Banzai Reward"
-                        )
+                    # Attempt transfer directly — xRocket transfer API is the source of truth
+                    # for sufficient funds (get_balance() endpoint returns 404 on pay.xrocket.tg).
+                    tid = f"banzai:{chat_id}:{int(winner_id)}:{int(time.time()*1000)}"
+                    transfer_ok = await self.xrocket_service.transfer(
+                        user_id=int(winner_id),
+                        currency="GRAM",
+                        amount=reward_ton,
+                        transfer_id=tid,
+                    )
+                    if not transfer_ok:
+                        logger.warning(f"Insufficient xRocket balance for GRAM transfer in Banzai: reward_amount={reward_ton}")
 
                 # Отправляем визуальное уведомление победителю
                 try:
