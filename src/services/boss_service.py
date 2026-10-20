@@ -140,12 +140,18 @@ class BossService:
 
     async def _get_boss_state_doc(self) -> Optional[Dict]:
         """Fetch the boss state document."""
-        return await self.boss_state.find_one()
+        return await self.boss_state.find_one({"_id": "boss_state"})
 
     async def _save_boss_state_doc(self, state: Dict):
-        """Save the boss state document (upsert)."""
+        """Save the boss state document (upsert).
+
+        Always targets the canonical _id="boss_state" document so there is
+        never more than one boss state. Using an empty filter previously
+        allowed start_boss() to overwrite a dead boss document back to
+        alive ("resurrecting" old bosses) and scattered state across docs.
+        """
         await self.boss_state.update_one(
-            {},
+            {"_id": "boss_state"},
             {"$set": state},
             upsert=True
         )
@@ -355,6 +361,10 @@ class BossService:
             # When evaded, actual_damage stays 0 and we skip damage application.
             current_hp = state["hp"]
             max_hp = state["max_hp"]
+            # combo_count is always needed for the BossAttackResult below, so
+            # assign it unconditionally before the evasion if/else.
+            # When evaded, actual_damage stays 0 and combo_count stays at its previous value.
+            combo_count = state.get("combo_count", 0)
 
             if not is_ult and random.random() < 0.10:
                 is_evaded = True
@@ -371,7 +381,6 @@ class BossService:
                 # --- Global Combo Mechanic ---
                 combo_window = 10.0  # seconds
                 last_combo = state.get("last_combo_time", 0)
-                combo_count = state.get("combo_count", 0)
 
                 if now - last_combo < combo_window:
                     combo_count += 1
