@@ -597,10 +597,10 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
             logger.info(f"[BOSS GRAM] user={user_id} damage too low: {actual_dmg} < 20")
 
     # Send hit result + GRAM reward announcement as ONE message in the chat
+    # (kept in chat — not auto-deleted, so players can see the outcome)
     if alert_text:
         try:
-            msg = await event.bot.send_message(chat_id, alert_text, parse_mode="HTML")
-            asyncio.create_task(delete_message_delayed(msg, 10))
+            await event.bot.send_message(chat_id, alert_text, parse_mode="HTML")
         except Exception as e:
             logger.error(f"[BOSS GRAM] user={user_id} failed to send chat message: {e}")
             if is_callback:
