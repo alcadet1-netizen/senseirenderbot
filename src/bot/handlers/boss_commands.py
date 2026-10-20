@@ -578,14 +578,6 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
                         if success:
                             await boss_service.increment_pool_used(reward_amount)
                             alert_text += f"\n💎 <b>LUCKY HIT!</b> +{reward_amount} GRAM (xRocket)"
-
-                            # Public notification in chat
-                            notification_text = f"💎 {user.first_name} выбил <b>{reward_amount} GRAM</b> с Босса!"
-                            try:
-                                msg = await event.bot.send_message(chat_id, notification_text, parse_mode="HTML")
-                                asyncio.create_task(delete_message_delayed(msg, 10))
-                            except Exception as e:
-                                logger.error(f"[BOSS GRAM] user={user_id} failed to send chat notification: {e}")
                         else:
                             logger.warning(f"[BOSS GRAM] user={user_id} transfer rejected by xRocket (insufficient funds or API error)")
                     else:
@@ -597,25 +589,19 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
         else:
             logger.info(f"[BOSS GRAM] user={user_id} damage too low: {actual_dmg} < 20")
 
-    if is_callback:
-        await safe_answer(event, alert_text)
-    else:
-        # Optionally reply to user for text command?
-        # User said "react only if there is a boss".
-        # Maybe a short reply "💥 -X HP" is good.
-        # Message is deleted so we must use answer (send new message) instead of reply
-        msg = await event.answer(alert_text)
-        # Auto-delete hit confirmation to keep chat clean (optional but good for spam)
-        # But for now just fix the error
+    # Send hit result + GRAM reward announcement as ONE message in the chat
+    if alert_text:
         try:
-             # Wait a bit and delete the hit confirmation?
-             # Or just leave it? User asked for "Text commands for fighting now auto-delete to keep chat clean"
-             # The COMMAND is deleted. The RESPONSE might be annoying if it stays.
-             # Let's delete it after 3 seconds.
-             await asyncio.sleep(3)
-             await msg.delete()
-        except Exception:
-             pass
+            msg = await event.bot.send_message(chat_id, alert_text, parse_mode="HTML")
+            asyncio.create_task(delete_message_delayed(msg, 10))
+        except Exception as e:
+            logger.error(f"[BOSS GRAM] user={user_id} failed to send chat message: {e}")
+            if is_callback:
+                await safe_answer(event, alert_text)
+
+    # Acknowledge callback to remove loading state on button
+    if is_callback:
+        await safe_answer(event)
 
     if result == "killed":
         # Distribute rewards
