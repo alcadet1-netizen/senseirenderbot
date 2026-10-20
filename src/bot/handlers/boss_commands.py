@@ -570,20 +570,24 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
                         try:
                             success = await container.xrocket_service.transfer(user_id, "GRAM", reward_amount)
                             logger.info(f"[BOSS GRAM] user={user_id} transfer success={success}")
-                            if success:
-                                await boss_service.increment_pool_used(reward_amount)
-                                alert_text += f"\n💎 <b>LUCKY HIT!</b> +{reward_amount} GRAM (xRocket)"
-
-                                # Public notification
-                                notification_text = f"💎 {user.first_name} выбил <b>{reward_amount} GRAM</b> с Босса!"
-                                msg = await event.bot.send_message(chat_id, notification_text, parse_mode="HTML")
-                                asyncio.create_task(delete_message_delayed(msg, 10))
-                            else:
-                                logger.warning(f"[BOSS GRAM] user={user_id} transfer rejected by xRocket (insufficient funds or API error)")
                         except Exception as e:
                             # Log error but don't fail the attack
                             logger.error(f"[BOSS GRAM] user={user_id} XRocket transfer error: {e}")
-                            pass
+                            success = False
+
+                        if success:
+                            await boss_service.increment_pool_used(reward_amount)
+                            alert_text += f"\n💎 <b>LUCKY HIT!</b> +{reward_amount} GRAM (xRocket)"
+
+                            # Public notification in chat
+                            notification_text = f"💎 {user.first_name} выбил <b>{reward_amount} GRAM</b> с Босса!"
+                            try:
+                                msg = await event.bot.send_message(chat_id, notification_text, parse_mode="HTML")
+                                asyncio.create_task(delete_message_delayed(msg, 10))
+                            except Exception as e:
+                                logger.error(f"[BOSS GRAM] user={user_id} failed to send chat notification: {e}")
+                        else:
+                            logger.warning(f"[BOSS GRAM] user={user_id} transfer rejected by xRocket (insufficient funds or API error)")
                     else:
                         logger.info(f"[BOSS GRAM] user={user_id} pool NOT available (reward_amount={reward_amount})")
                 else:
