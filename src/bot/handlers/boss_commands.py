@@ -530,16 +530,23 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
     # Prepare messages
     action_type = "УЛЬТА" if is_ult else "удар"
 
-    alert_text = f"💥 -{actual_dmg} HP! (Всего: {user_total_dmg})"
+    # User mention (like Banzai): @username or tg://user link
+    user_display = user.username or user.full_name or f"User {user_id}"
+    if user.username:
+        user_mention = f"@{user.username}"
+    else:
+        user_mention = f'<a href="tg://user?id={user_id}">{user_display}</a>'
+
+    alert_text = f"💥 {user_mention} нанёс -{actual_dmg} HP! (Всего: {user_total_dmg})"
     if combo_count > 1:
-        alert_text = f"🔥 COMBO x{combo_count}! " + alert_text
+        alert_text = f"🔥 COMBO x{combo_count}! {user_mention} нанёс -{actual_dmg} HP! (Всего: {user_total_dmg})"
 
     if is_ult:
-        alert_text = f"✨ CRITICAL! 💥 УЛЬТА! -{actual_dmg} HP! (Всего: {user_total_dmg})"
+        alert_text = f"✨ CRITICAL! 💥 УЛЬТА! {user_mention} нанёс -{actual_dmg} HP! (Всего: {user_total_dmg})"
     else:
         # Critical visual for normal hits if damage is high (e.g. > 15)
         if actual_dmg > 18: # Base max is around 20 + katana
-             alert_text = f"⚡ CRITICAL! -{actual_dmg} HP!"
+             alert_text = f"⚡ CRITICAL! {user_mention} нанёс -{actual_dmg} HP!"
 
         # Show progress towards ult for normal hits
         from src.core.constants import BOSS_ULT_REQUIRED_HITS
