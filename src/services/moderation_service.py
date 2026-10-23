@@ -97,7 +97,7 @@ class ModerationService:
 
         return {
             "success": True,
-            "user_id": user.id,
+            "user_id": user_id,
             "username": user.get("username") or user.get("first_name"),
             "reason": reason,
             "confiscated": confiscated,
