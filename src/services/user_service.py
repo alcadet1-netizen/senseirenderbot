@@ -286,8 +286,9 @@ class UserService:
     async def get_top_by_tickets(self, limit: int = 10) -> List[dict]:
         """Топ по билетам."""
         try:
-            # We'll need to aggregate
+            # We'll need to aggregate. Only count non-burned (active) tickets.
             pipeline = [
+                {"$match": {"burned": False}},
                 {"$group": {"_id": "$user_id", "count": {"$sum": 1}}},
                 {"$sort": {"count": -1}},
                 {"$limit": limit},
@@ -316,8 +317,9 @@ class UserService:
     async def get_ticket_holders_paginated(self, page: int = 0, page_size: int = 20) -> dict:
         """Пагинированный список держателей билетов (без кэша)."""
         try:
-            # First, get the count of distinct users with tickets for pagination
+            # First, get the count of distinct users with active tickets for pagination
             total_pipeline = [
+                {"$match": {"burned": False}},
                 {"$group": {"_id": "$user_id"}},
                 {"$count": "total"}
             ]
@@ -325,8 +327,9 @@ class UserService:
             total_result = await total_cursor.to_list(length=1)
             total = total_result[0]["total"] if total_result else 0
 
-            # Then get the paginated list of users with their ticket counts
+            # Then get the paginated list of users with their active ticket counts
             pipeline = [
+                {"$match": {"burned": False}},
                 {"$group": {"_id": "$user_id", "ticket_count": {"$sum": 1}}},
                 {"$sort": {"ticket_count": -1}},  # Sort by ticket count descending
                 {"$skip": page * page_size},
