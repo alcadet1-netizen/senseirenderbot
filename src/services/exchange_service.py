@@ -52,15 +52,12 @@ class ExchangeService:
                 upsert=True
             )
 
-            # Create ticket
-            # Find next ticket ID
-            last_ticket = await self.tickets.find_one(sort=[("_id", -1)])
-            next_id = (last_ticket.get("_id", 0) + 1) if last_ticket else 1
-
+            # Create ticket — MongoDB assigns _id (ObjectId) automatically.
+            # Code is generated from a timestamp to stay unique without relying on _id.
+            ticket_code = f"TICKET-{int(datetime.now(timezone.utc).timestamp())}"
             ticket_doc = {
-                "_id": next_id,
                 "user_id": user_id,
-                "code": f"TICKET-{next_id:08d}",  # Simple ticket code
+                "code": ticket_code,
                 "created_at": datetime.now(timezone.utc),
                 "burned": False
             }
