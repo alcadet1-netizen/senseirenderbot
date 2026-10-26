@@ -139,6 +139,7 @@ async def main() -> None:
 
     # Start web server for health checks
     app = web.Application()
+    app.router.add_get('/', lambda request: web.Response(text="OK"))
     app.router.add_get('/health', lambda request: web.Response(text="OK"))
     runner = web.AppRunner(app)
     await runner.setup()
