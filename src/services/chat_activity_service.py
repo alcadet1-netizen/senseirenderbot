@@ -90,9 +90,9 @@ class ChatActivityService:
                 return True
             except Exception as e:
                 err_str = str(e).lower()
-                # If it's a fatal error (bot kicked, chat not found, forbidden), don't retry
-                if "kicked" in err_str or "chat not found" in err_str or "forbidden" in err_str:
-                    logger.warning(f"❌ Bot kicked/blocked in {chat_id}. Removing from monitoring.")
+                # If it's a fatal error (bot kicked, chat not found, forbidden, migrated), don't retry
+                if "kicked" in err_str or "chat not found" in err_str or "forbidden" in err_str or "migrated to supergroup" in err_str:
+                    logger.warning(f"❌ Bot kicked/blocked/migrated in {chat_id}. Removing from monitoring.")
                     await self.chat_activities.delete_one({"chat_id": chat_id})
                     return False
 
@@ -136,8 +136,8 @@ class ChatActivityService:
 
             except Exception as e:
                 err_str = str(e).lower()
-                if "kicked" in err_str or "chat not found" in err_str or "forbidden" in err_str:
-                    logger.warning(f"❌ Bot kicked/blocked in {chat_id}. Removing from monitoring.")
+                if "kicked" in err_str or "chat not found" in err_str or "forbidden" in err_str or "migrated to supergroup" in err_str:
+                    logger.warning(f"❌ Bot kicked/blocked/migrated in {chat_id}. Removing from monitoring.")
                     await self.chat_activities.delete_one({"chat_id": chat_id})
                     continue
 
