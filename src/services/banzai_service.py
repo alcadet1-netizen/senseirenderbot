@@ -70,10 +70,17 @@ class BanzaiService:
         }
         await self.banzai_chat_activity.insert_one(doc)
 
-        # Also update the game document's last_activity if the game is active
+        now_ts = int(time.time())
+
+        # Also update the game document's last_activity if the game is active,
+        # count resets and track unique users who reset the silence timer.
         await self.banzai_games.update_one(
             {"_id": chat_id, "active": True},
-            {"$set": {"last_activity": int(time.time())}}
+            {
+                "$set": {"last_activity": now_ts, "one_minute_callout_done": False},
+                "$inc": {"resets": 1},
+                "$addToSet": {"reset_makers": user_id}
+            }
         )
 
     async def _ensure_indexes(self):
@@ -363,7 +370,10 @@ class BanzaiService:
 
         last_time = max(float(last_activity_ts or started_at_ts), float(started_at_ts))
         silence_duration = max(0, int(time.time() - last_time))
-        remaining_seconds = duration_seconds - int(silence_duration)
+        remaining_seconds = max(0, duration_seconds - int(silence_duration))
+
+        # Общее время игры с момента запуска (не сбрасывается при сбросе тишины)
+        elapsed_seconds = max(0, now - started_at_ts)
 
         leader_id = status.get("last_user_id")
         leader_ts = status.get("last_user_ts")
@@ -374,12 +384,12 @@ class BanzaiService:
         if leader_id:
             leader_name = await self._get_user_display(chat_id, bot, int(leader_id))
 
-        # Получаем топ-5 конкурентов (последних активных пользователей)
+        # Получаем всех конкурентов (последних активных пользователей), без лимита 5.
         contenders: List[Tuple[int, int]] = []
         try:
             cursor = self.banzai_chat_activity.find(
                 {"chat_id": chat_id, "timestamp": {"$gte": started_at_ts}}
-            ).sort("timestamp", -1).limit(5)
+            ).sort("timestamp", -1)
             async for doc in cursor:
                 uid = doc["user_id"]
                 ts = doc["timestamp"]
@@ -397,6 +407,7 @@ class BanzaiService:
             "active": 1,
             "duration_minutes": duration_minutes,
             "remaining_seconds": remaining_seconds,
+            "elapsed_seconds": elapsed_seconds,
             "silence_seconds": silence_duration,
             "leader_name": leader_name,
             "contenders": rendered_contenders,
@@ -554,6 +565,7 @@ class BanzaiService:
 
                 # Периодически обновляем интерфейс
                 if tick_counter % update_interval == 0:
+                    elapsed_seconds = max(0, int(time.time()) - started_at_ts)
                     await self._update_game_interface(
                         chat_id=chat_id,
                         bot=bot,
@@ -562,6 +574,7 @@ class BanzaiService:
                         leader_name=last_known_leader_name,
                         is_finished=False,
                         silence_seconds=silence_duration,
+                        elapsed_seconds=elapsed_seconds,
                     )
 
                 # Отправляем уведомление за 1 минуту до конца
@@ -626,6 +639,7 @@ class BanzaiService:
         winner_name: str = None,
         force: bool = False,
         silence_seconds: int | None = None,
+        elapsed_seconds: int | None = None,
     ):
         """Обновляет интерфейс игры в чате."""
         msg_id = await self.get_game_message_id(chat_id)
@@ -680,6 +694,7 @@ class BanzaiService:
             reset_makers_count=reset_makers_count,
             contenders=contenders,
             silence_seconds=silence_seconds,
+            elapsed_seconds=elapsed_seconds,
         )
 
         kb = self.get_game_keyboard(chat_id, active=not is_finished, is_private=False)
@@ -830,6 +845,15 @@ class BanzaiService:
                 logger.error(f"Error distributing Banzai rewards: {e}")
 
         # Обновляем интерфейс игры на финальный вид
+        # Покажем общее время игры на финальном экране.
+        total_elapsed_seconds = None
+        try:
+            game = await self.banzai_games.find_one({"_id": chat_id}, {"started_at": 1})
+            if game and game.get("started_at") is not None:
+                total_elapsed_seconds = max(0, int(time.time()) - int(game["started_at"]))
+        except Exception:
+            pass
+
         await self._update_game_interface(
             chat_id=chat_id,
             bot=bot,
@@ -840,6 +864,7 @@ class BanzaiService:
             winner_name=winner_name,
             force=True,
             silence_seconds=0,
+            elapsed_seconds=total_elapsed_seconds,
         )
 
         # Unpin the game message when game finishes

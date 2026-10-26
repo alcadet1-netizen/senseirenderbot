@@ -78,7 +78,8 @@ class BanzaiPresenter:
         participants_count: int = 0,
         contenders: list = None,
         reset_makers_count: int = 0,
-        silence_seconds: int | None = None
+        silence_seconds: int | None = None,
+        elapsed_seconds: int | None = None,
     ) -> str:
         """Render the main game message text."""
 
@@ -144,6 +145,10 @@ class BanzaiPresenter:
              lines.append(Visuals.frame_line_left(f"📊 Сбросов: {resets_count} | Люди: {reset_makers_count or participants_count}", width))
              if silence_seconds is not None:
                  lines.append(Visuals.frame_line_left(f"🕯 Тишина идёт: {int(silence_seconds)}s", width))
+             if elapsed_seconds is not None:
+                 em = elapsed_seconds // 60
+                 es = elapsed_seconds % 60
+                 lines.append(Visuals.frame_line_left(f"⏱ Игра идёт: {em:02d}:{es:02d}", width))
 
         lines.extend(contenders_lines)
 

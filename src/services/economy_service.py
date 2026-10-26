@@ -107,30 +107,37 @@ class EconomyService:
 
     async def _withdraw_from_bank(self, amount: float) -> bool:
         """Снять amount с банка. Возвращает True если успешно."""
-        # We'll do this in a transaction-like manner by finding and updating.
-        # For simplicity, we'll do it without transaction and hope for the best.
-        # In production, we should use a transaction.
-        doc = await self.bank.find_one({"_id": "single"})
-        if not doc:
-            # Initialize if not exists
-            await self._set_bank_balance(settings.bank_initial_coins)
+        # Bank read-modify-write must be atomic: concurrent payouts (bomb winners,
+        # boss rewards) must not interleave and corrupt the balance.
+        async with self._get_lock("bank"):
             doc = await self.bank.find_one({"_id": "single"})
-        current_balance = doc.get("coins", 0.0)
-        if current_balance < amount:
-            return False
-        new_balance = current_balance - amount
-        await self._set_bank_balance(new_balance)
-        return True
+            if not doc:
+                # Initialize if not exists
+                await self._set_bank_balance(settings.bank_initial_coins)
+                doc = await self.bank.find_one({"_id": "single"})
+            current_balance = doc.get("coins", 0.0)
+            if current_balance < amount:
+                # Реинициализируем пустой банк вместо «липкого» False, чтобы
+                # повторные bombas / награды не ломались на пустом банке.
+                await self._set_bank_balance(settings.bank_initial_coins)
+                doc = await self.bank.find_one({"_id": "single"})
+                current_balance = doc.get("coins", 0.0)
+                if current_balance < amount:
+                    return False
+            new_balance = current_balance - amount
+            await self._set_bank_balance(new_balance)
+            return True
 
     async def _deposit_to_bank(self, amount: float) -> None:
         """Положить amount в банк."""
-        doc = await self.bank.find_one({"_id": "single"})
-        if not doc:
-            await self._set_bank_balance(settings.bank_initial_coins)
+        async with self._get_lock("bank"):
             doc = await self.bank.find_one({"_id": "single"})
-        current_balance = doc.get("coins", 0.0)
-        new_balance = current_balance + amount
-        await self._set_bank_balance(new_balance)
+            if not doc:
+                await self._set_bank_balance(settings.bank_initial_coins)
+                doc = await self.bank.find_one({"_id": "single"})
+            current_balance = doc.get("coins", 0.0)
+            new_balance = current_balance + amount
+            await self._set_bank_balance(new_balance)
 
     async def process_message_reward(
         self,

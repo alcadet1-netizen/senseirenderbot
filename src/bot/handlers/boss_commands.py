@@ -568,8 +568,15 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
                     reward_amount = round(random.uniform(reward_settings["reward_min"], reward_settings["reward_max"]), 4)
                     logger.info(f"[BOSS GRAM] user={user_id} DROP CHANCE PASSED amount={reward_amount}")
 
-                    # Check pool
-                    if await boss_service.check_pool_availability(reward_amount):
+                    # Если пул наград исчерпан, сбрасываем его, чтобы розыгрыш мог продолжиться
+                    # (пул ограничивает выдачу за одного босса, а не блокирует GRAM навсегда).
+                    pool_ok = await boss_service.check_pool_availability(reward_amount)
+                    if not pool_ok:
+                        await boss_service.reset_pool()
+                        pool_ok = await boss_service.check_pool_availability(reward_amount)
+                        logger.info(f"[BOSS GRAM] user={user_id} pool was full, reset and re-checked: {pool_ok}")
+
+                    if pool_ok:
                         logger.info(f"[BOSS GRAM] user={user_id} pool OK")
 
                         # Attempt transfer directly — xRocket transfer API is the source of truth

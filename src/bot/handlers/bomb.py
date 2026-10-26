@@ -364,6 +364,10 @@ async def cmd_senseibomb(message: Message, container: Container):
                 f"⏰ Осталось: {remaining} сек"
             )
             return
+        # Bomb entry is still present but already expired (e.g. timeout handler
+        # hasn't run yet / finished). Treat it as stale and proceed with a new bomb.
+        logger.info(f"👉 [BOMB] Step 4b: Stale bomb entry found (expired {abs(remaining)}s ago), clearing it")
+        _active_bombs.pop(chat_id, None)
     
     # Проверяем кулдаун
     logger.info(f"👉 [BOMB] Step 5: Checking cooldown")
@@ -446,12 +450,19 @@ async def cmd_senseibomb(message: Message, container: Container):
             )
         except TelegramBadRequest:
             pass
-    
+        except Exception as e:
+            logger.warning(f"⚠️ [BOMB] activation frame {frame} edit failed: {e}")
+
     await asyncio.sleep(0.5)
-    
+
     # Показываем стартовое сообщение
     start_msg = _build_bomb_start_message(total, per_user, max_winners, BOMB_TIMEOUT)
-    await activation_msg.edit_text(start_msg, parse_mode="HTML")
+    try:
+        await activation_msg.edit_text(start_msg, parse_mode="HTML")
+    except TelegramBadRequest:
+        pass
+    except Exception as e:
+        logger.warning(f"⚠️ [BOMB] start message edit failed: {e}")
     
     # Сохраняем состояние
     _active_bombs[chat_id] = {
