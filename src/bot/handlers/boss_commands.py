@@ -418,8 +418,8 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
             return
 
     if result == "expired":
-        # Handle expiration penalty
-        participants = list(state["hits"].keys())
+        # Handle expiration penalty — штраф со участников при сбежавшем боссе.
+        participants = [int(uid) for uid in state["hits"].keys()]
         await economy_service.process_boss_loss(participants, 100.0)
 
         msg = "⏰ Время вышло! Босс сбежал!"
@@ -620,7 +620,7 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
     if result == "killed":
         # Distribute rewards
         coins_reward = boss_config.get("coins_reward", 0)
-        participants = list(state["hits"].keys())
+        participants = [int(uid) for uid in state["hits"].keys()]
 
         distribution_result = await economy_service.distribute_boss_reward(participants, float(coins_reward))
 
