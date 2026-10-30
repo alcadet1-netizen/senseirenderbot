@@ -161,6 +161,8 @@ _roulette_history: Dict[int, List[dict]] = {}
 class HasActiveRoulette:
     """Filter: only matches if there's an active roulette in this chat and the sender is the current winner."""
     def __call__(self, message) -> bool:
+        if message.text and message.text.strip().lower() == "руля":
+            return False
         roulette = _active_roulettes.get(message.chat.id)
         return bool(
             roulette

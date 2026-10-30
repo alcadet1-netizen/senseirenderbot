@@ -82,6 +82,8 @@ _bomb_stats: Dict[int, dict] = {}  # Статистика по чатам
 class HasActiveBomb:
     """Filter: only matches if there's an active bomb in this chat and the sender can still participate."""
     def __call__(self, message) -> bool:
+        if message.text and message.text.strip().lower() == "руля":
+            return False
         bomb = _active_bombs.get(message.chat.id)
         if not bomb:
             return False
