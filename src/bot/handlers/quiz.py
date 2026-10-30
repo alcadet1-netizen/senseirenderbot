@@ -26,6 +26,8 @@ def get_quiz_service(container: Container) -> "QuizService":
 class QuizActiveFilter(BaseFilter):
     """Фильтр для проверки активной викторины."""
     async def __call__(self, message: Message, container: Container) -> bool:
+        if message.text and message.text.strip().lower() == "руля":
+            return False
         service = get_quiz_service(container)
         return await service.is_quiz_running(message.chat.id)
 
