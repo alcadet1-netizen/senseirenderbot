@@ -38,15 +38,27 @@ def setup_routers() -> Router:
     main_router = Router(name="main")
 
     # Порядок важен!
-    # user_router должен быть первым, чтобы команды обрабатывались приоритетно
-    main_router.include_router(user_router)
+    # 1. Игровые роутеры (банзай, музыка, боссы, проверка сенсея, рулетка, бомба, волна)
+    #    — первыми, потому что активная игра должна перехватывать текстовые сообщения
+    #    до статических триггеров пользователей. Команды (начинающиеся с /) исключаются
+    #    фильтром ~F.text.startswith("/") в обработчиках игр, поэтому они всё равно
+    #    дойдут до user_router.
     main_router.include_router(banzai_router)  # Banzai game handler
     main_router.include_router(music_router)
     main_router.include_router(boss_router)
     main_router.include_router(boss_admin_router)
     main_router.include_router(boss_editor_router)
-    main_router.include_router(draw_router)
+    main_router.include_router(sensei_check_router)
+    main_router.include_router(roulette_router)
+    main_router.include_router(bomb_router)
+    main_router.include_router(wave_router)
 
+    # 2. user_router — пользовательские команды и текстовые триггеры.
+    #    Отрабатывает только если ни одна активная игра не匹配ла сообщение.
+    main_router.include_router(user_router)
+
+    # 3. Остальные функциональные роутеры
+    main_router.include_router(draw_router)
     main_router.include_router(errors_router)
     main_router.include_router(maintenance_router)
     main_router.include_router(admin_router)
@@ -61,13 +73,7 @@ def setup_routers() -> Router:
     main_router.include_router(zov_router)
     main_router.include_router(referral_router)
 
-    # SenseiCheck
-    main_router.include_router(sensei_check_router)
-    main_router.include_router(roulette_router)
-    main_router.include_router(bomb_router)
-    main_router.include_router(wave_router)
-
-    # Callbacks and triggers (low priority)
+    # 4. Callbacks и триггеры (низкий приоритет, отрабатывают последними)
     main_router.include_router(callbacks_router)
     main_router.include_router(triggers_router)
     main_router.include_router(events_router)

@@ -82,14 +82,7 @@ _bomb_stats: Dict[int, dict] = {}  # Статистика по чатам
 class HasActiveBomb:
     """Filter: only matches if there's an active bomb in this chat."""
     def __call__(self, message) -> bool:
-        result = message.chat.id in _active_bombs
-        logger.info(
-            "[BOMB_DEBUG] HasActiveBomb chat_id=%s in _active_bombs=%s (total entries=%d)",
-            message.chat.id,
-            result,
-            len(_active_bombs),
-        )
-        return result
+        return message.chat.id in _active_bombs
 
 
 def _get_user_mention(user_id: int, username: Optional[str], first_name: str = "") -> str:
@@ -483,14 +476,7 @@ async def cmd_senseibomb(message: Message, container: Container):
         "container": container,
         "total_distributed": 0,
     }
-    logger.info(
-        "[BOMB_DEBUG] State saved chat_id=%s expires=%.1f current_time=%.1f timeout_handler_in=%.0fs",
-        chat_id,
-        current_time + BOMB_TIMEOUT + 3,
-        current_time,
-        BOMB_TIMEOUT,
-    )
-    
+
     # Запускаем таймеры
     asyncio.create_task(_bomb_progress_updater(message.bot, chat_id))
     asyncio.create_task(_bomb_timeout_handler(message.bot, chat_id, container))
@@ -560,24 +546,11 @@ async def _bomb_timeout_handler(bot: Bot, chat_id: int, container: Container):
 
 async def _finish_bomb(bot: Bot, chat_id: int, container: Container, is_timeout: bool = False):
     """Эпичное завершение бомбы."""
-    logger.info(
-        "[BOMB_DEBUG] _finish_bomb ENTERED chat_id=%s is_timeout=%s in_active=%s",
-        chat_id,
-        is_timeout,
-        chat_id in _active_bombs,
-    )
     if chat_id not in _active_bombs:
-        logger.info("[BOMB_DEBUG] _finish_bomb EARLY RETURN: chat_id %s not in _active_bombs", chat_id)
         return
 
     bomb = _active_bombs.pop(chat_id)
     winners = bomb["winners"]
-    logger.info(
-        "[BOMB_DEBUG] _finish_bomb POP chat_id=%s winners=%d total_distributed=%d",
-        chat_id,
-        len(winners),
-        bomb["total_distributed"],
-    )
     total_distributed = bomb["total_distributed"]
     
     # Кулдаун
@@ -643,17 +616,7 @@ async def check_bomb_participant(message: Message, container: Container):
     chat_id = message.chat.id
     user_id = message.from_user.id
 
-    logger.info(
-        "[BOMB_DEBUG] check_bomb_participant ENTERED chat_id=%s user_id=%s text=%r",
-        chat_id,
-        user_id,
-        message.text,
-    )
-
     if chat_id not in _active_bombs:
-        logger.info(
-            "[BOMB_DEBUG] check_bomb_participant EARLY RETURN: chat_id %s not in _active_bombs", chat_id,
-        )
         return
 
     bomb = _active_bombs[chat_id]
@@ -661,29 +624,12 @@ async def check_bomb_participant(message: Message, container: Container):
     # Проверки
     now = time.time()
     if now > bomb["expires"]:
-        logger.info(
-            "[BOMB_DEBUG] check_bomb_participant EARLY RETURN: expired (now=%.1f, expires=%.1f, chat=%s)",
-            now,
-            bomb["expires"],
-            chat_id,
-        )
         return
 
     if user_id in bomb["winner_ids"]:
-        logger.info(
-            "[BOMB_DEBUG] check_bomb_participant EARLY RETURN: user %s already won (chat=%s)",
-            user_id,
-            chat_id,
-        )
         return
 
     if len(bomb["winners"]) >= bomb["max_winners"]:
-        logger.info(
-            "[BOMB_DEBUG] check_bomb_participant EARLY RETURN: max winners reached (%d/%d, chat=%s)",
-            len(bomb["winners"]),
-            bomb["max_winners"],
-            chat_id,
-        )
         return
     
     # УСПЕЛ!
