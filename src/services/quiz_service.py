@@ -205,6 +205,10 @@ class QuizService:
 
         await self.questions.delete_many({"_id": {"$in": question_ids}})
 
+    async def _get_quiz_state(self, chat_id: int) -> Optional[Dict]:
+        """Получить состояние викторины для чата."""
+        return await self.quiz_states.find_one({"chat_id": chat_id})
+
     async def is_quiz_running(self, chat_id: int) -> bool:
         """Проверить статус."""
         state = await self.quiz_states.find_one({"chat_id": chat_id})
