@@ -320,8 +320,10 @@ async def trigger_vanga(message: Message, container: Container):
 @router.message(F.text.regexp(RULYA_PATTERN))
 async def trigger_rulya(message: Message, container: Container):
     """Триггер 'Руля' - запускает рулетку (все пользователи с кулдауном)."""
+    logging.info(f"[TRIGGER_RULYA] ENTERED chat_id={message.chat.id} user_id={message.from_user.id} text={message.text!r}")
     # Проверяем, что это групповой чат
     if message.chat.type not in ("group", "supergroup"):
+        logging.info(f"[TRIGGER_RULYA] not a group chat, returning")
         return
 
     # Удаляем триггерное сообщение
@@ -333,6 +335,7 @@ async def trigger_rulya(message: Message, container: Container):
         logging.warning(f"⚠️ Failed to delete trigger message: {e}")
 
     # Используем уже импортированный обработчик
+    logging.info(f"[TRIGGER_RULYA] calling roulette_handler chat_id={message.chat.id} user_id={message.from_user.id}")
     await roulette_handler(message, container)
 
 

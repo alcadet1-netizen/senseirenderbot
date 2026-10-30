@@ -365,12 +365,14 @@ async def cmd_senseiroulette(message: Message, container: Container):
     """🎰 Запустить рулетку актива (все пользователи с кулдауном)."""
     chat_id = message.chat.id
     user_id = message.from_user.id
-    
+    logging.info(f"[ROULETTE] ENTERED chat_id={chat_id} user_id={user_id} is_admin={user_id in settings.admin_ids}")
+
     # Проверяем, что это групповой чат
     if message.chat.type not in ("group", "supergroup"):
+        logging.info(f"[ROULETTE] not a group chat, returning")
         await message.answer("🎰 Рулетка работает только в групповых чатах!")
         return
-    
+
     # Определяем админ ли пользователь
     is_bot_admin = user_id in settings.admin_ids
     is_chat_admin = False
@@ -389,29 +391,31 @@ async def cmd_senseiroulette(message: Message, container: Container):
         roulette = _active_roulettes[chat_id]
         remaining = int(roulette["expires"] - time.time())
         if remaining > 0:
+            logging.info(f"[ROULETTE] active roulette in chat_id={chat_id}, remaining={remaining}s, returning")
             winner_mention = _get_user_mention(
                 roulette["user_id"],
                 roulette.get("username"),
                 roulette.get("first_name", "")
             )
             msg = _build_countdown_message(
-                winner_mention, 
-                remaining, 
+                winner_mention,
+                remaining,
                 roulette["reward"],
                 roulette.get("is_jackpot", False)
             )
             await message.answer(msg, parse_mode="HTML")
             return
-    
+
     # === КУЛДАУН ===
     current_time = time.time()
-    
+
     if is_admin:
         # Админы: кулдаун 5 минут на чат
         if chat_id in _roulette_cooldowns:
             cooldown_expires = _roulette_cooldowns[chat_id]
             if current_time < cooldown_expires:
                 remaining = int(cooldown_expires - current_time)
+                logging.info(f"[ROULETTE] admin cooldown active chat_id={chat_id} remaining={remaining}s, returning")
                 history = _roulette_history.get(chat_id, [])
                 msg = _build_cooldown_message(remaining, history)
                 await message.answer(msg, parse_mode="HTML")
@@ -451,11 +455,13 @@ async def cmd_senseiroulette(message: Message, container: Container):
     candidate_ids = list(active_ids - exclude)
     
     if not candidate_ids:
+        logging.info(f"[ROULETTE] no candidates chat_id={chat_id} active_ids={len(active_ids)} exclude={len(exclude)}, returning")
         msg = _build_no_users_message()
         await message.answer(msg, parse_mode="HTML")
         return
-    
+
     # === АНИМАЦИЯ ВРАЩЕНИЯ ===
+    logging.info(f"[ROULETTE] starting spin chat_id={chat_id} winner from {len(candidate_ids)} candidates")
     spin_msg = await message.answer(
         _build_spinning_message(0),
         parse_mode="HTML"
