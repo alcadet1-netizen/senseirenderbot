@@ -159,9 +159,14 @@ _roulette_history: Dict[int, List[dict]] = {}
 
 
 class HasActiveRoulette:
-    """Filter: only matches if there's an active roulette in this chat."""
+    """Filter: only matches if there's an active roulette in this chat and the sender is the current winner."""
     def __call__(self, message) -> bool:
-        return message.chat.id in _active_roulettes
+        roulette = _active_roulettes.get(message.chat.id)
+        return bool(
+            roulette
+            and roulette["user_id"] == message.from_user.id
+            and time.time() <= roulette["expires"]
+        )
 
 
 def _get_random_reward() -> tuple[int, bool]:

@@ -80,9 +80,18 @@ _bomb_stats: Dict[int, dict] = {}  # Статистика по чатам
 
 
 class HasActiveBomb:
-    """Filter: only matches if there's an active bomb in this chat."""
+    """Filter: only matches if there's an active bomb in this chat and the sender can still participate."""
     def __call__(self, message) -> bool:
-        return message.chat.id in _active_bombs
+        bomb = _active_bombs.get(message.chat.id)
+        if not bomb:
+            return False
+        user_id = message.from_user.id
+        now = time.time()
+        return (
+            now <= bomb["expires"]
+            and user_id not in bomb["winner_ids"]
+            and len(bomb["winners"]) < bomb["max_winners"]
+        )
 
 
 def _get_user_mention(user_id: int, username: Optional[str], first_name: str = "") -> str:
