@@ -136,6 +136,20 @@ async def on_new_chat_members(message: Message, container: Container):
     """Обработка входа новых участников (через сообщение)."""
     logging.info(f"📨 New chat members message: {[u.id for u in message.new_chat_members]}")
     for user in message.new_chat_members:
+        # Разбаниваем в боте, если пользователь вернулся в чат (был забанен при выходе)
+        unban_result = await container.moderation_service.unban_user(user.id)
+        if unban_result["success"]:
+            logging.info(f"🔓 User {user.id} auto-unbanned on rejoin (was banned in DB)")
+            try:
+                mention = f"<b>{html.escape(user.full_name)}</b>"
+                await message.answer(
+                    f"🔓 <b>Авто-разбан</b>\n\n"
+                    f"{mention} разбанен автоматически при возвращении в чат.",
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logging.error(f"❌ Failed to send auto-unban message: {e}")
+
         # Check if captcha is enabled for this chat
         captcha_enabled = await container.chat_settings_service.get_setting(
             message.chat.id, f"chat:{message.chat.id}:captcha_enabled"
@@ -150,6 +164,20 @@ async def on_user_join(event: ChatMemberUpdated, container: Container):
     logging.info(f"👤 User join event: {event.new_chat_member.user.id} ({event.new_chat_member.user.username})")
 
     user = event.new_chat_member.user
+
+    # Разбаниваем в боте, если пользователь вернулся в чат (был забанен при выходе)
+    unban_result = await container.moderation_service.unban_user(user.id)
+    if unban_result["success"]:
+        logging.info(f"🔓 User {user.id} auto-unbanned on rejoin (was banned in DB)")
+        try:
+            mention = f"<b>{html.escape(user.full_name)}</b>"
+            await event.answer(
+                f"🔓 <b>Авто-разбан</b>\n\n"
+                f"{mention} разбанен автоматически при возвращении в чат.",
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logging.error(f"❌ Failed to send auto-unban message: {e}")
 
     # Check if captcha is enabled for this chat
     captcha_enabled = await container.chat_settings_service.get_setting(
