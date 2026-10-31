@@ -873,6 +873,15 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
         # Update user activity in chat
         await container.chat_activity_service.update_user_activity(chat_id, user_id)
 
+        # Если пользователь забанен в боте, но пишет сообщение и не забанен в чате — снимаем бан в боте
+        unban_check = await container.moderation_service.unban_if_active_in_chat(
+            bot=bot,
+            chat_id=chat_id,
+            user_id=user_id
+        )
+        if unban_check["success"]:
+            logger.info(f"🔓 User {user_id} auto-unbanned on message activity (was banned in DB, active in chat)")
+
         # Проверяем throttle для наград
         # Награды начисляем только в групповых чатах (не в лс)
         # Для callback queries проверяем чат сообщения, на которое пришел callback

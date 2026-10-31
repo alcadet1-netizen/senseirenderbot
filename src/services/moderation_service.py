@@ -6,6 +6,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 import logging
 
+from aiogram import Bot
 from src.core.config import settings
 from src.infra.mongo.client import MongoClient
 
@@ -119,6 +120,35 @@ class ModerationService:
 
         logger.info(f"User {user_id} unbanned")
         return {"success": True, "user_id": user_id}
+
+    async def unban_if_active_in_chat(self, bot: Bot, chat_id: int, user_id: int) -> dict:
+        """
+        Если пользователь забанен в боте (is_banned=True в MongoDB), но пишет сообщение
+        в чате и не забанен в самом Telegram — снимаем бан в боте.
+
+        Делает запрос к MongoDB только если флаг bana уже стоит, и get_chat_member
+        в Telegram — только для пользователей из бана. Для обычных пользователей
+        лишних запросов нет.
+        """
+        # Проверяем флаг бана в базе (один запрос к MongoDB)
+        user = await self.users.find_one({"id": user_id}, {"is_banned": 1})
+        if not user or not user.get("is_banned"):
+            # Пользователь не в бане — лишних запросов нет
+            return {"success": False, "reason": "not_banned"}
+
+        # Флаг бана стоит — проверяем статус в Telegram-чате
+        try:
+            member = await bot.get_chat_member(chat_id, user_id)
+            is_banned_in_tg = member.status in ("banned", "kicked", "restricted")
+        except Exception as e:
+            logger.warning(f"Failed to check chat member for user {user_id}: {e}")
+            return {"success": False, "error": str(e)}
+
+        if not is_banned_in_tg:
+            # Не забанен в чате — снимаем бан в боте
+            return await self.unban_user(user_id)
+
+        return {"success": False, "reason": "banned_in_chat"}
 
     async def get_banned_users(self) -> List[dict]:
         """Получить список забаненных."""
