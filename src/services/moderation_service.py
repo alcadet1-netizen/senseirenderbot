@@ -139,7 +139,7 @@ class ModerationService:
         # Флаг бана стоит — проверяем статус в Telegram-чате
         try:
             member = await bot.get_chat_member(chat_id, user_id)
-            is_banned_in_tg = member.status in ("banned", "kicked", "restricted")
+            is_banned_in_tg = member.status in ("kicked", "restricted")
         except Exception as e:
             logger.warning(f"Failed to check chat member for user {user_id}: {e}")
             return {"success": False, "error": str(e)}
