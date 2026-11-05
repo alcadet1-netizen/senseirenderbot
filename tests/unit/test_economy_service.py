@@ -236,12 +236,12 @@ async def test_upgrade_katana_success(economy_service, mock_mongo_client):
 
         # Verify
         assert result["is_upgraded"] is True
-        assert result["cost"] == KATANA_UPGRADE_COST
+        assert result["cost"] == 150.0
         assert result["growth"] > 0
 
         # Verify database calls for success case
         mock_mongo_client.database.users.update_one.assert_any_call(
-            {"id": 126}, {"$inc": {"coins": -KATANA_UPGRADE_COST}}
+            {"id": 126}, {"$inc": {"coins": -150.0}}
         )
         mock_mongo_client.database.bank.update_one.assert_called()  # Deposit to bank
         # Should have two update calls: one for coins, one for katana_length and timestamp
@@ -444,7 +444,7 @@ async def test_process_message_reward_new_user(economy_service, mock_mongo_clien
 async def test_get_bank_stats(economy_service, mock_mongo_client):
     """Тест получения статистики банка."""
     # Setup mocks
-    mock_mongo_client.database.bank.find_one.return_value = {"balance": 5000.0}
+    mock_mongo_client.database.bank.find_one.return_value = {"coins": 5000.0}
 
     # Mock the aggregate operation
     mock_cursor = MagicMock()

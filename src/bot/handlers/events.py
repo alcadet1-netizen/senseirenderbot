@@ -47,6 +47,13 @@ async def _send_welcome_message(user, container: Container, event):
     except Exception as e:
         logging.error(f"❌ Failed to send welcome message: {e}")
 
+    # Отправляем сообщение о стартовых бонусах
+    try:
+        bonus_text = Visuals.welcome_bonus_message(name=username)
+        await event.answer(bonus_text, parse_mode="HTML")
+    except Exception as e:
+        logging.error(f"❌ Failed to send welcome bonus message: {e}")
+
 async def _wait_for_captcha(bot, chat_id, user_id, message_id, container):
     """Фоновая задача ожидания капчи."""
     try:

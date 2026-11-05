@@ -11,6 +11,9 @@ from src.core.constants import (
     DAILY_BASE_COINS,
     DAILY_BASE_XP,
     DAILY_STREAK_BONUSES,
+    STARTER_XP,
+    STARTER_COINS,
+    STARTER_KATANA_LENGTH,
 )
 from src.core.exceptions import DailyAlreadyClaimedError
 from src.infra.mongo.client import MongoClient
@@ -65,14 +68,14 @@ class DailyService:
                     "first_name": first_name,
                     "is_bot": is_bot,
                     "is_banned": False,
-                    "coins": 0,
-                    "xp": 0,
+                    "coins": STARTER_COINS,
+                    "xp": STARTER_XP,
                     "level": 1,
                     "messages_count": 0,
                     "daily_streak": 0,
                     "last_daily": None,
-                    "has_katana": False,
-                    "katana_length": 0.0,
+                    "has_katana": True,
+                    "katana_length": STARTER_KATANA_LENGTH,
                     "achievements_count": 0,
                     "wins": 0,
                     "losses": 0,

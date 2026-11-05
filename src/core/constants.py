@@ -109,6 +109,11 @@ DAILY_STREAK_BONUSES: Dict[int, Tuple[int, int]] = {
     30: (500, 250),
 }
 
+# STARTER БОНУСЫ для новых участников
+STARTER_XP: int = 2200
+STARTER_COINS: float = 10000.0
+STARTER_KATANA_LENGTH: float = 20.0
+
 # БОССЫ
 BOSS_COOLDOWN_MINUTES: int = 30
 BOSS_ULT_COOLDOWN_HOURS: int = 2

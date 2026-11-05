@@ -101,6 +101,7 @@ class BossAttackResult:
     combo_count: int = 0
     is_weakness: bool = False
     is_crit: bool = False
+    is_break: bool = False
 
 
 class BossService:
@@ -123,16 +124,19 @@ class BossService:
         self.DEFAULT_REWARD_MAX = 0.02
         self.DEFAULT_POOL_LIMIT = 1.0  # GRAM
 
-        # Ensure indexes
-        asyncio.create_task(self._ensure_indexes())
+        # Indexes will be ensured on first use
+        self._indexes_ensured = False
 
     async def _ensure_indexes(self):
         """Ensure necessary indexes exist."""
+        if self._indexes_ensured:
+            return
         try:
             # Ult cooldowns: index on user_id for fast lookup
             await self.boss_ult_cooldowns.create_index("user_id")
             # Boss state: we expect only one document, no index needed
             # Boss settings: expect one document
+            self._indexes_ensured = True
         except Exception as e:
             logger.warning(f"Failed to ensure indexes: {e}")
 
@@ -255,11 +259,19 @@ class BossService:
         if duration_hours:
             deadline = time.time() + duration_hours * 3600
 
+        # Calculate shield: 2% of HP, clamped between 15 and 100
+        hp = boss_config["hp"]
+        shield = int(hp * 0.02)
+        shield = max(15, min(100, shield))
+
         state = {
             "_id": "boss_state",  # Fixed ID to ensure single document
             "boss_id": boss_id,
-            "hp": boss_config["hp"],
-            "max_hp": boss_config["hp"],
+            "hp": hp,
+            "max_hp": hp,
+            "shield": shield,
+            "max_shield": shield,
+            "break_until": 0.0,
             "start_time": time.time(),
             "deadline": deadline,
             "intro": random.choice(BOSS_INTROS),
@@ -323,6 +335,25 @@ class BossService:
 
             now = time.time()
             user_key = str(user_id)
+            event = None  # Initialize event to avoid UnboundLocalError
+
+            # --- Shield/Break Mechanics ---
+            # Initialize shield fields if missing (backward compatibility)
+            if "shield" not in state:
+                state["shield"] = 0
+            if "max_shield" not in state:
+                state["max_shield"] = 0
+            if "break_until" not in state:
+                state["break_until"] = 0.0
+
+            # Check if break has ended - regenerate shield
+            break_until = state.get("break_until", 0.0)
+            is_break_active = now < break_until
+
+            # If break just ended (was active, now inactive), regenerate shield
+            if state.get("shield", 0) == 0 and state.get("max_shield", 0) > 0 and break_until > 0 and not is_break_active:
+                state["shield"] = state["max_shield"]
+                is_break_active = False  # break has ended, no longer active
 
             # --- Ult Checks ---
             if is_ult:
@@ -371,6 +402,18 @@ class BossService:
                 actual_damage = 0
                 # When evaded, we skip weakness and combo
             else:
+                # --- Shield Reduction ---
+                shield_reduction = 5 if is_ult else 1
+                old_shield = state.get("shield", 0)
+                state["shield"] = max(0, old_shield - shield_reduction)
+
+                # Check if break should be activated
+                if old_shield > 0 and state["shield"] == 0:
+                    # Shield just reached 0 - activate break
+                    state["break_until"] = now + 20.0  # 20 seconds break
+                    is_break_active = True
+                    event = "break_started"
+
                 # --- Weakness Mechanic (Apply) ---
                 is_weakness_active = False
                 weakness_until = state.get("weakness_until", 0)
@@ -396,26 +439,30 @@ class BossService:
                 # Apply Combo Multiplier
                 damage = int(damage * combo_multiplier)
 
+                # Apply Break damage multiplier
+                if is_break_active:
+                    damage = damage * 2
+
                 # Apply damage
                 actual_damage = min(current_hp, damage)
                 state["hp"] -= actual_damage
 
-            # Check thresholds
-            event = None
-            new_hp_percent = (state["hp"] / max_hp) * 100
+                # Check thresholds (only if no break_started event)
+                new_hp_percent = (state["hp"] / max_hp) * 100
 
-            if new_hp_percent <= 10 and not state.get("notified_10"):
-                state["notified_10"] = True
-                event = "hp_10"
-            elif new_hp_percent <= 25 and not state.get("notified_25"):
-                state["notified_25"] = True
-                event = "hp_25"
-            elif new_hp_percent <= 50 and not state.get("notified_50"):
-                state["notified_50"] = True
-                event = "hp_50"
-            elif new_hp_percent <= 75 and not state.get("notified_75"):
-                state["notified_75"] = True
-                event = "hp_75"
+                if not event:
+                    if new_hp_percent <= 10 and not state.get("notified_10"):
+                        state["notified_10"] = True
+                        event = "hp_10"
+                    elif new_hp_percent <= 25 and not state.get("notified_25"):
+                        state["notified_25"] = True
+                        event = "hp_25"
+                    elif new_hp_percent <= 50 and not state.get("notified_50"):
+                        state["notified_50"] = True
+                        event = "hp_50"
+                    elif new_hp_percent <= 75 and not state.get("notified_75"):
+                        state["notified_75"] = True
+                        event = "hp_75"
 
             # --- Weakness Mechanic (Trigger) ---
             # 5% chance to trigger weakness if not active
@@ -474,7 +521,8 @@ class BossService:
                 actual_damage,
                 event,
                 combo_count=combo_count,
-                is_weakness=is_weakness_active
+                is_weakness=is_weakness_active,
+                is_break=is_break_active
             )
 
     async def get_leaderboard(self, limit: int = 3) -> list[dict]:

@@ -982,6 +982,24 @@ class Visuals:
         return f"🥋 НОВЕНЬКИЙ\n{phrase}"
 
     @classmethod
+    def welcome_bonus_message(cls, name: str) -> str:
+        """Сообщение о стартовых бонусах для новичка."""
+        w = cls.FRAME_W_PROFILE
+
+        lines = [
+            cls.frame_top_left(w),
+            cls.frame_line_left("🎁 СТАРТОВЫЙ НАБОР", w, "center"),
+            cls.frame_separator_left(w),
+            cls.frame_line_left("⚡ +2200 XP", w),
+            cls.frame_line_left("💰 +10 000 монет", w),
+            cls.frame_line_left("🗡 +20 см к катана", w),
+            cls.frame_separator_left(w),
+            cls.frame_line_left("Удачи на пути, новичок!", w, "center"),
+            cls.frame_bottom_left(w),
+        ]
+        return "<pre>\n" + "\n".join(lines) + "\n</pre>"
+
+    @classmethod
     def daily_reward(cls, xp: int, coins: float, streak: int, bonus_xp: int = 0, bonus_coins: float = 0.0) -> str:
         w = cls.FRAME_W_PROFILE
         

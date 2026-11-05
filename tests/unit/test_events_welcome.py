@@ -9,6 +9,12 @@ from src.bot.handlers.events import on_user_join
 @pytest.mark.asyncio
 async def test_join_initiates_captcha():
     container = MagicMock()
+    # Mock moderation_service with AsyncMock for unban_user
+    container.moderation_service = AsyncMock()
+    container.moderation_service.unban_user = AsyncMock(return_value={"success": False})
+    # Mock chat_settings_service with AsyncMock for get_setting
+    container.chat_settings_service = AsyncMock()
+    container.chat_settings_service.get_setting = AsyncMock(return_value="1")
     # Mock captcha_service
     container.captcha_service = MagicMock()
     container.captcha_service.set_lock = AsyncMock(return_value=True)  # Returns True so lock is acquired and we proceed
@@ -36,3 +42,5 @@ async def test_join_initiates_captcha():
     container.captcha_service.set_lock.assert_awaited()
     event.chat.restrict.assert_awaited()
     event.answer.assert_awaited()
+    container.moderation_service.unban_user.assert_awaited()
+    container.chat_settings_service.get_setting.assert_awaited()

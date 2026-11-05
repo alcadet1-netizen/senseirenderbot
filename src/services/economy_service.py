@@ -17,6 +17,9 @@ from src.core.constants import (
     KATANA_UPGRADE_COST_TABLE,
     KATANA_UPGRADE_COOLDOWN_HOURS,
     KATANA_WIN_CHANCE,
+    STARTER_XP,
+    STARTER_COINS,
+    STARTER_KATANA_LENGTH,
 )
 from src.core.exceptions import (
     InsufficientFundsError,
@@ -156,15 +159,15 @@ class EconomyService:
             # Get or create user
             user = await self.users.find_one({"id": user_id})
             if user is None:
-                # Create new user
+                # Create new user with starter bonuses
                 user = {
                     "id": user_id,
                     "username": username,
                     "first_name": first_name,
                     "last_name": last_name,
                     "is_bot": is_bot,
-                    "xp": 0,
-                    "coins": 0.0,
+                    "xp": STARTER_XP,
+                    "coins": STARTER_COINS,
                     "messages_count": 0,
                     "wins": 0,
                     "losses": 0,
@@ -174,8 +177,8 @@ class EconomyService:
                     "ban_reason": None,
                     "is_muted": False,
                     "mute_until": None,
-                    "has_katana": False,
-                    "katana_length": 0.0,
+                    "has_katana": True,
+                    "katana_length": STARTER_KATANA_LENGTH,
                     "last_katana_up": None,
                     "referrer_id": None,
                     "referral_count": 0,
@@ -185,7 +188,7 @@ class EconomyService:
                 await self.users.insert_one(user)
                 # Refresh the user document
                 user = await self.users.find_one({"id": user_id})
-                logger.info(f"[ECONOMY] Created new user {user_id}")
+                logger.info(f"[ECONOMY] Created new user {user_id} with starter bonuses: {STARTER_XP} XP, {STARTER_COINS} coins, {STARTER_KATANA_LENGTH}cm katana")
             else:
                 # Update if needed
                 update_data = {}
@@ -676,15 +679,15 @@ class EconomyService:
             # Get or create user
             user = await self.users.find_one({"id": user_id})
             if user is None:
-                # Create new user
+                # Create new user with starter bonuses
                 user = {
                     "id": user_id,
                     "username": None,
                     "first_name": "",
                     "last_name": None,
                     "is_bot": False,
-                    "xp": 0,
-                    "coins": 0.0,
+                    "xp": STARTER_XP,
+                    "coins": STARTER_COINS,
                     "messages_count": 0,
                     "wins": 0,
                     "losses": 0,
@@ -694,8 +697,8 @@ class EconomyService:
                     "ban_reason": None,
                     "is_muted": False,
                     "mute_until": None,
-                    "has_katana": False,
-                    "katana_length": 0.0,
+                    "has_katana": True,
+                    "katana_length": STARTER_KATANA_LENGTH,
                     "last_katana_up": None,
                     "referrer_id": None,
                     "referral_count": 0,
@@ -705,7 +708,7 @@ class EconomyService:
                 await self.users.insert_one(user)
                 # Refresh the user document
                 user = await self.users.find_one({"id": user_id})
-                logger.info(f"[ECONOMY] Created new user {user_id}")
+                logger.info(f"[ECONOMY] Created new user {user_id} with starter bonuses: {STARTER_XP} XP, {STARTER_COINS} coins, {STARTER_KATANA_LENGTH}cm katana")
             else:
                 # Update if needed - but for game win we don't typically update username/name
                 pass

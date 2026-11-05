@@ -7,7 +7,9 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from src.core.exceptions import UserNotFoundError
 from src.infra.mongo.client import MongoClient
 from src.services.level_service import LevelService
+from src.core.constants import STARTER_XP, STARTER_COINS, STARTER_KATANA_LENGTH
 import logging
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -107,8 +109,8 @@ class UserService:
                     "first_name": first_name,
                     "last_name": last_name,
                     "is_bot": is_bot,
-                    "xp": 0,
-                    "coins": 0.0,
+                    "xp": STARTER_XP,
+                    "coins": STARTER_COINS,
                     "messages_count": 0,
                     "wins": 0,
                     "losses": 0,
@@ -118,13 +120,13 @@ class UserService:
                     "ban_reason": None,
                     "is_muted": False,
                     "mute_until": None,
-                    "has_katana": False,
-                    "katana_length": 0.0,
+                    "has_katana": True,
+                    "katana_length": STARTER_KATANA_LENGTH,
                     "last_katana_up": None,
                     "referrer_id": None,
                     "referral_count": 0,
                     "can_receive_broadcast": True,
-                    "created_at": __import__("datetime").datetime.utcnow(),
+                    "created_at": datetime.now(timezone.utc),
                 }
                 await self.users.insert_one(new_user)
                 return {"user": new_user, "created": True}
