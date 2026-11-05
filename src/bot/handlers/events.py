@@ -162,6 +162,8 @@ async def on_new_chat_members(message: Message, container: Container):
             message.chat.id, f"chat:{message.chat.id}:captcha_enabled"
         )
         if captcha_enabled == "0":
+            # Капча отключена - отправляем приветствие сразу
+            await _send_welcome_message(user, container, message)
             continue
         await _initiate_captcha(user, container, message)
 
@@ -191,6 +193,8 @@ async def on_user_join(event: ChatMemberUpdated, container: Container):
         event.chat.id, f"chat:{event.chat.id}:captcha_enabled"
     )
     if captcha_enabled == "0":
+        # Капча отключена - отправляем приветствие сразу
+        await _send_welcome_message(user, container, event)
         return
 
     # ⚠️ КОСТЫЛЬ: Aiogram 3.x иногда не прокидывает container в chat_member handler
