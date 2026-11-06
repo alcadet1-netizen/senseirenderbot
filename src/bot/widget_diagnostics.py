@@ -46,7 +46,14 @@ def describe_failure(exc, bot=None):
     raw = getattr(exc, 'message', str(exc))
     detail = redact(raw, bot)
     lower = str(raw).lower()
-    if isinstance(exc, TelegramNotFound) or ('method' in lower and ('not found' in lower or 'unknown' in lower)):
+    transport_category = getattr(exc, 'category', None)
+    if transport_category == 'transport_runtime':
+        category, advice = 'transport_runtime', 'Фоновый обработчик MTProto остановлен. Нужна проверка схемы/ошибки обновлений, а не HTML виджета.'
+    elif transport_category == 'transport_closed':
+        category, advice = 'transport_closed', 'MTProto-транспорт остановлен. Дождитесь завершения перезапуска бота.'
+    elif transport_category == 'temporary' or lower in {'connectionerror', 'timeouterror', 'oserror'}:
+        category, advice = 'temporary', 'Соединение MTProto с Telegram потеряно или не ответило вовремя. Выполнено ограниченное восстановление; повторите проверку позже.'
+    elif isinstance(exc, TelegramNotFound) or ('method' in lower and ('not found' in lower or 'unknown' in lower)):
         category, advice = 'method_or_route', 'Telegram не нашёл метод или маршрут API. Нужна проверка endpoint и поддержки sendWidget.'
     elif isinstance(exc, TelegramRetryAfter):
         category, advice = 'rate_limit', 'Telegram ограничил частоту запросов. Попробуйте позже.'

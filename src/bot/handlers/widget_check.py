@@ -30,6 +30,9 @@ async def cmd_widget_check(message, container):
         'Отправлю минимальный виджет, затем макет Ежа без игровых запросов. '
         'Попытки, серия и балансы не меняются.', parse_mode=None,
     )
+    transport = getattr(container, 'native_widget_transport', None)
+    if transport is not None and callable(getattr(transport, 'diagnostic_status', None)):
+        await message.answer(transport.diagnostic_status(), parse_mode=None)
     for label in ('minimal', 'hedgehog'):
         try:
             if label == 'minimal':
@@ -43,8 +46,10 @@ async def cmd_widget_check(message, container):
             await send_native_widget(message.bot, container, message.chat.id, html, allow_queries=False)
         except WIDGET_TRANSPORT_ERRORS as exc:
             failure = describe_failure(exc, message.bot)
+            if transport is not None and callable(getattr(transport, 'diagnostic_status', None)):
+                await message.answer(transport.diagnostic_status(), parse_mode=None)
             await message.answer(
-                f'Проверка {label}: отказ API.\n'
+                f'Проверка {label}: ошибка отправки.\n'
                 f'Категория: {failure.category} · код: {failure.reference}\n'
                 f'Ответ Telegram (без секретов): {failure.description}\n{failure.advice}\n'
                 'Beta автоматически не включена. Если minimal прошёл, а hedgehog нет — '
