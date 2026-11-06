@@ -1,5 +1,6 @@
 """Generate demo data only; never export real users or secrets into the repo."""
 import argparse
+from dataclasses import replace
 from pathlib import Path
 
 from src.widgets.animation import to_gif
@@ -25,6 +26,7 @@ def main():
         (output / f'{name}.html').write_text(to_html(card), encoding='utf-8')
         (output / f'{name}.png').write_bytes(to_png(card))
         (output / f'{name}.gif').write_bytes(to_gif(card))
+        (output / f'{name}-light.png').write_bytes(to_png(replace(card, theme='light')))
         print(output / f'{name}.html')
 
 

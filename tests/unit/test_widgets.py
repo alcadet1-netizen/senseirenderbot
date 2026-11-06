@@ -221,7 +221,10 @@ def test_gif_has_multiple_readable_bounded_frames():
         image.seek(6)
         middle = image.convert('RGB')
         # Only highlights change: statistics below the animated accent stay readable.
-        assert first.crop((0, 100, 660, 200)).tobytes() == middle.crop((0, 100, 660, 200)).tobytes()
+        from src.widgets.rendering import render_image
+        _, geometry = render_image(card)
+        y = round((geometry.accent[3] + 30) * .75)
+        assert first.crop((0, y, 660, y + 60)).tobytes() == middle.crop((0, y, 660, y + 60)).tobytes()
         assert first.tobytes() != middle.tobytes()
     assert len(result) < 5 * 1024 * 1024
     assert to_gif(card) is result  # Same snapshot does not rerender on refresh.
@@ -278,3 +281,139 @@ async def test_text_refresh_does_not_render_animation():
         await show_card(message, profile_card({}), 7, 'profile', edit=True, animate=True)
     render.assert_not_called()
     message.edit_text.assert_awaited_once()
+
+
+@pytest.mark.parametrize('view,expected', [
+    ('profile', ('profile', 'dark', True)),
+    ('open', ('profile', 'dark', True)),
+    ('top.l.s', ('top', 'light', False)),
+    ('profile.d.a', ('profile', 'dark', True)),
+])
+def test_view_preferences_and_legacy_callbacks(view, expected):
+    from src.bot.handlers.widgets import decode_view
+    assert decode_view(view) == expected
+
+
+@pytest.mark.parametrize('value', ['daily.l.a', 'profile.red.a', 'top.d.pay', 'profile.l', 'top.l.a.extra'])
+def test_unknown_preferences_are_rejected(value):
+    from src.bot.handlers.widgets import decode_view
+    with pytest.raises(ValueError):
+        decode_view(value)
+
+
+def test_navigation_preserves_palette_and_motion():
+    from src.bot.handlers.widgets import decode_view
+    markup = keyboard(7, 'profile', theme='light', animate=False)
+    navigation, controls, refresh = markup.inline_keyboard
+    for button in navigation + refresh:
+        view = WidgetAction.unpack(button.callback_data).view
+        _, theme, motion = decode_view(view)
+        assert theme == 'light' and motion is False
+    assert decode_view(WidgetAction.unpack(controls[0].callback_data).view) == ('profile', 'dark', False)
+    assert decode_view(WidgetAction.unpack(controls[1].callback_data).view) == ('profile', 'light', True)
+    assert len(keyboard(7, 'top', allow_animation=False).inline_keyboard[1]) == 1
+
+
+def test_light_and_dark_palettes_really_change_pixels():
+    from dataclasses import replace
+    card = profile_card({})
+    dark = Image.open(BytesIO(to_png(card)))
+    light = Image.open(BytesIO(to_png(replace(card, theme='light'))))
+    assert dark.getpixel((0, 0)) != light.getpixel((0, 0))
+    assert dark.size == light.size
+    with pytest.raises(ValueError):
+        replace(card, theme='unknown')
+
+
+def test_measured_wrap_preserves_long_values():
+    from PIL import ImageDraw
+    from src.widgets.rendering import font, wrap, render_image
+    draw = ImageDraw.Draw(Image.new('RGB', (1, 1)))
+    value = 'Ш' * 48
+    lines = wrap(draw, value, 24, 352)
+    assert ''.join(lines) == value
+    assert all(draw.textlength(line, font=font(24)) <= 352 for line in lines)
+    long = Card('Profile', value, (('Роль', value),), progress=30)
+    image, geometry = render_image(long)
+    assert geometry.progress[1] < image.height - 80
+
+
+def test_html_accessibility_and_host_tokens():
+    source = to_html(profile_card({}))
+    assert 'prefers-reduced-motion:reduce' in source
+    assert '--tg-text-font-size' in source
+    assert 'env(safe-area-inset-bottom)' in source
+    assert '--tg-content-safe-area-corner-right' in source
+
+
+def test_missing_next_threshold_does_not_show_full_progress():
+    card = profile_card(dict(level=0, xp=0))
+    assert card.progress == 0
+    assert dict(card.rows)['До следующего'] == '300 XP'
+
+
+def callback_fixture():
+    from unittest.mock import MagicMock
+    from aiogram.types import Message
+    message = MagicMock(spec=Message)
+    message.chat = SimpleNamespace(id=123)
+    message.message_id = 456
+    message.answer = AsyncMock()
+    query = SimpleNamespace(from_user=SimpleNamespace(id=7), message=message, answer=AsyncMock())
+    container = SimpleNamespace(settings=SimpleNamespace(widgets_enabled=True, widget_animations_enabled=True))
+    return query, container
+
+
+@pytest.mark.asyncio
+async def test_callback_applies_preferences():
+    query, container = callback_fixture()
+    with patch('src.bot.handlers.widgets.load_card', new_callable=AsyncMock, return_value=profile_card({})), \
+         patch('src.bot.handlers.widgets.show_card', new_callable=AsyncMock) as show:
+        await widget_callback(query, WidgetAction(owner=7, view='profile.l.s'), container)
+    assert show.call_args.args[1].theme == 'light'
+    assert show.call_args.kwargs['animate'] is False
+
+
+@pytest.mark.asyncio
+async def test_parallel_refresh_is_rejected_and_guard_released():
+    import asyncio
+    from src.bot.handlers.widgets import _inflight
+    query, container = callback_fixture()
+    started, release = asyncio.Event(), asyncio.Event()
+    async def load(*args):
+        started.set()
+        await release.wait()
+        return profile_card({})
+    with patch('src.bot.handlers.widgets.load_card', side_effect=load) as service, \
+         patch('src.bot.handlers.widgets.show_card', new_callable=AsyncMock):
+        first = asyncio.create_task(widget_callback(query, WidgetAction(owner=7, view='profile'), container))
+        await started.wait()
+        await widget_callback(query, WidgetAction(owner=7, view='top'), container)
+        assert service.call_count == 1
+        release.set()
+        await first
+    assert not _inflight
+    assert 'уже обновляется' in query.answer.call_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_cancelled_refresh_releases_guard():
+    import asyncio
+    from src.bot.handlers.widgets import _inflight
+    query, container = callback_fixture()
+    with patch('src.bot.handlers.widgets.load_card', side_effect=asyncio.CancelledError):
+        with pytest.raises(asyncio.CancelledError):
+            await widget_callback(query, WidgetAction(owner=7, view='profile'), container)
+    assert not _inflight
+
+
+def test_palette_text_contrast_is_readable():
+    from src.widgets.rendering import PALETTES
+    def luminance(hex_color):
+        channels = [int(hex_color[i:i+2], 16) / 255 for i in (1, 3, 5)]
+        linear = [c / 12.92 if c <= .04045 else ((c + .055) / 1.055) ** 2.4 for c in channels]
+        return sum(c * weight for c, weight in zip(linear, (.2126, .7152, .0722)))
+    for colors in PALETTES.values():
+        for foreground, background in [('text', 'tile'), ('muted', 'tile'), ('muted', 'panel'), ('accent', 'panel')]:
+            a, b = sorted([luminance(colors[foreground]), luminance(colors[background])])
+            assert (b + .05) / (a + .05) >= 4.5

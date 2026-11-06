@@ -104,3 +104,6 @@ Widget interface
 - Current Bot API delivery uses animated GIF + inline buttons (PNG/text fallback), not native messageMediaWidget.
 - Widget-profile-1 HTML and official sandbox checks: [docs/WIDGETS.md](docs/WIDGETS.md).
 - Enable/disable with WIDGETS_ENABLED=true/false; disable motion with WIDGET_ANIMATIONS_ENABLED=false.
+
+Cards now include per-message light/dark and motion controls, measured text wrapping,
+and single-message refresh protection. HTML validation is pinned to widget-sandbox v0.6.0.
