@@ -22,7 +22,7 @@ TELETHON_COMMIT = 'dab6bc4d4fc0c7815f6f19c6f643d9f75d2d930c'
 ARCHIVE_SHA256 = 'f119a5dcf73b65fbefbc6caaec744a0a54d6d5756e7e37ca315828e49cbcc98e'
 ARCHIVE_URL = f'https://codeload.github.com/LonamiWebs/Telethon/tar.gz/{TELETHON_COMMIT}'
 RUNTIME = ROOT / '.cache/mtproto-layer233'
-MARKER = SCHEMA_SHA256 + ':' + ARCHIVE_SHA256
+MARKER = SCHEMA_SHA256 + ':' + ARCHIVE_SHA256 + ':message-compat-v1'
 
 
 def unpack_source(data, destination):
@@ -71,7 +71,15 @@ def prepare_runtime():
                             'from telethon import TelegramClient, types, functions; '
                             'from telethon.tl.alltlobjects import LAYER; '
                             'assert LAYER == 233; assert types.InputMediaWidget; '
-                            'assert functions.messages.SetBotWidgetQueryAnswerRequest'],
+                            'assert functions.messages.SetBotWidgetQueryAnswerRequest; '
+                            f'import sys; sys.path.insert(0, {str(ROOT)!r}); '
+                            'from src.infra.mtproto.compat import adapt_message_constructor; '
+                            'import telethon; adapt_message_constructor(telethon); '
+                            'from datetime import datetime, timezone; '
+                            'from telethon.extensions import BinaryReader; '
+                            'raw = next(c for c in types.Message.__mro__ if c.__module__ == "telethon.tl.types"); '
+                            'blob = bytes(raw(id=1, peer_id=types.PeerUser(1), date=datetime.now(timezone.utc), message="smoke")); '
+                            'decoded = BinaryReader(blob).tgread_object(); assert bytes(decoded) == blob'],
                            cwd=scratch, check=True, timeout=30, capture_output=True)
             (scratch / '.ready').write_text(MARKER)
             if RUNTIME.exists():
@@ -92,6 +100,8 @@ def load_runtime():
     else:
         sys.path.insert(0, str(runtime))
     import telethon
+    from .compat import adapt_message_constructor
+    adapt_message_constructor(telethon)
     return telethon
 
 
