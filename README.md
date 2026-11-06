@@ -100,7 +100,7 @@ Project is distributed under the MIT License – see LICENSE file if present.
 For questions or suggestions – open an Issue or Pull Request. Happy development and may your chat be full of activity!
 
 Widget interface
-- /senseiwidget — profile and XP leaderboard cards with refresh buttons.
-- Current Bot API delivery uses PNG + inline buttons, not native messageMediaWidget.
+- /senseiwidget — complete profile and XP leaderboard cards with refresh buttons.
+- Current Bot API delivery uses animated GIF + inline buttons (PNG/text fallback), not native messageMediaWidget.
 - Widget-profile-1 HTML and official sandbox checks: [docs/WIDGETS.md](docs/WIDGETS.md).
-- Enable/disable with WIDGETS_ENABLED=true/false.
+- Enable/disable with WIDGETS_ENABLED=true/false; disable motion with WIDGET_ANIMATIONS_ENABLED=false.
