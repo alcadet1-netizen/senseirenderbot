@@ -18,6 +18,11 @@ class Card:
     rows: tuple[tuple[str, str], ...]
     progress: int | None = None
     art: str = ""
+    theme: str = "dark"
+
+    def __post_init__(self):
+        if self.theme not in {"dark", "light"}:
+            raise ValueError("Unknown widget palette")
 
 
 def label(value: object, limit: int = 48) -> str:
@@ -41,7 +46,7 @@ def profile_card(profile: dict) -> Card:
     xp = int(number(profile.get('xp')))
     level = int(number(profile.get('level')))
     max_level = max(LEVEL_XP_REQUIREMENTS)
-    next_xp = int(number(profile.get('xp_next')))
+    next_xp = int(number(profile.get('xp_next'))) or LEVEL_XP_REQUIREMENTS.get(min(level + 1, max_level), 0)
     current = LEVEL_XP_REQUIREMENTS.get(level, 0)
     maxed = level >= max_level
     progress = 100 if maxed or next_xp <= current else round(100 * (xp - current) / (next_xp - current))
@@ -101,7 +106,7 @@ def to_html(card: Card) -> str:
     )
     art = '<pre class="blade">' + escape(card.art) + '</pre>' if card.art else ''
     return validate_html('''<!doctype html><html><head><meta charset="utf-8"><style>
-body{margin:0;padding:12px 20px;font-family:system-ui;color:var(--tg-theme-text-color,#e8edf6);background:var(--tg-theme-bg-color,#101827)}
+body{margin:0;padding:12px 20px;font:var(--tg-text-font-size,15px)/var(--tg-text-line-height,1.35) system-ui;color:var(--tg-theme-text-color,#e8edf6);background:var(--tg-theme-bg-color,#101827)}
 h2{font-size:18px;margin:0 0 6px;color:var(--tg-theme-button-color,#709cff)}
 .hint{font-size:11px;color:var(--tg-theme-hint-color,#8698b4);margin:8px 0}
 .row{display:flex;justify-content:space-between;gap:12px;font-size:12px;line-height:16px;padding:4px 0;border-bottom:1px solid var(--tg-theme-secondary-bg-color,#253047)}
@@ -112,10 +117,12 @@ h2{font-size:18px;margin:0 0 6px;color:var(--tg-theme-button-color,#709cff)}
 @keyframes arrival{from{transform:translateX(8px)}to{transform:translateX(0)}}
 @keyframes charge{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 .row{animation:arrival 350ms ease-out}.fill{transform-origin:left;animation:charge 700ms ease-out}
-button{margin-top:12px;padding:8px 12px}
+@media(prefers-reduced-motion:reduce){.row,.fill{animation:none}}
+button{margin-top:12px;padding:10px 16px;min-height:40px;border-radius:12px}
+.footer{padding-bottom:max(8px,env(safe-area-inset-bottom));padding-right:max(12px,var(--tg-content-safe-area-corner-right,0px))}
 </style></head><body><h2>''' + escape(card.title) + '</h2><div class="hint">' + escape(card.subtitle) +
         '</div><div id="stats">' + rows + progress + art + '''</div>
-<button id="toggle">Скрыть / показать</button><div class="hint">Снимок · обновление кнопкой под сообщением</div>
+<button id="toggle">Скрыть / показать</button><div class="hint footer">Снимок · обновление кнопкой под сообщением</div>
 <script>
 var stats=document.getElementById('stats');
 document.getElementById('toggle').onclick=function(){stats.style.display=stats.style.display==='none'?'block':'none';};
@@ -125,44 +132,8 @@ if(window.TelegramWidget){window.TelegramWidget.ready();}
 
 def to_png(card: Card) -> bytes:
     """Bot API compatibility view. No HTML/JS is executed by the server."""
-    from PIL import Image, ImageDraw, ImageFont
-    def font(size):
-        # DejaVu is installed explicitly in the production Docker image.
-        try:
-            return ImageFont.truetype('DejaVuSans.ttf', size)
-        except OSError:
-            return ImageFont.load_default(size=size)
-    width = 880
-    height = 205 + 58 * len(card.rows) + (65 if card.progress is not None else 0) + (46 if card.art else 0)
-    image = Image.new('RGB', (width, height), '#101827')
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle((16, 16, width - 16, height - 16), radius=24, outline='#293751', width=2)
-    draw.text((42, 38), card.title, font=font(30), fill='#86aaff')
-    draw.text((42, 84), card.subtitle[:48], font=font(19), fill='#a7b7cf')
-    for i, (key, value) in enumerate(card.rows):
-        y = 136 + i * 58
-        # Bound labels to their column by measured width, including wide Unicode.
-        key = label(key)
-        while key and draw.textlength(key, font=font(23)) > 325:
-            key = key[:-1]
-        draw.text((42, y), key, font=font(23), fill='#bdc9dc')
-        value_font = font(23)
-        for size in range(23, 12, -1):
-            value_font = font(size)
-            if draw.textlength(value, font=value_font) <= 440:
-                break
-        # Names/titles have their own bounded values; shrink rather than cut.
-        draw.text((width - 42, y), value, font=value_font, fill='#f1f5fc', anchor='ra')
-    if card.progress is not None:
-        y = 145 + len(card.rows) * 58
-        draw.rounded_rectangle((42, y, width - 42, y + 10), radius=5, fill='#293751')
-        p = max(0, min(100, card.progress))
-        if p:
-            draw.rounded_rectangle((42, y, 42 + (width - 84) * p / 100, y + 10), radius=5, fill='#86aaff')
-        draw.text((42, y + 20), f'Прогресс уровня: {p}%', font=font(18), fill='#a7b7cf')
-    if card.art:
-        draw.text((42, height - 94), card.art, font=font(20), fill='#86aaff')
-    draw.text((42, height - 49), 'SENSEI  /  Снимок · обновите кнопкой под карточкой', font=font(17), fill='#8394b0')
+    from src.widgets.rendering import render_image
+    image, _ = render_image(card)
     output = BytesIO()
     image.save(output, format='PNG')
     return output.getvalue()

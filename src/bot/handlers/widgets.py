@@ -5,6 +5,7 @@ Native HTML export is admin-only until a layer-233 transport is available.
 """
 import asyncio
 import logging
+from dataclasses import replace
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
@@ -30,13 +31,34 @@ class WidgetAction(CallbackData, prefix='sw'):
     view: str
 
 
-def keyboard(owner: int, view: str) -> InlineKeyboardMarkup:
-    def button(text, target):
-        return InlineKeyboardButton(text=text, callback_data=WidgetAction(owner=owner, view=target).pack())
+def decode_view(value: str, default_motion: bool = True) -> tuple[str, str, bool]:
+    """Accept old callback links; new ones carry palette and motion per message."""
+    if value in {'profile', 'top', 'open'}:
+        return ('profile' if value == 'open' else value, 'dark', default_motion)
+    parts = value.split('.')
+    if len(parts) != 3 or parts[0] not in {'profile', 'top'} or parts[1] not in {'d', 'l'} or parts[2] not in {'a', 's'}:
+        raise ValueError('Unknown widget view')
+    return parts[0], ('dark' if parts[1] == 'd' else 'light'), parts[2] == 'a'
+
+
+def keyboard(owner: int, view: str, *, theme='dark', animate=False, allow_animation=True) -> InlineKeyboardMarkup:
+    def button(text, target, palette=theme, motion=animate):
+        state = f'{target}.{palette[0]}.{"a" if motion else "s"}'
+        return InlineKeyboardButton(text=text, callback_data=WidgetAction(owner=owner, view=state).pack())
+    controls = [button('☀ Светлая' if theme == 'dark' else '☾ Тёмная', view,
+                       palette='light' if theme == 'dark' else 'dark')]
+    if allow_animation:
+        controls.append(button('Ⅱ Без движения' if animate else '▷ Анимация', view, motion=not animate))
     return InlineKeyboardMarkup(inline_keyboard=[
-        [button('Профиль', 'profile'), button('Рейтинг XP', 'top')],
+        [button('● Профиль' if view == 'profile' else 'Профиль', 'profile'),
+         button('● Рейтинг XP' if view == 'top' else 'Рейтинг XP', 'top')],
+        controls,
         [button('↻ Обновить', view)],
     ])
+
+
+# Only one refresh may own a message. Entries disappear even on cancellation.
+_inflight: set[tuple[int, int]] = set()
 
 
 async def load_card(container: Container, user, view: str) -> Card:
@@ -63,8 +85,8 @@ def text_fallback(card: Card) -> str:
     return '\n'.join(lines)
 
 
-async def show_card(message: Message, card: Card, owner: int, view: str, *, edit=False, animate=False):
-    markup = keyboard(owner, view)
+async def show_card(message: Message, card: Card, owner: int, view: str, *, edit=False, animate=False, allow_animation=True):
+    markup = keyboard(owner, view, theme=card.theme, animate=animate, allow_animation=allow_animation)
     caption = f'{card.title}\nСнимок данных. Для актуальных значений нажмите «Обновить».'
     has_media = bool(getattr(message, 'photo', None) or getattr(message, 'animation', None))
     if edit and not has_media:
@@ -122,7 +144,8 @@ async def cmd_widget(message: Message, container: Container):
     try:
         card = await load_card(container, message.from_user, 'profile')
         await show_card(message, card, message.from_user.id, 'profile',
-                        animate=container.settings.widget_animations_enabled)
+                        animate=container.settings.widget_animations_enabled,
+                        allow_animation=container.settings.widget_animations_enabled)
     except Exception:
         logger.exception('Widget profile unavailable')
         await message.answer('Не удалось загрузить карточку. Попробуйте позже или используйте /mysensei.')
@@ -136,19 +159,31 @@ async def widget_callback(query: CallbackQuery, callback_data: WidgetAction, con
     if callback_data.owner != query.from_user.id:
         await query.answer('Это чужая карточка. Откройте свою: /senseiwidget', show_alert=True)
         return
-    if callback_data.view not in {'profile', 'top', 'open'} or not isinstance(query.message, Message):
+    if not isinstance(getattr(query, "message", None), Message):
         await query.answer('Карточка недоступна.', show_alert=True)
         return
-    # Acknowledge before database access / image generation.
-    await query.answer()
     try:
-        view = 'profile' if callback_data.view == 'open' else callback_data.view
-        card = await load_card(container, query.from_user, view)
+        view, theme, animate = decode_view(callback_data.view, container.settings.widget_animations_enabled)
+    except ValueError:
+        await query.answer('Карточка недоступна.', show_alert=True)
+        return
+    key = (getattr(getattr(query.message, 'chat', None), 'id', 0),
+           getattr(query.message, 'message_id', 0))
+    if key in _inflight:
+        await query.answer('Карточка уже обновляется. Подождите немного.')
+        return
+    _inflight.add(key)
+    try:
+        await query.answer()
+        card = replace(await load_card(container, query.from_user, view), theme=theme)
         await show_card(query.message, card, query.from_user.id, view, edit=callback_data.view != 'open',
-                        animate=container.settings.widget_animations_enabled)
+                        animate=animate and container.settings.widget_animations_enabled,
+                        allow_animation=container.settings.widget_animations_enabled)
     except Exception:
         logger.exception('Widget refresh failed')
         await query.message.answer('Не удалось обновить карточку. Попробуйте позже.')
+    finally:
+        _inflight.discard(key)
 
 
 @router.message(Command('widgethtml'))

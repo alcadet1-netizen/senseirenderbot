@@ -10,9 +10,9 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT / '.cache'
-UPSTREAM = CACHE / 'widget-sandbox'
+UPSTREAM = CACHE / 'widget-sandbox-v0.6.0'
 TOOLS = CACHE / 'widget-tools'
-COMMIT = 'e9654cab644145521e754004de220aa4ed0f3ad1'  # v0.1.1
+COMMIT = 'd6f39f3bc9a126aa418a1ac74825d84d6144183e'  # v0.6.0
 DEPS = ['esbuild@0.28.2', 'tsx@4.23.15', 'quickjs-emscripten-core@0.32.0',
         'css-tree@3.2.1', 'linkedom@0.18.13', 'parse5@8.0.0',
         '@jitl/quickjs-ffi-types@0.32.0']
@@ -25,7 +25,7 @@ def run(*args):
 def main():
     CACHE.mkdir(exist_ok=True)
     if not UPSTREAM.exists():
-        run('git', 'clone', '--depth', '1', '--branch', 'v0.1.1',
+        run('git', 'clone', '--depth', '1', '--branch', 'v0.6.0',
             'https://github.com/TelegramMessenger/widget-sandbox.git', str(UPSTREAM))
     actual = subprocess.check_output(['git', '-C', str(UPSTREAM), 'rev-parse', 'HEAD'], text=True).strip()
     if actual != COMMIT:
