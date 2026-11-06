@@ -5,6 +5,7 @@
 from aiogram import Router
 
 from src.bot.handlers.widgets import router as widgets_router
+from src.bot.handlers.widget_check import router as widget_check_router
 
 from src.bot.handlers.user_commands import router as user_router
 from src.bot.handlers.banzai import router as banzai_router
@@ -57,6 +58,7 @@ def setup_routers() -> Router:
 
     # 2. user_router — пользовательские команды и текстовые триггеры.
     #    Отрабатывает только если ни одна активная игра не匹配ла сообщение.
+    main_router.include_router(widget_check_router)
     main_router.include_router(widgets_router)
     main_router.include_router(user_router)
 
