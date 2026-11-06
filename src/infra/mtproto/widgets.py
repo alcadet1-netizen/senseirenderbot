@@ -22,6 +22,7 @@ class MtprotoWidgets:
         self._connection_lock = asyncio.Lock()
         self._generation = 0
         self._closed = False
+        self.inline_enabled = None
 
     @classmethod
     async def start(cls, container, bot_id):
@@ -44,6 +45,7 @@ class MtprotoWidgets:
             await client.connect()
             await client.sign_in(bot_token=settings.bot_token)
             me = await client.get_me()
+            transport.inline_enabled = getattr(me, 'bot_inline_placeholder', None) is not None
             if not me.bot or me.id != bot_id:
                 raise RuntimeError('MTProto and Bot API identities must be the SAME bot')
         except asyncio.CancelledError:
@@ -85,7 +87,7 @@ class MtprotoWidgets:
         failure = self._background_failure()
         return (f'MTProto: connected={self._connected()}, closed={self._closed}, '
                 f'updates={failure or "no_failure_recorded"}, recovering={self._connection_lock.locked()}, '
-                f'reconnect_generation={self._generation}')
+                f'reconnect_generation={self._generation}, inline_enabled={self.inline_enabled}')
 
     def _check_ready(self, stage):
         if self._closed:
@@ -213,7 +215,59 @@ class MtprotoWidgets:
             query_id=int(method.widget_query_id), result=method.data,
         ), 'answer_query')
 
+    async def answer_inline_hedgehog(self, update):
+        """Official via-bot native media; user explicitly selects it in a chat."""
+        from src.core.exceptions import DailyAlreadyClaimedError
+        from src.services.hedgehog_service import GameError
+        from src.services.maintenance_service import MaintenanceService
+        from src.widgets.hedgehog import to_hedgehog_html
+        from src.widgets.limits import RENDER_SLOTS
+
+        if update.query.strip().casefold() not in {'ежа', 'ёж', 'еж', 'hedgehog'}:
+            return
+        results = []
+        if (not update.offset and not self.container.settings.maintenance_mode
+                and not MaintenanceService.is_enabled()):
+            try:
+                # Existing authenticated profile only. Opening inline search never
+                # starts the clock, changes XP/coins or consumes the daily claim.
+                game = await self.container.hedgehog_service.issue(update.user_id)
+                async with RENDER_SLOTS:
+                    html = await asyncio.to_thread(
+                        to_hedgehog_html, game['token'],
+                        self.container.settings.BASE_DIR / 'src/infra/storage/ega',
+                    )
+                results.append(self.types.InputBotInlineResult(
+                    id='hedgehog_' + game['token'], type='article',
+                    title='🦔 Погладь ежа · 7 секунд',
+                    description='Нативный виджет в этом чате. Одно поглаживание — +10% монет.',
+                    send_message=self.types.InputBotInlineMessageWidget(
+                        width=340, height=0, html=html, allow_queries=True,
+                        shared_widget=False, message='🦔 Погладь ежа · 7 секунд',
+                    ),
+                ))
+            except (GameError, DailyAlreadyClaimedError):
+                pass  # No profile, banned, already claimed: never offer a playable result.
+            except (OSError, ValueError):
+                logger.error('Native inline hedgehog HTML build failed')
+        # Never cache a personal token for other users (or for the next UTC day).
+        accepted = await self._request(self.functions.messages.SetInlineBotResultsRequest(
+            query_id=update.query_id, results=results, cache_time=0, private=True,
+        ), 'answer_inline_hedgehog')
+        logger.info('Native inline hedgehog results: accepted=%s count=%d', bool(accepted), len(results))
+        return accepted
+
     async def on_update(self, update):
+        if isinstance(update, self.types.UpdateBotInlineQuery):
+            self.inline_enabled = True
+            from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure
+            try:
+                await self.answer_inline_hedgehog(update)
+            except WIDGET_TRANSPORT_ERRORS as exc:
+                describe_failure(exc)  # Sanitized category/reference; never HTML, token or raw update.
+            except Exception:
+                logger.error('Native inline hedgehog result failed; no daily reward issued')
+            return
         from aiogram.types import Update
         from src.bot.native_widgets import HedgehogWidgetMiddleware
         if not isinstance(update, (self.types.UpdateBotWidgetQuery,
@@ -221,9 +275,10 @@ class MtprotoWidgets:
                                    self.types.UpdateBotWidgetCopyQuery)):
             return
         try:
-            # We send only original, non-shared widgets. Never process wallet,
-            # inline or forwarded-copy requests as game actions.
-            allowed = (isinstance(update, self.types.UpdateBotWidgetQuery)
+            # Direct and via-bot originals use authenticated Telegram identity.
+            # Forwarded copies and wallet requests are never game actions.
+            allowed = (isinstance(update, (self.types.UpdateBotWidgetQuery,
+                                           self.types.UpdateInlineBotWidgetQuery))
                        and isinstance(update.query_type, self.types.WidgetQueryTypeData)
                        and not update.query_type.with_wallet
                        and update.wallet_card is None)
@@ -238,9 +293,14 @@ class MtprotoWidgets:
                 value = ''
             # All identity/message coordinates come from authenticated MTProto
             # updates. The HTML supplies only the untrusted 64-byte action.
-            query = {'id': str(update.query_id), 'from': {'id': update.user_id},
-                     'chat': {'id': self.utils.get_peer_id(update.peer), 'type': update.chat_type},
-                     'message_id': update.msg_id, 'data': value}
+            query = {'id': str(update.query_id), 'from': {'id': update.user_id}, 'data': value}
+            if isinstance(update, self.types.UpdateInlineBotWidgetQuery):
+                # Opaque authenticated coordinates, NOT an invented chat/message ID.
+                query['inline_message_id'] = bytes(update.inline_message_id).hex()
+                query['chat_type'] = update.chat_type
+            else:
+                query['chat'] = {'id': self.utils.get_peer_id(update.peer), 'type': update.chat_type}
+                query['message_id'] = update.msg_id
             event = Update.model_validate({'update_id': 0, 'widget_query': query})
             async def unused_handler(event, data):
                 return None

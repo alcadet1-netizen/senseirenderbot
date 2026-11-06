@@ -62,7 +62,10 @@ class HedgehogWidgetMiddleware(BaseMiddleware):
             return None
         response = {'error': 'Вызови /senseidaily для своей игры.'}
         try:
-            if shared is not None or not isinstance(query.get('chat'), dict) or not query.get('message_id'):
+            direct = isinstance(query.get('chat'), dict) and bool(query.get('message_id'))
+            inline_id = query.get('inline_message_id')
+            inline = isinstance(inline_id, str) and 0 < len(inline_id) <= 256
+            if shared is not None or not (direct or inline):
                 raise GameError('Пересланная игра не выдаёт наград. Вызови /senseidaily.')
             if self.container.settings.maintenance_mode or MaintenanceService.is_enabled():
                 raise GameError('Сенсей на техобслуживании. Попробуй позже.')

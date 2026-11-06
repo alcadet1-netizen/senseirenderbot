@@ -2,6 +2,8 @@
 import asyncio
 import logging
 
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
 from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure, widget_chat_advice
 
 from src.bot.native_widgets import send_native_widget
@@ -35,10 +37,28 @@ async def launch_hedgehog(message, user, container, token=None):
         await message.answer(str(exc), parse_mode=None)
     except WIDGET_TRANSPORT_ERRORS as exc:
         failure = describe_failure(exc, message.bot)
-        text = failure.public_text()
-        if failure.category in {'widget_policy', 'permissions'} and message.chat.type != 'private':
-            text += '\n\n' + await widget_chat_advice(message)
-        await message.answer(text, parse_mode=None)
+        inline_available = (
+            failure.category == 'widget_policy' and message.chat.type in {'group', 'supergroup'}
+            and callable(getattr(getattr(container, 'native_widget_transport', None),
+                                 'answer_inline_hedgehog', None))
+        )
+        kwargs = {}
+        if inline_available:
+            text = ('🦔 Telegram отклонил прямую отправку виджета в эту группу. '
+                    'Попробуйте официальную inline-отправку: нажмите кнопку и выберите «Погладь ежа». '
+                    'Виджет вставляется в эту же группу — не Mini App и не личка.\n'
+                    'Если поиск недоступен, владельцу бота нужно включить /setinline в @BotFather.\n'
+                    'Попытка не потрачена, ежедневная награда не начислена. '
+                    'Допуск inline-отправки также проверяет Telegram.\n'
+                    f'Диагностика прямой отправки: {failure.category} / {failure.reference}.')
+            kwargs['reply_markup'] = InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text='🦔 Вставить ежа в эту группу', switch_inline_query_current_chat='ежа')
+            ]])
+        else:
+            text = failure.public_text()
+            if failure.category in {'widget_policy', 'permissions'} and message.chat.type != 'private':
+                text += '\n\n' + await widget_chat_advice(message)
+        await message.answer(text, parse_mode=None, **kwargs)
     except (OSError, ValueError):
         logger.exception('Could not build native hedgehog widget')
         await message.answer(
