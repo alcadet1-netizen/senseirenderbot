@@ -230,3 +230,84 @@ class DailyService:
             return False, f"через {hours} ч. {minutes} мин."
 
         return True, None
+
+    async def settle_hedgehog(self, user_id: int, won: bool, day: str) -> dict:
+        """Atomically apply a day's game result to the user, never subtract funds.
+
+        The receipt and the balance/streak change live in ONE Mongo document.
+        Optional ledger writes follow that atomic commit; retries return the
+        stored receipt rather than re-crediting after a network failure.
+        """
+        from pymongo import ReturnDocument
+        from src.services.hedgehog_service import FAILURE_MESSAGE, GameError, utc_day
+
+        if day != utc_day():
+            raise GameError('Наступил новый день. Откройте /senseidaily заново.')
+        lock = await self._get_user_lock(user_id)
+        async with lock:
+            user = await self.users.find_one({'id': user_id})
+            if not user or user.get('is_banned'):
+                raise GameError('Профиль недоступен.')
+            if user.get('hedgehog_day') == day:
+                return user['hedgehog_result']
+            claim_date = datetime.combine(date.fromisoformat(day), datetime.min.time())
+            if await self.daily_claims.find_one({'user_id': user_id, 'claim_date': claim_date}):
+                raise DailyAlreadyClaimedError('завтра после 00:00 UTC')
+            streak = 0
+            if won:
+                previous = user.get('last_daily')
+                if isinstance(previous, str):
+                    previous = datetime.fromisoformat(previous)
+                yesterday = date.fromisoformat(day) - timedelta(days=1)
+                streak = user.get('daily_streak', 0) + 1 if previous and previous.date() == yesterday else 1
+            bonus_xp, bonus_coins = 0, 0
+            if won:
+                for days, bonus in sorted(DAILY_STREAK_BONUSES.items()):
+                    if streak >= days:
+                        bonus_xp, bonus_coins = bonus
+            total_xp = DAILY_BASE_XP + bonus_xp if won else 0
+            bank = await self.bank.find_one({'_id': 'main'}) if won else None
+            total_coins = min(DAILY_BASE_COINS + bonus_coins, max(0, int((bank or {}).get('balance', 0)))) if won else 0
+            result = {
+                'success': won, 'streak': streak,
+                'xp': DAILY_BASE_XP if won else 0, 'coins': DAILY_BASE_COINS if won else 0,
+                'bonus_xp': bonus_xp, 'bonus_coins': bonus_coins,
+                'total_xp': total_xp, 'total_coins': total_coins,
+                'message': 'Вы погладили ежа! Он довольно фырчит, а бонус уже ваш. 🦔' if won else FAILURE_MESSAGE,
+            }
+            now = datetime.now(timezone.utc)
+            changes = {'$set': {'hedgehog_day': day, 'hedgehog_result': result,
+                                'daily_streak': streak, 'last_daily': now, 'updated_at': now}}
+            if won:
+                changes['$inc'] = {'xp': total_xp, 'coins': total_coins}
+            committed = await self.users.find_one_and_update(
+                {'id': user_id, 'is_banned': {'$ne': True}, 'hedgehog_day': {'$ne': day}},
+                changes, return_document=ReturnDocument.AFTER,
+            )
+            if committed is None:
+                cached = await self.users.find_one({'id': user_id, 'hedgehog_day': day})
+                if cached:
+                    return cached['hedgehog_result']
+                raise GameError('Не удалось записать результат. Попробуйте ещё раз.')
+            # The user receipt is authoritative. Bank accounting and journal
+            # writes below are best-effort, not a multi-document transaction.
+            try:
+                if total_coins:
+                    await self.bank.update_one(
+                        {'_id': 'main', 'balance': {'$gte': total_coins}},
+                        {'$inc': {'balance': -total_coins}},
+                    )
+                key = f'hedgehog:{user_id}:{day}'
+                await self.daily_claims.update_one({'_id': key}, {'$setOnInsert': {
+                    'user_id': user_id, 'claim_date': claim_date, 'xp_received': total_xp,
+                    'coins_received': total_coins, 'streak_at_claim': streak,
+                    'game_result': result, 'created_at': now,
+                }}, upsert=True)
+                if won:
+                    await self.transactions.update_one({'_id': key}, {'$setOnInsert': {
+                        'user_id': user_id, 'tx_type': 'daily_bonus', 'xp_change': total_xp,
+                        'coins_change': total_coins, 'description': 'Hedgehog daily game', 'created_at': now,
+                    }}, upsert=True)
+            except Exception:
+                logger.exception('Hedgehog receipt committed; daily journal needs reconciliation: user=%s day=%s', user_id, day)
+            return result

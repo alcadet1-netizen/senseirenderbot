@@ -16,6 +16,7 @@ from src.core.container import Container
 from src.core.constants import RANDOM_MESSAGE_CHANCE
 from src.core.exceptions import DailyAlreadyClaimedError
 from src.core.visuals import Visuals
+from src.bot.presenters.hedgehog_presenter import launch_hedgehog
 from src.bot.handlers.roulette import cmd_senseiroulette as roulette_handler
 from src.texts.phrases import get_random_phrase, check_easter_egg, get_random_pour_phrase, ERROR_COOLDOWN
 
@@ -91,47 +92,9 @@ async def trigger_pour(message: Message, container: Container):
 
 @router.message(F.text.regexp(DAILY_PATTERN))
 async def trigger_daily(message: Message, container: Container):
-    """Триггер на 'ежа/фарма'."""
-    if not message.from_user:
-        return
-
-    # Delete trigger message
-    try:
-        await message.delete()
-    except TelegramBadRequest:
-        pass
-    except Exception as e:
-        logging.warning(f"⚠️ Failed to delete trigger message in trigger_daily: {e}")
-
-    try:
-        result = await container.daily_service.claim_daily(
-            user_id=message.from_user.id,
-            username=message.from_user.username,
-            first_name=message.from_user.first_name or "",
-            is_bot=message.from_user.is_bot or False
-        )
-
-        if result["success"]:
-            username = message.from_user.username
-            mention = f"@{username}" if username else f"<b>{message.from_user.full_name}</b>"
-
-            card = Visuals.daily_reward(
-                xp=result["xp"],
-                coins=result["coins"],
-                streak=result["streak"],
-                bonus_xp=result["bonus_xp"],
-                bonus_coins=result["bonus_coins"],
-            )
-            await message.answer(f"{mention}\n\n{card}", parse_mode="HTML")
-
-    except DailyAlreadyClaimedError as e:
-        username = message.from_user.username
-        mention = f"@{username}" if username else f"<b>{html.escape(message.from_user.full_name)}</b>"
-        await message.answer(
-            f"{mention}\n\n"
-            f"⏰ Бонус уже получен!\nСледующий: {e.next_claim_time}",
-            parse_mode="HTML"
-        )
+    """Алиасы ежедневного бонуса не обходят мини-игру."""
+    if message.from_user:
+        await launch_hedgehog(message, message.from_user, container)
 
 
 @router.message(F.text.regexp(CRYPTO_TOP_PATTERN))

@@ -47,6 +47,13 @@ class Container:
     _captcha_service: Optional["CaptchaService"] = field(default=None, init=False, repr=False)
 
     @property
+    def hedgehog_service(self):
+        if getattr(self, '_hedgehog_service', None) is None:
+            from src.services.hedgehog_service import HedgehogService
+            self._hedgehog_service = HedgehogService(self.mongo_client, self.daily_service)
+        return self._hedgehog_service
+
+    @property
     def boss_service(self):
         if self._boss_service is None:
             from src.services.boss_service import BossService
