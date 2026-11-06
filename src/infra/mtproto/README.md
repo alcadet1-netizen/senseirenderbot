@@ -12,8 +12,10 @@ https://github.com/LonamiWebs/Telethon/tree/dab6bc4d4fc0c7815f6f19c6f643d9f75d2d
 and checks the archive's SHA-256 before extracting regular files. Telethon's
 LICENSE is retained in the generated cache. The complete official schema replaces
 Telethon's older API schema; the upstream generator builds both types and
-functions, including response and update deserialization. No source monkey
-patching, forced layer number on old types, or guessed access_hash is used.
+functions, including response and update deserialization. No raw TL constructor replacement, forced layer number on old types, or guessed
+access_hash is used. A narrow friendly Message constructor adapter is installed
+by compat.py: new optional layer-233 fields are preserved on Telethon's friendly
+Message subclasses, whose handwritten constructor is not regenerated upstream.
 
 Generated code and build sources live under `.cache/mtproto-layer233`, excluded
 from Git. Only this optional runtime imports Telethon. The existing aiogram bot

@@ -2,6 +2,8 @@
 import asyncio
 import logging
 import secrets
+import traceback
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +70,10 @@ class MtprotoWidgets:
             detail = type(error).__name__
             if isinstance(code, int):
                 detail += f' constructor=0x{code & 0xffffffff:08x}'
+            frames = traceback.extract_tb(error.__traceback__)
+            if frames:
+                frame = frames[-1]
+                detail += f' at={Path(frame.filename).name}:{frame.lineno}:{frame.name}'
             return detail
         task = getattr(self.client, '_updates_handle', None)
         if (isinstance(task, asyncio.Future) and task.done() and self._connected()

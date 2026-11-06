@@ -372,3 +372,89 @@ async def test_normal_rpc_cancellation_is_not_retried(tl):
         await transport._request(tl.functions.updates.GetStateRequest(), 'send_media')
     client.connect.assert_not_called()
     assert client.call_count == 1
+
+
+@pytest.mark.parametrize('name', ['Message', 'MessageService', 'MessageEmpty'])
+@pytest.mark.parametrize('new_fields', [False, True])
+def test_friendly_message_wire_roundtrip_retains_layer233_fields(tl, name, new_fields):
+    from datetime import datetime, timezone
+    from telethon.extensions import BinaryReader
+    cls = getattr(tl.types, name)
+    raw = next(c for c in cls.__mro__ if c.__module__ == 'telethon.tl.types' and c.__name__ == name)
+    kwargs = {'id': 7, 'peer_id': tl.types.PeerUser(7)}
+    if name != 'MessageEmpty':
+        kwargs['date'] = datetime(2026, 11, 7, tzinfo=timezone.utc)
+    if name == 'Message':
+        kwargs['message'] = 'Test'
+        if new_fields:
+            kwargs.update(from_rank='Captain', guestchat_via_from=tl.types.PeerUser(8),
+                          rich_message=tl.types.RichMessage(blocks=[], photos=[], documents=[], rtl=True))
+    if name == 'MessageService':
+        kwargs['action'] = tl.types.MessageActionEmpty()
+    payload = bytes(raw(**kwargs))
+    with BinaryReader(payload) as reader:
+        result = reader.tgread_object()
+    assert isinstance(result, cls)
+    assert bytes(result) == payload
+    if name == 'Message':
+        assert result.from_rank == ('Captain' if new_fields else None)
+        assert (result.rich_message.rtl if new_fields else result.rich_message is None)
+        if new_fields:
+            assert result.guestchat_via_from.user_id == 8
+
+
+def test_without_adapter_even_plain_message_reproduces_unexpected_from_rank(tl, monkeypatch):
+    from datetime import datetime, timezone
+    from telethon.tl.custom.message import Message as CustomMessage
+    from telethon.extensions import BinaryReader
+    raw = next(c for c in tl.types.Message.__mro__ if c.__module__ == 'telethon.tl.types')
+    payload = bytes(raw(id=7, peer_id=tl.types.PeerUser(7),
+                        date=datetime.now(timezone.utc), message='No new flags set'))
+    assert hasattr(CustomMessage.__init__, '__wrapped__')
+    monkeypatch.setattr(CustomMessage, '__init__', CustomMessage.__init__.__wrapped__)
+    with pytest.raises(TypeError, match='from_rank'):
+        with BinaryReader(payload) as reader:
+            reader.tgread_object()
+
+
+def test_message_adapter_idempotent_and_does_not_swallow_unknown_keywords(tl):
+    import telethon
+    from telethon.tl.custom.message import Message as CustomMessage
+    from src.infra.mtproto.compat import adapt_message_constructor
+    before = CustomMessage.__init__
+    adapt_message_constructor(telethon)
+    assert CustomMessage.__init__ is before
+    with pytest.raises(TypeError, match='unknown_future_field'):
+        tl.types.Message(id=7, peer_id=tl.types.PeerUser(7), unknown_future_field=True)
+
+
+@pytest.mark.asyncio
+async def test_real_update_container_and_difference_decode_and_preprocess(tl):
+    from datetime import datetime, timezone
+    from telethon import TelegramClient
+    from telethon.sessions import MemorySession
+    from telethon.extensions import BinaryReader
+    raw = next(c for c in tl.types.Message.__mro__ if c.__module__ == 'telethon.tl.types')
+    now = datetime(2026, 11, 7, tzinfo=timezone.utc)
+    message = raw(id=7, peer_id=tl.types.PeerUser(7), from_id=tl.types.PeerUser(7),
+                  date=now, message='ordinary command', from_rank='Captain')
+    user = tl.types.User(id=7, access_hash=123, first_name='Tester')
+    update = tl.types.UpdateNewMessage(message=message, pts=1, pts_count=1)
+    containers = [
+        tl.types.Updates(updates=[update], users=[user], chats=[], date=now, seq=0),
+        tl.types.updates.Difference(new_messages=[message], new_encrypted_messages=[],
+                                    other_updates=[], chats=[], users=[user],
+                                    state=tl.types.updates.State(pts=1, qts=0, date=now, seq=0, unread_count=0)),
+    ]
+    client = TelegramClient(MemorySession(), 123, 'not-a-real-hash')
+    for original in containers:
+        with BinaryReader(bytes(original)) as reader:
+            decoded = reader.tgread_object()
+        # Actual Telethon update preprocessing, not mocked economic handler.
+        updates = decoded.updates if isinstance(decoded, tl.types.Updates) else [
+            tl.types.UpdateNewMessage(message=decoded.new_messages[0], pts=1, pts_count=1)]
+        processed = await client._preprocess_updates(updates, decoded.users, decoded.chats)
+        assert processed[0].message.from_rank == 'Captain'
+        assert processed[0]._entities[7].id == 7
+    peer = await client.get_input_entity(7)
+    assert peer.user_id == 7 and peer.access_hash == 123
