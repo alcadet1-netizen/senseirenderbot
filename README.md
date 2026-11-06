@@ -111,4 +111,4 @@ and single-message refresh protection. HTML validation is pinned to widget-sandb
 /upkatana and «ап катана» now show a compact blade-growth animation for the completed
 attempt, with actual before/after lengths, cost, rank and PNG/text fallbacks.
 
-Daily hedgehog Mini App: see [setup and rules](docs/HEDGEHOG_MINI_APP.md).
+Daily hedgehog native chat widget: see [setup, rules and beta/test limitation](docs/HEDGEHOG_WIDGET.md).

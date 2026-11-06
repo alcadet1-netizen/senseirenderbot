@@ -52,7 +52,10 @@ class Settings(BaseSettings):
 
     widget_animations_enabled: bool = Field(default=True, alias="WIDGET_ANIMATIONS_ENABLED")
 
-    # Public HTTPS base URL for the daily Telegram Mini App.
+    # Explicit opt-in: the upstream native widget beta uses Telegram TEST chats.
+    telegram_widget_beta: bool = Field(default=False, alias="TELEGRAM_WIDGET_BETA")
+
+    # Legacy Mini App links remain usable, but daily now sends a native widget.
     mini_app_url: str = Field(default="", alias="MINI_APP_URL")
 
     # BANK

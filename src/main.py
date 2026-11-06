@@ -13,6 +13,7 @@ from aiogram.types import BotCommand
 
 from src.bot import create_bot, create_dispatcher
 from src.bot.handlers import setup_routers
+from src.bot.native_widgets import HedgehogWidgetMiddleware
 from src.bot.middlewares import (
     DatabaseMiddleware,
     DependencyMiddleware,
@@ -151,6 +152,9 @@ async def main() -> None:
     site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get('PORT', '10000')))
     await site.start()
 
+    # Future Bot API widget queries are extras until aiogram types catch up.
+    dp.update.outer_middleware(HedgehogWidgetMiddleware(container))
+
     # Регистрируем middleware для сообщений
     dp.message.middleware(LoggingMiddleware())
     dp.message.middleware(MaintenanceMiddleware())
@@ -185,7 +189,7 @@ async def main() -> None:
         logger.info("🔄 Starting polling...")
         await dp.start_polling(
             bot,
-            allowed_updates=dp.resolve_used_update_types(),
+            allowed_updates=[*dp.resolve_used_update_types(), "widget_query", "shared_widget_query"],
             close_bot_session=True,
         )
     finally:

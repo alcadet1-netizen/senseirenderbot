@@ -1,5 +1,7 @@
 # Интерфейс карточек и Telegram widget-sandbox
 
+> **Обновление для Ежа:** ежедневная игра получила отдельную [нативную доставку через документированный Bot API 10.4 beta/test](HEDGEHOG_WIDGET.md). Ниже ограничения PNG/GIF относятся к профилю, рейтингу и катане; статус production-поддержки виджетов не подтверждён.
+
 ## Что реализовано
 
 - `/senseiwidget`, кнопка «🧩 Карточки» в профиле и основной клавиатуре.
@@ -50,7 +52,7 @@
 [Формат доставки](https://github.com/TelegramMessenger/widget-sandbox/blob/v0.6.0/docs/tgw-format.md)
 описывает `inputMediaWidget` / `messageMediaWidget` через MTProto layer 233.
 В используемом aiogram нет типизированного транспорта для них. Не добавлен
-вымышленный `sendWidget`, `.html` не выдается за нативный media-widget,
+production-вызов `sendWidget` для этих карточек, `.html` не выдается за нативный media-widget,
 PNG/GIF-карточка не исполняет HTML.
 
 Для настоящей нативной доставки ещё нужно:
