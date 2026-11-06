@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, alias="DEBUG")
     maintenance_mode: bool = Field(default=False, alias="MAINTENANCE_MODE")
 
+    # Widget-compatible cards; native HTML still requires a layer-233 transport.
+    widgets_enabled: bool = Field(default=True, alias="WIDGETS_ENABLED")
+
     # BANK
     bank_initial_coins: float = Field(default=1_000_000_000.0, alias="BANK_INITIAL_COINS")
 

@@ -11,3 +11,10 @@ venv
 .idea
 .vscode
 *.log
+
+# Never bake local credentials or development caches into the deploy image.
+.env
+.env.*
+!.env.example
+.cache/
+.pytest_cache/
