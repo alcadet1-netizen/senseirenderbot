@@ -2,7 +2,7 @@
 import asyncio
 import logging
 
-from aiogram.exceptions import TelegramBadRequest, TelegramNotFound
+from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure
 
 from src.bot.native_widgets import SendWidget
 from src.core.exceptions import DailyAlreadyClaimedError
@@ -33,14 +33,9 @@ async def launch_hedgehog(message, user, container, token=None):
         await message.answer(f'🦔 Сегодня вы уже встречались с ежом. Следующая попытка: {exc.next_claim_time}', parse_mode=None)
     except GameError as exc:
         await message.answer(str(exc), parse_mode=None)
-    except (TelegramBadRequest, TelegramNotFound):
-        logger.warning('Native widget rejected by Telegram; no Mini App fallback', exc_info=True)
-        await message.answer(
-            '🦔 Нативная игра-виджет пока недоступна на этом сервере Telegram. '
-            'Ей нужен Bot API с sendWidget (в документации — 10.4 beta/test) '
-            'и клиент с поддержкой виджетов. Попытка не потрачена, награда не начислена. '
-            'Mini App вместо виджета не открываю.', parse_mode=None,
-        )
+    except WIDGET_TRANSPORT_ERRORS as exc:
+        failure = describe_failure(exc, message.bot)
+        await message.answer(failure.public_text(), parse_mode=None)
     except (OSError, ValueError):
         logger.exception('Could not build native hedgehog widget')
         await message.answer(

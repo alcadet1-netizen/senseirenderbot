@@ -1,0 +1,69 @@
+"""Safe diagnostics: API rejection is not proof of missing client support."""
+import logging
+import re
+import secrets
+from dataclasses import dataclass
+
+from aiogram.exceptions import (
+    TelegramAPIError, TelegramBadRequest, TelegramForbiddenError,
+    TelegramNetworkError, TelegramNotFound, TelegramRetryAfter,
+    TelegramServerError, TelegramUnauthorizedError,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def redact(value: str, bot=None) -> str:
+    text = str(value)
+    token = getattr(bot, 'token', None)
+    if isinstance(token, str) and token:
+        text = text.replace(token, '[REDACTED]')
+    text = re.sub(r'https?://[^\s<>"\']+', '[URL REDACTED]', text)
+    text = re.sub(r'\b\d{5,}:[A-Za-z0-9_-]{15,}', '[TOKEN REDACTED]', text)
+    text = re.sub(r'(?i)(session[=:]\s*)[A-Za-z0-9_-]+', r'\1[REDACTED]', text)
+    text = re.sub(r'[A-Za-z0-9_-]{32,}', '[REDACTED]', text)
+    return ' '.join(text.split())[:700]
+
+
+@dataclass(frozen=True)
+class WidgetFailure:
+    reference: str
+    category: str
+    description: str
+    advice: str
+
+    def public_text(self):
+        return (f'🦔 Не удалось отправить нативного ежа. {self.advice}\n'
+                f'Код диагностики: {self.category} / {self.reference}.\n'
+                'Попытка не потрачена, награда не начислена. '
+                'Администратор может проверить API командой /senseiwidgetcheck в личке. '
+                'Mini App вместо виджета не открываю.')
+
+
+def describe_failure(exc, bot=None):
+    detail = redact(getattr(exc, 'message', str(exc)), bot)
+    lower = detail.lower()
+    if isinstance(exc, TelegramNotFound) or ('method' in lower and ('not found' in lower or 'unknown' in lower)):
+        category, advice = 'method_or_route', 'Telegram не нашёл метод или маршрут API. Нужна проверка endpoint и поддержки sendWidget.'
+    elif isinstance(exc, TelegramRetryAfter):
+        category, advice = 'rate_limit', 'Telegram ограничил частоту запросов. Попробуйте позже.'
+    elif isinstance(exc, TelegramUnauthorizedError):
+        category, advice = 'authorization', 'Telegram отклонил авторизацию бота. Администратору нужно проверить окружение.'
+    elif isinstance(exc, TelegramForbiddenError) or any(s in lower for s in ('forbidden', 'not enough rights', 'chat_send_photos_forbidden')):
+        category, advice = 'permissions', 'Telegram запретил отправку в этот чат. Проверьте права бота на отправку медиа.'
+    elif any(s in lower for s in ('too_large', 'too large', 'html_invalid', 'html invalid', 'width', 'height')):
+        category, advice = 'payload', 'Telegram отклонил содержимое или размеры виджета. Нужна проверка формата, а не переключение в beta.'
+    elif isinstance(exc, TelegramBadRequest):
+        category, advice = 'bad_request', 'Telegram отклонил параметры запроса. Это ещё не означает отсутствие поддержки виджетов.'
+    elif isinstance(exc, (TelegramNetworkError, TelegramServerError)):
+        category, advice = 'temporary', 'Сеть или сервер Telegram временно недоступны. Попробуйте позже.'
+    else:
+        category, advice = 'api_error', 'Telegram вернул ошибку API. Администратору нужна диагностика.'
+    failure = WidgetFailure(secrets.token_hex(4), category, detail, advice)
+    # Never log the exception repr, request HTML, session token or tokenized URL.
+    logger.warning('Native widget failure ref=%s category=%s type=%s description=%s',
+                   failure.reference, category, type(exc).__name__, detail)
+    return failure
+
+
+WIDGET_TRANSPORT_ERRORS = (TelegramAPIError, TelegramNetworkError)
