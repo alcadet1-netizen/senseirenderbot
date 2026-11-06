@@ -68,12 +68,16 @@ async def test_probe_is_private_admin_only(admin, private):
 
 
 @pytest.mark.asyncio
-async def test_probe_success_no_economy_and_queries_disabled():
+async def test_probe_success_no_economy_and_query_flag_matrix():
     message, container = setup_probe()
     await cmd_widget_check(message, container)
     requests = [call.args[0] for call in message.bot.call_args_list]
-    assert len(requests) == 2
-    assert all(isinstance(r, SendWidget) and not r.allow_queries and not r.is_shared for r in requests)
+    assert len(requests) == 4
+    assert all(isinstance(r, SendWidget) and not r.is_shared for r in requests)
+    assert [r.allow_queries for r in requests] == [False, False, True, True]
+    assert requests[0].html == requests[2].html
+    assert requests[1].html == requests[3].html
+    assert "diagnostic_no_game" in requests[3].html
     assert 'TelegramWidget.ready' in requests[0].html
     assert 'data:image/jpeg;base64,' in requests[1].html
     assert 'не подтверждает' in message.answer.call_args.args[0]
@@ -116,3 +120,26 @@ def test_background_transport_failure_is_not_html_or_network_failure():
         category='transport_runtime'))
     assert failure.category == 'transport_runtime'
     assert 'Фоновый обработчик' in failure.advice
+
+
+@pytest.mark.asyncio
+async def test_probe_detects_query_flag_rejection_without_blame_on_artwork():
+    from src.infra.mtproto.widgets import MtprotoWidgetError
+    message, container = setup_probe()
+    message.bot.side_effect = [{}, {}, MtprotoWidgetError('INPUT_MEDIA_WIDGET_NOT_ALLOWED')]
+    await cmd_widget_check(message, container)
+    assert message.bot.call_count == 3
+    text = message.answer.call_args.args[0]
+    assert 'minimal_queries' in text and 'allow_queries=true' in text
+    assert 'Отличается флаг запросов, а не оформление' in text
+    assert 'widget_policy' in text
+    assert 'не доказывает общий запрет' in text
+    assert container.settings.telegram_widget_beta is False
+
+
+def test_policy_error_is_not_proof_of_bot_wide_ban():
+    from src.infra.mtproto.widgets import MtprotoWidgetError
+    failure = describe_failure(MtprotoWidgetError('INPUT_MEDIA_WIDGET_NOT_ALLOWED'))
+    assert failure.category == 'widget_policy'
+    assert 'параметров нужно уточнить' in failure.advice
+    assert 'этому боту или чату' not in failure.advice
