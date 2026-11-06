@@ -200,7 +200,7 @@ class MtprotoWidgets:
         request = self.functions.messages.SendMediaRequest(
             peer=peer, media=self.types.InputMediaWidget(
                 width=340, height=0, html=html, allow_queries=allow_queries, shared_widget=False,
-            ), message='🦔 Погладь ежа · 12 секунд', random_id=secrets.randbits(63) or 1,
+            ), message='🦔 Погладь ежа · 7 секунд', random_id=secrets.randbits(63) or 1,
         )
         return await self._request(request, 'send_media')
 

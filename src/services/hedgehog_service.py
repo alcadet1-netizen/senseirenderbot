@@ -1,4 +1,4 @@
-"""Server-owned 12-second daily game. One persisted outcome per user / UTC day."""
+"""Server-owned seven-second daily game. One persisted outcome per user / UTC day."""
 import secrets
 import time
 from datetime import datetime, timedelta, timezone
@@ -7,7 +7,11 @@ from pymongo import ReturnDocument
 
 from src.core.exceptions import DailyAlreadyClaimedError
 
-GAME_SECONDS = 12
+GAME_SECONDS = 7
+
+def game_seconds(game):
+    return game.get("duration_seconds", GAME_SECONDS if game.get("mode") == "pet_once" else 12)
+
 WIN_PERCENT = 95
 FAILURE_MESSAGE = (
     'Вы не смогли погладить ежа! 🦔 Ёж включил режим кактуса и ушёл по делам. '
@@ -24,7 +28,7 @@ class GameError(ValueError):
 
 
 class HedgehogService:
-    def __init__(self, mongo, daily_service, reward_mode="tap_bonus"):
+    def __init__(self, mongo, daily_service, reward_mode="pet_once"):
         self.reward_mode = reward_mode
         self.games = mongo.database.hedgehog_games
         self.users = mongo.database.users
@@ -54,9 +58,9 @@ class HedgehogService:
 
         # Unstarted invitations can adopt the new rules without choosing or
         # rerolling an outcome. Never rewrite playing/done historical sessions.
-        if self.reward_mode == 'tap_bonus' and game['state'] == 'issued' and game.get('mode') != 'tap_bonus':
+        if self.reward_mode in {'tap_bonus', 'pet_once'} and game['state'] == 'issued' and game.get('mode') != self.reward_mode:
             updated = await self.games.find_one_and_update(
-                {'_id': game['_id'], 'state': 'issued'}, {'$set': {'mode': 'tap_bonus'}},
+                {'_id': game['_id'], 'state': 'issued'}, {'$set': {'mode': self.reward_mode}},
                 return_document=ReturnDocument.AFTER,
             )
             game = updated or await self.games.find_one({'_id': game['_id']})
@@ -72,20 +76,24 @@ class HedgehogService:
 
     async def start(self, token: str, user_id: int) -> dict:
         game = await self.owned(token, user_id)
-        if game['state'] == 'issued':
+        for _ in range(3):
+            if game['state'] != 'issued':
+                break
             # CAS makes reloads/tabs keep the original start and random outcome.
             updated = await self.games.find_one_and_update(
-                {'_id': game['_id'], 'state': 'issued'},
+                {'_id': game['_id'], 'state': 'issued', 'mode': game.get('mode')},
                 {'$set': {'state': 'playing', 'started_at': time.time(),
-                          'taps': 0, 'tap_seq': 0,
-                          'won': True if game.get('mode') == 'tap_bonus' else secrets.randbelow(100) < WIN_PERCENT}},
+                          'taps': 0, 'tap_seq': 0, 'duration_seconds': game_seconds(game),
+                          'won': True if game.get('mode') in {'tap_bonus', 'pet_once'} else secrets.randbelow(100) < WIN_PERCENT}},
                 return_document=ReturnDocument.AFTER,
             )
             game = updated or await self.owned(token, user_id)
+        if game['state'] == 'issued':
+            raise GameError('Ёж ещё готовится. Нажмите начать ещё раз.')
         if game['state'] == 'done':
             return {'state': 'done', 'result': game['result']}
         return {'state': 'playing', 'remaining_ms': max(0, round(
-            (GAME_SECONDS - (time.time() - game['started_at'])) * 1000)),
+            (game_seconds(game) - (time.time() - game['started_at'])) * 1000)),
                 'tap_seq': game.get('tap_seq', 0), 'taps': game.get('taps', 0), 'bonus_percent': game.get('taps', 0) * 10}
 
     async def tap(self, token: str, user_id: int, sequence: int) -> dict:
@@ -93,14 +101,14 @@ class HedgehogService:
         game = await self.owned(token, user_id)
         if type(sequence) is not int or not 1 <= sequence <= 100:
             raise GameError('Неверный номер поглаживания.')
-        if game['state'] != 'playing' or time.time() - game['started_at'] >= GAME_SECONDS:
-            return await self.finish(token, user_id)
-        if game.get('mode') != 'tap_bonus':
-            return await self.start(token, user_id)
         now = time.time()
+        if game['state'] != 'playing' or now - game['started_at'] >= game_seconds(game):
+            return await self.finish(token, user_id)
+        if game.get('mode') not in {'tap_bonus', 'pet_once'}:
+            return await self.start(token, user_id)
         previous = game.get('last_tap_at', game['started_at'])
-        if (sequence > game.get('tap_seq', 0) and game.get('taps', 0) < 5
-                and now - previous >= 1.5):
+        if (sequence > game.get('tap_seq', 0) and game.get('taps', 0) < (1 if game.get('mode') == 'pet_once' else 5)
+                and now - previous >= (0 if game.get('mode') == 'pet_once' else 1.5)):
             await self.games.find_one_and_update(
                 {'_id': game['_id'], 'state': 'playing', 'taps': game.get('taps', 0),
                  'tap_seq': game.get('tap_seq', 0)},
@@ -108,8 +116,10 @@ class HedgehogService:
                 return_document=ReturnDocument.AFTER,
             )
         game = await self.owned(token, user_id)
+        if game['state'] != 'playing':
+            return await self.finish(token, user_id)
         return {'state': 'playing', 'remaining_ms': max(0, round(
-            (GAME_SECONDS - (time.time() - game['started_at'])) * 1000)),
+            (game_seconds(game) - (time.time() - game['started_at'])) * 1000)),
                 'tap_seq': game.get('tap_seq', 0), 'taps': game.get('taps', 0), 'bonus_percent': game.get('taps', 0) * 10}
 
     async def finish(self, token: str, user_id: int) -> dict:
@@ -118,7 +128,7 @@ class HedgehogService:
             return {'state': 'done', 'result': game['result']}
         if game['state'] not in {'playing', 'settling'}:
             raise GameError('Сначала поздоровайтесь с ежом!')
-        remaining = GAME_SECONDS - (time.time() - game['started_at'])
+        remaining = game_seconds(game) - (time.time() - game['started_at'])
         if remaining > 0:
             return {'state': 'playing', 'remaining_ms': max(100, round(remaining * 1000))}
         frozen = await self.games.find_one_and_update(
@@ -132,7 +142,9 @@ class HedgehogService:
         # disconnect or restart returns it without adding rewards a second time.
         result = await self.daily.settle_hedgehog(
             user_id, game['won'], game['day'],
-            tap_count=game.get('taps', 0) if game.get('mode') == 'tap_bonus' else 0,
+            tap_count=(min(1, game.get('taps', 0)) if game.get('mode') == 'pet_once'
+                       else game.get('taps', 0) if game.get('mode') == 'tap_bonus' else 0),
+            pet_once=game.get('mode') == 'pet_once',
         )
         await self.games.update_one({'_id': game['_id']}, {'$set': {'state': 'done', 'result': result}})
         return {'state': 'done', 'result': result}

@@ -42,7 +42,7 @@ def compact_result(response):
         return response
     r = response['result']
     return {'state': 'done', 'result': {k: r.get(k, 0) for k in (
-        'success', 'total_xp', 'total_coins', 'streak', 'message', 'tap_bonus_coins')}}
+        'success', 'total_xp', 'total_coins', 'streak', 'message', 'tap_bonus_coins', 'tap_count')}}
 
 
 class HedgehogWidgetMiddleware(BaseMiddleware):
