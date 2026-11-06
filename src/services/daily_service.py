@@ -231,7 +231,7 @@ class DailyService:
 
         return True, None
 
-    async def settle_hedgehog(self, user_id: int, won: bool, day: str) -> dict:
+    async def settle_hedgehog(self, user_id: int, won: bool, day: str, *, tap_count: int = 0) -> dict:
         """Atomically apply a day's game result to the user, never subtract funds.
 
         The receipt and the balance/streak change live in ONE Mongo document.
@@ -267,12 +267,19 @@ class DailyService:
                         bonus_xp, bonus_coins = bonus
             total_xp = DAILY_BASE_XP + bonus_xp if won else 0
             bank = await self.bank.find_one({'_id': 'main'}) if won else None
-            total_coins = min(DAILY_BASE_COINS + bonus_coins, max(0, int((bank or {}).get('balance', 0)))) if won else 0
+            base_coins = DAILY_BASE_COINS + bonus_coins if won else 0
+            bounded_taps = max(0, min(5, int(tap_count))) if won else 0
+            available_coins = max(0, int((bank or {}).get('balance', 0)))
+            standard_coins = min(base_coins, available_coins)
+            desired_extra = base_coins * bounded_taps // 10
+            total_coins = min(base_coins + desired_extra, available_coins)
+            extra_coins = max(0, total_coins - standard_coins)
             result = {
                 'success': won, 'streak': streak,
                 'xp': DAILY_BASE_XP if won else 0, 'coins': DAILY_BASE_COINS if won else 0,
                 'bonus_xp': bonus_xp, 'bonus_coins': bonus_coins,
                 'total_xp': total_xp, 'total_coins': total_coins,
+                'tap_count': bounded_taps, 'tap_bonus_coins': extra_coins,
                 'message': 'Вы погладили ежа! Он довольно фырчит, а бонус уже ваш. 🦔' if won else FAILURE_MESSAGE,
             }
             now = datetime.now(timezone.utc)

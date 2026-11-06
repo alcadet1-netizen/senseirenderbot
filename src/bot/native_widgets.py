@@ -6,6 +6,7 @@ Unknown Update fields must be intercepted before aiogram dispatches them.
 """
 import json
 import logging
+import re
 from typing import Any
 
 from aiogram import BaseMiddleware
@@ -40,8 +41,8 @@ def compact_result(response):
     if response.get('state') != 'done':
         return response
     r = response['result']
-    return {'state': 'done', 'result': {k: r[k] for k in (
-        'success', 'total_xp', 'total_coins', 'streak', 'message')}}
+    return {'state': 'done', 'result': {k: r.get(k, 0) for k in (
+        'success', 'total_xp', 'total_coins', 'streak', 'message', 'tap_bonus_coins')}}
 
 
 class HedgehogWidgetMiddleware(BaseMiddleware):
@@ -72,7 +73,7 @@ class HedgehogWidgetMiddleware(BaseMiddleware):
             if not isinstance(value, str) or len(value.encode()) > 64:
                 raise GameError('Неверное действие.')
             parts = value.split(':')
-            if len(parts) != 3 or parts[0] != 'hg' or parts[1] not in {'s', 'f'}:
+            if len(parts) != 3 or parts[0] != 'hg' or not re.fullmatch(r'(?:s|f|t[0-9]{1,3})', parts[1]):
                 raise GameError('Неверное действие.')
             # Sender comes exclusively from Telegram's update, never the HTML.
             service = self.container.hedgehog_service
@@ -80,7 +81,10 @@ class HedgehogWidgetMiddleware(BaseMiddleware):
             if not user or user.get('is_banned'):
                 raise GameError('Профиль недоступен.')
             method = service.start if parts[1] == 's' else service.finish
-            response = compact_result(await method(parts[2], user_id))
+            if parts[1].startswith('t'):
+                response = compact_result(await service.tap(parts[2], user_id, int(parts[1][1:])))
+            else:
+                response = compact_result(await method(parts[2], user_id))
         except (GameError, DailyAlreadyClaimedError) as exc:
             response = {'error': str(exc)}
         except Exception:
