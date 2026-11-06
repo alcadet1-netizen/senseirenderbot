@@ -143,3 +143,82 @@ def test_policy_error_is_not_proof_of_bot_wide_ban():
     assert failure.category == 'widget_policy'
     assert 'параметров нужно уточнить' in failure.advice
     assert 'этому боту или чату' not in failure.advice
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('status,permission,is_member,expected', [
+    ('administrator', False, True, 'Право отправлять фото'),
+    ('member', True, True, 'Право отправлять фото'),
+    ('member', False, True, 'недоступна отправка'),
+    ('member', None, True, 'не сообщил определённого'),
+    ('restricted', False, True, 'недоступна отправка'),
+    ('restricted', True, False, 'недоступна отправка'),
+    ('restricted', True, True, 'Право отправлять фото'),
+    ('left', True, False, 'недоступна отправка'),
+    ('kicked', True, False, 'недоступна отправка'),
+])
+async def test_actual_group_photo_permissions(status, permission, is_member, expected):
+    from src.bot.widget_diagnostics import widget_chat_advice
+    message, _ = setup_probe(private=False)
+    message.bot.get_chat_member.return_value = SimpleNamespace(
+        status=status, is_member=is_member, can_send_photos=permission)
+    message.bot.get_chat.return_value = SimpleNamespace(
+        permissions=SimpleNamespace(can_send_photos=permission))
+    text = await widget_chat_advice(message)
+    assert expected in text
+    message.bot.get_chat_member.assert_awaited_once_with(message.chat.id, message.bot.id)
+    message.bot.promote_chat_member.assert_not_called()
+    message.bot.set_chat_permissions.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('exc', [TimeoutError(), error(TelegramNetworkError, 'network failed')])
+async def test_photo_permission_lookup_failure_is_unknown_not_denial(exc):
+    from src.bot.widget_diagnostics import widget_chat_advice
+    message, _ = setup_probe(private=False)
+    message.bot.get_chat_member.side_effect = exc
+    assert 'Не удалось проверить' in await widget_chat_advice(message)
+
+
+@pytest.mark.asyncio
+async def test_explicit_group_probe_uses_actual_destination_and_hides_runtime():
+    message, container = setup_probe(private=False)
+    message.text = '/senseiwidgetcheck@bot here'
+    message.chat.id = -100123
+    message.bot.get_chat_member.return_value = SimpleNamespace(status='administrator')
+    message.bot.get_chat.return_value = SimpleNamespace(permissions=None)
+    container.native_widget_transport = SimpleNamespace(
+        send_widget=AsyncMock(), diagnostic_status=lambda: 'PRIVATE_RUNTIME_DETAILS')
+    await cmd_widget_check(message, container)
+    requests = container.native_widget_transport.send_widget.call_args_list
+    assert len(requests) == 4
+    assert all(call.args[0] == message.chat.id for call in requests)
+    assert [c.kwargs['allow_queries'] for c in requests] == [False, False, True, True]
+    replies = '\n'.join(c.args[0] for c in message.answer.call_args_list)
+    assert 'PRIVATE_RUNTIME_DETAILS' not in replies
+    assert 'в этой группе' in replies
+    assert 'Допуск в группе этим не проверен' not in replies
+
+
+@pytest.mark.asyncio
+async def test_group_probe_here_does_not_bypass_admin_check():
+    message, container = setup_probe(admin=False, private=False)
+    message.text = '/senseiwidgetcheck here'
+    await cmd_widget_check(message, container)
+    message.bot.assert_not_called()
+    message.bot.get_chat_member.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_group_policy_failure_is_scoped_to_actual_group():
+    from src.infra.mtproto.widgets import MtprotoWidgetError
+    message, container = setup_probe(private=False)
+    message.text = '/senseiwidgetcheck here'
+    message.bot.get_chat_member.return_value = SimpleNamespace(status='administrator')
+    message.bot.get_chat.return_value = SimpleNamespace(permissions=None)
+    message.bot.side_effect = MtprotoWidgetError('INPUT_MEDIA_WIDGET_NOT_ALLOWED')
+    await cmd_widget_check(message, container)
+    assert message.bot.call_count == 1
+    text = message.answer.call_args.args[0]
+    assert 'minimal' in text and 'этой группе' in text
+    assert 'личному чату' not in text

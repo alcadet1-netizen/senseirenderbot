@@ -1,4 +1,4 @@
-"""Explicit, private admin-only real API probes, with no economy operations."""
+"""Explicit, admin-only real API probes, with no economy operations."""
 import asyncio
 import zlib
 
@@ -6,7 +6,7 @@ from aiogram import Router
 from aiogram.filters import Command
 
 from src.bot.native_widgets import send_native_widget
-from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure
+from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure, widget_chat_advice
 from src.widgets.hedgehog import to_hedgehog_html
 from src.widgets.limits import RENDER_SLOTS
 
@@ -17,21 +17,28 @@ MINIMAL_WIDGET = ('<!doctype html><html><body><p>Проверка нативно
 
 @router.message(Command('senseiwidgetcheck'))
 async def cmd_widget_check(message, container):
-    if (not message.from_user or message.chat.type != 'private'
-            or message.from_user.id not in container.settings.admin_ids):
-        await message.answer('Проверка доступна только администратору бота в личном чате.', parse_mode=None)
+    args = (getattr(message, 'text', None) or '').split()[1:]
+    group_probe = message.chat.type in {'group', 'supergroup'} and args == ['here']
+    if (not message.from_user or message.from_user.id not in container.settings.admin_ids
+            or (message.chat.type != 'private' and not group_probe)):
+        await message.answer(
+            'Проверка доступна только администратору бота: в личке или явно '
+            '/senseiwidgetcheck here в проверяемой группе.', parse_mode=None)
         return
+    context = 'этой группе' if group_probe else 'этом личном чате'
     # No endpoint URL/token printed and no environment switching.
     mode = ('MTProto layer 233 / production'
             if getattr(container.settings, 'native_widget_transport', 'bot_api') == 'mtproto'
             else ('Bot API beta/test' if container.settings.telegram_widget_beta else 'Bot API production'))
     await message.answer(
-        f'Проверка нативного виджета · {mode}.\n'
+        f'Проверка нативного виджета в {context} · {mode}.\n'
         'Проверю минимальный виджет и макет Ежа сначала с allow_queries=false, затем с true. '
         'Попытки, серия и балансы не меняются.', parse_mode=None,
     )
+    if group_probe:
+        await message.answer(await widget_chat_advice(message), parse_mode=None)
     transport = getattr(container, 'native_widget_transport', None)
-    if transport is not None and callable(getattr(transport, 'diagnostic_status', None)):
+    if not group_probe and transport is not None and callable(getattr(transport, 'diagnostic_status', None)):
         await message.answer(transport.diagnostic_status(), parse_mode=None)
     for label, allow_queries in (('minimal', False), ('hedgehog', False),
                                  ('minimal_queries', True), ('hedgehog_queries', True)):
@@ -50,7 +57,7 @@ async def cmd_widget_check(message, container):
             await send_native_widget(message.bot, container, message.chat.id, html, allow_queries=allow_queries)
         except WIDGET_TRANSPORT_ERRORS as exc:
             failure = describe_failure(exc, message.bot)
-            if transport is not None and callable(getattr(transport, 'diagnostic_status', None)):
+            if not group_probe and transport is not None and callable(getattr(transport, 'diagnostic_status', None)):
                 await message.answer(transport.diagnostic_status(), parse_mode=None)
             await message.answer(
                 f'Проверка {label}: ошибка отправки.\n'
@@ -60,7 +67,7 @@ async def cmd_widget_check(message, container):
                 + ('Статические макеты прошли, но минимальный с запросами отклонён. '
                    'Отличается флаг запросов, а не оформление Ежа.\n'
                    if label == 'minimal_queries' else '')
-                + 'Отказ относится к этому макету, параметрам и личному чату. '
+                + f'Отказ относится к этому макету, параметрам и {context}. '
                 'Он не доказывает общий запрет виджетов боту. Beta автоматически не включена.',
                 parse_mode=None,
             )
@@ -73,8 +80,9 @@ async def cmd_widget_check(message, container):
             f'zlib-9 {len(zlib.compress(html.encode(), 9))} байт.', parse_mode=None,
         )
     await message.answer(
-        'Все четыре варианта приняты сервером в этом личном чате. Допуск в группе этим не проверен. '
-        'Если вместо них заглушка — проверьте версию '
+        f'Все четыре варианта приняты сервером в {context}. '
+        + ('Допуск в группе этим не проверен. ' if not group_probe else '')
+        + 'Если вместо них заглушка — проверьте версию '
         'и поддержку виджетов в клиенте Telegram. Приём API не подтверждает отображение '
         'и работу widget_query. Если виджеты видны, вызовите /senseidaily для проверки игры.',
         parse_mode=None,
