@@ -597,3 +597,27 @@ async def test_pet_validation_uses_one_time_sample_before_commit():
         result = await game.tap(token, 7, 1)
     assert result['taps'] == 1
     assert next(iter(db.hedgehog_games.docs.values()))['last_tap_at'] == 106.999
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('can_send_photos', [False, True])
+async def test_group_rejection_explains_actual_rights_without_spending(can_send_photos):
+    from pathlib import Path
+    from unittest.mock import AsyncMock
+    from src.infra.mtproto.widgets import MtprotoWidgetError
+    from src.bot.presenters.hedgehog_presenter import launch_hedgehog
+    db, daily, game = services()
+    user = SimpleNamespace(id=7, username=None, first_name='Ёж', last_name=None, is_bot=False)
+    container = SimpleNamespace(settings=SimpleNamespace(BASE_DIR=Path(__file__).resolve().parents[2]),
+                                user_service=SimpleNamespace(get_or_create=AsyncMock()), hedgehog_service=game)
+    bot = AsyncMock(side_effect=MtprotoWidgetError('INPUT_MEDIA_WIDGET_NOT_ALLOWED'))
+    bot.get_chat_member.return_value = SimpleNamespace(status='member')
+    bot.get_chat.return_value = SimpleNamespace(permissions=SimpleNamespace(can_send_photos=can_send_photos))
+    message = SimpleNamespace(chat=SimpleNamespace(id=-100123, type='supergroup'), bot=bot, answer=AsyncMock())
+    await launch_hedgehog(message, user, container)
+    text = message.answer.call_args.args[0]
+    assert 'Попытка не потрачена' in text
+    assert ('Право отправлять фото' if can_send_photos else 'недоступна отправка') in text
+    assert bot.call_count == 1  # No policy retries or hidden private-chat fallback.
+    assert not db.users.writes
+    assert next(iter(db.hedgehog_games.docs.values()))['state'] == 'issued'

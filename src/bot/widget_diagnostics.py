@@ -1,4 +1,5 @@
 """Safe diagnostics: API rejection is not proof of missing client support."""
+import asyncio
 import logging
 import re
 import secrets
@@ -81,3 +82,38 @@ def describe_failure(exc, bot=None):
 
 
 WIDGET_TRANSPORT_ERRORS = (TelegramAPIError, TelegramNetworkError, MtprotoWidgetError)
+
+
+async def widget_chat_advice(message):
+    """Read permissions in the actual destination; never mutate chat rights."""
+    kind = message.chat.type
+    if kind == 'channel':
+        return 'Канал: прямая отправка нативных виджетов в каналы сейчас не поддерживается.'
+    if kind not in {'group', 'supergroup'}:
+        return 'Проверка относится только к этому личному чату, не к группе.'
+    try:
+        async with asyncio.timeout(5):
+            member = await message.bot.get_chat_member(message.chat.id, message.bot.id)
+            chat = await message.bot.get_chat(message.chat.id)
+    except (TelegramAPIError, TimeoutError):
+        return ('Не удалось проверить права бота в этой группе. Проверьте его членство '
+                'и право отправлять фото/медиа; затем /senseiwidgetcheck here в этой группе.')
+    status = member.status
+    if status in {'left', 'kicked'}:
+        allowed = False
+    elif status in {'creator', 'administrator'}:
+        allowed = True
+    elif status == 'restricted':
+        allowed = bool(member.is_member and member.can_send_photos)
+    else:
+        allowed = getattr(getattr(chat, 'permissions', None), 'can_send_photos', None)
+    if allowed is False:
+        return ('В этой группе боту недоступна отправка фото/медиа или он не состоит в ней. '
+                'Администратору группы нужно разрешить отправку фото и убедиться, что бот добавлен. '
+                'После изменения прав повторите /senseidaily.')
+    if allowed is True:
+        return ('Право отправлять фото в этой группе есть. Это не гарантирует допуск виджетов сервером Telegram. '
+                'Администратор бота может проверить именно эту группу: /senseiwidgetcheck here. '
+                'Если даже minimal отклонён, оформление Ежа не причина отказа.')
+    return ('Telegram не сообщил определённого разрешения на фото. Проверьте права бота; '
+            'для проверки именно этой группы: /senseiwidgetcheck here.')

@@ -2,7 +2,7 @@
 import asyncio
 import logging
 
-from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure
+from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure, widget_chat_advice
 
 from src.bot.native_widgets import send_native_widget
 from src.core.exceptions import DailyAlreadyClaimedError
@@ -35,7 +35,10 @@ async def launch_hedgehog(message, user, container, token=None):
         await message.answer(str(exc), parse_mode=None)
     except WIDGET_TRANSPORT_ERRORS as exc:
         failure = describe_failure(exc, message.bot)
-        await message.answer(failure.public_text(), parse_mode=None)
+        text = failure.public_text()
+        if failure.category in {'widget_policy', 'permissions'} and message.chat.type != 'private':
+            text += '\n\n' + await widget_chat_advice(message)
+        await message.answer(text, parse_mode=None)
     except (OSError, ValueError):
         logger.exception('Could not build native hedgehog widget')
         await message.answer(
