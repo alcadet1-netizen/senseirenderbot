@@ -102,8 +102,7 @@ for (const theme of ['light', 'dark']) {
     events:[1,2,3].map(gesture=>({type:'click',targetId:button.id,gesture})),
     onRequest:async q=>{
       if(q.data.includes(':s:')) {
-        await new Promise(resolve=>setTimeout(resolve,1600));
-        return {result:JSON.stringify({state:'playing',remaining_ms:12000,taps:0,tap_seq:0,bonus_percent:0})};
+        return {result:JSON.stringify({state:'playing',remaining_ms:7000,taps:0,tap_seq:0,bonus_percent:0})};
       }
       if(q.data.includes(':t1:')) return {result:JSON.stringify({state:'playing',remaining_ms:0,taps:1,tap_seq:1,bonus_percent:10})};
       return {result:JSON.stringify({state:'done',result})};

@@ -509,3 +509,91 @@ async def test_unstarted_legacy_invitation_upgrades_but_playing_outcome_does_not
     stored.update(mode='classic', state='playing', started_at=100, won=False)
     assert (await game.issue(7))['mode'] == 'classic'
     assert stored['won'] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('petted', [False, True])
+async def test_seven_second_single_pet_round(petted):
+    from src.core.constants import DAILY_BASE_COINS, DAILY_STREAK_BONUSES
+    db, daily, game = services()
+    game.reward_mode = 'pet_once'
+    token = (await game.issue(7))['token']
+    with patch('src.services.hedgehog_service.time.time', return_value=100):
+        started = await game.start(token, 7)
+        assert started['remaining_ms'] == 7000
+        assert (await game.finish(token, 7))['state'] == 'playing'
+    if petted:
+        for sequence, timestamp in [(1, 100.05), (2, 101), (3, 106.99)]:
+            with patch('src.services.hedgehog_service.time.time', return_value=timestamp):
+                reply = await game.tap(token, 7, sequence)
+                assert reply['taps'] == 1 and reply['bonus_percent'] == 10
+    with patch('src.services.hedgehog_service.time.time', return_value=107):
+        result = (await game.finish(token, 7))['result']
+        assert result['success'] and result['tap_count'] == int(petted)
+        assert ('Успели' if petted else 'Стандартный бонус') in result['message']
+        assert (await game.finish(token, 7))['result'] == result
+    base = DAILY_BASE_COINS
+    for days, (_, coins) in sorted(DAILY_STREAK_BONUSES.items()):
+        if 9 >= days:
+            base = DAILY_BASE_COINS + coins
+    assert result['total_coins'] == base + (base // 10 if petted else 0)
+    assert len(db.users.writes) == 1
+
+
+@pytest.mark.asyncio
+async def test_pet_exactly_at_deadline_is_standard_not_bonus():
+    db, daily, game = services()
+    game.reward_mode = 'pet_once'
+    token = (await game.issue(7))['token']
+    with patch('src.services.hedgehog_service.time.time', return_value=100):
+        await game.start(token, 7)
+    with patch('src.services.hedgehog_service.time.time', return_value=107):
+        response = await game.tap(token, 7, 1)
+        assert response['state'] == 'done'
+        assert response['result']['tap_bonus_coins'] == 0
+        assert response['result']['tap_count'] == 0
+
+
+def test_concept_widget_keeps_art_and_seven_second_copy():
+    from pathlib import Path
+    from src.widgets.hedgehog import to_hedgehog_html
+    html = to_hedgehog_html('A' * 32, Path(__file__).resolve().parents[2] / 'src/infra/storage/ega')
+    assert 'id="animal"' in html and 'id="hand"' in html
+    assert '#faf1e2' in html and '#99a776' in html
+    assert '7 секунд' in html and '+10%' in html
+    assert '+50%' not in html and '12 секунд' not in html
+    assert 'pet.onclick=scene.onclick=touch' in html
+
+
+@pytest.mark.asyncio
+async def test_mode_upgrade_race_cannot_start_new_game_with_legacy_loss():
+    db, daily, game = services()
+    token = (await game.issue(7))['token']
+    original = db.hedgehog_games.find_one_and_update
+    first = True
+    async def race(query, changes, **kwargs):
+        nonlocal first
+        if first and changes.get('$set', {}).get('state') == 'playing':
+            first = False
+            next(iter(db.hedgehog_games.docs.values()))['mode'] = 'pet_once'
+            return None
+        return await original(query, changes, **kwargs)
+    with patch.object(db.hedgehog_games, 'find_one_and_update', side_effect=race), \
+         patch('src.services.hedgehog_service.time.time', return_value=100), \
+         patch('src.services.hedgehog_service.secrets.randbelow', return_value=99):
+        response = await game.start(token, 7)
+    assert response['remaining_ms'] == 7000
+    assert next(iter(db.hedgehog_games.docs.values()))['won'] is True
+
+
+@pytest.mark.asyncio
+async def test_pet_validation_uses_one_time_sample_before_commit():
+    db, daily, game = services()
+    game.reward_mode = 'pet_once'
+    token = (await game.issue(7))['token']
+    with patch('src.services.hedgehog_service.time.time', return_value=100):
+        await game.start(token, 7)
+    with patch('src.services.hedgehog_service.time.time', side_effect=[106.999, 107.001]):
+        result = await game.tap(token, 7, 1)
+    assert result['taps'] == 1
+    assert next(iter(db.hedgehog_games.docs.values()))['last_tap_at'] == 106.999

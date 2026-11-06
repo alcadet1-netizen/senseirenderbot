@@ -231,7 +231,7 @@ class DailyService:
 
         return True, None
 
-    async def settle_hedgehog(self, user_id: int, won: bool, day: str, *, tap_count: int = 0) -> dict:
+    async def settle_hedgehog(self, user_id: int, won: bool, day: str, *, tap_count: int = 0, pet_once: bool = False) -> dict:
         """Atomically apply a day's game result to the user, never subtract funds.
 
         The receipt and the balance/streak change live in ONE Mongo document.
@@ -280,7 +280,9 @@ class DailyService:
                 'bonus_xp': bonus_xp, 'bonus_coins': bonus_coins,
                 'total_xp': total_xp, 'total_coins': total_coins,
                 'tap_count': bounded_taps, 'tap_bonus_coins': extra_coins,
-                'message': 'Вы погладили ежа! Он довольно фырчит, а бонус уже ваш. 🦔' if won else FAILURE_MESSAGE,
+                'message': (('Ёжик доволен! Успели погладить — бонус за ласку ваш. 🦔' if bounded_taps
+                             else 'Ёжик отдохнул рядом. Стандартный бонус ваш! 🦔') if pet_once
+                            else 'Вы погладили ежа! Он довольно фырчит, а бонус уже ваш. 🦔') if won else FAILURE_MESSAGE,
             }
             now = datetime.now(timezone.utc)
             changes = {'$set': {'hedgehog_day': day, 'hedgehog_result': result,
