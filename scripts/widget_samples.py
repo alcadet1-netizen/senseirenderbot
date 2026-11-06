@@ -3,6 +3,7 @@ import argparse
 from dataclasses import replace
 from pathlib import Path
 
+from src.widgets.hedgehog import to_hedgehog_html
 from src.widgets.animation import to_gif
 from src.widgets.katana import KatanaUpgrade, to_upgrade_gif, to_upgrade_html, to_upgrade_png
 from src.widgets.cards import profile_card, top_card, to_html, to_png
@@ -14,6 +15,7 @@ def main():
     args = parser.parse_args()
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
+    (output / "hedgehog.html").write_text(to_hedgehog_html("A" * 32, Path("src/infra/storage/ega")), encoding="utf-8")
     cards = {
         'profile': profile_card(dict(username='Ученик Сенсея', level=7, xp=5300,
                                      xp_next=5500, coins=12540, tickets=3,

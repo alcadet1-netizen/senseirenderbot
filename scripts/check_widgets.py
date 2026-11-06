@@ -68,6 +68,31 @@ for (const name of ['profile', 'top', 'katana-success', 'katana-failure']) {
     console.log(name + ' / ' + theme + ': strict sandbox, render ops, controls OK');
   }
 }
+const gameHtml = fs.readFileSync(new URL('./widget-samples/hedgehog.html', import.meta.url), 'utf8');
+for (const theme of ['light', 'dark']) {
+  const boot = await runWidget(gameHtml, { policy:'strict', theme, timerRounds:0 });
+  assert.deepEqual(boot.diags, []);
+  const button = boot.ops.flat().find(op => op.op === 'el' && op.attrs?.id === 'pet');
+  assert.ok(button);
+  for (const success of [true, false]) {
+    const result = { success, total_xp:success?60:0, total_coins:success?25:0,
+      streak:success?1:0, message:success?'Вы погладили ежа!':'Вы не смогли погладить ежа!' };
+    const run = await runWidget(gameHtml, {
+      policy:'strict', theme, timerRounds:0, context:{canQuery:true,chatType:'group'},
+      events:[{type:'click',targetId:button.id,gesture:1},{type:'click',targetId:button.id,gesture:2}],
+      onRequest: q => ({result:JSON.stringify(q.data.includes(':s:') ? {state:'playing',remaining_ms:0} : {state:'done',result})}),
+      probes:["document.getElementById('reward').textContent","document.getElementById('photo').style.display"],
+    });
+    assert.deepEqual(run.diags, []);
+    assert.equal(run.requests.length, 2);
+    assert.ok(run.requests.every(q => q.verdict === 'foreground' && !q.background));
+    assert.ok(run.requests[0].data.startsWith('hg:s:'));
+    assert.ok(run.requests[1].data.startsWith('hg:f:'));
+    assert.equal(run.probes[0], success ? '+60 XP · +25 монет · Серия: 1' : 'Серия: 0 · Ничего не списано');
+    assert.equal(run.probes[1] === 'block', success);
+    console.log('hedgehog / ' + theme + ' / ' + (success?'win':'loss') + ': strict sandbox, real gesture/request bridge, receipt/image OK');
+  }
+}
 ''', encoding='utf-8')
     run(str(modules / '.bin/tsx'), str(runner))
 

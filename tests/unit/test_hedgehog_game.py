@@ -246,27 +246,28 @@ async def test_http_routes_auth_identity_and_reward_picture():
 
 
 @pytest.mark.asyncio
-async def test_launch_private_group_and_missing_https(monkeypatch):
+async def test_launch_native_widget_in_private_and_group_without_https():
+    from pathlib import Path
     from unittest.mock import AsyncMock
     from src.bot.presenters.hedgehog_presenter import launch_hedgehog
+    from src.bot.native_widgets import SendWidget
     db, daily, game = services()
     user = SimpleNamespace(id=7, username='petter', first_name='Ёж', last_name=None, is_bot=False)
-    container = SimpleNamespace(settings=SimpleNamespace(mini_app_url='https://example.test'),
+    container = SimpleNamespace(settings=SimpleNamespace(BASE_DIR=Path(__file__).resolve().parents[2]),
                                 user_service=SimpleNamespace(get_or_create=AsyncMock()), hedgehog_service=game)
-    message = SimpleNamespace(chat=SimpleNamespace(type='private'), answer=AsyncMock(),
-                              bot=SimpleNamespace(get_me=AsyncMock(return_value=SimpleNamespace(username='test_bot'))))
+    bot = AsyncMock()
+    message = SimpleNamespace(chat=SimpleNamespace(type='private', id=7), answer=AsyncMock(), bot=bot)
     await launch_hedgehog(message, user, container)
-    button = message.answer.call_args.kwargs['reply_markup'].inline_keyboard[0][0]
-    assert button.web_app.url.startswith('https://example.test/miniapp/hedgehog?session=')
+    request = bot.call_args.args[0]
+    assert isinstance(request, SendWidget)
+    assert request.chat_id == 7 and request.allow_queries and not request.is_shared
+    assert 'TelegramWidget.request' in request.html
+    assert '/miniapp/' not in request.html
     message.chat.type = 'supergroup'
+    message.chat.id = -1001234
     await launch_hedgehog(message, user, container)
-    button = message.answer.call_args.kwargs['reply_markup'].inline_keyboard[0][0]
-    assert button.web_app is None
-    assert button.url.startswith('https://t.me/test_bot?start=hedgehog_')
-    monkeypatch.delenv('RENDER_EXTERNAL_URL', raising=False)
-    container.settings.mini_app_url = 'http://example.test'
-    await launch_hedgehog(message, user, container)
-    assert 'HTTPS' in message.answer.call_args.args[0]
+    assert bot.call_args.args[0].chat_id == -1001234
+    message.answer.assert_not_called()
     assert not db.users.writes
 
 
@@ -287,3 +288,121 @@ async def test_crash_after_user_commit_recovers_without_double_credit():
     assert result['result'] == before['hedgehog_result']
     assert db.users.docs[7] == before
     assert len(db.users.writes) == 1
+
+
+def test_native_html_limits_inline_image_and_no_miniapp():
+    import re
+    import zlib
+    from pathlib import Path
+    from src.widgets.hedgehog import to_hedgehog_html
+    images = Path(__file__).resolve().parents[2] / 'src/infra/storage/ega'
+    for token in ['A' * 32, 'z' * 32, '_' * 32, '-' * 32]:
+        html = to_hedgehog_html(token, images)
+        assert len(html.encode()) <= 32768
+        assert len(zlib.compress(html.encode(), 9)) <= 4096
+        assert 'data:image/jpeg;base64,' in html
+        assert 'TelegramWidget.request' in html
+        assert not re.search(r'https?://|fetch\(|WebApp|<iframe', html)
+    with pytest.raises(ValueError):
+        to_hedgehog_html('</script>', images)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('roll', [0, 99])
+async def test_native_queries_survive_real_aiogram_dispatch_and_pay_once(roll):
+    from unittest.mock import AsyncMock
+    from aiogram import Dispatcher, Bot
+    from aiogram.types import Update
+    from src.bot.native_widgets import HedgehogWidgetMiddleware
+    db, daily, game = services()
+    token = (await game.issue(7))['token']
+    container = SimpleNamespace(settings=SimpleNamespace(maintenance_mode=False), hedgehog_service=game)
+    dp = Dispatcher()
+    dp.update.outer_middleware(HedgehogWidgetMiddleware(container))
+    # Real Bot identity and Update model, with a mocked HTTP session only.
+    bot = Bot('123456:TEST')
+    bot.session = AsyncMock(return_value=True)
+    def update(action, number):
+        return Update.model_validate({'update_id': number, 'widget_query': {
+            'id': str(number), 'from': {'id': 7}, 'chat': {'id': -1001234, 'type': 'supergroup'},
+            'message_id': 3, 'data': f'hg:{action}:{token}'}})
+    try:
+        with patch('src.services.hedgehog_service.secrets.randbelow', return_value=roll), \
+             patch('src.services.hedgehog_service.time.time', return_value=100):
+            await dp.feed_update(bot, update('s', 1))
+        first = json.loads(bot.session.call_args.args[1].data)
+        assert first['state'] == 'playing' and 'won' not in first
+        with patch('src.services.hedgehog_service.time.time', return_value=112):
+            await dp.feed_update(bot, update('f', 2))
+            await dp.feed_update(bot, update('f', 3))
+        request = bot.session.call_args.args[1]
+        final = json.loads(request.data)
+        assert request.__api_method__ == 'answerWidgetQuery'
+        assert final['result']['success'] is (roll < 95)
+        assert len(request.data.encode()) <= 1024
+        assert len(db.users.writes) == 1
+        assert db.users.docs[7]['coins'] == 1000 + final['result']['total_coins']
+        assert db.users.docs[7]['xp'] == 500 + final['result']['total_xp']
+    finally:
+        await bot.session.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('kind', ['other_owner', 'copy', 'malformed', 'banned', 'maintenance'])
+async def test_native_queries_reject_untrusted_actions(kind):
+    from aiogram.types import Update
+    from unittest.mock import AsyncMock
+    from src.bot.native_widgets import HedgehogWidgetMiddleware
+    db, daily, game = services()
+    token = (await game.issue(7))['token']
+    container = SimpleNamespace(settings=SimpleNamespace(maintenance_mode=kind == 'maintenance'), hedgehog_service=game)
+    query = {'id': 'q', 'from': {'id': 8 if kind == 'other_owner' else 7}, 'chat': {'id': 7},
+             'message_id': 1, 'data': 'broken' if kind == 'malformed' else f'hg:s:{token}'}
+    if kind == 'banned':
+        db.users.docs[7]['is_banned'] = True
+    key = 'shared_widget_query' if kind == 'copy' else 'widget_query'
+    event = Update.model_validate({'update_id': 1, key: query})
+    bot = AsyncMock()
+    handler = AsyncMock()
+    await HedgehogWidgetMiddleware(container)(handler, event, {'bot': bot})
+    assert 'error' in json.loads(bot.call_args.args[0].data)
+    handler.assert_not_called()
+    assert not db.users.writes
+    assert next(iter(db.hedgehog_games.docs.values()))['state'] == 'issued'
+
+
+@pytest.mark.asyncio
+async def test_native_unsupported_api_does_not_spend_attempt_or_open_webapp():
+    from pathlib import Path
+    from unittest.mock import AsyncMock
+    from aiogram.exceptions import TelegramNotFound
+    from src.bot.native_widgets import SendWidget
+    from src.bot.presenters.hedgehog_presenter import launch_hedgehog
+    db, daily, game = services()
+    user = SimpleNamespace(id=7, username=None, first_name='Ёж', last_name=None, is_bot=False)
+    container = SimpleNamespace(settings=SimpleNamespace(BASE_DIR=Path(__file__).resolve().parents[2]),
+                                user_service=SimpleNamespace(get_or_create=AsyncMock()), hedgehog_service=game)
+    bot = AsyncMock(side_effect=TelegramNotFound(method=SendWidget(chat_id=7, html=''), message='Not Found'))
+    message = SimpleNamespace(chat=SimpleNamespace(id=7), bot=bot, answer=AsyncMock())
+    await launch_hedgehog(message, user, container)
+    assert 'Попытка не потрачена' in message.answer.call_args.args[0]
+    assert 'reply_markup' not in message.answer.call_args.kwargs
+    assert not db.users.writes
+    assert next(iter(db.hedgehog_games.docs.values()))['state'] == 'issued'
+
+
+@pytest.mark.asyncio
+async def test_native_beta_endpoint_requires_explicit_opt_in(monkeypatch):
+    from src.bot import loader
+    monkeypatch.setattr(loader.settings, 'telegram_widget_beta', True)
+    bot = loader.create_bot()
+    try:
+        assert bot.session.api.api_url('TEST', 'sendWidget') == 'https://api.telegram.org/beta/botTEST/test/sendWidget'
+    finally:
+        await bot.session.close()
+    monkeypatch.setattr(loader.settings, 'telegram_widget_beta', False)
+    bot = loader.create_bot()
+    try:
+        assert bot.session.api.api_url('TEST', 'sendWidget') == 'https://api.telegram.org/botTEST/sendWidget'
+    finally:
+        await bot.session.close()
