@@ -93,7 +93,7 @@ def services():
     )
     mongo = SimpleNamespace(database=db)
     daily = DailyService(mongo)
-    return db, daily, HedgehogService(mongo, daily)
+    return db, daily, HedgehogService(mongo, daily, reward_mode="classic")
 
 
 @pytest.mark.asyncio
@@ -406,3 +406,106 @@ async def test_native_beta_endpoint_requires_explicit_opt_in(monkeypatch):
         assert bot.session.api.api_url('TEST', 'sendWidget') == 'https://api.telegram.org/botTEST/sendWidget'
     finally:
         await bot.session.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('tap_count', [0, 1, 3, 5])
+async def test_new_game_standard_reward_or_server_tap_bonus(tap_count):
+    from src.core.constants import DAILY_BASE_COINS, DAILY_STREAK_BONUSES
+    db, daily, game = services()
+    game.reward_mode = 'tap_bonus'
+    token = (await game.issue(7))['token']
+    with patch('src.services.hedgehog_service.time.time', return_value=100), \
+         patch('src.services.hedgehog_service.secrets.randbelow', return_value=99) as roll:
+        await game.start(token, 7)
+        roll.assert_not_called()
+    for number in range(1, tap_count + 1):
+        with patch('src.services.hedgehog_service.time.time', return_value=100 + 1.5 * number):
+            result = await game.tap(token, 7, number)
+            assert result['bonus_percent'] == number * 10
+    with patch('src.services.hedgehog_service.time.time', return_value=112):
+        result = (await game.finish(token, 7))['result']
+        assert (await game.finish(token, 7))['result'] == result
+    base = DAILY_BASE_COINS
+    for days, (_, coins) in sorted(DAILY_STREAK_BONUSES.items()):
+        if 9 >= days:
+            base = DAILY_BASE_COINS + coins
+    assert result['success'] and result['streak'] == 9
+    assert result['total_coins'] == base + base * tap_count // 10
+    assert result['tap_bonus_coins'] == base * tap_count // 10
+    assert db.users.docs[7]['coins'] == 1000 + result['total_coins']
+    assert len(db.users.writes) == 1
+
+
+@pytest.mark.asyncio
+async def test_tap_replay_spam_owner_reload_and_cap():
+    db, daily, game = services()
+    game.reward_mode = 'tap_bonus'
+    token = (await game.issue(7))['token']
+    with patch('src.services.hedgehog_service.time.time', return_value=100):
+        await game.start(token, 7)
+        assert (await game.tap(token, 7, 1))['taps'] == 0
+    for n in range(1, 8):
+        with patch('src.services.hedgehog_service.time.time', return_value=100 + n * 1.5):
+            response = await game.tap(token, 7, n)
+            assert response['taps'] == min(5, n)
+            assert (await game.tap(token, 7, n)) == response
+            assert (await game.tap(token, 7, n + 1))['taps'] == min(5, n)
+            assert (await game.start(token, 7))['bonus_percent'] == min(50, n * 10)
+    with pytest.raises(GameError):
+        await game.tap(token, 8, 9)
+    with pytest.raises(GameError):
+        await game.tap(token, 7, 10000)
+
+
+@pytest.mark.asyncio
+async def test_tap_bonus_limited_to_bank_and_legacy_receipt_stable():
+    db, daily, game = services()
+    db.bank.docs['main']['balance'] = 1
+    result = await daily.settle_hedgehog(7, True, utc_day(), tap_count=999999)
+    assert result['total_coins'] == 1 and result['tap_bonus_coins'] == 0
+    assert result['tap_count'] == 5
+    assert await daily.settle_hedgehog(7, True, utc_day(), tap_count=0) == result
+
+
+@pytest.mark.asyncio
+async def test_native_tap_action_uses_signed_owner_and_server_counter():
+    from aiogram.types import Update
+    from unittest.mock import AsyncMock
+    from src.bot.native_widgets import HedgehogWidgetMiddleware
+    db, daily, game = services()
+    game.reward_mode = 'tap_bonus'
+    token = (await game.issue(7))['token']
+    container = SimpleNamespace(settings=SimpleNamespace(maintenance_mode=False), hedgehog_service=game)
+    bot = AsyncMock()
+    handler = AsyncMock()
+    def update(action, owner=7):
+        return Update.model_validate({'update_id': 1, 'widget_query': {
+            'id': 'query', 'from': {'id': owner}, 'chat': {'id': 7}, 'message_id': 1,
+            'data': f'hg:{action}:{token}'}})
+    middleware = HedgehogWidgetMiddleware(container)
+    with patch('src.services.hedgehog_service.time.time', return_value=100):
+        await middleware(handler, update('s'), {'bot': bot})
+    with patch('src.services.hedgehog_service.time.time', return_value=101.5):
+        await middleware(handler, update('t1', 8), {'bot': bot})
+        assert 'error' in json.loads(bot.call_args.args[0].data)
+        await middleware(handler, update('t1'), {'bot': bot})
+        assert json.loads(bot.call_args.args[0].data)['bonus_percent'] == 10
+    with patch('src.services.hedgehog_service.time.time', return_value=112):
+        await middleware(handler, update('f'), {'bot': bot})
+    assert json.loads(bot.call_args.args[0].data)['result']['tap_bonus_coins'] > 0
+    handler.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_unstarted_legacy_invitation_upgrades_but_playing_outcome_does_not():
+    db, daily, game = services()
+    original = await game.issue(7)
+    assert original['mode'] == 'classic'
+    game.reward_mode = 'tap_bonus'
+    upgraded = await game.issue(7)
+    assert upgraded['token'] == original['token'] and upgraded['mode'] == 'tap_bonus'
+    stored = next(iter(db.hedgehog_games.docs.values()))
+    stored.update(mode='classic', state='playing', started_at=100, won=False)
+    assert (await game.issue(7))['mode'] == 'classic'
+    assert stored['won'] is False

@@ -93,6 +93,31 @@ for (const theme of ['light', 'dark']) {
     console.log('hedgehog / ' + theme + ' / ' + (success?'win':'loss') + ': strict sandbox, real gesture/request bridge, receipt/image OK');
   }
 }
+for (const theme of ['light', 'dark']) {
+  const boot = await runWidget(gameHtml, { policy:'strict', theme, timerRounds:0 });
+  const button = boot.ops.flat().find(op => op.op === 'el' && op.attrs?.id === 'pet');
+  const result = {success:true,total_xp:60,total_coins:60,tap_bonus_coins:5,streak:1,message:'Ёж доволен!'};
+  const run = await runWidget(gameHtml, {
+    policy:'strict',theme,timerRounds:0,context:{canQuery:true,chatType:'group'},
+    events:[1,2,3].map(gesture=>({type:'click',targetId:button.id,gesture})),
+    onRequest:async q=>{
+      if(q.data.includes(':s:')) {
+        await new Promise(resolve=>setTimeout(resolve,1600));
+        return {result:JSON.stringify({state:'playing',remaining_ms:12000,taps:0,tap_seq:0,bonus_percent:0})};
+      }
+      if(q.data.includes(':t1:')) return {result:JSON.stringify({state:'playing',remaining_ms:0,taps:1,tap_seq:1,bonus_percent:10})};
+      return {result:JSON.stringify({state:'done',result})};
+    },
+    probes:["document.getElementById('bonus').textContent","document.getElementById('reward').textContent","document.getElementById('photo').style.display"],
+  });
+  assert.deepEqual(run.diags, []);
+  assert.equal(run.requests.length,3);
+  assert.ok(run.requests[1].data.startsWith('hg:t1:'));
+  assert.ok(run.probes[0].includes('+10%'));
+  assert.ok(run.probes[1].includes('В том числе за ласку: +5'));
+  assert.equal(run.probes[2],'block');
+  console.log('hedgehog / '+theme+' / tap bonus: gesture, server counter, reward and original picture OK');
+}
 ''', encoding='utf-8')
     run(str(modules / '.bin/tsx'), str(runner))
 
