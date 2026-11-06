@@ -16,6 +16,7 @@ from src.bot.filters import AdminFilter, PrivateChatFilter
 from src.core.config import settings
 from src.core.container import Container
 from src.core.visuals import Visuals
+from src.bot.presenters.katana_presenter import send_katana_upgrade
 from src.core.exceptions import (
     DailyAlreadyClaimedError,
     InsufficientFundsError,
@@ -189,9 +190,9 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
 @router.message(F.text.lower().in_({"ап катана", "\\upkatana"}))
 async def cmd_upkatana(message: Message, container: Container):
     """Команда /upkatana - улучшение катаны."""
-    logger.info(f"👉 [CMD] cmd_upkatana triggered by {message.from_user.id}")
     if not message.from_user:
         return
+    logger.info(f"👉 [CMD] cmd_upkatana triggered by {message.from_user.id}")
 
     # Delete trigger message
     try:
@@ -205,6 +206,15 @@ async def cmd_upkatana(message: Message, container: Container):
 
     try:
         result = await container.economy_service.upgrade_katana(message.from_user.id)
+
+        if container.settings.widgets_enabled:
+            await send_katana_upgrade(
+                message, message.from_user.id,
+                message.from_user.username or message.from_user.full_name,
+                result, animate=container.settings.widget_animations_enabled,
+            )
+            logger.info("Katana upgrade receipt sent for user %s", message.from_user.id)
+            return
 
         # Успех или неудача (но транзакция прошла)
         is_upgraded = result["is_upgraded"]

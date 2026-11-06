@@ -107,3 +107,6 @@ Widget interface
 
 Cards now include per-message light/dark and motion controls, measured text wrapping,
 and single-message refresh protection. HTML validation is pinned to widget-sandbox v0.6.0.
+
+/upkatana and «ап катана» now show a compact blade-growth animation for the completed
+attempt, with actual before/after lengths, cost, rank and PNG/text fallbacks.

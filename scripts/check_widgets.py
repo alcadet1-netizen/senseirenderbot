@@ -48,7 +48,7 @@ def main():
     runner.write_text('''import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { runWidget } from ''' + json.dumps(str(harness)) + ''';
-for (const name of ['profile', 'top']) {
+for (const name of ['profile', 'top', 'katana-success', 'katana-failure']) {
   const html = fs.readFileSync(new URL('./widget-samples/' + name + '.html', import.meta.url), 'utf8');
   for (const theme of ['light', 'dark']) {
     const result = await runWidget(html, { policy: 'strict', theme, script: [
