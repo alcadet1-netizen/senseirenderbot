@@ -34,6 +34,7 @@ class WidgetFailure:
     category: str
     description: str
     advice: str
+    stage: str = "unknown"
 
     def public_text(self):
         return (f'🦔 Не удалось отправить нативного ежа. {self.advice}\n'
@@ -74,10 +75,18 @@ def describe_failure(exc, bot=None):
         category, advice = 'temporary', 'Сеть или сервер Telegram временно недоступны. Попробуйте позже.'
     else:
         category, advice = 'api_error', 'Telegram вернул ошибку API. Администратору нужна диагностика.'
-    failure = WidgetFailure(secrets.token_hex(4), category, detail, advice)
+    stage = getattr(exc, 'stage', None)
+    if stage not in {'send_media', 'answer_inline_hedgehog', 'answer_query', 'reject_query',
+                     'resolve_peer', 'reconnect_probe'}:
+        stage = 'unknown'
+    if stage == 'answer_inline_hedgehog' and category == 'widget_policy':
+        advice = ('Telegram отклонил создание нативного inline-результата. '
+                  'До отправки выбранного результата в группу дело не дошло; '
+                  'повтор прямой отправки или включение shared_widget не устраняют этот отказ.')
+    failure = WidgetFailure(secrets.token_hex(4), category, detail, advice, stage)
     # Never log the exception repr, request HTML, session token or tokenized URL.
-    logger.warning('Native widget failure ref=%s category=%s type=%s description=%s',
-                   failure.reference, category, type(exc).__name__, detail)
+    logger.warning('Native widget failure ref=%s category=%s type=%s stage=%s description=%s',
+                   failure.reference, category, type(exc).__name__, stage, detail)
     return failure
 
 

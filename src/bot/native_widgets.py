@@ -12,6 +12,7 @@ from typing import Any
 from aiogram import BaseMiddleware
 from aiogram.methods.base import TelegramMethod
 
+from src.bot.inline_queries import is_hedgehog_inline_query
 from src.core.exceptions import DailyAlreadyClaimedError
 from src.services.hedgehog_service import GameError
 from src.services.maintenance_service import MaintenanceService
@@ -53,6 +54,11 @@ class HedgehogWidgetMiddleware(BaseMiddleware):
         # aiogram keeps future Bot API fields as Pydantic extras. Do not let its
         # Update.event_type reject these before our bridge has handled them.
         fields = event.model_dump(mode='python', by_alias=True, exclude_none=True)
+        inline = fields.get('inline_query')
+        if isinstance(inline, dict) and is_hedgehog_inline_query(inline.get('query')):
+            # MTProto owns native inline answers. In particular, never let the
+            # generic VK handler answer the same query with empty/audio results.
+            return None
         query = fields.get('widget_query')
         shared = fields.get('shared_widget_query')
         if query is None and shared is None:

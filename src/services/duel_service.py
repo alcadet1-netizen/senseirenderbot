@@ -125,6 +125,8 @@ class DuelService:
     def __init__(self, container: Container):
         self.container = container
         self.duels: Dict[int, Duel] = {} # int ID
+        self._closing = False
+        self._lifecycle_lock = asyncio.Lock()
 
         # Get references to services we'll need
         self.user_service = container.user_service
@@ -137,6 +139,34 @@ class DuelService:
 
     # --- Core Public Methods ---
 
+    async def shutdown(self):
+        """Refund live escrow under each duel lock before the database closes.
+
+        Reuses cancellation settlement, without sending through a closing bot
+        session or scheduling new archive tasks. Existing refunds are best-effort,
+        not a crash-safe transaction across both player documents.
+        """
+        async with self._lifecycle_lock:
+            self._closing = True
+            pending = list(self.duels.values())
+        timers, failures = [], []
+        for duel in pending:
+            async with duel.lock:
+                timer = duel.timeout_task
+                if isinstance(timer, asyncio.Task) and timer is not asyncio.current_task():
+                    timer.cancel()
+                    timers.append(timer)
+                if not duel.finished:
+                    try:
+                        await self._cancel_duel(duel, 'Бот перезапускается. Ставки возвращены.', notify=False)
+                    except Exception as exc:
+                        logger.error('Duel shutdown refund failed: duel=%s type=%s', duel.id, type(exc).__name__)
+                        failures.append(exc)
+        if timers:
+            await asyncio.gather(*timers, return_exceptions=True)
+        if failures:
+            raise ExceptionGroup('Some duel refunds failed during shutdown', failures)
+
     def _is_in_active_duel(self, user_id: int) -> bool:
         for duel in self.duels.values():
             if not duel.finished and user_id in (duel.challenger_id, duel.opponent_id):
@@ -144,6 +174,13 @@ class DuelService:
         return False
 
     async def create_duel(self, challenger_id: int, opponent_id: int, bet: int, chat_id: int, bot: Bot) -> Union[Duel, str]:
+        # Let an in-flight escrow finish registration before shutdown snapshots it.
+        async with self._lifecycle_lock:
+            return await self._create_duel(challenger_id, opponent_id, bet, chat_id, bot)
+
+    async def _create_duel(self, challenger_id: int, opponent_id: int, bet: int, chat_id: int, bot: Bot) -> Union[Duel, str]:
+        if self._closing:
+            return "Бот перезапускается. Новые дуэли временно недоступны."
         logger.info("Create duel: challenger=%s opponent=%s bet=%s chat=%s", challenger_id, opponent_id, bet, chat_id)
         # 0. Check busy
         if self._is_in_active_duel(challenger_id):
@@ -295,6 +332,8 @@ class DuelService:
     # --- Internal Logic ---
 
     async def _start_round(self, duel: Duel):
+        if self._closing or duel.finished:
+            return
         duel.round_num += 1
         duel.round_deadline_mono = time.monotonic() + DUEL_ROUND_TIMEOUT_SEC
 
@@ -308,7 +347,8 @@ class DuelService:
         await self._update_control_dm(duel, duel.challenger_id)
         await self._update_control_dm(duel, duel.opponent_id)
 
-        duel.timeout_task = asyncio.create_task(self._wait_for_round(duel.id, duel.round_num))
+        if not self._closing and not duel.finished:
+            duel.timeout_task = asyncio.create_task(self._wait_for_round(duel.id, duel.round_num))
 
     async def _wait_for_round(self, duel_id: int, round_num: int):
         # Tick every second to update timer in arena
@@ -887,7 +927,7 @@ class DuelService:
         # Remove from active duels after a delay
         asyncio.create_task(self._archive_duel(duel.id))
 
-    async def _cancel_duel(self, duel: Duel, reason: str):
+    async def _cancel_duel(self, duel: Duel, reason: str, *, notify: bool = True):
         if duel.finished: return
         duel.finished = True
 
@@ -919,6 +959,9 @@ class DuelService:
                 await self.transactions.insert_one(tx_doc)
 
             logger.info("Duel canceled with refund: id=%s bet=%s reason=%s", duel.id, duel.bet, reason)
+
+        if not notify:
+            return
 
         # Update messages
         try:

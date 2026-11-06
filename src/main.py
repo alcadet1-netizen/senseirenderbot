@@ -108,12 +108,13 @@ async def on_shutdown(bot: Bot, container: Container | None = None) -> None:
 
     if container:
         # Возвращаем ставки из активных дуэлей
-        await container.duel_service.shutdown()
-        logger.info("✅ Active duels refunded")
-
-        # Отключаемся от MongoDB
-        await container.mongo_client.close()
-        logger.info("✅ MongoDB disconnected")
+        try:
+            await container.duel_service.shutdown()
+            logger.info("✅ Active duels refunded")
+        finally:
+            # Close even if one settlement fails; never mask it as a success.
+            await container.mongo_client.close()
+            logger.info("✅ MongoDB disconnected")
 
     logger.info("👋 Goodbye!")
 

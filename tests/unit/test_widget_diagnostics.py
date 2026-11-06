@@ -222,3 +222,20 @@ async def test_group_policy_failure_is_scoped_to_actual_group():
     text = message.answer.call_args.args[0]
     assert 'minimal' in text and 'этой группе' in text
     assert 'личному чату' not in text
+
+
+@pytest.mark.parametrize('stage', ['send_media', 'answer_inline_hedgehog'])
+def test_rpc_stage_is_preserved_in_safe_diagnostics(stage, caplog):
+    from src.infra.mtproto.widgets import MtprotoWidgetError, MtprotoWidgets
+    failure = describe_failure(MtprotoWidgets._failure(MtprotoWidgetError('INPUT_MEDIA_WIDGET_NOT_ALLOWED'), stage))
+    assert failure.stage == stage
+    assert f'stage={stage}' in caplog.text
+    if stage == 'answer_inline_hedgehog':
+        assert 'создание нативного inline-результата' in failure.advice
+
+
+def test_unknown_rpc_stage_is_not_logged(caplog):
+    from src.infra.mtproto.widgets import MtprotoWidgetError
+    failure = describe_failure(MtprotoWidgetError('INPUT_MEDIA_WIDGET_NOT_ALLOWED', stage='secret_session_value'))
+    assert failure.stage == 'unknown'
+    assert 'secret_session_value' not in caplog.text
