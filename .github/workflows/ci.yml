@@ -37,5 +37,7 @@ jobs:
           PY
       - name: Check HTML in official Telegram QuickJS sandbox
         run: python -m scripts.check_widgets
+      - name: Check Mini App JavaScript
+        run: node --check src/web/hedgehog/app.js
       - name: Check startup script
         run: bash -n start.sh

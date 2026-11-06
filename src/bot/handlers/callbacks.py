@@ -9,6 +9,7 @@ from aiogram.exceptions import TelegramBadRequest
 
 from src.core.container import Container
 from src.core.visuals import Visuals
+from src.bot.presenters.hedgehog_presenter import launch_hedgehog
 from src.core.exceptions import (
     DailyAlreadyClaimedError, 
     InsufficientFundsError, 
@@ -169,43 +170,8 @@ async def cb_daily(query: CallbackQuery, callback_data: MenuCb, container: Conta
     if not await check_owner(query, callback_data.user_id):
         return
         
-    try:
-        result = await container.daily_service.claim_daily(
-            user_id=query.from_user.id,
-            username=query.from_user.username,
-            first_name=query.from_user.first_name or "",
-            is_bot=query.from_user.is_bot or False
-        )
-        
-        if result["success"]:
-            card = Visuals.daily_reward(
-                xp=result["xp"],
-                coins=result["coins"],
-                streak=result["streak"],
-                bonus_xp=result["bonus_xp"],
-                bonus_coins=result["bonus_coins"]
-            )
-            await query.message.edit_text(card, parse_mode="HTML")
-            try:
-                await query.answer("🎁 Бонус получен!", show_alert=True)
-            except TelegramBadRequest:
-                pass
-        else:
-             try:
-                await query.answer(f"❌ {result.get('error', 'Ошибка')}", show_alert=True)
-             except TelegramBadRequest:
-                pass
-
-    except DailyAlreadyClaimedError as e:
-        try:
-            await query.answer(f"⏳ {e}", show_alert=True)
-        except TelegramBadRequest:
-            pass
-    except Exception as e:
-        try:
-            await query.answer(f"❌ Ошибка: {e}", show_alert=True)
-        except TelegramBadRequest:
-            pass
+    await query.answer()
+    await launch_hedgehog(query.message, query.from_user, container)
 
 
 @router.callback_query(MenuCb.filter(F.action == "upgrade_katana_confirm"))

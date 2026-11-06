@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Погладь ежа · SENSEI</title><link rel="stylesheet" href="/miniapp/hedgehog/app.css"><script defer src="https://telegram.org/js/telegram-web-app.js"></script><script defer src="/miniapp/hedgehog/app.js"></script></head>
+<body><main>
+<header><span class="brand">SENSEI · ЕЖЕДНЕВНЫЙ РИТУАЛ</span><span class="badge">95% успеха</span></header>
+<h1>Колючий снаружи.<br>Ласковый внутри.</h1><p class="intro">Погладь ежа — и забери ежедневный бонус.<br>Всего 12 секунд спокойствия.</p>
+<div class="stage" id="stage">
+<div class="halo"></div><span class="spark s1">✦</span><span class="spark s2">✧</span>
+<svg id="hedgehog" viewBox="0 0 400 280" role="img" aria-label="Ёжик ждёт поглаживаний">
+<defs><linearGradient id="spines" x2="0" y2="1"><stop stop-color="#9b7766"/><stop offset="1" stop-color="#604a48"/></linearGradient><linearGradient id="face" x2="0" y2="1"><stop stop-color="#fff0d8"/><stop offset="1" stop-color="#e8c4a6"/></linearGradient></defs>
+<ellipse cx="202" cy="241" rx="125" ry="14" fill="#a2c8b8" opacity=".23"/>
+<g class="pet-body"><path d="M82 211L61 179 81 169 69 145 96 138 88 111 118 110 123 80 148 89 167 62 188 80 212 54 231 80 258 65 271 96 301 93 303 123 330 134 317 163 338 184 316 212Z" fill="url(#spines)"/>
+<g fill="none" stroke="#c6a58a" stroke-width="5" stroke-linecap="round"><path d="M107 149l12 16m23-43 9 18m34-40 2 20m41-15-5 18m40-2-9 17m33 12-14 12M94 183l15 9m26-27 12 12m32-32 4 20m45-21-4 20m35-8-9 17m38 9-13 10"/></g>
+<ellipse cx="147" cy="225" rx="20" ry="11" fill="#b98e78"/><ellipse cx="256" cy="225" rx="20" ry="11" fill="#b98e78"/>
+<path d="M113 207Q104 156 146 152Q166 151 181 166Q196 153 224 167Q254 150 282 175Q302 204 272 225Q218 252 156 235Z" fill="url(#face)"/>
+<ellipse cx="147" cy="159" rx="15" ry="18" fill="#edb9a5"/><ellipse cx="275" cy="174" rx="14" ry="17" fill="#edb9a5"/>
+<circle cx="171" cy="196" r="7" fill="#443b3c"/><circle cx="248" cy="199" r="7" fill="#443b3c"/><circle cx="173" cy="194" r="2" fill="white"/><circle cx="250" cy="197" r="2" fill="white"/>
+<ellipse cx="211" cy="211" rx="13" ry="9" fill="#58444a"/><path d="M205 224q7 6 14 0" stroke="#76524e" stroke-width="3" fill="none" stroke-linecap="round"/>
+<ellipse cx="157" cy="216" rx="13" ry="6" fill="#e7a599"/><ellipse cx="263" cy="219" rx="13" ry="6" fill="#e7a599"/>
+</g></svg><span id="heart" aria-hidden="true">♡</span><span class="stage-label" id="stage-label">Твой маленький колючий приятель</span></div>
+<section class="timer-card"><div><span id="status" role="status" aria-live="polite">Готов к знакомству?</span><b id="clock">12 сек</b></div><progress id="timer" max="12000" value="12000" aria-label="Осталось времени"></progress></section>
+<button id="play" type="button">🦔 Поздороваться и погладить</button><p class="rules">Одна попытка в день · обновление в 00:00 UTC<br>5%: ёж вредничает и сбрасывает серию. Монеты и XP не теряются.</p>
+<p id="error" role="alert" hidden></p><button id="retry" class="secondary" hidden>Проверить результат ещё раз</button>
+</main><section id="result" role="dialog" aria-modal="true" aria-labelledby="result-title" hidden><div class="result-card"><span class="brand">КОЛЮЧИЙ ВЕРДИКТ</span><img id="reward-image" hidden alt="Ёжик празднует ваш ежедневный бонус"><div id="verdict-icon">🦔</div><h2 id="result-title"></h2><p id="result-message"></p><div id="rewards"></div><button id="close">Готово</button></div></section>
+</body></html>

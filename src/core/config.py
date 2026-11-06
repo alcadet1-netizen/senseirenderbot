@@ -52,6 +52,9 @@ class Settings(BaseSettings):
 
     widget_animations_enabled: bool = Field(default=True, alias="WIDGET_ANIMATIONS_ENABLED")
 
+    # Public HTTPS base URL for the daily Telegram Mini App.
+    mini_app_url: str = Field(default="", alias="MINI_APP_URL")
+
     # BANK
     bank_initial_coins: float = Field(default=1_000_000_000.0, alias="BANK_INITIAL_COINS")
 

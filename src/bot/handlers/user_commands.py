@@ -16,6 +16,7 @@ from src.bot.filters import AdminFilter, PrivateChatFilter
 from src.core.config import settings
 from src.core.container import Container
 from src.core.visuals import Visuals
+from src.bot.presenters.hedgehog_presenter import launch_hedgehog
 from src.bot.presenters.katana_presenter import send_katana_upgrade
 from src.core.exceptions import (
     DailyAlreadyClaimedError,
@@ -120,6 +121,10 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
         first_name=message.from_user.first_name or "",
         last_name=message.from_user.last_name,
     )
+
+    if command.args and command.args.startswith("hedgehog_"):
+        await launch_hedgehog(message, message.from_user, container, token=command.args[len("hedgehog_"):])
+        return
 
     # Обработка реферальной ссылки
     args = command.args
@@ -421,89 +426,9 @@ async def cmd_topkatana(message: Message, container: Container):
 @router.message(F.text.lower().in_({"ежа", "фарм", "фармить", "фарма", "ферма"}))
 @router.message(F.text == "🎁 Бонус", PrivateChatFilter())
 async def cmd_daily(message: Message, container: Container):
-    """Команда /senseidaily - ежедневный бонус."""
-    logger.info(f"👉 [CMD] cmd_daily triggered by {message.from_user.id}")
-    if not message.from_user:
-        return
-
-    # Delete trigger message (except private chat button which we can't detect easily here but safe to try)
-    # Don't delete if it is "🎁 Бонус" (button text) in private chat usually, but here we can just try.
-    if message.chat.type != "private" or message.text not in ["🎁 Бонус"]:
-         try:
-            await message.delete()
-         except TelegramBadRequest:
-            pass
-         except Exception as e:
-            logger.warning(f"⚠️ Failed to delete trigger message in cmd_daily: {e}")
-
-    mention = get_mention(message.from_user)
-
-    try:
-        result = await container.daily_service.claim_daily(
-            user_id=message.from_user.id,
-            username=message.from_user.username,
-            first_name=message.from_user.first_name or ""
-        )
-
-        if result["success"]:
-            card = Visuals.daily_reward(
-                xp=result["xp"],
-                coins=result["coins"],
-                streak=result["streak"],
-                bonus_xp=result["bonus_xp"],
-                bonus_coins=result["bonus_coins"]
-            )
-
-            # Add hedgehog message
-            hedgehog_msg = "🦔 <b>Вы погладили ежа!</b>\n\n"
-            full_text = f"{mention}\n\n{hedgehog_msg}{card}"
-
-            # Пытаемся отправить картинку из папки ega
-            ega_path = settings.BASE_DIR / "src" / "infra" / "storage" / "ega"
-
-            sent_photo = False
-            if ega_path.exists():
-                images = [f.name for f in ega_path.iterdir() if f.suffix.lower() in ('.jpg', '.jpeg', '.png', '.gif')]
-                if images:
-                    image_name = random.choice(images)
-                    image_path = ega_path / image_name
-                    try:
-                        # Используем send_photo чтобы сообщение не удалялось
-                        await message.bot.send_photo(
-                            chat_id=message.chat.id,
-                            photo=FSInputFile(str(image_path)),
-                            caption=full_text,
-                            parse_mode="HTML"
-                        )
-                        sent_photo = True
-                        logger.info(f"✅ Daily photo sent to {message.from_user.id}")
-                    except Exception as e:
-                        logger.warning(f"⚠️ Failed to send daily photo: {e}")
-
-            if not sent_photo:
-                # Используем send_message если фото не удалось отправить
-                await message.bot.send_message(
-                    chat_id=message.chat.id,
-                    text=full_text,
-                    parse_mode="HTML"
-                )
-                logger.info(f"✅ Daily text sent to {message.from_user.id}")
-        else:
-            await message.bot.send_message(
-                chat_id=message.chat.id,
-                text=f"{mention}\n\n❌ {result.get('error', 'Ошибка')}",
-                parse_mode="HTML"
-            )
-
-    except DailyAlreadyClaimedError as e:
-        await message.answer(
-            f"{mention}\n\n"
-            f"⏰ <b>Бонус уже получен!</b>\n\n"
-            f"Следующий доступен: {e.next_claim_time}",
-            parse_mode="HTML"
-        )
-    except Exception as e:
-        logger.error(f"❌ Error in cmd_daily: {e}", exc_info=True)
+    """Команда и текстовые алиасы запускают одну ежедневную мини-игру."""
+    if message.from_user:
+        await launch_hedgehog(message, message.from_user, container)
 
 
 @router.message(Command("senseiobmen", "обмен", "exchange"))

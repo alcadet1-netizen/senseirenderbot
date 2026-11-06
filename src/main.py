@@ -26,6 +26,7 @@ from src.bot.middlewares import (
 )
 from src.bot.middlewares.digest import DigestMiddleware
 from src.bot.middlewares.cleanup import CommandCleanupMiddleware
+from src.web.hedgehog_app import setup_hedgehog
 from src.core.config import settings
 from src.core.container import Container
 from src.core.logger import setup_logging
@@ -59,6 +60,8 @@ async def on_startup(bot: Bot, container: Container) -> None:
     # Подключаемся к MongoDB
     await container.mongo_client.connect()
     logger.info("✅ MongoDB connected")
+
+    await container.hedgehog_service.ensure_indexes()
 
     # Заполняем достижения
     count = await container.achievement_service.seed_achievements()
@@ -139,7 +142,8 @@ async def main() -> None:
     bot.container = container
 
     # Start web server for health checks
-    app = web.Application()
+    app = web.Application(client_max_size=16 * 1024)
+    setup_hedgehog(app, container)
     app.router.add_get('/', lambda request: web.Response(text="OK"))
     app.router.add_get('/health', lambda request: web.Response(text="OK"))
     runner = web.AppRunner(app)
