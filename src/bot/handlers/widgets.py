@@ -1,4 +1,4 @@
-"""Widget interface for the existing Bot API transport (PNG + real buttons).
+"""Widget interface for the existing Bot API transport (GIF/PNG + real buttons).
 
 Do not pretend that sendDocument or sendPhoto produces messageMediaWidget.
 Native HTML export is admin-only until a layer-233 transport is available.
@@ -12,11 +12,12 @@ from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import (
     BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup,
-    InputMediaPhoto, Message,
+    InputMediaAnimation, InputMediaPhoto, Message,
 )
 
 from src.core.container import Container
 from src.widgets.cards import Card, profile_card, top_card, to_html, to_png
+from src.widgets.animation import to_gif
 
 logger = logging.getLogger(__name__)
 router = Router(name='widgets')
@@ -54,21 +55,50 @@ async def load_card(container: Container, user, view: str) -> Card:
 
 
 def text_fallback(card: Card) -> str:
-    return '\n'.join([card.title, card.subtitle, '', *(f'{k}: {v}' for k, v in card.rows)])
+    lines = [card.title, card.subtitle, '', *(f'{k}: {v}' for k, v in card.rows)]
+    if card.progress is not None:
+        lines.append(f'Прогресс уровня: {card.progress}%')
+    if card.art:
+        lines.append(card.art)
+    return '\n'.join(lines)
 
 
-async def show_card(message: Message, card: Card, owner: int, view: str, *, edit=False):
+async def show_card(message: Message, card: Card, owner: int, view: str, *, edit=False, animate=False):
     markup = keyboard(owner, view)
     caption = f'{card.title}\nСнимок данных. Для актуальных значений нажмите «Обновить».'
+    has_media = bool(getattr(message, 'photo', None) or getattr(message, 'animation', None))
+    if edit and not has_media:
+        # Text fallback must stay editable; never call edit_text on an animation.
+        try:
+            await message.edit_text(text_fallback(card), parse_mode=None, reply_markup=markup)
+        except TelegramBadRequest as exc:
+            if 'message is not modified' not in str(exc).lower():
+                await message.answer(text_fallback(card), parse_mode=None, reply_markup=markup)
+        return
+    if animate:
+        try:
+            async with _render_slots:
+                gif = await asyncio.to_thread(to_gif, card)
+            animation = BufferedInputFile(gif, filename=f'sensei-{view}.gif')
+            if edit:
+                await message.edit_media(
+                    InputMediaAnimation(media=animation, caption=caption, parse_mode=None), reply_markup=markup,
+                )
+            else:
+                await message.answer_animation(animation, caption=caption, parse_mode=None, reply_markup=markup)
+            return
+        except TelegramBadRequest as exc:
+            if 'message is not modified' in str(exc).lower():
+                return
+            logger.warning('Widget animation refused; trying PNG', exc_info=True)
+        except (OSError, ValueError):
+            logger.warning('Widget animation rendering failed; trying PNG', exc_info=True)
     try:
         async with _render_slots:
             png = await asyncio.to_thread(to_png, card)
         photo = BufferedInputFile(png, filename=f'sensei-{view}.png')
-        if edit and message.photo:
+        if edit:
             await message.edit_media(InputMediaPhoto(media=photo, caption=caption, parse_mode=None), reply_markup=markup)
-        elif edit:
-            # A previous render failed: keep this text message editable.
-            await message.edit_text(text_fallback(card), parse_mode=None, reply_markup=markup)
         else:
             await message.answer_photo(photo, caption=caption, parse_mode=None, reply_markup=markup)
     except TelegramBadRequest as exc:
@@ -91,7 +121,8 @@ async def cmd_widget(message: Message, container: Container):
         return
     try:
         card = await load_card(container, message.from_user, 'profile')
-        await show_card(message, card, message.from_user.id, 'profile')
+        await show_card(message, card, message.from_user.id, 'profile',
+                        animate=container.settings.widget_animations_enabled)
     except Exception:
         logger.exception('Widget profile unavailable')
         await message.answer('Не удалось загрузить карточку. Попробуйте позже или используйте /mysensei.')
@@ -113,7 +144,8 @@ async def widget_callback(query: CallbackQuery, callback_data: WidgetAction, con
     try:
         view = 'profile' if callback_data.view == 'open' else callback_data.view
         card = await load_card(container, query.from_user, view)
-        await show_card(query.message, card, query.from_user.id, view, edit=callback_data.view != 'open')
+        await show_card(query.message, card, query.from_user.id, view, edit=callback_data.view != 'open',
+                        animate=container.settings.widget_animations_enabled)
     except Exception:
         logger.exception('Widget refresh failed')
         await query.message.answer('Не удалось обновить карточку. Попробуйте позже.')
