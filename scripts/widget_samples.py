@@ -4,6 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from src.widgets.animation import to_gif
+from src.widgets.katana import KatanaUpgrade, to_upgrade_gif, to_upgrade_html, to_upgrade_png
 from src.widgets.cards import profile_card, top_card, to_html, to_png
 
 
@@ -27,6 +28,14 @@ def main():
         (output / f'{name}.png').write_bytes(to_png(card))
         (output / f'{name}.gif').write_bytes(to_gif(card))
         (output / f'{name}-light.png').write_bytes(to_png(replace(card, theme='light')))
+        print(output / f'{name}.html')
+    for name, receipt in {
+        'katana-success': KatanaUpgrade('Ученик Сенсея', 20.4, 20.76, 100, True),
+        'katana-failure': KatanaUpgrade('Ученик Сенсея', 20.4, 20.22, 100, False),
+    }.items():
+        (output / f'{name}.html').write_text(to_upgrade_html(receipt), encoding='utf-8')
+        (output / f'{name}.png').write_bytes(to_upgrade_png(receipt))
+        (output / f'{name}.gif').write_bytes(to_upgrade_gif(receipt))
         print(output / f'{name}.html')
 
 

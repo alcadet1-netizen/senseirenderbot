@@ -19,11 +19,10 @@ from aiogram.types import (
 from src.core.container import Container
 from src.widgets.cards import Card, profile_card, top_card, to_html, to_png
 from src.widgets.animation import to_gif
+from src.widgets.limits import RENDER_SLOTS as _render_slots
 
 logger = logging.getLogger(__name__)
 router = Router(name='widgets')
-# Bound simultaneous Pillow work, even during bursts of callback presses.
-_render_slots = asyncio.Semaphore(2)
 
 
 class WidgetAction(CallbackData, prefix='sw'):

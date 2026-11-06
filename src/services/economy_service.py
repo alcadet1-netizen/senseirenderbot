@@ -391,6 +391,9 @@ class EconomyService:
                 raise UserNotFoundError(user_id)
             if not user.get("has_katana", False):
                 raise NoKatanaError()
+            # Keep the actual starting length for the upgrade receipt, including
+            # failures clamped to zero. Presentation must not re-read/retry it.
+            old_length = user.get("katana_length", 0.0)
             # Check cooldown
             now = datetime.now(timezone.utc)
             last_katana_up = user.get("last_katana_up")
@@ -444,6 +447,7 @@ class EconomyService:
             user = await self.users.find_one({"id": user_id})
             return {
                 "is_upgraded": is_success,
+                "old_length": old_length,
                 "growth": growth,
                 "new_length": user.get("katana_length", 0.0),
                 "cost": cost
