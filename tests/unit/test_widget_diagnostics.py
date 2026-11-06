@@ -101,3 +101,18 @@ async def test_probe_full_payload_failure_does_not_claim_method_missing():
     assert 'payload' in text and 'hedgehog' in text
     assert 'INPUT_MEDIA_WIDGET_TOO_LARGE' in text
     assert 'method_or_route' not in text
+
+
+@pytest.mark.parametrize('description', ['ConnectionError', 'TimeoutError'])
+def test_legacy_mtproto_network_error_is_temporary_not_api_support(description):
+    from src.infra.mtproto.widgets import MtprotoWidgetError
+    assert describe_failure(MtprotoWidgetError(description)).category == 'temporary'
+
+
+def test_background_transport_failure_is_not_html_or_network_failure():
+    from src.infra.mtproto.widgets import MtprotoWidgetError
+    failure = describe_failure(MtprotoWidgetError(
+        'MTPROTO_UPDATES_FAILED: TypeNotFoundError constructor=0x1234abcd; layer=233',
+        category='transport_runtime'))
+    assert failure.category == 'transport_runtime'
+    assert 'Фоновый обработчик' in failure.advice
