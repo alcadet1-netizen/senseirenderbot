@@ -51,18 +51,21 @@ import { runWidget } from ''' + json.dumps(str(harness)) + ''';
 for (const name of ['profile', 'top', 'katana-success', 'katana-failure']) {
   const html = fs.readFileSync(new URL('./widget-samples/' + name + '.html', import.meta.url), 'utf8');
   for (const theme of ['light', 'dark']) {
-    const result = await runWidget(html, { policy: 'strict', theme, script: [
+    const receipt = name.startsWith('katana-');
+    const result = await runWidget(html, { policy: 'strict', theme, script: receipt ? [
+      {probe: "document.querySelectorAll('button').length"}
+    ] : [
       {probe: "document.getElementById('stats').style.display"},
       {probe: "(document.getElementById('toggle').click(), document.getElementById('stats').style.display)"},
       {probe: "(document.getElementById('toggle').click(), document.getElementById('stats').style.display)"}
     ]});
     assert.deepEqual(result.diags, [], JSON.stringify(result.diags));
     assert.ok(result.renderOps.length > 0);
-    assert.equal(result.probes[1], 'none');
-    assert.equal(result.probes[2], 'block');
+    if (receipt) { assert.equal(result.probes[0], '0'); }
+    else { assert.equal(result.probes[1], 'none'); assert.equal(result.probes[2], 'block'); }
     assert.equal(result.timers, 0);
     assert.ok(result.actions.every(a => a.kind === 'ready'));
-    console.log(name + ' / ' + theme + ': strict sandbox, render ops, toggle OK');
+    console.log(name + ' / ' + theme + ': strict sandbox, render ops, controls OK');
   }
 }
 ''', encoding='utf-8')
