@@ -100,6 +100,8 @@ class MtprotoWidgets:
     @staticmethod
     def _failure(exc, stage):
         if isinstance(exc, MtprotoWidgetError):
+            if exc.stage is None:
+                return MtprotoWidgetError(exc.message, stage=stage, category=exc.category)
             return exc
         constructor = getattr(exc, 'invalid_constructor_id', None)
         if isinstance(constructor, int):
@@ -223,7 +225,8 @@ class MtprotoWidgets:
         from src.widgets.hedgehog import to_hedgehog_html
         from src.widgets.limits import RENDER_SLOTS
 
-        if update.query.strip().casefold() not in {'ежа', 'ёж', 'еж', 'hedgehog'}:
+        from src.bot.inline_queries import is_hedgehog_inline_query
+        if not is_hedgehog_inline_query(update.query):
             return
         results = []
         if (not update.offset and not self.container.settings.maintenance_mode

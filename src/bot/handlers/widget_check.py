@@ -61,7 +61,7 @@ async def cmd_widget_check(message, container):
                 await message.answer(transport.diagnostic_status(), parse_mode=None)
             await message.answer(
                 f'Проверка {label}: ошибка отправки.\n'
-                f'Категория: {failure.category} · код: {failure.reference}\n'
+                f'Категория: {failure.category} · этап: {failure.stage} · код: {failure.reference}\n'
                 f'Ответ Telegram (без секретов): {failure.description}\n{failure.advice}\n'
                 f'Параметры: allow_queries={str(allow_queries).lower()}, shared=false.\n'
                 + ('Статические макеты прошли, но минимальный с запросами отклонён. '
