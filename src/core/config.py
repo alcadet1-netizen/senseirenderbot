@@ -5,10 +5,10 @@
 import logging
 import os
 from functools import lru_cache
-from typing import List
+from typing import List, Literal
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     admin_ids_str: str = Field(default="", alias="ADMIN_IDS")
     main_chat_id: int = Field(default=0, alias="MAIN_CHAT_ID")
     proxy_url: str = Field(default="", alias="PROXY_URL")
+
+    # Native widgets can use production MTProto instead of Bot API sendWidget.
+    native_widget_transport: Literal['bot_api', 'mtproto'] = Field(default='bot_api', alias='NATIVE_WIDGET_TRANSPORT')
+    telegram_api_id: int = Field(default=0, ge=0, alias='TELEGRAM_API_ID')
+    telegram_api_hash: SecretStr = Field(default=SecretStr(''), alias='TELEGRAM_API_HASH', repr=False)
 
     # MONGODB
     mongo_uri: str = Field(

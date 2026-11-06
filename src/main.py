@@ -186,6 +186,9 @@ async def main() -> None:
 
     # Запускаем polling
     try:
+        if settings.native_widget_transport == 'mtproto':
+            from src.infra.mtproto.widgets import MtprotoWidgets
+            container.native_widget_transport = await MtprotoWidgets.start(container, bot.id)
         logger.info("🔄 Starting polling...")
         await dp.start_polling(
             bot,
@@ -193,8 +196,14 @@ async def main() -> None:
             close_bot_session=True,
         )
     finally:
-        await runner.cleanup()
-        await on_shutdown(bot, container)
+        try:
+            if container.native_widget_transport is not None:
+                await container.native_widget_transport.close()
+        finally:
+            try:
+                await runner.cleanup()
+            finally:
+                await on_shutdown(bot, container)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ import zlib
 from aiogram import Router
 from aiogram.filters import Command
 
-from src.bot.native_widgets import SendWidget
+from src.bot.native_widgets import send_native_widget
 from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure
 from src.widgets.hedgehog import to_hedgehog_html
 from src.widgets.limits import RENDER_SLOTS
@@ -22,9 +22,11 @@ async def cmd_widget_check(message, container):
         await message.answer('Проверка доступна только администратору бота в личном чате.', parse_mode=None)
         return
     # No endpoint URL/token printed and no environment switching.
-    mode = 'beta/test' if container.settings.telegram_widget_beta else 'production'
+    mode = ('MTProto layer 233 / production'
+            if getattr(container.settings, 'native_widget_transport', 'bot_api') == 'mtproto'
+            else ('Bot API beta/test' if container.settings.telegram_widget_beta else 'Bot API production'))
     await message.answer(
-        f'Проверка sendWidget · режим {mode}.\n'
+        f'Проверка нативного виджета · {mode}.\n'
         'Отправлю минимальный виджет, затем макет Ежа без игровых запросов. '
         'Попытки, серия и балансы не меняются.', parse_mode=None,
     )
@@ -38,7 +40,7 @@ async def cmd_widget_check(message, container):
                         to_hedgehog_html, 'A' * 32,
                         container.settings.BASE_DIR / 'src/infra/storage/ega',
                     )
-            await message.bot(SendWidget(chat_id=message.chat.id, html=html, allow_queries=False))
+            await send_native_widget(message.bot, container, message.chat.id, html, allow_queries=False)
         except WIDGET_TRANSPORT_ERRORS as exc:
             failure = describe_failure(exc, message.bot)
             await message.answer(

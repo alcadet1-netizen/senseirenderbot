@@ -10,6 +10,8 @@ from aiogram.exceptions import (
     TelegramServerError, TelegramUnauthorizedError,
 )
 
+from src.infra.mtproto.widgets import MtprotoWidgetError
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,8 +43,9 @@ class WidgetFailure:
 
 
 def describe_failure(exc, bot=None):
-    detail = redact(getattr(exc, 'message', str(exc)), bot)
-    lower = detail.lower()
+    raw = getattr(exc, 'message', str(exc))
+    detail = redact(raw, bot)
+    lower = str(raw).lower()
     if isinstance(exc, TelegramNotFound) or ('method' in lower and ('not found' in lower or 'unknown' in lower)):
         category, advice = 'method_or_route', 'Telegram не нашёл метод или маршрут API. Нужна проверка endpoint и поддержки sendWidget.'
     elif isinstance(exc, TelegramRetryAfter):
@@ -53,6 +56,10 @@ def describe_failure(exc, bot=None):
         category, advice = 'permissions', 'Telegram запретил отправку в этот чат. Проверьте права бота на отправку медиа.'
     elif any(s in lower for s in ('too_large', 'too large', 'html_invalid', 'html invalid', 'width', 'height')):
         category, advice = 'payload', 'Telegram отклонил содержимое или размеры виджета. Нужна проверка формата, а не переключение в beta.'
+    elif 'widget_not_allowed' in lower:
+        category, advice = 'widget_policy', 'Telegram не разрешил нативный виджет этому боту или чату. Транспорт не обходит серверный запрет.'
+    elif 'peer_not_cached' in lower:
+        category, advice = 'peer_resolution', 'Отправьте боту новое сообщение в этом чате и повторите проверку: нужен peer из MTProto.'
     elif isinstance(exc, TelegramBadRequest):
         category, advice = 'bad_request', 'Telegram отклонил параметры запроса. Это ещё не означает отсутствие поддержки виджетов.'
     elif isinstance(exc, (TelegramNetworkError, TelegramServerError)):
@@ -66,4 +73,4 @@ def describe_failure(exc, bot=None):
     return failure
 
 
-WIDGET_TRANSPORT_ERRORS = (TelegramAPIError, TelegramNetworkError)
+WIDGET_TRANSPORT_ERRORS = (TelegramAPIError, TelegramNetworkError, MtprotoWidgetError)
