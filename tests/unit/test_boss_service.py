@@ -9,6 +9,12 @@ from src.services.boss_service import BossService
 
 class TestBossService(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        # Shield tests exercise successful hits, not the independent 10% miss.
+        # Without this patch they fail randomly despite unchanged shield logic.
+        rng = patch("src.services.boss_service.random.random", return_value=0.5)
+        rng.start()
+        self.addCleanup(rng.stop)
+
         # Создаем мок для MongoClient
         self.mongo_client = MagicMock()
         self.db = MagicMock()

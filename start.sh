@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
-# Запускаем бота
-echo "���������🚀 Starting bot..."
-python src/main.py
+# Module invocation works on Render without relying on Docker's PYTHONPATH.
+# exec forwards shutdown signals to Python so active duel stakes are refunded.
+echo "Starting SENSEI bot..."
+exec python -m src.main

@@ -28,7 +28,7 @@ Quick Start
    docker-compose up -d
 
    # Or direct run:
-   python -m src.bot.main
+   python -m src.main
 
 The bot will start polling and be ready for use.
 
@@ -98,3 +98,9 @@ License
 Project is distributed under the MIT License – see LICENSE file if present.
 
 For questions or suggestions – open an Issue or Pull Request. Happy development and may your chat be full of activity!
+
+Widget interface
+- /senseiwidget — profile and XP leaderboard cards with refresh buttons.
+- Current Bot API delivery uses PNG + inline buttons, not native messageMediaWidget.
+- Widget-profile-1 HTML and official sandbox checks: [docs/WIDGETS.md](docs/WIDGETS.md).
+- Enable/disable with WIDGETS_ENABLED=true/false.

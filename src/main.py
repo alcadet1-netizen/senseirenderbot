@@ -42,6 +42,7 @@ async def setup_bot_commands(bot: Bot) -> None:
     """Установка команд бота."""
     commands = [
         BotCommand(command="senseihelp", description="📋 Помощь"),
+        BotCommand(command="senseiwidget", description="🧩 Карточки профиля и рейтинга"),
         BotCommand(command="mysensei", description="👤 Мой профиль"),
         BotCommand(command="senseitop", description="🏆 Топ игроков"),
         BotCommand(command="senseidaily", description="🎁 Ежедневный бонус"),
@@ -143,7 +144,7 @@ async def main() -> None:
     app.router.add_get('/health', lambda request: web.Response(text="OK"))
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 10000)
+    site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get('PORT', '10000')))
     await site.start()
 
     # Регистрируем middleware для сообщений

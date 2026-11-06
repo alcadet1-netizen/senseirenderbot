@@ -17,6 +17,7 @@ RUN sed -i 's/deb.debian.org/mirror.yandex.ru/g' /etc/apt/sources.list.d/debian.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
+    fonts-dejavu-core \
     ffmpeg \
     nodejs \
     && rm -rf /var/lib/apt/lists/*

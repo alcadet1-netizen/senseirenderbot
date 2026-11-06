@@ -358,7 +358,7 @@ class CryptoService:
         # Try to get price with fallback sources
         price_usdt = await self._fetch_price_with_fallback(coin_id, symbol, "usdt")
 
-        if price_usdt == 0:
+        if price_usdt is None or price_usdt <= 0:
             return f"{Visuals.cross()} Не удалось найти курс для {symbol.upper()} в USDT"
 
         total_usdt = price_usdt * amount
