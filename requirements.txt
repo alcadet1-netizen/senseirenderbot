@@ -12,3 +12,7 @@ yt-dlp[default]>=2023.11.16
 Pillow>=10.0.0
 huggingface_hub>=0.20.0
 gradio_client>=0.8.0
+# MTProto layer-233 runtime (source/generator pinned in bootstrap.py)
+pyaes==1.6.1
+rsa==4.9.1
+setuptools==80.9.0

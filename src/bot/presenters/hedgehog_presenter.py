@@ -4,7 +4,7 @@ import logging
 
 from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure
 
-from src.bot.native_widgets import SendWidget
+from src.bot.native_widgets import send_native_widget
 from src.core.exceptions import DailyAlreadyClaimedError
 from src.services.hedgehog_service import GameError
 from src.widgets.hedgehog import to_hedgehog_html
@@ -28,7 +28,7 @@ async def launch_hedgehog(message, user, container, token=None):
             )
         # Direct media in THIS chat, including groups. No WebAppInfo, URL or
         # private-chat deep link. The roll does not start until a widget tap.
-        await message.bot(SendWidget(chat_id=message.chat.id, html=html))
+        await send_native_widget(message.bot, container, message.chat.id, html)
     except DailyAlreadyClaimedError as exc:
         await message.answer(f'🦔 Сегодня вы уже встречались с ежом. Следующая попытка: {exc.next_claim_time}', parse_mode=None)
     except GameError as exc:

@@ -91,3 +91,14 @@ class HedgehogWidgetMiddleware(BaseMiddleware):
             encoded = '{"error":"Ответ ежа слишком большой. Попробуй позже."}'
         await data['bot'](AnswerWidgetQuery(widget_query_id=query['id'], data=encoded))
         return None
+
+
+async def send_native_widget(bot, container, chat_id, html, *, allow_queries=True):
+    """One explicit route for both real games and admin probes; no fallback."""
+    transport = getattr(container, 'native_widget_transport', None)
+    if transport is not None:
+        return await transport.send_widget(chat_id, html, allow_queries=allow_queries)
+    if getattr(container.settings, 'native_widget_transport', 'bot_api') == 'mtproto':
+        from src.infra.mtproto.widgets import MtprotoWidgetError
+        raise MtprotoWidgetError('MTPROTO_TRANSPORT_NOT_READY')
+    return await bot(SendWidget(chat_id=chat_id, html=html, allow_queries=allow_queries))

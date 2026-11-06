@@ -16,6 +16,7 @@ class Container:
     settings: Settings
     mongo_client: MongoClient
     start_time: float = field(default_factory=lambda: 0.0)
+    native_widget_transport: Optional[object] = field(default=None, init=False, repr=False)
     _redis: Optional[object] = field(default=None, init=False, repr=False)
     _sensei_check_service: Optional["SenseiCheckService"] = field(default=None, init=False, repr=False)
 
