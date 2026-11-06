@@ -64,7 +64,7 @@ def describe_failure(exc, bot=None):
     elif any(s in lower for s in ('too_large', 'too large', 'html_invalid', 'html invalid', 'width', 'height')):
         category, advice = 'payload', 'Telegram отклонил содержимое или размеры виджета. Нужна проверка формата, а не переключение в beta.'
     elif 'widget_not_allowed' in lower:
-        category, advice = 'widget_policy', 'Telegram не разрешил нативный виджет этому боту или чату. Транспорт не обходит серверный запрет.'
+        category, advice = 'widget_policy', 'Telegram отклонил этот вариант нативного виджета. Причину ограничения бота, чата или параметров нужно уточнить; транспорт не обходит серверный отказ.'
     elif 'peer_not_cached' in lower:
         category, advice = 'peer_resolution', 'Отправьте боту новое сообщение в этом чате и повторите проверку: нужен peer из MTProto.'
     elif isinstance(exc, TelegramBadRequest):

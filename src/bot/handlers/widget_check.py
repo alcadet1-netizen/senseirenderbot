@@ -27,15 +27,16 @@ async def cmd_widget_check(message, container):
             else ('Bot API beta/test' if container.settings.telegram_widget_beta else 'Bot API production'))
     await message.answer(
         f'Проверка нативного виджета · {mode}.\n'
-        'Отправлю минимальный виджет, затем макет Ежа без игровых запросов. '
+        'Проверю минимальный виджет и макет Ежа сначала с allow_queries=false, затем с true. '
         'Попытки, серия и балансы не меняются.', parse_mode=None,
     )
     transport = getattr(container, 'native_widget_transport', None)
     if transport is not None and callable(getattr(transport, 'diagnostic_status', None)):
         await message.answer(transport.diagnostic_status(), parse_mode=None)
-    for label in ('minimal', 'hedgehog'):
+    for label, allow_queries in (('minimal', False), ('hedgehog', False),
+                                 ('minimal_queries', True), ('hedgehog_queries', True)):
         try:
-            if label == 'minimal':
+            if label.startswith('minimal'):
                 html = MINIMAL_WIDGET
             else:
                 async with RENDER_SLOTS:
@@ -43,7 +44,10 @@ async def cmd_widget_check(message, container):
                         to_hedgehog_html, 'A' * 32,
                         container.settings.BASE_DIR / 'src/infra/storage/ega',
                     )
-            await send_native_widget(message.bot, container, message.chat.id, html, allow_queries=False)
+                # Issued game tokens are always 32 characters; this sentinel
+                # cannot resolve to an issued daily session, even if tapped.
+                html = html.replace('"' + 'A' * 32 + '"', '"diagnostic_no_game"', 1)
+            await send_native_widget(message.bot, container, message.chat.id, html, allow_queries=allow_queries)
         except WIDGET_TRANSPORT_ERRORS as exc:
             failure = describe_failure(exc, message.bot)
             if transport is not None and callable(getattr(transport, 'diagnostic_status', None)):
@@ -52,19 +56,25 @@ async def cmd_widget_check(message, container):
                 f'Проверка {label}: ошибка отправки.\n'
                 f'Категория: {failure.category} · код: {failure.reference}\n'
                 f'Ответ Telegram (без секретов): {failure.description}\n{failure.advice}\n'
-                'Beta автоматически не включена. Если minimal прошёл, а hedgehog нет — '
-                'проблема в макете/ограничениях, не в отсутствии метода.', parse_mode=None,
+                f'Параметры: allow_queries={str(allow_queries).lower()}, shared=false.\n'
+                + ('Статические макеты прошли, но минимальный с запросами отклонён. '
+                   'Отличается флаг запросов, а не оформление Ежа.\n'
+                   if label == 'minimal_queries' else '')
+                + 'Отказ относится к этому макету, параметрам и личному чату. '
+                'Он не доказывает общий запрет виджетов боту. Beta автоматически не включена.',
+                parse_mode=None,
             )
             return
         except (OSError, ValueError):
             await message.answer(f'Проверка {label}: локальная ошибка сборки HTML/картинки. Запрос не отправлен.', parse_mode=None)
             return
         await message.answer(
-            f'{label}: API принял виджет. HTML {len(html.encode())} байт, '
+            f'{label}: API принял виджет (allow_queries={str(allow_queries).lower()}, shared=false). HTML {len(html.encode())} байт, '
             f'zlib-9 {len(zlib.compress(html.encode(), 9))} байт.', parse_mode=None,
         )
     await message.answer(
-        'Оба виджета приняты сервером. Если вместо них заглушка — проверьте версию '
+        'Все четыре варианта приняты сервером в этом личном чате. Допуск в группе этим не проверен. '
+        'Если вместо них заглушка — проверьте версию '
         'и поддержку виджетов в клиенте Telegram. Приём API не подтверждает отображение '
         'и работу widget_query. Если виджеты видны, вызовите /senseidaily для проверки игры.',
         parse_mode=None,
