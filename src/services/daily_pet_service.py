@@ -146,8 +146,10 @@ class DailyPetService:
                     continue
                 try:
                     if delta:
-                        await self.bank.update_one({'_id': 'main', 'balance': {'$gte': delta}},
+                        debit = await self.bank.update_one({'_id': 'main', 'balance': {'$gte': delta}},
                                                    {'$inc': {'balance': -delta}})
+                        if debit is None or getattr(debit, 'matched_count', None) == 0:
+                            raise RuntimeError('Bank debit did not match after user credit; reconciliation required')
                     await self.transactions.update_one(
                         {'_id': f"daily_pet:{user_id}:{session['day']}:{updated['taps']}"},
                         {'$setOnInsert': {'user_id': user_id, 'tx_type': 'daily_pet_bonus',
