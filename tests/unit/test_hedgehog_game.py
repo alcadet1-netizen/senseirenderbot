@@ -51,7 +51,7 @@ class Collection:
     def matches(self, doc, query):
         for key, value in query.items():
             actual = doc.get(key)
-            if isinstance(value, dict):
+            if isinstance(value, dict) and any(k.startswith('$') for k in value):
                 if '$ne' in value and actual == value['$ne']:
                     return False
                 if '$gte' in value and (actual is None or actual < value['$gte']):
@@ -249,7 +249,7 @@ async def test_http_routes_auth_identity_and_reward_picture():
 async def test_launch_native_widget_in_private_and_group_without_https():
     from pathlib import Path
     from unittest.mock import AsyncMock
-    from src.bot.presenters.hedgehog_presenter import launch_hedgehog
+    from src.bot.presenters.hedgehog_presenter import launch_legacy_hedgehog as launch_hedgehog
     from src.bot.native_widgets import SendWidget
     db, daily, game = services()
     user = SimpleNamespace(id=7, username='petter', first_name='Ёж', last_name=None, is_bot=False)
@@ -377,7 +377,7 @@ async def test_native_unsupported_api_does_not_spend_attempt_or_open_webapp():
     from unittest.mock import AsyncMock
     from aiogram.exceptions import TelegramNotFound
     from src.bot.native_widgets import SendWidget
-    from src.bot.presenters.hedgehog_presenter import launch_hedgehog
+    from src.bot.presenters.hedgehog_presenter import launch_legacy_hedgehog as launch_hedgehog
     db, daily, game = services()
     user = SimpleNamespace(id=7, username=None, first_name='Ёж', last_name=None, is_bot=False)
     container = SimpleNamespace(settings=SimpleNamespace(BASE_DIR=Path(__file__).resolve().parents[2]),
@@ -605,7 +605,7 @@ async def test_group_rejection_explains_actual_rights_without_spending(can_send_
     from pathlib import Path
     from unittest.mock import AsyncMock
     from src.infra.mtproto.widgets import MtprotoWidgetError
-    from src.bot.presenters.hedgehog_presenter import launch_hedgehog
+    from src.bot.presenters.hedgehog_presenter import launch_legacy_hedgehog as launch_hedgehog
     db, daily, game = services()
     user = SimpleNamespace(id=7, username=None, first_name='Ёж', last_name=None, is_bot=False)
     container = SimpleNamespace(settings=SimpleNamespace(BASE_DIR=Path(__file__).resolve().parents[2]),

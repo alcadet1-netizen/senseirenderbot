@@ -204,7 +204,7 @@ class MtprotoWidgets:
         request = self.functions.messages.SendMediaRequest(
             peer=peer, media=self.types.InputMediaWidget(
                 width=340, height=0, html=html, allow_queries=allow_queries, shared_widget=False,
-            ), message='🦔 Погладь ежа · 7 секунд', random_id=secrets.randbits(63) or 1,
+            ), message='🦔 Ёжик · ежедневный бонус', random_id=secrets.randbits(63) or 1,
         )
         return await self._request(request, 'send_media')
 
@@ -218,6 +218,14 @@ class MtprotoWidgets:
         ), 'answer_query')
 
     async def answer_inline_hedgehog(self, update):
+        """Retired group inline flow: clear results without offering another native game."""
+        from src.bot.inline_queries import is_hedgehog_inline_query
+        if is_hedgehog_inline_query(update.query):
+            return await self._request(self.functions.messages.SetInlineBotResultsRequest(
+                query_id=update.query_id, results=[], cache_time=0, private=True,
+            ), 'clear_inline_hedgehog')
+
+    async def answer_legacy_inline_hedgehog(self, update):
         """Official via-bot native media; user explicitly selects it in a chat."""
         from src.core.exceptions import DailyAlreadyClaimedError
         from src.services.hedgehog_service import GameError

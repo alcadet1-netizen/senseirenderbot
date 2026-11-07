@@ -48,6 +48,13 @@ class Container:
     _captcha_service: Optional["CaptchaService"] = field(default=None, init=False, repr=False)
 
     @property
+    def daily_pet_service(self):
+        if getattr(self, '_daily_pet_service', None) is None:
+            from src.services.daily_pet_service import DailyPetService
+            self._daily_pet_service = DailyPetService(self.mongo_client, self.daily_service)
+        return self._daily_pet_service
+
+    @property
     def hedgehog_service(self):
         if getattr(self, '_hedgehog_service', None) is None:
             from src.services.hedgehog_service import HedgehogService

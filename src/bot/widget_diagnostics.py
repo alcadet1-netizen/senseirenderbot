@@ -77,7 +77,7 @@ def describe_failure(exc, bot=None):
         category, advice = 'api_error', 'Telegram вернул ошибку API. Администратору нужна диагностика.'
     stage = getattr(exc, 'stage', None)
     if stage not in {'send_media', 'answer_inline_hedgehog', 'answer_query', 'reject_query',
-                     'resolve_peer', 'reconnect_probe'}:
+                     'resolve_peer', 'reconnect_probe', 'clear_inline_hedgehog'}:
         stage = 'unknown'
     if stage == 'answer_inline_hedgehog' and category == 'widget_policy':
         advice = ('Telegram отклонил создание нативного inline-результата. '

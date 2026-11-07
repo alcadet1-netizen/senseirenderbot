@@ -117,6 +117,30 @@ for (const theme of ['light', 'dark']) {
   assert.equal(run.probes[2],'block');
   console.log('hedgehog / '+theme+' / tap bonus: gesture, server counter, reward and original picture OK');
 }
+const petHtml=fs.readFileSync(new URL('./widget-samples/daily-pet.html',import.meta.url),'utf8');
+for(const theme of ['light','dark']){
+  const boot=await runWidget(petHtml,{policy:'strict',theme,timerRounds:0});
+  assert.deepEqual(boot.diags,[]);
+  assert.equal(boot.requests.length,0);
+  const button=boot.ops.flat().find(op=>op.op==='el'&&op.attrs?.id==='pet');
+  let taps=0;
+  const run=await runWidget(petHtml,{
+    policy:'strict',theme,timerRounds:0,context:{canQuery:true,chatType:'private'},
+    events:[1,2,3].map(gesture=>({type:'click',targetId:button.id,gesture})),
+    onRequest:q=>{if(q.data.includes(':p:'))taps++;return {result:JSON.stringify({
+      state:taps<2?'playing':'done',remaining_ms:taps<2?4000:0,taps,extra_coins:Math.floor(55*taps/10),base_coins:55})};},
+    probes:["document.getElementById('bonus').textContent","document.getElementById('reward').textContent","document.getElementById('photo').style.display"]
+  });
+  assert.deepEqual(run.diags,[]);
+  assert.equal(run.requests.length,3);
+  assert.ok(run.requests[0].data.startsWith('dp:p:'));
+  assert.ok(run.requests[1].data.startsWith('dp:p:'));
+  assert.ok(run.requests[2].data.startsWith('dp:v:'));
+  assert.ok(run.probes[0].includes('+20%'));
+  assert.ok(run.probes[1].includes('+11 монет'));
+  assert.equal(run.probes[2],'block');
+  console.log('daily-pet / '+theme+': private native taps, no start/reset, linear bonus and picture OK');
+}
 ''', encoding='utf-8')
     run(str(modules / '.bin/tsx'), str(runner))
 

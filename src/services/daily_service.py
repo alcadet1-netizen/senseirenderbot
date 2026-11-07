@@ -231,7 +231,7 @@ class DailyService:
 
         return True, None
 
-    async def settle_hedgehog(self, user_id: int, won: bool, day: str, *, tap_count: int = 0, pet_once: bool = False) -> dict:
+    async def settle_hedgehog(self, user_id: int, won: bool, day: str, *, tap_count: int = 0, pet_once: bool = False, ordinary: bool = False) -> dict:
         """Atomically apply a day's game result to the user, never subtract funds.
 
         The receipt and the balance/streak change live in ONE Mongo document.
@@ -275,7 +275,7 @@ class DailyService:
             total_coins = min(base_coins + desired_extra, available_coins)
             extra_coins = max(0, total_coins - standard_coins)
             result = {
-                'success': won, 'streak': streak,
+                'success': won, 'streak': streak, 'ordinary_daily': ordinary,
                 'xp': DAILY_BASE_XP if won else 0, 'coins': DAILY_BASE_COINS if won else 0,
                 'bonus_xp': bonus_xp, 'bonus_coins': bonus_coins,
                 'total_xp': total_xp, 'total_coins': total_coins,

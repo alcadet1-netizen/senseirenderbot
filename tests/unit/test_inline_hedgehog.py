@@ -19,6 +19,8 @@ def setup(tl):
         hedgehog_service=game)
     client = connected_client(return_value=True)
     transport = MtprotoWidgets(client, container, tl.types, tl.functions, tl.utils)
+    # Historical protocol tests retain the retired builder explicitly. Production clears inline results.
+    transport.answer_inline_hedgehog = transport.answer_legacy_inline_hedgehog
     return db, game, container, client, transport
 
 
@@ -126,7 +128,7 @@ async def test_inline_wallet_foreign_owner_and_malformed_actions_rejected(tl, ki
 
 @pytest.mark.asyncio
 async def test_group_policy_rejection_offers_native_inline_not_private_or_webapp(tl):
-    from src.bot.presenters.hedgehog_presenter import launch_hedgehog
+    from src.bot.presenters.hedgehog_presenter import launch_legacy_hedgehog as launch_hedgehog
     db, game, container, client, transport = setup(tl)
     container.native_widget_transport = transport
     container.user_service = SimpleNamespace(get_or_create=AsyncMock())
