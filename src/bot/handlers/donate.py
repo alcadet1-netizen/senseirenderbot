@@ -94,8 +94,14 @@ class DonationPaymentMiddleware(BaseMiddleware):
     async def __call__(self, handler, event, data):
         if isinstance(event, Update):
             if event.pre_checkout_query:
+                if event.pre_checkout_query.invoice_payload.startswith('petbuy:'):
+                    from src.bot.handlers.paid_hedgehog import pre_checkout
+                    return await pre_checkout(event.pre_checkout_query, self.container)
                 return await donation_pre_checkout(event.pre_checkout_query)
             message = event.message
+            if message and message.successful_payment and message.successful_payment.invoice_payload.startswith('petbuy:'):
+                from src.bot.handlers.paid_hedgehog import successful_payment
+                return await successful_payment(message, self.container)
             if message and message.successful_payment and message.successful_payment.invoice_payload.startswith('donate:'):
                 return await donation_received(message, self.container)
         return await handler(event, data)

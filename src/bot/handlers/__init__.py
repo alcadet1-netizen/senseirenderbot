@@ -4,6 +4,7 @@
 
 from aiogram import Router
 
+from src.bot.handlers.paid_hedgehog import router as paid_hedgehog_router
 from src.bot.handlers.donate import router as donate_router
 from src.bot.handlers.widgets import router as widgets_router
 from src.bot.handlers.widget_check import router as widget_check_router
@@ -41,6 +42,7 @@ def setup_routers() -> Router:
     """Настройка и объединение всех роутеров."""
     main_router = Router(name="main")
 
+    main_router.include_router(paid_hedgehog_router)
     main_router.include_router(donate_router)
 
     # Порядок важен!

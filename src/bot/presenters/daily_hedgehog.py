@@ -28,27 +28,23 @@ async def send_daily_hedgehog(message, user, container):
             user_id=user.id, username=user.username, first_name=user.first_name or '',
             last_name=user.last_name, is_bot=user.is_bot)
         # Resolve everything fallible we can before awarding the daily reward.
-        photo = picture(container, str(user.id))
-        me = await message.bot.me()
+        picture(container, str(user.id))
+        await message.bot.me()
+        paid = getattr(container, 'paid_hedgehog_service', None)
+        if paid is not None:
+            receipt = await paid.pending(user.id)
+            if receipt:
+                from src.bot.handlers.paid_hedgehog import deliver
+                await deliver(message, container, receipt)
+                return
         result, session = await container.daily_pet_service.claim(user.id)
-        link = f'https://t.me/{me.username}?start=pet_{session["token"]}'
-        reward_caption = (f'🦔 {user.first_name or "Друг"}, награда ваша!\n'
-                          f"+{result['total_xp']} XP · +{result['total_coins']} монет\n"
-                          f"🔥 Серия: {result['streak']} дн.")
-        caption = (reward_caption + '\n\nВ личке: 15 сек. на переход и ласку.\n'
-                   'Принятый тап → +10% монет.')
-        markup = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text='Погладить ёжика · 15 сек.', url=link)]])
-        # Start before the send attempt, not on /start or on the first pet.
-        # Retrying delivery can never renew this deadline.
-        active = await container.daily_pet_service.activate(session['token'], user.id, time.time())
-        if time.time() >= active['deadline']:
-            caption = reward_caption + '\n\nВремя ласки вышло. До завтра ♡'
-            markup = None
-        await message.answer_photo(photo, caption=caption, reply_markup=markup, parse_mode=None)
-        await container.daily_pet_service.mark_delivered(session['token'], user.id)
-    except DailyAlreadyClaimedError as exc:
-        await message.answer(f'🦔 Сегодня награда уже получена. Следующая: {exc.next_claim_time}', parse_mode=None)
+        await send_reward_notice(message, user, container, result, session)
+    except DailyAlreadyClaimedError:
+        from src.bot.handlers.paid_hedgehog import repeat_keyboard
+        await message.answer('🦔 Бесплатная Ежа сегодня уже получена.\n'
+                             'Ещё попытки: 1 ⭐ → 5 ⭐ → 10 ⭐ → 20 ⭐…\n'
+                             'Каждая даёт полную награду; серия растёт раз в сутки. Цены сбрасываются в 00:00 UTC.',
+                             reply_markup=repeat_keyboard(), parse_mode=None)
     except GameError as exc:
         await message.answer(str(exc), parse_mode=None)
 
@@ -74,3 +70,23 @@ async def open_pet(message, user, container, token):
                              f'Диагностика: {failure.category} / {failure.reference}', parse_mode=None)
     except (OSError, ValueError):
         await message.answer('Не удалось подготовить личного ежа. Основная награда уже начислена.', parse_mode=None)
+
+
+async def send_reward_notice(message, user, container, result, session):
+    me = await message.bot.me()
+    link = f'https://t.me/{me.username}?start=pet_{session["token"]}'
+    reward_caption = (f'🦔 {user.first_name or "Друг"}, награда ваша!\n'
+                      f"+{result['total_xp']} XP · +{result['total_coins']} монет\n"
+                      f"🔥 Серия: {result['streak']} дн.")
+    caption = (reward_caption + '\n\nВ личке: 15 сек. на переход и ласку.\n'
+               'Принятый тап → +10% монет.')
+    markup = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text='Погладить ёжика · 15 сек.', url=link)]])
+    # Start before the send attempt, not on /start or on the first pet.
+    # Retrying delivery can never renew this deadline.
+    active = await container.daily_pet_service.activate(session['token'], user.id, time.time())
+    if time.time() >= active['deadline']:
+        caption = reward_caption + '\n\nВремя ласки вышло. До завтра ♡'
+        markup = None
+    await message.answer_photo(picture(container, str(user.id)), caption=caption, reply_markup=markup, parse_mode=None)
+    await container.daily_pet_service.mark_delivered(session['token'], user.id)
