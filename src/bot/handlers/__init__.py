@@ -4,6 +4,7 @@
 
 from aiogram import Router
 
+from src.bot.handlers.donate import router as donate_router
 from src.bot.handlers.widgets import router as widgets_router
 from src.bot.handlers.widget_check import router as widget_check_router
 
@@ -39,6 +40,8 @@ from src.bot.handlers.wave import router as wave_router
 def setup_routers() -> Router:
     """Настройка и объединение всех роутеров."""
     main_router = Router(name="main")
+
+    main_router.include_router(donate_router)
 
     # Порядок важен!
     # 1. Игровые роутеры (банзай, музыка, боссы, проверка сенсея, рулетка, бомба, волна)

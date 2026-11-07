@@ -10,6 +10,7 @@ import sys
 from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand
+from src.bot.handlers.donate import DonationPaymentMiddleware
 
 from src.bot import create_bot, create_dispatcher
 from src.bot.handlers import setup_routers
@@ -44,6 +45,8 @@ logger = logging.getLogger(__name__)
 async def setup_bot_commands(bot: Bot) -> None:
     """Установка команд бота."""
     commands = [
+        BotCommand(command="donate", description="❤️ Поддержать проект"),
+        BotCommand(command="paysupport", description="Поддержка по вопросам оплаты"),
         BotCommand(command="senseihelp", description="📋 Помощь"),
         BotCommand(command="senseiwidget", description="🧩 Карточки профиля и рейтинга"),
         BotCommand(command="mysensei", description="👤 Мой профиль"),
@@ -157,6 +160,8 @@ async def main() -> None:
 
     # Future Bot API widget queries are extras until aiogram types catch up.
     dp.update.outer_middleware(HedgehogWidgetMiddleware(container))
+
+    dp.update.outer_middleware(DonationPaymentMiddleware(container))
 
     # Регистрируем middleware для сообщений
     dp.message.middleware(LoggingMiddleware())
