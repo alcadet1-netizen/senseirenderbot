@@ -39,6 +39,7 @@ def get_admin_help() -> str:
         Visuals.frame_line_left("» СПРАВКА", w),
         Visuals.frame_line_left("◦ /adminhelp", w),
         Visuals.frame_line_left("◦ /health (status)", w),
+        Visuals.frame_line_left("◦ /ega — тест Ежа (лс)", w),
         Visuals.frame_separator_left(w),
         Visuals.frame_line_left("» КОНТЕНТ", w),
         Visuals.frame_line_left("◦ /addquestion", w),

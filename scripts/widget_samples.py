@@ -19,6 +19,8 @@ def main():
     (output / "hedgehog.html").write_text(to_hedgehog_html("A" * 32, Path("src/infra/storage/ega")), encoding="utf-8")
     (output / "daily-pet.html").write_text(to_daily_pet_html("A" * 32, Path("src/infra/storage/ega"),
         dict(state='playing', remaining_ms=6000, taps=0, extra_coins=0, base_coins=55)), encoding='utf-8')
+    (output / "daily-pet-demo.html").write_text(to_daily_pet_html("A" * 32, Path("src/infra/storage/ega"),
+        dict(state='playing', remaining_ms=15000, taps=0, extra_coins=0, base_coins=55), demo=True), encoding='utf-8')
     cards = {
         'profile': profile_card(dict(username='Ученик Сенсея', level=7, xp=5300,
                                      xp_next=5500, coins=12540, tickets=3,

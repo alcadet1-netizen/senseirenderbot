@@ -144,6 +144,21 @@ for(const theme of ['light','dark']){
   assert.ok(JSON.stringify(run.actions).includes('https://t.me/airchatton'));
   console.log('daily-pet / '+theme+': private native taps, no start/reset, linear bonus and picture OK');
 }
+const demoHtml=fs.readFileSync(new URL('./widget-samples/daily-pet-demo.html',import.meta.url),'utf8');
+for(const theme of ['light','dark']){
+  const boot=await runWidget(demoHtml,{policy:'strict',theme,timerRounds:0});
+  const button=boot.ops.flat().find(op=>op.op==='el'&&op.attrs?.id==='pet');
+  const run=await runWidget(demoHtml,{
+    policy:'strict',theme,timerRounds:0,context:{canQuery:false,chatType:'private'},
+    events:[1,2,3].map(gesture=>({type:'click',targetId:button.id,gesture})),
+    probes:["document.getElementById('bonus').textContent","document.getElementById('reward').textContent"]
+  });
+  assert.deepEqual(run.diags,[]);
+  assert.equal(run.requests.length,0);
+  assert.ok(run.probes[0].includes('+30%'));
+  assert.ok(run.probes[1].includes('Тестовый бонус (без начисления): +16'));
+  console.log('daily-pet-demo / '+theme+': local touch feedback, no payout requests OK');
+}
 ''', encoding='utf-8')
     run(str(modules / '.bin/tsx'), str(runner))
 
