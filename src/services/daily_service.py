@@ -98,7 +98,7 @@ class DailyService:
                 "claim_date": start_of_day
             })
 
-            if existing_claim:
+            if existing_claim or user.get("hedgehog_day") == today.isoformat():
                 now = datetime.utcnow()
                 tomorrow = datetime.combine(
                     today + timedelta(days=1),
@@ -146,7 +146,7 @@ class DailyService:
 
             # Check bank balance
             bank_doc = await self.bank.find_one({"_id": "main"})
-            bank_balance = bank_doc.get("balance", 0) if bank_doc else 0
+            bank_balance = max(0, int((bank_doc or {}).get("balance", 0)))
 
             if bank_balance < total_coins:
                 total_coins = min(total_coins, int(bank_balance))
@@ -302,10 +302,12 @@ class DailyService:
             # writes below are best-effort, not a multi-document transaction.
             try:
                 if total_coins:
-                    await self.bank.update_one(
+                    debit = await self.bank.update_one(
                         {'_id': 'main', 'balance': {'$gte': total_coins}},
                         {'$inc': {'balance': -total_coins}},
                     )
+                    if debit is None or getattr(debit, 'matched_count', None) == 0:
+                        raise RuntimeError('Bank debit did not match after user credit; reconciliation required')
                 key = f'hedgehog:{user_id}:{day}'
                 await self.daily_claims.update_one({'_id': key}, {'$setOnInsert': {
                     'user_id': user_id, 'claim_date': claim_date, 'xp_received': total_xp,

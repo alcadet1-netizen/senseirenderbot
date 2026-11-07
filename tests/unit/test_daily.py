@@ -229,3 +229,27 @@ async def test_can_claim_available(daily_service, mock_mongo_client):
 
     # Verify calls
     mock_mongo_client.database.daily_claims.find_one.assert_called_once()
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('balance', [-100, -0.5, 0])
+async def test_legacy_daily_never_subtracts_user_coins_for_negative_bank(daily_service, mock_mongo_client, balance):
+    db = mock_mongo_client.database
+    db.users.find_one.return_value = dict(id=7, is_banned=False, last_daily=None, daily_streak=0)
+    db.daily_claims.find_one.return_value = None
+    db.bank.find_one.return_value = dict(_id='main', balance=balance)
+    await daily_service.claim_daily(7)
+    changes = db.users.update_one.call_args.args[1]
+    assert changes['$inc']['coins'] == 0
+    assert changes['$inc']['xp'] > 0
+    db.bank.update_one.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_legacy_daily_honours_user_receipt_even_if_claim_journal_failed(daily_service, mock_mongo_client):
+    db = mock_mongo_client.database
+    db.users.find_one.return_value = dict(id=7, is_banned=False, hedgehog_day=datetime.utcnow().date().isoformat())
+    db.daily_claims.find_one.return_value = None
+    with pytest.raises(DailyAlreadyClaimedError):
+        await daily_service.claim_daily(7)
+    db.users.update_one.assert_not_called()
+    db.bank.update_one.assert_not_called()
