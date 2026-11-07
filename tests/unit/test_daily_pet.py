@@ -20,7 +20,7 @@ def setup():
     mongo = SimpleNamespace(database=db)
     service = DailyPetService(mongo, daily)
     container = SimpleNamespace(daily_pet_service=service, daily_service=daily,
-        settings=SimpleNamespace(BASE_DIR=Path(__file__).resolve().parents[2], maintenance_mode=False),
+        settings=SimpleNamespace(BASE_DIR=Path(__file__).resolve().parents[2], maintenance_mode=False, mini_app_url='https://bot.example'),
         user_service=SimpleNamespace(get_or_create=AsyncMock()))
     return db, service, container, mongo
 
@@ -159,7 +159,7 @@ async def test_group_command_photo_and_deeplink_not_native_group_send():
 
 
 @pytest.mark.asyncio
-async def test_private_link_sends_native_art_without_extending_or_paying():
+async def test_private_link_offers_authorized_miniapp_without_extending_or_paying():
     from src.bot.presenters.daily_hedgehog import open_pet
     db, service, container, _ = setup()
     result, token = await issue(service)
@@ -167,9 +167,9 @@ async def test_private_link_sends_native_art_without_extending_or_paying():
     message = SimpleNamespace(chat=SimpleNamespace(id=7, type='private'), bot=bot, answer=AsyncMock())
     with patch('src.services.daily_pet_service.time.time', return_value=104):
         await open_pet(message, SimpleNamespace(id=7), container, token)
-    request = bot.call_args.args[0]
-    assert isinstance(request, SendWidget) and request.chat_id == 7
-    assert 'dp:' in request.html and 'Ёжик' in request.html
+    button = message.answer.call_args.kwargs['reply_markup'].inline_keyboard[0][0]
+    assert button.web_app.url == f'https://bot.example/miniapp/daily-pet#session={token}'
+    bot.assert_not_called()
     assert db.users.docs[7]['daily_pet']['deadline'] == 110
     assert db.users.docs[7]['daily_pet']['taps'] == 0
     assert db.users.docs[7]['coins'] == 1000 + result['total_coins']
@@ -227,7 +227,7 @@ def test_private_native_markup_sizes_and_tap_protocol():
 
 
 @pytest.mark.asyncio
-async def test_expired_private_link_renders_finished_art_without_new_coins():
+async def test_expired_private_link_can_open_readonly_result_without_new_coins():
     from src.bot.presenters.daily_hedgehog import open_pet
     db, service, container, _ = setup()
     result, token = await issue(service)
@@ -235,7 +235,9 @@ async def test_expired_private_link_renders_finished_art_without_new_coins():
     message = SimpleNamespace(chat=SimpleNamespace(id=7, type='private'), bot=bot, answer=AsyncMock())
     with patch('src.services.daily_pet_service.time.time', return_value=115):
         await open_pet(message, SimpleNamespace(id=7), container, token)
-    assert '"state":"done"' in bot.call_args.args[0].html
+    assert message.answer.call_args.kwargs['reply_markup'].inline_keyboard[0][0].web_app is not None
+    with patch('src.services.daily_pet_service.time.time', return_value=115):
+        assert (await service.widget_action(token, 7, 'v', ''))['state'] == 'done'
     assert db.users.docs[7]['coins'] == 1000 + result['total_coins']
 
 

@@ -28,6 +28,7 @@ from src.bot.middlewares import (
 from src.bot.middlewares.digest import DigestMiddleware
 from src.bot.middlewares.cleanup import CommandCleanupMiddleware
 from src.web.hedgehog_app import setup_hedgehog
+from src.web.daily_pet_app import setup_daily_pet
 from src.core.config import settings
 from src.core.container import Container
 from src.core.logger import setup_logging
@@ -146,6 +147,7 @@ async def main() -> None:
     # Start web server for health checks
     app = web.Application(client_max_size=16 * 1024)
     setup_hedgehog(app, container)
+    setup_daily_pet(app, container)
     app.router.add_get('/', lambda request: web.Response(text="OK"))
     app.router.add_get('/health', lambda request: web.Response(text="OK"))
     runner = web.AppRunner(app)

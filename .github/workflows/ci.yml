@@ -40,6 +40,8 @@ jobs:
       - name: Check HTML in official Telegram QuickJS sandbox
         run: python -m scripts.check_widgets
       - name: Check Mini App JavaScript
-        run: node --check src/web/hedgehog/app.js
+        run: |
+          node --check src/web/hedgehog/app.js
+          node --check src/web/daily_pet/app.js
       - name: Check startup script
         run: bash -n start.sh

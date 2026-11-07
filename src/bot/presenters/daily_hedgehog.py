@@ -1,16 +1,14 @@
-"""Ordinary photo reward in chat; optional private native petting widget."""
+"""Ordinary photo reward in chat; optional private Telegram Mini App."""
 import hashlib
-import asyncio
+import os
 import time
+from urllib.parse import urlsplit
 
-from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from src.core.exceptions import DailyAlreadyClaimedError
 from src.services.hedgehog_service import GameError
-from src.bot.native_widgets import send_native_widget
 from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure
-from src.widgets.daily_pet import to_daily_pet_html
-from src.widgets.limits import RENDER_SLOTS
 
 
 def picture(container, token):
@@ -61,11 +59,17 @@ async def open_pet(message, user, container, token):
         session = await container.daily_pet_service.owned(token, user.id)
         if session['state'] == 'pending':
             raise GameError('Сначала получите обычное уведомление ежа в чате.')
-        snapshot = await container.daily_pet_service.widget_action(token, user.id, 'v', '')
-        async with RENDER_SLOTS:
-            html = await asyncio.to_thread(to_daily_pet_html, token,
-                container.settings.BASE_DIR / 'src/infra/storage/ega', snapshot)
-        await send_native_widget(message.bot, container, user.id, html)
+        base = (getattr(container.settings, 'mini_app_url', '') or os.environ.get('RENDER_EXTERNAL_URL', '')).strip()
+        parsed = urlsplit(base)
+        if parsed.scheme != 'https' or not parsed.netloc or parsed.username or parsed.password:
+            raise GameError('Для личной игры нужен HTTPS адрес MINI_APP_URL или RENDER_EXTERNAL_URL. Основная награда уже ваша.')
+        url = f'https://{parsed.netloc}/miniapp/daily-pet#session={token}'
+        markup = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text='🦔 Открыть игру с ёжиком', web_app=WebAppInfo(url=url))]])
+        await message.answer('🦔 Коснись ёжика в игре! На переход и поглаживания — общие 10 секунд. '
+                             'Таймер уже идёт, открытие не продлевает его. '
+                             'Основная награда сохранена; каждый принятый тап добавляет 10% монет.',
+                             reply_markup=markup, parse_mode=None)
     except GameError as exc:
         await message.answer(str(exc), parse_mode=None)
     except WIDGET_TRANSPORT_ERRORS as exc:

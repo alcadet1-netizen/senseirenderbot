@@ -12,6 +12,10 @@ from src.core.exceptions import DailyAlreadyClaimedError
 from src.services.hedgehog_service import GameError, utc_day
 
 
+class PetRateLimit(GameError):
+    pass
+
+
 class DailyPetService:
     def __init__(self, mongo, daily):
         self.users = mongo.database.users
@@ -86,15 +90,17 @@ class DailyPetService:
                 return
         raise GameError('Уведомление отправлено; окно поглаживаний не продлевается.')
 
-    async def widget_action(self, token, user_id, action, query_id):
+    async def widget_action(self, token, user_id, action, query_id, *, received_at=None):
         if action not in {'v', 'p'}:
             raise GameError('Неверное действие.')
         session = await self.owned(token, user_id)
         if session['state'] == 'pending':
             raise GameError('Уведомление ежа ещё готовится.')
-        if action == 'p' and time.time() < session['deadline']:
+        if action == 'p' and (time.time() if received_at is None else received_at) < session['deadline']:
             try:
-                session = await self.tap(token, user_id, query_id)
+                session = await self.tap(token, user_id, query_id, received_at=received_at)
+            except PetRateLimit:
+                raise
             except GameError:
                 session = await self.owned(token, user_id)
                 if time.time() < session['deadline']:
@@ -104,7 +110,7 @@ class DailyPetService:
                 'taps': session['taps'], 'extra_coins': session['extra_coins'],
                 'base_coins': session['base_coins']}
 
-    async def tap(self, token, user_id, query_id):
+    async def tap(self, token, user_id, query_id, *, received_at=None):
         if not isinstance(query_id, str) or not 1 <= len(query_id) <= 128:
             raise GameError('Неверное поглаживание.')
         async with self._locks[user_id]:
@@ -114,8 +120,12 @@ class DailyPetService:
                     raise GameError('Ёж ещё готовится. Нажмите ещё раз.')
                 if query_id in session['queries']:
                     return session
-                if time.time() >= session['deadline']:
+                accepted_at = time.time() if received_at is None else received_at
+                if accepted_at >= session['deadline'] or accepted_at < session['deadline'] - 10:
                     raise GameError(f"10 секунд истекли. Основная награда ваша. Дополнительно: +{session['extra_coins']} монет.")
+                slot = int(accepted_at * 10) if received_at is not None else None
+                if slot is not None and slot in session.get('web_slots', []):
+                    raise PetRateLimit('Тапы слишком частые: не более одного за 100 мс. Эффекты работают на каждом касании.')
                 bank = await self.bank.find_one({'_id': 'main'})
                 desired = session['base_coins'] * (session['taps'] + 1) // 10
                 # Each tap adds ten percent of the original coin award, not compound interest.
@@ -124,6 +134,8 @@ class DailyPetService:
                 updated['taps'] += 1
                 updated['extra_coins'] += delta
                 updated['queries'].append(query_id)
+                if slot is not None:
+                    updated.setdefault('web_slots', []).append(slot)
                 # Count, dedup receipt and money are ONE atomic user-document change.
                 # Full snapshot CAS also protects simultaneous callbacks across processes.
                 committed = await self.users.find_one_and_update(

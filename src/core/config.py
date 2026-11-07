@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # Explicit opt-in: the upstream native widget beta uses Telegram TEST chats.
     telegram_widget_beta: bool = Field(default=False, alias="TELEGRAM_WIDGET_BETA")
 
-    # Legacy Mini App links remain usable, but daily now sends a native widget.
+    # Private HD hedgehog Mini App; falls back to Render RENDER_EXTERNAL_URL when empty.
     mini_app_url: str = Field(default="", alias="MINI_APP_URL")
 
     # BANK
