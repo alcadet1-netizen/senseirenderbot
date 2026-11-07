@@ -1,4 +1,4 @@
-"""Immediate ordinary daily reward plus a ten-second personal callback window."""
+"""Immediate ordinary daily reward plus a fifteen-second personal callback window."""
 import asyncio
 import copy
 import secrets
@@ -48,7 +48,7 @@ class DailyPetService:
                     raise DailyAlreadyClaimedError('завтра после 00:00 UTC')
                 return result, previous
             session = dict(day=day, token=secrets.token_urlsafe(24), state='pending',
-                           deadline=None, delivered=False, taps=0, extra_coins=0, queries=[],
+                           deadline=None, duration=15, delivered=False, taps=0, extra_coins=0, queries=[],
                            base_coins=result['total_coins'])
             committed = await self.users.find_one_and_update(
                 {'id': user_id, 'hedgehog_day': day, 'daily_pet': previous},
@@ -71,7 +71,7 @@ class DailyPetService:
         session = await self.owned(token, user_id)
         if session['state'] != 'pending':
             return session  # Resends/restarts never extend the first delivery's window.
-        active = {**session, 'state': 'active', 'deadline': sent_at + 10}
+        active = {**session, 'state': 'active', 'deadline': sent_at + session.get('duration', 10)}
         saved = await self.users.find_one_and_update(
             {'id': user_id, 'daily_pet': session}, {'$set': {'daily_pet': active}},
             return_document=ReturnDocument.AFTER)
@@ -121,8 +121,8 @@ class DailyPetService:
                 if query_id in session['queries']:
                     return session
                 accepted_at = time.time() if received_at is None else received_at
-                if accepted_at >= session['deadline'] or accepted_at < session['deadline'] - 10:
-                    raise GameError(f"10 секунд истекли. Основная награда ваша. Дополнительно: +{session['extra_coins']} монет.")
+                if accepted_at >= session['deadline'] or accepted_at < session['deadline'] - session.get('duration', 10):
+                    raise GameError(f"{session.get('duration', 10)} секунд истекли. Основная награда ваша. Дополнительно: +{session['extra_coins']} монет.")
                 slot = int(accepted_at * 10) if received_at is not None else None
                 if slot is not None and slot in session.get('web_slots', []):
                     raise PetRateLimit('Тапы слишком частые: не более одного за 100 мс. Эффекты работают на каждом касании.')

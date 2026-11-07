@@ -1,11 +1,14 @@
-"""Ordinary photo reward in chat; optional private Telegram Mini App."""
+"""Ordinary photo reward in chat; private native touch widget."""
 import hashlib
-import os
+import asyncio
 import time
-from urllib.parse import urlsplit
 
-from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
+from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
+
+from src.bot.native_widgets import send_native_widget
+from src.widgets.daily_pet import to_daily_pet_html
+from src.widgets.limits import RENDER_SLOTS
 from src.core.exceptions import DailyAlreadyClaimedError
 from src.services.hedgehog_service import GameError
 from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure
@@ -32,16 +35,16 @@ async def send_daily_hedgehog(message, user, container):
         caption = (f'🦔 {user.first_name or "Друг"}, вы погладили ежа!\n'
                    f"Ежедневная награда: +{result['total_xp']} XP · +{result['total_coins']} монет.\n"
                    f"Серия: {result['streak']} дн. · Бонус серии: +{result['bonus_xp']} XP / +{result['bonus_coins']} монет.\n\n"
-                   'Дополнительно: успейте перейти в личку и гладить ежа за 10 секунд! '
+                   'Дополнительно: успейте перейти в личку и гладить ежа за 15 секунд! '
                    'Каждый принятый тап — ещё +10% от этой суммы монет. '
                    'Не успели — основная награда уже ваша.')
         markup = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text='🦔 В личку: погладить за 10 секунд', url=link)]])
+            InlineKeyboardButton(text='🦔 В личку: погладить за 15 секунд', url=link)]])
         # Start before the send attempt, not on /start or on the first pet.
         # Retrying delivery can never renew this deadline.
         active = await container.daily_pet_service.activate(session['token'], user.id, time.time())
         if time.time() >= active['deadline']:
-            caption = caption.split('\n\nДополнительно:', 1)[0] + '\n\n10 секунд дополнительных поглаживаний уже истекли.'
+            caption = caption.split('\n\nДополнительно:', 1)[0] + '\n\n15 секунд дополнительных поглаживаний уже истекли.'
             markup = None
         await message.answer_photo(photo, caption=caption, reply_markup=markup, parse_mode=None)
         await container.daily_pet_service.mark_delivered(session['token'], user.id)
@@ -59,17 +62,11 @@ async def open_pet(message, user, container, token):
         session = await container.daily_pet_service.owned(token, user.id)
         if session['state'] == 'pending':
             raise GameError('Сначала получите обычное уведомление ежа в чате.')
-        base = (getattr(container.settings, 'mini_app_url', '') or os.environ.get('RENDER_EXTERNAL_URL', '')).strip()
-        parsed = urlsplit(base)
-        if parsed.scheme != 'https' or not parsed.netloc or parsed.username or parsed.password:
-            raise GameError('Для личной игры нужен HTTPS адрес MINI_APP_URL или RENDER_EXTERNAL_URL. Основная награда уже ваша.')
-        url = f'https://{parsed.netloc}/miniapp/daily-pet#session={token}'
-        markup = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text='🦔 Открыть игру с ёжиком', web_app=WebAppInfo(url=url))]])
-        await message.answer('🦔 Коснись ёжика в игре! На переход и поглаживания — общие 10 секунд. '
-                             'Таймер уже идёт, открытие не продлевает его. '
-                             'Основная награда сохранена; каждый принятый тап добавляет 10% монет.',
-                             reply_markup=markup, parse_mode=None)
+        snapshot = await container.daily_pet_service.widget_action(token, user.id, 'v', '')
+        async with RENDER_SLOTS:
+            html = await asyncio.to_thread(to_daily_pet_html, token,
+                container.settings.BASE_DIR / 'src/infra/storage/ega', snapshot)
+        await send_native_widget(message.bot, container, user.id, html)
     except GameError as exc:
         await message.answer(str(exc), parse_mode=None)
     except WIDGET_TRANSPORT_ERRORS as exc:

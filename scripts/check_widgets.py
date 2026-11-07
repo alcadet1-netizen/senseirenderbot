@@ -123,10 +123,12 @@ for(const theme of ['light','dark']){
   assert.deepEqual(boot.diags,[]);
   assert.equal(boot.requests.length,0);
   const button=boot.ops.flat().find(op=>op.op==='el'&&op.attrs?.id==='pet');
+  const back=boot.ops.flat().find(op=>op.op==='el'&&op.attrs?.id==='back');
+  assert.ok(back);
   let taps=0;
   const run=await runWidget(petHtml,{
     policy:'strict',theme,timerRounds:0,context:{canQuery:true,chatType:'private'},
-    events:[1,2,3].map(gesture=>({type:'click',targetId:button.id,gesture})),
+    events:[...[1,2,3].map(gesture=>({type:'click',targetId:button.id,gesture})),{type:'click',targetId:back.id,gesture:4}],
     onRequest:q=>{if(q.data.includes(':p:'))taps++;return {result:JSON.stringify({
       state:taps<2?'playing':'done',remaining_ms:taps<2?4000:0,taps,extra_coins:Math.floor(55*taps/10),base_coins:55})};},
     probes:["document.getElementById('bonus').textContent","document.getElementById('reward').textContent","document.getElementById('photo').style.display"]
@@ -139,6 +141,7 @@ for(const theme of ['light','dark']){
   assert.ok(run.probes[0].includes('+20%'));
   assert.ok(run.probes[1].includes('+11 монет'));
   assert.equal(run.probes[2],'block');
+  assert.ok(JSON.stringify(run.actions).includes('https://t.me/airchatton'));
   console.log('daily-pet / '+theme+': private native taps, no start/reset, linear bonus and picture OK');
 }
 ''', encoding='utf-8')

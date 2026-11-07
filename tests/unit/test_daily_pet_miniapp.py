@@ -44,7 +44,7 @@ async def test_miniapp_assets_hmac_owner_and_immutable_reward_window():
         assert data['taps'] == 1 and data['extra_coins'] == reward['total_coins']//10
         duplicate = await client.post(url,json=body)
         assert (await duplicate.json())['taps'] == 1
-        assert db.users.docs[7]['daily_pet']['deadline'] == now+10
+        assert db.users.docs[7]['daily_pet']['deadline'] == now+15
         db.users.docs[7]['daily_pet']['deadline'] = now-1
         late = await client.post(url,json={**body,'request_id':'late-touch-two','received_at':now-2})
         data = await late.json()
@@ -64,7 +64,7 @@ async def test_authenticated_server_arrival_before_deadline_can_settle_after_it(
         assert result['state'] == 'done' and result['taps'] == 1
         same = await service.widget_action(token,7,'p','web:arrived-in-time',received_at=109.8)
         assert same['taps'] == 1
-        late = await service.widget_action(token,7,'p','web:late-request',received_at=110)
+        late = await service.widget_action(token,7,'p','web:late-request',received_at=115)
         assert late['taps'] == 1
 
 
@@ -82,31 +82,18 @@ async def test_server_rate_slots_do_not_trust_tap_counts_or_double_pay_replays()
 
 
 @pytest.mark.asyncio
-async def test_private_webapp_url_uses_render_origin_and_never_resets_or_pays(monkeypatch):
+async def test_private_native_widget_does_not_require_render_origin(monkeypatch):
     from src.bot.presenters.daily_hedgehog import open_pet
+    from src.bot.native_widgets import SendWidget
     db, service, container, _ = setup()
     _, token = await issue(service)
     container.settings.mini_app_url = ''
-    monkeypatch.setenv('RENDER_EXTERNAL_URL','https://sensei-cnsh.onrender.com')
-    message = SimpleNamespace(chat=SimpleNamespace(id=7,type='private'),answer=AsyncMock())
+    monkeypatch.delenv('RENDER_EXTERNAL_URL', raising=False)
+    message = SimpleNamespace(chat=SimpleNamespace(id=7,type='private'),answer=AsyncMock(),bot=AsyncMock())
     await open_pet(message,SimpleNamespace(id=7),container,token)
-    url = message.answer.call_args.kwargs['reply_markup'].inline_keyboard[0][0].web_app.url
-    assert url == f'https://sensei-cnsh.onrender.com/miniapp/daily-pet#session={token}'
-    assert '?session=' not in url
+    assert isinstance(message.bot.call_args.args[0], SendWidget)
+    message.answer.assert_not_called()
     assert db.users.docs[7]['daily_pet']['taps'] == 0
-
-
-@pytest.mark.asyncio
-async def test_non_https_webapp_config_does_not_create_button_or_change_money(monkeypatch):
-    from src.bot.presenters.daily_hedgehog import open_pet
-    db, service, container, _ = setup()
-    _, token = await issue(service)
-    before=db.users.docs[7]['coins']
-    container.settings.mini_app_url='http://insecure.example'
-    message=SimpleNamespace(chat=SimpleNamespace(id=7,type='private'),answer=AsyncMock())
-    await open_pet(message,SimpleNamespace(id=7),container,token)
-    assert 'reply_markup' not in message.answer.call_args.kwargs
-    assert db.users.docs[7]['coins']==before
 
 
 def test_reference_atlas_has_all_eight_hd_cells_and_no_replay_reward_control():

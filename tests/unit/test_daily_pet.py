@@ -52,12 +52,12 @@ async def test_standard_immediate_then_each_tap_ten_percent_no_five_tap_cap():
 async def test_deadline_includes_travel_no_reset_no_pet_keeps_standard():
     db, service, _, mongo = setup()
     result, token = await issue(service)
-    with patch('src.services.daily_pet_service.time.time', return_value=109.999):
+    with patch('src.services.daily_pet_service.time.time', return_value=114.999):
         payload = await service.widget_action(token, 7, 'v', '')
         assert payload['taps'] == 0
     restarted = DailyPetService(mongo, service.daily)
-    assert (await restarted.activate(token, 7, 109))['deadline'] == 110
-    with patch('src.services.daily_pet_service.time.time', return_value=110):
+    assert (await restarted.activate(token, 7, 109))['deadline'] == 115
+    with patch('src.services.daily_pet_service.time.time', return_value=115):
         payload = await restarted.widget_action(token, 7, 'p', 'late')
     assert payload['state'] == 'done' and payload['taps'] == 0
     assert db.users.docs[7]['coins'] == 1000 + result['total_coins']
@@ -85,7 +85,7 @@ async def test_delivery_retry_uses_same_receipt_and_never_renews_clock():
     first, token = await issue(service)
     second, session = await service.claim(7)
     assert first == second and session['token'] == token
-    assert (await service.activate(token, 7, 150))['deadline'] == 110
+    assert (await service.activate(token, 7, 150))['deadline'] == 115
     assert db.users.docs[7]['coins'] == 1000 + first['total_coins']
 
 
@@ -155,11 +155,11 @@ async def test_group_command_photo_and_deeplink_not_native_group_send():
     assert link.startswith('https://t.me/Senseigame_bot?start=pet_')
     bot.assert_not_called()
     assert db.users.docs[7]['daily_pet']['delivered']
-    assert db.users.docs[7]['daily_pet']['deadline'] == 110
+    assert db.users.docs[7]['daily_pet']['deadline'] == 115
 
 
 @pytest.mark.asyncio
-async def test_private_link_offers_authorized_miniapp_without_extending_or_paying():
+async def test_private_link_sends_native_widget_without_extending_or_paying():
     from src.bot.presenters.daily_hedgehog import open_pet
     db, service, container, _ = setup()
     result, token = await issue(service)
@@ -167,10 +167,13 @@ async def test_private_link_offers_authorized_miniapp_without_extending_or_payin
     message = SimpleNamespace(chat=SimpleNamespace(id=7, type='private'), bot=bot, answer=AsyncMock())
     with patch('src.services.daily_pet_service.time.time', return_value=104):
         await open_pet(message, SimpleNamespace(id=7), container, token)
-    button = message.answer.call_args.kwargs['reply_markup'].inline_keyboard[0][0]
-    assert button.web_app.url == f'https://bot.example/miniapp/daily-pet#session={token}'
-    bot.assert_not_called()
-    assert db.users.docs[7]['daily_pet']['deadline'] == 110
+    bot.assert_awaited_once()
+    widget = bot.call_args.args[0]
+    assert isinstance(widget, SendWidget)
+    assert widget.chat_id == 7 and 'TelegramWidget.request' in widget.html
+    assert 'https://t.me/airchatton' in widget.html
+    message.answer.assert_not_called()
+    assert db.users.docs[7]['daily_pet']['deadline'] == 115
     assert db.users.docs[7]['daily_pet']['taps'] == 0
     assert db.users.docs[7]['coins'] == 1000 + result['total_coins']
 
@@ -190,13 +193,13 @@ async def test_bank_cap_and_zero_bank_never_increase_xp_or_subtract_user_money()
 
 
 @pytest.mark.asyncio
-async def test_midnight_does_not_renew_or_shorten_an_existing_ten_second_window():
+async def test_midnight_does_not_renew_or_shorten_an_existing_fifteen_second_window():
     db, service, _, _ = setup()
     _, token = await issue(service)
     with patch('src.services.daily_pet_service.utc_day', return_value='2099-01-01'), \
          patch('src.services.daily_pet_service.time.time', return_value=105):
         session = await service.tap(token, 7, 'a')
-    assert session['deadline'] == 110 and session['taps'] == 1
+    assert session['deadline'] == 115 and session['taps'] == 1
 
 
 @pytest.mark.asyncio
@@ -222,7 +225,9 @@ def test_private_native_markup_sizes_and_tap_protocol():
         dict(state='playing', remaining_ms=5000, taps=3, extra_coins=16, base_coins=55))
     assert len(zlib.compress(html.encode(), 9)) <= 3900
     assert 'dp:' in html and '7 секунд' not in html
-    assert "ask(ended?'v':'p')" in html
+    assert "if(ended)ask('v')" in html
+    assert "document.body.onclick=touch" in html
+    assert "15 секунд" in html and "openTelegramLink" in html
     assert 'TelegramWidget.request' in html and 'WebApp' not in html
 
 
@@ -235,7 +240,9 @@ async def test_expired_private_link_can_open_readonly_result_without_new_coins()
     message = SimpleNamespace(chat=SimpleNamespace(id=7, type='private'), bot=bot, answer=AsyncMock())
     with patch('src.services.daily_pet_service.time.time', return_value=115):
         await open_pet(message, SimpleNamespace(id=7), container, token)
-    assert message.answer.call_args.kwargs['reply_markup'].inline_keyboard[0][0].web_app is not None
+    bot.assert_awaited_once()
+    assert isinstance(bot.call_args.args[0], SendWidget)
+    assert '"state":"done"' in bot.call_args.args[0].html
     with patch('src.services.daily_pet_service.time.time', return_value=115):
         assert (await service.widget_action(token, 7, 'v', ''))['state'] == 'done'
     assert db.users.docs[7]['coins'] == 1000 + result['total_coins']
@@ -261,5 +268,17 @@ async def test_failed_photo_delivery_can_retry_without_duplicate_reward_or_new_w
     with patch('src.services.daily_pet_service.time.time', return_value=115):
         await launch_hedgehog(message, user, container)
     assert db.users.docs[7]['coins'] == before
-    assert db.users.docs[7]['daily_pet']['deadline'] == 110
+    assert db.users.docs[7]['daily_pet']['deadline'] == 115
     assert message.answer_photo.call_args.kwargs['reply_markup'] is None
+
+
+@pytest.mark.asyncio
+async def test_historical_ten_second_receipt_is_not_extended():
+    db, service, _, _ = setup()
+    _, token = await issue(service)
+    session = db.users.docs[7]['daily_pet']
+    session.pop('duration')
+    session['deadline'] = 110
+    assert (await service.activate(token, 7, 104))['deadline'] == 110
+    with patch('src.services.daily_pet_service.time.time', return_value=110):
+        assert (await service.widget_action(token, 7, 'p', 'late'))['taps'] == 0
