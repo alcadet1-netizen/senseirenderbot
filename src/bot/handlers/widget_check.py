@@ -87,3 +87,32 @@ async def cmd_widget_check(message, container):
         'и работу widget_query. Если виджеты видны, вызовите /senseidaily для проверки игры.',
         parse_mode=None,
     )
+
+
+@router.message(Command('ega'))
+async def cmd_ega(message, container):
+    """Admin-only visual demo; never creates a daily session or sends queries."""
+    if (message.chat.type != 'private' or not message.from_user
+            or message.from_user.id not in container.settings.admin_ids):
+        await message.answer('Команда /ega доступна только администратору бота в личке.', parse_mode=None)
+        return
+    from src.widgets.daily_pet import to_daily_pet_html
+
+    await message.answer('🦔 Тест Ежа на 15 секунд. Награды не начисляются, '
+                         'балансы, серия и ежедневная попытка не меняются.', parse_mode=None)
+    try:
+        async with RENDER_SLOTS:
+            html = await asyncio.to_thread(
+                to_daily_pet_html, 'A' * 32,
+                container.settings.BASE_DIR / 'src/infra/storage/ega',
+                dict(state='playing', remaining_ms=15000, taps=0, extra_coins=0, base_coins=55),
+                demo=True,
+            )
+        await send_native_widget(message.bot, container, message.chat.id, html, allow_queries=False)
+    except WIDGET_TRANSPORT_ERRORS as exc:
+        failure = describe_failure(exc, message.bot)
+        await message.answer('Не удалось отправить тестовый виджет Ежа. '
+                             f'Диагностика: {failure.category} / {failure.reference}. '
+                             'Балансы и ежедневная попытка не менялись.', parse_mode=None)
+    except (OSError, ValueError):
+        await message.answer('Не удалось собрать тестовый виджет Ежа. Награды не менялись.', parse_mode=None)

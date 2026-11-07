@@ -4,7 +4,7 @@ import json
 from src.widgets.hedgehog import TEMPLATE, to_hedgehog_html
 
 
-def to_daily_pet_html(token, images, snapshot):
+def to_daily_pet_html(token, images, snapshot, *, demo=False):
     front = TEMPLATE.split('<script>', 1)[0]
     for old, new in (
         ('7 сек', '10 сек'), ('за 7 секунд', 'пока не истекли 10 секунд'),
@@ -29,7 +29,21 @@ def to_daily_pet_html(token, images, snapshot):
     front = front.replace('<span class="nose">', '<span class="paw"></span><span class="paw r"></span><span class="nose">')
     for left, top, angle in ((2, 42, -90), (-5, 72, -95), (-6, 108, -110), (0, 140, -120), (159, 42, 20), (164, 72, 30), (164, 108, 40), (155, 140, 55)):
         front = front.replace('<span class="ear">', f'<i class="spike" style="left:{left}px;top:{top}px;transform:rotate({angle}deg)"></i><span class="ear">')
-    template = front + SCRIPT.replace('__SNAPSHOT__', json.dumps(snapshot, separators=(',', ':'))) + '</body></html>'
+    script = SCRIPT
+    if demo:
+        # A local-only demo: no request method or usable payout token in the HTML.
+        start = script.index('function ask(action){')
+        end = script.index('function touch(){', start)
+        script = script[:start] + DEMO_ASK + script[end:]
+        script = script.replace('Основная награда и подтверждённые добавки сохранены.',
+                                'Тест завершён. Награды не начислялись.')
+        script = script.replace('Дополнительно начислено:', 'Тестовый бонус (без начисления):')
+        script = script.replace('15 секунд общие с уведомлением в чате', 'Тест · 15 секунд · без наград')
+        front = front.replace('Основная награда уже начислена. Успей добавить монет!',
+                              'Тестовый виджет. Балансы и ежедневная попытка не меняются.')
+        front = front.replace('Раз в день · 00:00 UTC · XP без изменений.', 'ТЕСТ · Награды не начисляются')
+        token = 'A' * 32
+    template = front + script.replace('__SNAPSHOT__', json.dumps(snapshot, separators=(',', ':'))) + '</body></html>'
     # No gallery thumbnail: the ordinary full-size photo is already in the chat.
     return to_hedgehog_html(token, images / '__no_thumbnail__', template=template)
 
@@ -75,3 +89,11 @@ show(data);
 if(TelegramWidget.isForward||TelegramWidget.isPreview){clearInterval(clock);pet.disabled=true;scene.disabled=true;note.textContent='Открой личную ссылку со своего уведомления ежа.';document.getElementById('back').style.display='none';}
 TelegramWidget.ready();
 </script>'''
+
+
+DEMO_ASK = """function ask(action){
+ var count=data.taps+(action==='p'&&!ended?1:0);
+ show({state:ended?'done':'playing',remaining_ms:Math.max(0,deadline-Date.now()),
+       taps:count,extra_coins:Math.floor(55*count/10),base_coins:55});
+}
+"""
