@@ -1,5 +1,7 @@
 """Private native petting UI; all coins and deadlines are server-owned."""
 import json
+import math
+import re
 
 from src.widgets.hedgehog import TEMPLATE, to_hedgehog_html
 
@@ -27,8 +29,16 @@ def to_daily_pet_html(token, images, snapshot, *, demo=False):
     front = front.replace('<img id="photo" src="__IMAGE__" alt="Картинка ежа к ежедневной награде">',
         '<p id="photo">♥ Спасибо за ласку!</p><button id="back" style="display:none">Вернуться в чат ↗</button>')
     front = front.replace('<span class="nose">', '<span class="paw"></span><span class="paw r"></span><span class="nose">')
-    for left, top, angle in ((2, 42, -90), (-5, 72, -95), (-6, 108, -110), (0, 140, -120), (159, 42, 20), (164, 72, 30), (164, 108, 40), (155, 140, 55)):
-        front = front.replace('<span class="ear">', f'<i class="spike" style="left:{left}px;top:{top}px;transform:rotate({angle}deg)"></i><span class="ear">')
+    # One centred ellipse and evenly spaced radial quills, instead of the old
+    # hand-positioned leaves. Faces/paws share a mirrored centreline at x=87.
+    front = re.sub(r'<i class="spike"[^>]*></i>', '', front)
+    quills = []
+    for angle in range(-210, 31, 12):
+        radians = math.radians(angle)
+        left = 87 + 74 * math.cos(radians) - 8
+        top = 98 + 80 * math.sin(radians) - 27
+        quills.append(f'<i class="spike" style="left:{left:.1f}px;top:{top:.1f}px;transform:rotate({angle + 90}deg)"></i>')
+    front = front.replace('<span class="quills">', ''.join(quills) + '<span class="quills">')
     script = SCRIPT
     if demo:
         # A local-only demo: no request method or usable payout token in the HTML.
@@ -49,8 +59,9 @@ def to_daily_pet_html(token, images, snapshot, *, demo=False):
 
 
 EXTRA_STYLE = '''
-#heart{display:flex;gap:12px;padding:10px}#heart i{display:block;position:relative;width:14px;height:14px;background:#ed2149;transform:rotate(45deg)}#heart i:before,#heart i:after{content:"";position:absolute;width:14px;height:14px;background:#ed2149;border-radius:50%;left:-7px;top:0}#heart i:after{left:0;top:-7px}.paw{position:absolute;left:38px;top:142px;width:28px;height:25px;border:2px solid #111;background:white;border-radius:50%}.paw.r{left:111px}.joy .paw{transform:translateY(-12px)}.foot{height:20px;width:29px}.foot:after{content:"";position:absolute;left:9px;top:6px;width:11px;height:10px;background:white;border-radius:50%}body{color:#111}#scene{height:225px;width:280px}#animal{left:48px;top:20px}.quills{border:9px dotted #111}.belly{inset:34px 20px 4px}.eyes{top:73px;height:25px;width:21px;border:4px solid #111;background:#111;border-radius:50%}.eyes.r{left:105px}.eyes:after{content:"";position:absolute;background:white;width:6px;height:7px;border-radius:50%;left:1px;top:1px}.nose{top:105px}.mouth{top:120px}.cheek{top:115px}#heart{font-size:23px;right:8px;top:0;color:#ed2149}#hand{left:155px;top:139px;z-index:2}#hand:before,.fingers{display:none}#ripple{position:absolute;left:147px;top:130px;width:49px;height:49px;border:3px solid #ff6f85;border-radius:50%;opacity:0}.petted #ripple{opacity:1;transform:scale(1.4)}.joy #ripple{opacity:1;transform:scale(.8)}.petted .eyes,.joy .eyes{height:10px;background:white;border:3px solid #111;border-bottom:0;border-radius:20px 20px 0 0}.petted .eyes:after,.joy .eyes:after{display:none}.joy #animal{transform:rotate(5deg) translateY(-5px)}.joy #hand{transform:rotate(-24deg) translateY(-10px)}.joy #heart{opacity:1;transform:scale(1.2)}.joy .mouth{height:15px;width:21px;left:78px;background:#ed2149;border:3px solid #111;border-radius:0 0 15px 15px}#back{background:#111;color:#fff;width:100%;padding:13px;border:0;border-radius:24px}#photo{height:auto;width:auto;color:#ed2149;font-weight:bold}#pet{font-size:15px}#petting{color:#555}
+body{color:#17191d}#scene{height:235px;width:280px;max-width:100%}#animal{left:53px;top:24px;width:174px;height:180px;transform-origin:50% 85%}.spike{width:0;height:0;background:transparent;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:27px solid #17191d;border-radius:0;transform-origin:50% 100%}.quills{inset:6px 2px 0;border:0;border-radius:49% 49% 43% 43%;background:#17191d}.belly{inset:37px 20px 10px;border:2px solid #17191d;border-radius:48% 48% 44% 44%}.ear{top:37px;left:17px;width:28px;height:30px;border:6px solid white}.ear.r{left:auto;right:17px}.eyes{left:53px;top:76px;width:19px;height:23px;background:#17191d;border:0;border-radius:50%}.eyes.r{left:102px}.eyes:after{content:"";position:absolute;left:5px;top:4px;width:6px;height:7px;border-radius:50%;background:white}.nose{left:80px;top:105px;width:14px;height:10px;background:#17191d}.mouth{left:77px;top:117px;width:20px;height:9px;border-color:#17191d}.cheek{left:45px;top:110px;width:20px;height:10px}.cheek.r{left:109px}.paw{position:absolute;left:44px;top:138px;width:25px;height:22px;border:2px solid #17191d;border-radius:50%;background:white}.paw.r{left:105px}.foot{bottom:0;left:43px;width:28px;height:20px;background:#17191d}.foot.r{left:103px}.foot:after{content:"";position:absolute;left:8px;top:6px;width:12px;height:9px;border-radius:50%;background:white}#hand{left:160px;top:163px;width:31px;height:67px;border:2px solid #17191d;border-radius:18px 18px 7px 7px;transform:rotate(-30deg);z-index:2}#hand:before,.fingers{display:none}#ripple{position:absolute;left:144px;top:146px;width:42px;height:42px;border:2px solid #ff7187;border-radius:50%;opacity:0}#heart{display:flex;gap:12px;padding:10px;right:6px;top:3px}#heart i{position:relative;display:block;width:13px;height:13px;background:#ed2149;transform:rotate(45deg)}#heart i:before,#heart i:after{content:"";position:absolute;left:-6px;top:0;width:13px;height:13px;background:#ed2149;border-radius:50%}#heart i:after{left:0;top:-6px}.petted .eyes,.joy .eyes{height:10px;background:white;border:3px solid #17191d;border-bottom:0;border-radius:20px 20px 0 0}.petted .eyes:after,.joy .eyes:after{display:none}.petted #hand{transform:rotate(-25deg) translateY(-4px)}.petted #ripple{opacity:1;transform:scale(1.25)}.joy #animal{transform:translateY(-4px) scale(1.025)}.joy #hand{transform:rotate(-30deg) translateY(-7px)}.joy #heart{opacity:1;transform:scale(1.1)}.joy #ripple{opacity:1;transform:scale(.85)}.joy .paw{transform:translateY(-5px)}.joy .mouth{left:78px;width:18px;height:15px;background:#ed2149;border:2px solid #17191d;border-radius:0 0 12px 12px}#back{width:100%;padding:13px;border:0;border-radius:24px;background:#17191d;color:white}#photo{height:auto;width:auto;color:#ed2149;font-weight:bold}#pet{font-size:15px}#petting{color:#555}
 '''
+
 
 
 

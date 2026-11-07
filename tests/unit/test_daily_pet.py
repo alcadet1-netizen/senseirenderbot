@@ -150,7 +150,9 @@ async def test_group_command_photo_and_deeplink_not_native_group_send():
         await launch_hedgehog(message, user, container)
     message.answer_photo.assert_awaited_once()
     call = message.answer_photo.call_args
-    assert 'XP' in call.kwargs['caption'] and 'Бонус серии' in call.kwargs['caption']
+    assert 'XP' in call.kwargs['caption'] and 'Серия:' in call.kwargs['caption']
+    assert 'Бонус серии' not in call.kwargs['caption']
+    assert len(call.kwargs['caption']) < 180
     link = call.kwargs['reply_markup'].inline_keyboard[0][0].url
     assert link.startswith('https://t.me/Senseigame_bot?start=pet_')
     bot.assert_not_called()
@@ -270,6 +272,9 @@ async def test_failed_photo_delivery_can_retry_without_duplicate_reward_or_new_w
     assert db.users.docs[7]['coins'] == before
     assert db.users.docs[7]['daily_pet']['deadline'] == 115
     assert message.answer_photo.call_args.kwargs['reply_markup'] is None
+    caption = message.answer_photo.call_args.kwargs['caption']
+    assert 'Время ласки вышло' in caption
+    assert 'на переход' not in caption and 'Принятый тап' not in caption
 
 
 @pytest.mark.asyncio
@@ -282,3 +287,20 @@ async def test_historical_ten_second_receipt_is_not_extended():
     assert (await service.activate(token, 7, 104))['deadline'] == 110
     with patch('src.services.daily_pet_service.time.time', return_value=110):
         assert (await service.widget_action(token, 7, 'p', 'late'))['taps'] == 0
+
+
+def test_hedgehog_quills_are_radially_mirrored_and_within_native_budget():
+    import re
+    import zlib
+    from src.widgets.daily_pet import to_daily_pet_html
+    html = to_daily_pet_html('Q'*32, Path('.'),
+        dict(state='playing', remaining_ms=15000, taps=149, extra_coins=819, base_coins=55))
+    positions = re.findall(r'class="spike" style="left:([-\d.]+)px;top:([-\d.]+)px;transform:rotate\(([-\d.]+)deg\)', html)
+    assert len(positions) == 21
+    for first, second in zip(positions, reversed(positions)):
+        left, top, angle = map(float, first)
+        right, other_top, other_angle = map(float, second)
+        assert left + right == pytest.approx(158, abs=.11)
+        assert top == pytest.approx(other_top, abs=.11)
+        assert angle == -other_angle
+    assert len(zlib.compress(html.encode(), 9)) <= 3900
