@@ -122,6 +122,9 @@ for(const theme of ['light','dark']){
   const boot=await runWidget(petHtml,{policy:'strict',theme,timerRounds:0});
   assert.deepEqual(boot.diags,[]);
   assert.equal(boot.requests.length,0);
+  const drawing=boot.ops.flat().filter(op=>op.op==='canvas');
+  assert.ok(drawing.length>0, 'Native SDK must emit canvas commands');
+  fs.writeFileSync(new URL('./pet-canvas-'+theme+'.json',import.meta.url),JSON.stringify(drawing));
   const button=boot.ops.flat().find(op=>op.op==='el'&&op.attrs?.id==='pet');
   const back=boot.ops.flat().find(op=>op.op==='el'&&op.attrs?.id==='back');
   assert.ok(back);
@@ -155,6 +158,7 @@ for(const theme of ['light','dark']){
   });
   assert.deepEqual(run.diags,[]);
   assert.equal(run.requests.length,0);
+  assert.ok(run.ops.flat().filter(op=>op.op==='canvas').length>=4, 'Initial drawing plus every touch must redraw');
   assert.ok(run.probes[0].includes('+30%'));
   assert.ok(run.probes[1].includes('Тестовый бонус (без начисления): +16'));
   console.log('daily-pet-demo / '+theme+': local touch feedback, no payout requests OK');
