@@ -32,19 +32,18 @@ async def send_daily_hedgehog(message, user, container):
         me = await message.bot.me()
         result, session = await container.daily_pet_service.claim(user.id)
         link = f'https://t.me/{me.username}?start=pet_{session["token"]}'
-        caption = (f'🦔 {user.first_name or "Друг"}, вы погладили ежа!\n'
-                   f"Ежедневная награда: +{result['total_xp']} XP · +{result['total_coins']} монет.\n"
-                   f"Серия: {result['streak']} дн. · Бонус серии: +{result['bonus_xp']} XP / +{result['bonus_coins']} монет.\n\n"
-                   'Дополнительно: успейте перейти в личку и гладить ежа за 15 секунд! '
-                   'Каждый принятый тап — ещё +10% от этой суммы монет. '
-                   'Не успели — основная награда уже ваша.')
+        reward_caption = (f'🦔 {user.first_name or "Друг"}, награда ваша!\n'
+                          f"+{result['total_xp']} XP · +{result['total_coins']} монет\n"
+                          f"🔥 Серия: {result['streak']} дн.")
+        caption = (reward_caption + '\n\nВ личке: 15 сек. на переход и ласку.\n'
+                   'Принятый тап → +10% монет.')
         markup = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text='🦔 В личку: погладить за 15 секунд', url=link)]])
+            InlineKeyboardButton(text='Погладить ёжика · 15 сек.', url=link)]])
         # Start before the send attempt, not on /start or on the first pet.
         # Retrying delivery can never renew this deadline.
         active = await container.daily_pet_service.activate(session['token'], user.id, time.time())
         if time.time() >= active['deadline']:
-            caption = caption.split('\n\nДополнительно:', 1)[0] + '\n\n15 секунд дополнительных поглаживаний уже истекли.'
+            caption = reward_caption + '\n\nВремя ласки вышло. До завтра ♡'
             markup = None
         await message.answer_photo(photo, caption=caption, reply_markup=markup, parse_mode=None)
         await container.daily_pet_service.mark_delivered(session['token'], user.id)
