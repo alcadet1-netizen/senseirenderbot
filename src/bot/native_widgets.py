@@ -82,18 +82,27 @@ class HedgehogWidgetMiddleware(BaseMiddleware):
             if not isinstance(value, str) or len(value.encode()) > 64:
                 raise GameError('Неверное действие.')
             parts = value.split(':')
-            if len(parts) != 3 or parts[0] != 'hg' or not re.fullmatch(r'(?:s|f|t[0-9]{1,3})', parts[1]):
+            if len(parts) != 3:
                 raise GameError('Неверное действие.')
-            # Sender comes exclusively from Telegram's update, never the HTML.
-            service = self.container.hedgehog_service
-            user = await service.users.find_one({'id': user_id})
-            if not user or user.get('is_banned'):
-                raise GameError('Профиль недоступен.')
-            method = service.start if parts[1] == 's' else service.finish
-            if parts[1].startswith('t'):
-                response = compact_result(await service.tap(parts[2], user_id, int(parts[1][1:])))
+            if parts[0] == 'dp':
+                if (parts[1] not in {'v', 'p'} or not direct
+                        or query['chat'].get('type') != 'private' or query['chat'].get('id') != user_id):
+                    raise GameError('Поглаживания доступны только владельцу в личке с ботом.')
+                response = await self.container.daily_pet_service.widget_action(
+                    parts[2], user_id, parts[1], query['id'])
             else:
-                response = compact_result(await method(parts[2], user_id))
+                if parts[0] != 'hg' or not re.fullmatch(r'(?:s|f|t[0-9]{1,3})', parts[1]):
+                    raise GameError('Неверное действие.')
+                # Sender comes exclusively from Telegram's update, never the HTML.
+                service = self.container.hedgehog_service
+                user = await service.users.find_one({'id': user_id})
+                if not user or user.get('is_banned'):
+                    raise GameError('Профиль недоступен.')
+                method = service.start if parts[1] == 's' else service.finish
+                if parts[1].startswith('t'):
+                    response = compact_result(await service.tap(parts[2], user_id, int(parts[1][1:])))
+                else:
+                    response = compact_result(await method(parts[2], user_id))
         except (GameError, DailyAlreadyClaimedError) as exc:
             response = {'error': str(exc)}
         except Exception:

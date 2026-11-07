@@ -10,7 +10,7 @@ from pathlib import Path
 from PIL import Image, ImageOps
 
 
-def to_hedgehog_html(token: str, images_dir: Path) -> str:
+def to_hedgehog_html(token: str, images_dir: Path, *, template=None) -> str:
     if not isinstance(token, str) or not re.fullmatch(r'[A-Za-z0-9_-]{32}', token):
         raise ValueError('Invalid daily token')
     pictures = sorted(p for p in images_dir.glob('*') if p.is_file() and p.suffix.lower() in {'.png', '.jpg', '.jpeg', '.gif'})
@@ -25,7 +25,7 @@ def to_hedgehog_html(token: str, images_dir: Path) -> str:
                 thumb.save(buffer, 'JPEG', quality=quality, optimize=True)
                 candidates.append('data:image/jpeg;base64,' + base64.b64encode(buffer.getvalue()).decode('ascii'))
     for image in candidates:
-        html = TEMPLATE.replace('__TOKEN__', json.dumps(token)).replace('__IMAGE__', image)
+        html = (TEMPLATE if template is None else template).replace('__TOKEN__', json.dumps(token)).replace('__IMAGE__', image)
         if len(html.encode()) <= 32768 and len(zlib.compress(html.encode(), 9)) <= 3900:
             return html
     raise ValueError('Hedgehog exceeds native widget size limits')

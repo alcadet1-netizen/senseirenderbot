@@ -15,7 +15,7 @@ from src.widgets.limits import RENDER_SLOTS
 logger = logging.getLogger(__name__)
 
 
-async def launch_hedgehog(message, user, container, token=None):
+async def launch_legacy_hedgehog(message, user, container, token=None):
     try:
         await container.user_service.get_or_create(
             user_id=user.id, username=user.username, first_name=user.first_name or '',
@@ -65,3 +65,13 @@ async def launch_hedgehog(message, user, container, token=None):
             '🦔 Ёж запутался в колючках при подготовке виджета. Попробуй позже. '
             'Попытка не потрачена.', parse_mode=None,
         )
+
+
+async def launch_hedgehog(message, user, container, token=None):
+    if token and message.chat.type != 'private':
+        await message.answer('Старую игру можно открыть в личке. Обычный бонус: /senseidaily.', parse_mode=None)
+        return
+    if token:
+        return await launch_legacy_hedgehog(message, user, container, token)
+    from src.bot.presenters.daily_hedgehog import send_daily_hedgehog
+    return await send_daily_hedgehog(message, user, container)

@@ -122,6 +122,11 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
         last_name=message.from_user.last_name,
     )
 
+    if command.args and command.args.startswith("pet_"):
+        from src.bot.presenters.daily_hedgehog import open_pet
+        await open_pet(message, message.from_user, container, command.args[4:])
+        return
+
     if command.args and command.args.startswith("hedgehog_"):
         await launch_hedgehog(message, message.from_user, container, token=command.args[len("hedgehog_"):])
         return
@@ -426,7 +431,7 @@ async def cmd_topkatana(message: Message, container: Container):
 @router.message(F.text.lower().in_({"ежа", "фарм", "фармить", "фарма", "ферма"}))
 @router.message(F.text == "🎁 Бонус", PrivateChatFilter())
 async def cmd_daily(message: Message, container: Container):
-    """Команда и текстовые алиасы запускают одну ежедневную мини-игру."""
+    """Обычный ежедневный приз с фото и десятисекундным личным виджетом."""
     if message.from_user:
         await launch_hedgehog(message, message.from_user, container)
 
