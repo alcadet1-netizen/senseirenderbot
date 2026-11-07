@@ -18,6 +18,7 @@ class PetRateLimit(GameError):
 
 class DailyPetService:
     def __init__(self, mongo, daily):
+        self.mongo = mongo
         self.users = mongo.database.users
         self.bank = mongo.database.bank
         self.transactions = mongo.database.transactions
@@ -37,7 +38,7 @@ class DailyPetService:
                 if session and session.get('day') == day:
                     if session.get('delivered'):
                         raise DailyAlreadyClaimedError('завтра после 00:00 UTC')
-                    return user['hedgehog_result'], session
+                    return session.get('reward', user['hedgehog_result']), session
             result = await self.daily.settle_hedgehog(user_id, True, day, ordinary=True)
             if not result.get('ordinary_daily'):
                 raise DailyAlreadyClaimedError('завтра после 00:00 UTC')
@@ -116,6 +117,9 @@ class DailyPetService:
         async with self._locks[user_id]:
             for _ in range(8):
                 session = await self.owned(token, user_id)
+                if session.get('paid_order'):
+                    from src.services.paid_hedgehog_service import PaidHedgehogService
+                    return await PaidHedgehogService(self.mongo).tap(token, user_id, query_id, received_at=received_at)
                 if session['state'] == 'pending':
                     raise GameError('Ёж ещё готовится. Нажмите ещё раз.')
                 if query_id in session['queries']:
