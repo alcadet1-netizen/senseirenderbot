@@ -289,18 +289,14 @@ async def test_historical_ten_second_receipt_is_not_extended():
         assert (await service.widget_action(token, 7, 'p', 'late'))['taps'] == 0
 
 
-def test_hedgehog_quills_are_radially_mirrored_and_within_native_budget():
-    import re
+def test_hedgehog_uses_single_canvas_without_css_transform_geometry():
     import zlib
     from src.widgets.daily_pet import to_daily_pet_html
-    html = to_daily_pet_html('Q'*32, Path('.'),
-        dict(state='playing', remaining_ms=15000, taps=149, extra_coins=819, base_coins=55))
-    positions = re.findall(r'class="spike" style="left:([-\d.]+)px;top:([-\d.]+)px;transform:rotate\(([-\d.]+)deg\)', html)
-    assert len(positions) == 21
-    for first, second in zip(positions, reversed(positions)):
-        left, top, angle = map(float, first)
-        right, other_top, other_angle = map(float, second)
-        assert left + right == pytest.approx(158, abs=.11)
-        assert top == pytest.approx(other_top, abs=.11)
-        assert angle == -other_angle
-    assert len(zlib.compress(html.encode(), 9)) <= 3900
+    for demo in (False, True):
+        html = to_daily_pet_html('Q'*32, Path('.'),
+            dict(state='playing', remaining_ms=15000, taps=149, extra_coins=819, base_coins=55), demo=demo)
+        assert html.count('<canvas ') == 1
+        assert 'class="spike"' not in html and 'transform-origin' not in html
+        assert "getContext('2d')" in html and 'bezierCurveTo' in html
+        assert "paint(frame%2?1:2)" in html
+        assert len(zlib.compress(html.encode(), 9)) <= 3900
