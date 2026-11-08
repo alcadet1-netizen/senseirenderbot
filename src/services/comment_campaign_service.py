@@ -26,6 +26,10 @@ def utc(value):
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
+class InboxMismatch(RuntimeError):
+    """Fatal: do not start another Telegram poller with an independent inbox."""
+
+
 class LeaseLost(RuntimeError):
     pass
 
@@ -115,7 +119,7 @@ class CommentCampaignService:
                 {'$setOnInsert': {'identity': self.inbox.identity}}, upsert=True,
                 return_document=ReturnDocument.AFTER)
             if binding['identity'] != self.inbox.identity:
-                raise RuntimeError('Campaign workers require the same persistent inbox; different disk detected')
+                raise InboxMismatch('Campaign workers require the same persistent inbox; different disk detected')
         except BaseException:
             await self.inbox.close()
             raise
@@ -127,6 +131,9 @@ class CommentCampaignService:
             return
         try:
             await self.initialize(bot)
+        except InboxMismatch:
+            logger.error('Startup refused: independent campaign inbox detected')
+            raise
         except Exception:
             logger.exception('Comment campaigns DISABLED: startup validation failed')
             return

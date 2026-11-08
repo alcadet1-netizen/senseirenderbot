@@ -401,11 +401,13 @@ class CampaignCases:
 
     async def test_distinct_inbox_disables_second_worker(self,campaign_env,tmp_path):
         env=campaign_env
-        from src.infra.comment_campaign_inbox import CampaignInbox
+        import pytest
+        from src.services.comment_campaign_service import InboxMismatch
         other=CommentCampaignService(env.container,clock=lambda:env.clock[0])
         env.cfg.campaign_inbox_path=str(tmp_path/'different.sqlite3')
         try:
-            await other.start(env.bot)
+            with pytest.raises(InboxMismatch):
+                await other.start(env.bot)
             assert not other.ready and other.task is None
             assert env.service.ready
         finally:
