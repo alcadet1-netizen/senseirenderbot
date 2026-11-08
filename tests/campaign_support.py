@@ -548,3 +548,18 @@ class CampaignCases:
         assert env.bot.send_message.await_count==2
         assert await env.db.transactions.count_documents({'funding_source':'senseibank'})==3
         assert (await env.db.bank.find_one({'_id':'single'}))['coins']==997800
+
+    async def test_new_post_announcement_precedes_older_due_work_and_comment_batch(self,campaign_env):
+        env=campaign_env;await env.profile(7);await env.begin(1,100)
+        env.clock[0]+=timedelta(hours=4,seconds=1)
+        env.cfg.campaign_batch_size=25
+        await env.service.capture(env.root(2,200))
+        await env.service.capture(env.comment(201,7,parent=200))
+        await env.service.tick()
+        assert env.bot.send_message.await_count==2
+        assert env.bot.send_message.call_args.kwargs['reply_parameters'].message_id==200
+        assert (await env.db.comment_campaigns.find_one({'_id':'-100111:1'}))['phase']=='wait'
+        assert await env.db.campaign_comments.count_documents({})==0
+        assert await env.service.inbox.pending()
+        await env.service.tick()
+        assert await env.db.campaign_comments.count_documents({'campaign_id':'-100111:2'})==1

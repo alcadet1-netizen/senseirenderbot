@@ -83,6 +83,7 @@ class CommentCampaignService:
         await self.campaigns.create_index([('terminal', 1), ('status', 1), ('due_at', 1)])
         await self.campaigns.create_index([('discussion_chat_id', 1), ('discussion_media_group_id', 1)], unique=True,
             partialFilterExpression={'discussion_media_group_id': {'$type': 'string'}})
+        await self.campaigns.create_index([('phase', 1), ('terminal', 1), ('due_at', 1)])
         await self.comments.create_index([('campaign_id', 1), ('message_id', 1)], unique=True)
         await self.comments.create_index([('campaign_id', 1), ('eligible', 1), ('user_id', 1)])
         await self.routes.create_index([('chat_id', 1), ('message_id', 1)], unique=True)
@@ -334,9 +335,12 @@ class CommentCampaignService:
             return False
         processed = False
         for update_id, payload in await self.inbox.batch(self.cfg.campaign_batch_size):
-            await self.ingest(Update.model_validate_json(payload))
+            root_campaign = await self.ingest(Update.model_validate_json(payload))
             await self.inbox.ack(update_id)
             processed = True
+            if root_campaign:
+                # Announce before ingesting the following comment batch.
+                break
         for chat_id, mid in await self.inbox.deletion_batch(self.cfg.campaign_batch_size):
             await self.mark_deleted(chat_id, mid)
             await self.inbox.ack_deletion(chat_id, mid)
@@ -370,16 +374,23 @@ class CommentCampaignService:
         message = event.message
         if message and message.chat.id == self.discussion_id:
             if message.is_automatic_forward:
-                await self.observe_root(message)
+                return await self.observe_root(message)
             else:
                 await self.collect(message)
 
     async def claim_work(self):
         now = self.now()
-        return await self.campaigns.find_one_and_update({
+        query = {
             'terminal': False, 'status': {'$in': ['active', 'processing', 'failed']}, 'due_at': {'$lte': now},
-            'lease_until': {'$lte': now}}, {'$set': {'lease_owner': uuid.uuid4().hex,
-                'lease_until': now+timedelta(seconds=self.cfg.campaign_lease_seconds)}},
+            'lease_until': {'$lte': now}}
+        lease = {'$set': {'lease_owner': uuid.uuid4().hex,
+            'lease_until': now+timedelta(seconds=self.cfg.campaign_lease_seconds)}}
+        # New post announcements should not queue behind an older payout batch.
+        announcement = await self.campaigns.find_one_and_update({**query, 'phase': 'announcement'}, lease,
+            sort=[('due_at', ASCENDING)], return_document=ReturnDocument.AFTER)
+        if announcement:
+            return announcement
+        return await self.campaigns.find_one_and_update(query, lease,
             sort=[('due_at', ASCENDING)], return_document=ReturnDocument.AFTER)
 
     async def fence(self, cid, owner, tx=None):
