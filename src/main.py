@@ -159,6 +159,11 @@ async def main() -> None:
     setup_daily_pet(app, container)
     app.router.add_get('/', lambda request: web.Response(text="OK"))
     app.router.add_get('/health', lambda request: web.Response(text="OK"))
+    async def campaign_health(request):
+        snapshot = container.comment_campaign_service.health_snapshot()
+        status = 503 if snapshot['enabled'] and not snapshot['ready'] else 200
+        return web.json_response(snapshot, status=status)
+    app.router.add_get('/health/campaigns', campaign_health)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get('PORT', '10000')))
@@ -197,11 +202,9 @@ async def main() -> None:
     main_router = setup_routers()
     dp.include_router(main_router)
 
-    # Выполняем startup
-    await on_startup(bot, container)
-
-    # Запускаем polling
+    # Startup failures must also close the health server and DB resources.
     try:
+        await on_startup(bot, container)
         if settings.native_widget_transport == 'mtproto':
             from src.infra.mtproto.widgets import MtprotoWidgets
             container.native_widget_transport = await MtprotoWidgets.start(container, bot.id)

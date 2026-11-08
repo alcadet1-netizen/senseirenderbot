@@ -8,9 +8,10 @@ from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 
 from aiogram.types import MessageOriginChannel, ReplyParameters, Update
+from aiogram.exceptions import TelegramNetworkError, TelegramServerError, TelegramRetryAfter
 from src.infra.comment_campaign_inbox import CampaignInbox
 from pymongo import ASCENDING, ReturnDocument
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import DuplicateKeyError, ConnectionFailure
 from pymongo.read_concern import ReadConcern
 from pymongo.write_concern import WriteConcern
 
@@ -61,6 +62,8 @@ class CommentCampaignService:
         self.bot_id = None
         self.enabled_at = None
         self.inbox = None
+        self.startup_state = 'not_started' if self.cfg.comment_campaigns_enabled else 'disabled'
+        self.settlement_not_before = None
 
     def now(self):
         return utc(self.clock())
@@ -128,23 +131,54 @@ class CommentCampaignService:
         except BaseException:
             await self.inbox.close()
             raise
+        self.settlement_not_before = self.now()+timedelta(seconds=self.cfg.campaign_settlement_grace_seconds)
         self.ready = True
         logger.info('Comment campaigns ready channel=%s discussion=%s', self.channel_id, self.discussion_id)
 
+    def health_snapshot(self):
+        running = self.ready and self.task is not None and not self.task.done()
+        state = self.startup_state
+        if self.task is not None and self.task.done() and self.ready:
+            state = 'worker_stopped'
+        return {'enabled': self.cfg.comment_campaigns_enabled, 'ready': running, 'state': state}
+
+    async def close_failed_inbox(self):
+        self.ready = False
+        if self.inbox is not None:
+            await self.inbox.close()
+
     async def start(self, bot):
-        if not self.cfg.comment_campaigns_enabled or self.task:
+        if not self.cfg.comment_campaigns_enabled:
+            self.startup_state = 'disabled'
+            logger.warning('Comment campaigns OFF: set COMMENT_CAMPAIGNS_ENABLED=true to announce prizes')
             return
-        try:
-            await self.initialize(bot)
-        except InboxMismatch:
-            logger.error('Startup refused: independent campaign inbox detected')
-            raise
-        except Exception:
-            logger.exception('Comment campaigns DISABLED: startup validation failed')
+        if self.task:
             return
+        self.startup_state = 'starting'
+        for attempt in range(1, 4):
+            try:
+                await self.initialize(bot)
+                break
+            except (TelegramNetworkError, TelegramServerError, TelegramRetryAfter, TimeoutError, ConnectionFailure) as exc:
+                await self.close_failed_inbox()
+                if attempt == 3:
+                    self.startup_state = 'error'
+                    logger.error('Campaign startup failed after 3 attempts: %s; polling must not start', type(exc).__name__)
+                    raise
+                self.startup_state = 'retrying'
+                delay = max(1, exc.retry_after) if isinstance(exc, TelegramRetryAfter) else min(5, self.cfg.campaign_retry_seconds)
+                logger.warning('Campaign startup retry %s/3 in %ss: %s', attempt, delay, type(exc).__name__)
+                await asyncio.sleep(delay)
+            except BaseException:
+                self.startup_state = 'error'
+                await self.close_failed_inbox()
+                logger.error('Campaign startup validation failed; polling must not start', exc_info=True)
+                raise
+        self.startup_state = 'ready'
         self.task = asyncio.create_task(self.run(), name='comment-campaign-worker')
 
     async def stop(self):
+        self.startup_state = 'stopped'
         self.ready = False
         if self.task:
             self.task.cancel()
@@ -169,6 +203,8 @@ class CommentCampaignService:
         if (message.chat.id != self.discussion_id or not message.is_automatic_forward
                 or not isinstance(origin, MessageOriginChannel) or origin.chat.id != self.channel_id
                 or utc(origin.date) < self.enabled_at):
+            logger.info('Campaign root ignored discussion=%s source_channel=%s post=%s reason=wrong_source_or_before_enable',
+                message.chat.id, getattr(getattr(origin, 'chat', None), 'id', None), getattr(origin, 'message_id', None))
             return None
         cid = self.campaign_id(origin.message_id)
         album = getattr(message, 'media_group_id', None)
@@ -285,6 +321,11 @@ class CommentCampaignService:
             # Commit locally before acknowledging the middleware; Mongo outages
             # do not discard updates already admitted to this durable queue.
             await self.inbox.put(event)
+            if event.message and event.message.is_automatic_forward:
+                origin = event.message.forward_origin
+                logger.info('Campaign automatic forward queued discussion=%s source_channel=%s post=%s',
+                    event.message.chat.id, getattr(getattr(origin, 'chat', None), 'id', None),
+                    getattr(origin, 'message_id', None))
 
     async def drain_inbox(self):
         if not self.inbox:
@@ -484,6 +525,8 @@ class CommentCampaignService:
             logger.info('Campaign announced campaign=%s message=%s', cid, sent.message_id)
         elif camp['phase'] == 'wait':
             close_at = utc(camp['deadline'])+timedelta(seconds=camp['rules'].get('grace', 0))
+            if self.settlement_not_before is not None:
+                close_at = max(close_at, self.settlement_not_before)
             if self.now() < close_at:
                 await self.update_owned(camp, {'due_at': close_at, 'status': 'active'})
                 return
@@ -558,8 +601,7 @@ class CommentCampaignService:
         return camp is not None or ingested
 
     async def run(self):
-        # A startup drain window lets queued Telegram comments reach the DB.
-        await asyncio.sleep(self.cfg.campaign_settlement_grace_seconds)
+        # Announce immediately. Only settlement waits for the startup drain window.
         while self.ready:
             try:
                 worked = await self.tick()
