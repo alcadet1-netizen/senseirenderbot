@@ -29,7 +29,8 @@ async def test_startup_fail_closed_and_does_not_start_worker(tmp_path,cause):
     if cause=='topology': env.db.command=AsyncMock(return_value={})
     if cause=='rights': env.bot.get_chat_member.return_value.status='member'
     if cause=='link': env.cfg.discussion_chat_id=-100333;env.service.discussion_id=-100333
-    await env.service.start(env.bot)
+    with pytest.raises(RuntimeError):
+        await env.service.start(env.bot)
     assert not env.service.ready and env.service.task is None
     await env.close()
 
@@ -98,3 +99,93 @@ async def test_short_notifications_and_escaped_mention(tmp_path):
         assert 'Спасибо' not in text
     finally:
         await env.close()
+
+
+@pytest.mark.asyncio
+async def test_temporary_startup_timeout_retries_then_announces(tmp_path):
+    from unittest.mock import patch
+    env=Harness(FakeDB(),tmp_path)
+    original=env.bot.get_chat.side_effect
+    calls=0
+    async def flaky(chat_id):
+        nonlocal calls
+        calls+=1
+        if calls==1: raise TimeoutError('temporary outage')
+        return await original(chat_id)
+    env.bot.get_chat.side_effect=flaky
+    with patch('src.services.comment_campaign_service.asyncio.sleep',new=AsyncMock()):
+        await env.service.start(env.bot)
+    try:
+        assert env.service.health_snapshot()=={'enabled':True,'ready':True,'state':'ready'}
+        await env.service.capture(env.root())
+        # Stop only the background runner, use its durable queue deterministically.
+        env.service.task.cancel()
+        import asyncio
+        try: await env.service.task
+        except asyncio.CancelledError: pass
+        await env.service.tick()
+        assert env.bot.send_message.await_count==1
+    finally: await env.close()
+
+
+@pytest.mark.asyncio
+async def test_exhausted_startup_timeout_refuses_polling(tmp_path):
+    from unittest.mock import patch
+    env=Harness(FakeDB(),tmp_path)
+    env.bot.get_chat.side_effect=TimeoutError('offline')
+    with patch('src.services.comment_campaign_service.asyncio.sleep',new=AsyncMock()) as sleep:
+        with pytest.raises(TimeoutError): await env.service.start(env.bot)
+    assert sleep.await_count==2 and env.bot.get_chat.await_count==3
+    assert env.service.health_snapshot()=={'enabled':True,'ready':False,'state':'error'}
+    assert env.service.task is None
+    await env.close()
+
+
+@pytest.mark.asyncio
+async def test_disabled_feature_is_explicit_in_health_and_logs(tmp_path,caplog):
+    env=Harness(FakeDB(),tmp_path);env.cfg.comment_campaigns_enabled=False
+    await env.service.start(env.bot)
+    assert env.service.health_snapshot()=={'enabled':False,'ready':False,'state':'disabled'}
+    assert 'COMMENT_CAMPAIGNS_ENABLED=true' in caplog.text
+    env.bot.get_chat.assert_not_called()
+    await env.close()
+
+
+@pytest.mark.asyncio
+async def test_startup_grace_does_not_delay_announcement(tmp_path):
+    import asyncio
+    from datetime import timedelta
+    env=await Harness(FakeDB(),tmp_path).open()
+    env.service.settlement_not_before=env.clock[0]+timedelta(seconds=30)
+    try:
+        await env.service.capture(env.root())
+        sent=asyncio.Event()
+        original=env.bot.send_message.side_effect
+        async def announce(**kwargs):
+            result=await original(**kwargs);sent.set();return result
+        env.bot.send_message.side_effect=announce
+        task=asyncio.create_task(env.service.run())
+        try: await asyncio.wait_for(sent.wait(),2)
+        finally:
+            task.cancel()
+            try: await task
+            except asyncio.CancelledError: pass
+        assert env.bot.send_message.await_count==1
+    finally: await env.close()
+
+
+@pytest.mark.asyncio
+async def test_restart_grace_still_defers_overdue_settlement(tmp_path):
+    from datetime import timedelta
+    env=await Harness(FakeDB(),tmp_path).open()
+    try:
+        await env.begin()
+        env.clock[0]+=timedelta(hours=4,seconds=1)
+        env.service.settlement_not_before=env.clock[0]+timedelta(seconds=30)
+        await env.service.tick()
+        row=await env.db.comment_campaigns.find_one({'_id':'-100111:1'})
+        assert not row['sealed'] and row['phase']=='wait'
+        env.clock[0]+=timedelta(seconds=31)
+        await env.service.tick()
+        assert (await env.db.comment_campaigns.find_one({'_id':'-100111:1'}))['sealed']
+    finally: await env.close()
