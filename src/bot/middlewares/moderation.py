@@ -8,6 +8,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import Message, TelegramObject
 
 from src.core.container import Container
+from src.bot.middlewares.comment_campaign import campaign_message_deleted
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ class ModerationMiddleware(BaseMiddleware):
                 # Удаляем сообщение
                 try:
                     await message.delete()
+                    await campaign_message_deleted(container, message.chat.id, message.message_id)
                     logger.info(
                         f"Deleted message from muted user {user_id} "
                         f"in chat {message.chat.id}"

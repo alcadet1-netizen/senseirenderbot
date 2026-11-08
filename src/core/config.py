@@ -44,6 +44,23 @@ class Settings(BaseSettings):
     )
     mongo_db: str = Field(default="", alias="MONGO_DB")
 
+    # Channel comment campaigns: opt-in, numeric IDs resolved/pinned at startup.
+    comment_campaigns_enabled: bool = Field(default=False, alias='COMMENT_CAMPAIGNS_ENABLED')
+    target_channel_id: int = Field(default=0, le=0, alias='TARGET_CHANNEL_ID')
+    discussion_chat_id: int = Field(default=0, le=0, alias='DISCUSSION_CHAT_ID')
+    campaign_duration_hours: float = Field(default=4, gt=0, le=168, alias='CAMPAIGN_DURATION_HOURS')
+    base_reward: int = Field(default=100, ge=0, le=1_000_000_000, alias='BASE_REWARD')
+    winner_reward: int = Field(default=2000, ge=0, le=1_000_000_000, alias='WINNER_REWARD')
+    reward_per_unique_user: bool = Field(default=False, alias='REWARD_PER_UNIQUE_USER')
+    winner_reward_mode: Literal['total', 'bonus'] = Field(default='total', alias='WINNER_REWARD_MODE')
+    campaign_inbox_path: str = Field(default='var/comment_campaign_inbox.sqlite3', alias='CAMPAIGN_INBOX_PATH')
+    campaign_poll_seconds: float = Field(default=5, ge=.1, le=60, alias='CAMPAIGN_POLL_SECONDS')
+    campaign_lease_seconds: int = Field(default=180, ge=60, le=3600, alias='CAMPAIGN_LEASE_SECONDS')
+    campaign_retry_seconds: int = Field(default=60, ge=1, le=3600, alias='CAMPAIGN_RETRY_SECONDS')
+    campaign_settlement_grace_seconds: int = Field(default=30, ge=0, le=600, alias='CAMPAIGN_SETTLEMENT_GRACE_SECONDS')
+    campaign_batch_size: int = Field(default=25, ge=1, le=200, alias='CAMPAIGN_BATCH_SIZE')
+    campaign_allowed_content_types: str = Field(default='text,photo,video,animation,audio,voice,video_note,document,sticker,poll,contact,location,venue,dice', alias='CAMPAIGN_ALLOWED_CONTENT_TYPES')
+
     # CRYPTO API
     ton_api_key: str = Field(default="", alias="TON_API_KEY")
     xrocket_pay_token: str = Field(default="", alias="XROCKET_PAY_TOKEN")

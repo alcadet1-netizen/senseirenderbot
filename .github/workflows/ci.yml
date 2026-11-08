@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 10
     env:
       BOT_TOKEN: '123456:TEST'
+      CAMPAIGN_TEST_MONGO_URI: 'mongodb://127.0.0.1:27017/?replicaSet=rs0'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -28,8 +29,26 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Build pinned MTProto layer-233 runtime (no credentials)
         run: python -m src.infra.mtproto.bootstrap
+      - name: Start real MongoDB replica set for campaign integration tests
+        run: |
+          docker run --detach --name campaign-mongo --publish 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          python -m scripts.start_test_mongo
       - name: Run tests
-        run: python -m pytest -q
+        run: python -m pytest -q --junitxml=.cache/test-results.xml
+      - name: Annotate test failures
+        if: failure()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          path = Path(".cache/test-results.xml")
+          if path.exists():
+              for case in ET.parse(path).iter("testcase"):
+                  for failure in list(case.findall("failure")) + list(case.findall("error")):
+                      text = (failure.text or failure.get("message", ""))[:12000]
+                      text = text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                      print(f"::error title={case.get('name')}::{text}")
+          PY
       - name: Check production imports and widget router
         run: |
           python - <<'PY'
