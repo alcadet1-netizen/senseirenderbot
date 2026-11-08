@@ -44,6 +44,8 @@ class CommentCampaignService:
         self.rewards = self.db.campaign_rewards
         self.posts = self.db.campaign_posts
         self.deleted = self.db.campaign_deleted_messages
+        self.users = self.db.users
+        self.journal = self.db.transactions
         self.clock = clock or (lambda: datetime.now(UTC))
         self.channel_id = self.cfg.target_channel_id
         self.discussion_id = self.cfg.discussion_chat_id
@@ -65,7 +67,7 @@ class CommentCampaignService:
     async def ensure_indexes(self):
         # Existing wallet, no parallel balance. Duplicate user IDs must be fixed
         # by an operator, never silently merged/deleted during a migration.
-        await self.db.users.create_index('id', unique=True)
+        await self.users.create_index('id', unique=True)
         await self.campaigns.create_index([('channel_id', 1), ('post_id', 1)], unique=True)
         await self.campaigns.create_index([('discussion_chat_id', 1), ('discussion_message_id', 1)], unique=True)
         await self.campaigns.create_index([('terminal', 1), ('status', 1), ('due_at', 1)])
@@ -262,13 +264,17 @@ class CommentCampaignService:
 
     async def drain_inbox(self):
         if not self.inbox:
-            return
+            return False
+        processed = False
         for update_id, payload in await self.inbox.batch(self.cfg.campaign_batch_size):
             await self.ingest(Update.model_validate_json(payload))
             await self.inbox.ack(update_id)
+            processed = True
         for chat_id, mid in await self.inbox.deletion_batch(self.cfg.campaign_batch_size):
             await self.mark_deleted(chat_id, mid)
             await self.inbox.ack_deletion(chat_id, mid)
+            processed = True
+        return processed
 
     async def note_deleted(self, chat_id, mid):
         if self.ready and chat_id == self.discussion_id:
@@ -331,7 +337,7 @@ class CommentCampaignService:
                 session=tx).sort('message_id', 1).limit(self.cfg.campaign_batch_size).to_list(length=self.cfg.campaign_batch_size)
             count, winner, cursor = camp['eligible_count'], camp['winner'], camp['plan_cursor']
             for row in rows:
-                profile = await self.db.users.find_one({'id': row['user_id']}, session=tx)
+                profile = await self.users.find_one({'id': row['user_id']}, session=tx)
                 eligible = not row.get('deleted', False) and not (profile or {}).get('is_banned', False)
                 if eligible and camp['rules']['unique']:
                     eligible = not await self.comments.find_one({'campaign_id': cid,
@@ -372,14 +378,14 @@ class CommentCampaignService:
             existing = await self.rewards.find_one({'_id': key}, session=tx)
             if existing and existing['status'] == 'paid':
                 return
-            profile = await self.db.users.find_one({'id': row['user_id']}, session=tx)
+            profile = await self.users.find_one({'id': row['user_id']}, session=tx)
             status = 'pending_registration' if not profile else 'blocked_banned' if profile.get('is_banned') else 'paid'
             record = dict(campaign_id=cid, channel_id=camp['channel_id'], post_id=camp['post_id'],
                 comment_id=row['message_id'], user_id=row['user_id'], kind=kind, amount=amount, status=status, next_check_at=self.now())
             await self.rewards.update_one({'_id': key}, {'$setOnInsert': record}, upsert=True, session=tx)
             if status == 'paid':
-                await self.db.users.update_one({'id': row['user_id']}, {'$inc': {'coins': amount}}, session=tx)
-                await self.db.transactions.insert_one(dict(_id=key, user_id=row['user_id'],
+                await self.users.update_one({'id': row['user_id']}, {'$inc': {'coins': amount}}, session=tx)
+                await self.journal.insert_one(dict(_id=key, user_id=row['user_id'],
                     tx_type='comment_campaign_reward', coins_change=amount, xp_change=0,
                     campaign_id=cid, comment_id=row['message_id'], reward_kind=kind, created_at=self.now()), session=tx)
                 await self.rewards.update_one({'_id': key}, {'$set': {'status': 'paid', 'paid_at': self.now()}}, session=tx)
@@ -477,12 +483,12 @@ class CommentCampaignService:
             current = await self.rewards.find_one({'_id': record['_id']}, session=tx)
             if not current or current['status'] != 'pending_registration':
                 return
-            profile = await self.db.users.find_one({'id': current['user_id']}, session=tx)
+            profile = await self.users.find_one({'id': current['user_id']}, session=tx)
             if not profile or profile.get('is_banned'):
                 await self.rewards.update_one({'_id': current['_id']}, {'$set': {'next_check_at': self.now()+timedelta(seconds=self.cfg.campaign_retry_seconds)}}, session=tx)
                 return
-            await self.db.users.update_one({'id': current['user_id']}, {'$inc': {'coins': current['amount']}}, session=tx)
-            await self.db.transactions.insert_one(dict(_id=current['_id'], user_id=current['user_id'],
+            await self.users.update_one({'id': current['user_id']}, {'$inc': {'coins': current['amount']}}, session=tx)
+            await self.journal.insert_one(dict(_id=current['_id'], user_id=current['user_id'],
                 tx_type='comment_campaign_reward', coins_change=current['amount'], xp_change=0,
                 campaign_id=current['campaign_id'], comment_id=current['comment_id'],
                 reward_kind=current['kind'], created_at=self.now()), session=tx)
@@ -490,7 +496,7 @@ class CommentCampaignService:
         await self.transaction(release)
 
     async def tick(self):
-        await self.drain_inbox()
+        ingested = await self.drain_inbox()
         camp = await self.claim_work()
         if camp:
             try:
@@ -513,7 +519,7 @@ class CommentCampaignService:
         for post in missing:
             logger.warning('No automatic discussion root observed; comments may be disabled post=%s', post['_id'])
             await self.posts.update_one({'_id': post['_id'], 'state': 'awaiting_discussion'}, {'$set': {'state': 'no_discussion_observed'}})
-        return camp is not None
+        return camp is not None or ingested
 
     async def run(self):
         # A startup drain window lets queued Telegram comments reach the DB.

@@ -265,7 +265,7 @@ class CampaignCases:
             if camp['phase']=='payout': break
             await env.service.tick()
         winner=camp['winner']
-        with patch.object(env.db.transactions,'insert_one',side_effect=RuntimeError('DB write failed')):
+        with patch.object(env.service.journal,'insert_one',side_effect=RuntimeError('DB write failed')):
             await env.service.tick()
         assert await env.wallet(7)==0
         assert await env.db.campaign_rewards.count_documents({})==0
@@ -358,3 +358,28 @@ class CampaignCases:
         await env.db.campaign_message_routes.delete_many({})
         await env.service.ingest(env.comment(101,parent=camp['start_message_id']))
         await env.finish();assert await env.wallet(7)==2000
+
+    async def test_partial_payout_resume_preserves_winner_and_money(self,campaign_env):
+        env=campaign_env;await env.profile(7)
+        env.cfg.campaign_batch_size=1;env.cfg.winner_reward_mode='bonus'
+        await env.begin();await env.service.ingest(env.comment(101));await env.service.ingest(env.comment(102))
+        env.clock[0]+=timedelta(hours=4,seconds=1)
+        for _ in range(30):
+            await env.service.tick()
+            camp=await env.db.comment_campaigns.find_one({'_id':'-100111:1'})
+            if camp['payout_cursor']==101: break
+        assert camp['payout_cursor']==101
+        winner=camp['winner'];assert await env.wallet(7) in (100,2100)
+        await env.service.stop()
+        env.service=CommentCampaignService(env.container,clock=lambda:env.clock[0]);await env.service.initialize(env.bot)
+        completed=await env.finish()
+        assert completed['winner']==winner and await env.wallet(7)==2200
+        assert await env.db.transactions.count_documents({'tx_type':'comment_campaign_reward'})==3
+
+    async def test_known_deletion_before_comment_ingestion_is_tombstoned(self,campaign_env):
+        env=campaign_env;await env.profile(7);await env.begin()
+        await env.service.note_deleted(-100222,101)
+        assert await env.service.inbox.pending()
+        await env.service.tick();assert not await env.service.inbox.pending()
+        await env.service.ingest(env.comment(101))
+        camp=await env.finish();assert camp['eligible_count']==0 and await env.wallet(7)==0

@@ -34,7 +34,21 @@ jobs:
           docker run --detach --name campaign-mongo --publish 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
           python -m scripts.start_test_mongo
       - name: Run tests
-        run: python -m pytest -q
+        run: python -m pytest -q --junitxml=.cache/test-results.xml
+      - name: Annotate test failures
+        if: failure()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          path = Path(".cache/test-results.xml")
+          if path.exists():
+              for case in ET.parse(path).iter("testcase"):
+                  for failure in list(case.findall("failure")) + list(case.findall("error")):
+                      text = (failure.text or failure.get("message", ""))[:12000]
+                      text = text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                      print(f"::error title={case.get('name')}::{text}")
+          PY
       - name: Check production imports and widget router
         run: |
           python - <<'PY'

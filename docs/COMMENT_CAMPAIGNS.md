@@ -142,3 +142,5 @@ CI автоматически поднимает настоящий MongoDB 7 re
 Сценарии: старт/дубликат root, несколько авторов/комментариев, unique/bonus, боты/служебные/чужие треды/deadline, вложенные ответы, restart/параллельные посты, Telegram start/final failures, фиксированный winner и write fencing, rollback БД, pending registration, durable ingress restart, ручные пересылки, rules snapshot, известное удаление, альбом, параллельные воркеры, повторная задача, потеря route cache и защита от преждевременного retry deadline.
 
 Проверки прав/связи на живом канале и фактический Telegram end-to-end не выполняются локальными тестами; их нужно провести после настройки deployment.
+
+Последняя локальная проверка: **403 passed, 22 skipped (нет локального replica set), 2 xfailed**. Две ожидаемые ошибки относятся к ранее задокументированному legacy free-bank race, не к новым акциям. Также пройдены production imports/router, Node syntax/startup checks и 18 сценариев официального strict widget sandbox. Для настоящих MongoDB-транзакций ориентируйтесь на зелёный CI PR #27, а не на skipped локальные интеграционные тесты.
