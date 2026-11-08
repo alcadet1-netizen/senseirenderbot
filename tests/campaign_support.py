@@ -500,3 +500,66 @@ class CampaignCases:
         assert await env.wallet(7)==0
         assert await env.db.bank.count_documents({})==0
         assert await env.db.transactions.count_documents({})==0
+
+    async def test_complete_post_announcement_four_hours_bank_rewards_and_one_result(self,campaign_env):
+        """User acceptance flow through the real durable ingress, on fake and Mongo."""
+        env=campaign_env
+        for uid in (7,8,9): await env.profile(uid)
+        published=env.clock[0]
+        await env.service.capture(Update.model_validate(dict(update_id=1,channel_post=dict(
+            message_id=1,date=published,chat=dict(id=-100111,type='channel'),text='new post'))))
+        # Discussion delivery is later; it must NOT extend the publication window.
+        env.clock[0]+=timedelta(seconds=5)
+        raw=env.root().model_dump(mode='json')
+        raw['message']['forward_origin']['date']=int(published.timestamp())
+        await env.service.capture(Update.model_validate(raw));await env.service.tick()
+        assert env.bot.send_message.await_count==1
+        start=env.bot.send_message.await_args_list[0].kwargs
+        assert start['chat_id']==-100222 and start['reply_parameters'].message_id==100
+        camp=await env.db.comment_campaigns.find_one({'_id':'-100111:1'})
+        assert camp['deadline']==published+timedelta(hours=4)
+        for mid,uid,date in [(101,7,published+timedelta(seconds=10)),
+                             (102,8,published+timedelta(hours=1)),
+                             (103,9,published+timedelta(hours=4,seconds=-1)),
+                             (104,7,published+timedelta(hours=4))]:
+            await env.service.capture(env.comment(mid,uid,date=date))
+        env.clock[0]=published+timedelta(hours=4,seconds=-1)
+        for _ in range(5): await env.service.tick()
+        assert all([await env.wallet(uid)==0 for uid in (7,8,9)])
+        assert env.bot.send_message.await_count==1
+        env.clock[0]+=timedelta(seconds=2)
+        with patch('src.services.comment_campaign_service.secrets.randbelow',return_value=0):
+            for _ in range(30):
+                await env.service.tick()
+                camp=await env.db.comment_campaigns.find_one({'_id':'-100111:1'})
+                if camp['status']=='completed': break
+        assert camp['status']=='completed' and camp['eligible_count']==3
+        assert await env.wallet(7)==100 and await env.wallet(8)==100 and await env.wallet(9)==2000
+        assert (await env.db.bank.find_one({'_id':'single'}))['coins']==997800
+        assert env.bot.send_message.await_count==2
+        result=env.bot.send_message.await_args_list[1].kwargs
+        assert result['chat_id']==-100222 and result['reply_parameters'].message_id==100
+        assert 'User&lt;9&gt;' in result['text'] and '2000 Sensei Coin' in result['text']
+        assert 'Остальные комментарии — по 100 Sensei Coin' in result['text']
+        # Redelivery and repeated scheduled jobs do not add money or result messages.
+        await env.service.capture(Update.model_validate(raw))
+        await env.service.capture(env.comment(101,7,date=published+timedelta(seconds=10)))
+        for _ in range(5): await env.service.tick()
+        assert env.bot.send_message.await_count==2
+        assert await env.db.transactions.count_documents({'funding_source':'senseibank'})==3
+        assert (await env.db.bank.find_one({'_id':'single'}))['coins']==997800
+
+    async def test_new_post_announcement_precedes_older_due_work_and_comment_batch(self,campaign_env):
+        env=campaign_env;await env.profile(7);await env.begin(1,100)
+        env.clock[0]+=timedelta(hours=4,seconds=1)
+        env.cfg.campaign_batch_size=25
+        await env.service.capture(env.root(2,200))
+        await env.service.capture(env.comment(201,7,parent=200))
+        await env.service.tick()
+        assert env.bot.send_message.await_count==2
+        assert env.bot.send_message.call_args.kwargs['reply_parameters'].message_id==200
+        assert (await env.db.comment_campaigns.find_one({'_id':'-100111:1'}))['phase']=='wait'
+        assert await env.db.campaign_comments.count_documents({})==0
+        assert await env.service.inbox.pending()
+        await env.service.tick()
+        assert await env.db.campaign_comments.count_documents({'campaign_id':'-100111:2'})==1

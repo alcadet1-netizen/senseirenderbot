@@ -95,7 +95,7 @@ async def test_short_notifications_and_escaped_mention(tmp_path):
         camp=await env.finish()
         text=await env.service.final_text(camp)
         assert len(START_TEXT)<200 and len(text)<200
-        assert 'User&lt;7&gt;' in text and '2000 Coin' in text
+        assert 'User&lt;7&gt;' in text and '2000 Sensei Coin' in text
         assert 'Спасибо' not in text
     finally:
         await env.close()
@@ -189,3 +189,32 @@ async def test_restart_grace_still_defers_overdue_settlement(tmp_path):
         await env.service.tick()
         assert (await env.db.comment_campaigns.find_one({'_id':'-100111:1'}))['sealed']
     finally: await env.close()
+
+
+@pytest.mark.asyncio
+async def test_admitted_root_wakes_idle_worker_without_poll_delay(tmp_path):
+    import asyncio
+    from unittest.mock import patch
+    env=await Harness(FakeDB(),tmp_path).open()
+    env.cfg.campaign_poll_seconds=60
+    idle=asyncio.Event();sent=asyncio.Event()
+    original_tick=env.service.tick;original_send=env.bot.send_message.side_effect
+    async def tick():
+        result=await original_tick();idle.set();return result
+    async def send(**kwargs):
+        result=await original_send(**kwargs);sent.set();return result
+    env.bot.send_message.side_effect=send
+    task=None
+    try:
+        with patch.object(env.service,'tick',side_effect=tick):
+            task=asyncio.create_task(env.service.run())
+            await asyncio.wait_for(idle.wait(),2)
+            await env.service.capture(env.root())
+            await asyncio.wait_for(sent.wait(),2)
+            assert env.bot.send_message.await_count==1
+    finally:
+        if task:
+            task.cancel()
+            try: await task
+            except asyncio.CancelledError: pass
+        await env.close()

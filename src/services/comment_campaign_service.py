@@ -18,7 +18,7 @@ from pymongo.write_concern import WriteConcern
 logger = logging.getLogger(__name__)
 UTC = timezone.utc
 
-START_TEXT = '🎉 Coin за комментарии\n\n100 Coin за каждый комментарий.\nОдному случайному комментарию — 2000 Coin вместо 100.\nИтоги через 4 ч.'
+START_TEXT = '🎉 Sensei Coin за комментарии\n\n100 Sensei Coin за каждый комментарий.\nОдному случайному комментарию — 2000 Sensei Coin вместо 100.\nИтоги через 4 ч.'
 USER_CONTENT_TYPES = frozenset('text,photo,video,animation,audio,voice,video_note,document,sticker,poll,contact,location,venue,dice'.split(','))
 EMPTY_TEXT = '🏁 Розыгрыш завершён. Подходящих комментариев нет — начислений нет.'
 
@@ -58,6 +58,7 @@ class CommentCampaignService:
         self.discussion_id = self.cfg.discussion_chat_id
         self.ready = False
         self.task = None
+        self.wake_event = asyncio.Event()
         self.bot = None
         self.bot_id = None
         self.enabled_at = None
@@ -82,6 +83,7 @@ class CommentCampaignService:
         await self.campaigns.create_index([('terminal', 1), ('status', 1), ('due_at', 1)])
         await self.campaigns.create_index([('discussion_chat_id', 1), ('discussion_media_group_id', 1)], unique=True,
             partialFilterExpression={'discussion_media_group_id': {'$type': 'string'}})
+        await self.campaigns.create_index([('phase', 1), ('terminal', 1), ('due_at', 1)])
         await self.comments.create_index([('campaign_id', 1), ('message_id', 1)], unique=True)
         await self.comments.create_index([('campaign_id', 1), ('eligible', 1), ('user_id', 1)])
         await self.routes.create_index([('chat_id', 1), ('message_id', 1)], unique=True)
@@ -321,6 +323,7 @@ class CommentCampaignService:
             # Commit locally before acknowledging the middleware; Mongo outages
             # do not discard updates already admitted to this durable queue.
             await self.inbox.put(event)
+            self.wake_event.set()
             if event.message and event.message.is_automatic_forward:
                 origin = event.message.forward_origin
                 logger.info('Campaign automatic forward queued discussion=%s source_channel=%s post=%s',
@@ -332,9 +335,12 @@ class CommentCampaignService:
             return False
         processed = False
         for update_id, payload in await self.inbox.batch(self.cfg.campaign_batch_size):
-            await self.ingest(Update.model_validate_json(payload))
+            root_campaign = await self.ingest(Update.model_validate_json(payload))
             await self.inbox.ack(update_id)
             processed = True
+            if root_campaign:
+                # Announce before ingesting the following comment batch.
+                break
         for chat_id, mid in await self.inbox.deletion_batch(self.cfg.campaign_batch_size):
             await self.mark_deleted(chat_id, mid)
             await self.inbox.ack_deletion(chat_id, mid)
@@ -344,6 +350,7 @@ class CommentCampaignService:
     async def note_deleted(self, chat_id, mid):
         if self.ready and chat_id == self.discussion_id:
             await self.inbox.deleted(chat_id, mid)
+            self.wake_event.set()
 
     async def mark_deleted(self, chat_id, mid):
         async def mark(tx):
@@ -367,16 +374,23 @@ class CommentCampaignService:
         message = event.message
         if message and message.chat.id == self.discussion_id:
             if message.is_automatic_forward:
-                await self.observe_root(message)
+                return await self.observe_root(message)
             else:
                 await self.collect(message)
 
     async def claim_work(self):
         now = self.now()
-        return await self.campaigns.find_one_and_update({
+        query = {
             'terminal': False, 'status': {'$in': ['active', 'processing', 'failed']}, 'due_at': {'$lte': now},
-            'lease_until': {'$lte': now}}, {'$set': {'lease_owner': uuid.uuid4().hex,
-                'lease_until': now+timedelta(seconds=self.cfg.campaign_lease_seconds)}},
+            'lease_until': {'$lte': now}}
+        lease = {'$set': {'lease_owner': uuid.uuid4().hex,
+            'lease_until': now+timedelta(seconds=self.cfg.campaign_lease_seconds)}}
+        # New post announcements should not queue behind an older payout batch.
+        announcement = await self.campaigns.find_one_and_update({**query, 'phase': 'announcement'}, lease,
+            sort=[('due_at', ASCENDING)], return_document=ReturnDocument.AFTER)
+        if announcement:
+            return announcement
+        return await self.campaigns.find_one_and_update(query, lease,
             sort=[('due_at', ASCENDING)], return_document=ReturnDocument.AFTER)
 
     async def fence(self, cid, owner, tx=None):
@@ -484,8 +498,8 @@ class CommentCampaignService:
         rules = campaign['rules']
         unit = 'первый комментарий участника' if rules['unique'] else 'каждый комментарий'
         mode = 'дополнительно' if rules['winner_mode'] == 'bonus' else f'вместо {rules["base"]}'
-        return (f'🎉 Coin за комментарии\n\n{rules["base"]} Coin за {unit}.\n'
-                f'Одному случайному комментарию — {rules["winner"]} Coin {mode}.\n'
+        return (f'🎉 Sensei Coin за комментарии\n\n{rules["base"]} Sensei Coin за {unit}.\n'
+                f'Одному случайному комментарию — {rules["winner"]} Sensei Coin {mode}.\n'
                 f'Итоги через {rules["duration"]:g} ч.')
 
     async def final_text(self, camp):
@@ -497,8 +511,14 @@ class CommentCampaignService:
         pending = await self.rewards.count_documents({'campaign_id': camp['_id'], 'status': 'pending_registration'})
         blocked = await self.rewards.count_documents({'campaign_id': camp['_id'], 'status': 'blocked_banned'})
         waiting_bank = await self.rewards.count_documents({'campaign_id': camp['_id'], 'status': 'pending_bank'})
-        text = f'🏆 Итоги\n\nПобедитель: {mention} — {total} Coin.'
-        text += '\nНачисления обработаны.' if pending or blocked or waiting_bank else '\nCoin начислены участникам.'
+        text = f'🏆 Победитель: {mention} — {total} Sensei Coin!'
+        if pending or blocked or waiting_bank:
+            text += '\nНачисления обработаны.'
+        elif camp['eligible_count'] > 1:
+            unit = 'участники' if rules['unique'] else 'комментарии'
+            text += f'\nОстальные {unit} — по {rules["base"]} Sensei Coin. Награды начислены.'
+        else:
+            text += '\nНаграда начислена.'
         if pending:
             text += '\nЕсть сохранённые награды: для получения нажмите /start в боте.'
         if waiting_bank:
@@ -603,9 +623,14 @@ class CommentCampaignService:
     async def run(self):
         # Announce immediately. Only settlement waits for the startup drain window.
         while self.ready:
+            # Clear before draining: an admission during tick remains signalled.
+            self.wake_event.clear()
             try:
                 worked = await self.tick()
             except Exception:
                 logger.exception('Campaign scheduler iteration failed; will retry')
                 worked = False
-            await asyncio.sleep(.05 if worked else self.cfg.campaign_poll_seconds)
+            try:
+                await asyncio.wait_for(self.wake_event.wait(), timeout=.05 if worked else self.cfg.campaign_poll_seconds)
+            except TimeoutError:
+                pass
