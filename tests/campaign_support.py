@@ -192,7 +192,7 @@ class CampaignCases:
             await env.service.ingest(event)
         assert await env.db.campaign_comments.count_documents({})==0
         camp=await env.finish();assert camp['eligible_count']==0 and await env.wallet(7)==0
-        assert 'не было подходящих' in env.bot.send_message.call_args.kwargs['text']
+        assert 'Подходящих комментариев нет' in env.bot.send_message.call_args.kwargs['text']
 
     async def test_nested_replies_and_repeated_update(self,campaign_env):
         env=campaign_env;await env.profile(7);await env.begin()
@@ -383,3 +383,55 @@ class CampaignCases:
         await env.service.tick();assert not await env.service.inbox.pending()
         await env.service.ingest(env.comment(101))
         camp=await env.finish();assert camp['eligible_count']==0 and await env.wallet(7)==0
+
+    async def test_late_album_alias_restores_existing_campaign(self,campaign_env):
+        env=campaign_env;await env.profile(7)
+        original=env.clock[0]
+        root=env.root().model_dump(mode='json');root['message']['media_group_id']='late-album'
+        await env.service.ingest(Update.model_validate(root));await env.service.tick()
+        env.clock[0]+=timedelta(hours=4,seconds=1)
+        alias=env.root(2,101).model_dump(mode='json')
+        alias['message']['media_group_id']='late-album'
+        alias['message']['forward_origin']['date']=int(original.timestamp())
+        await env.service.ingest(Update.model_validate(alias))
+        await env.service.ingest(env.comment(102,parent=101,date=original+timedelta(minutes=1)))
+        camp=await env.finish()
+        assert camp['eligible_count']==1 and await env.wallet(7)==2000
+        assert await env.db.comment_campaigns.count_documents({})==1
+
+    async def test_distinct_inbox_disables_second_worker(self,campaign_env,tmp_path):
+        env=campaign_env
+        import pytest
+        from src.services.comment_campaign_service import InboxMismatch
+        other=CommentCampaignService(env.container,clock=lambda:env.clock[0])
+        env.cfg.campaign_inbox_path=str(tmp_path/'different.sqlite3')
+        try:
+            with pytest.raises(InboxMismatch):
+                await other.start(env.bot)
+            assert not other.ready and other.task is None
+            assert env.service.ready
+        finally:
+            await other.stop()
+
+    async def test_capture_cannot_commit_between_empty_check_and_seal(self,campaign_env):
+        env=campaign_env;await env.begin()
+        env.clock[0]+=timedelta(hours=4,seconds=1)
+        reached=asyncio.Event();release=asyncio.Event()
+        original=env.service.transaction
+        async def paused(callback):
+            reached.set();await release.wait()
+            return await original(callback)
+        with patch.object(env.service,'transaction',side_effect=paused):
+            closing=asyncio.create_task(env.service.tick())
+            await asyncio.wait_for(reached.wait(),5)
+            entering=asyncio.create_task(env.service.capture(env.comment(101,date=env.clock[0]-timedelta(hours=1))))
+            try:
+                await asyncio.sleep(.05)
+                assert not entering.done(), 'Admission must wait for settlement barrier'
+            finally:
+                release.set()
+                await asyncio.wait_for(closing,5)
+                await asyncio.wait_for(entering,5)
+        assert (await env.db.comment_campaigns.find_one({'_id':'-100111:1'}))['sealed']
+        # Updates admitted after the cutoff do not retroactively change a draw.
+        assert await env.service.inbox.pending()

@@ -61,3 +61,40 @@ async def test_disk_failure_is_not_silently_acknowledged(tmp_path):
 @pytest.mark.parametrize('path',['',':memory:','  '])
 def test_nonpersistent_inbox_path_refused(path):
     with pytest.raises(ValueError): CampaignInbox(path,999)
+
+
+@pytest.mark.asyncio
+async def test_barrier_blocks_other_connection_without_losing_capture(tmp_path):
+    import asyncio
+    from types import SimpleNamespace
+    a=CampaignInbox(str(tmp_path/'shared.sqlite3'),999)
+    b=CampaignInbox(str(tmp_path/'shared.sqlite3'),999)
+    await a.open();await b.open()
+    await b.db.execute('PRAGMA busy_timeout=1')
+    event=SimpleNamespace(update_id=123,model_dump_json=lambda **kw:'{}')
+    try:
+        assert a.identity==b.identity
+        async with a.settlement_barrier() as empty:
+            assert empty
+            pending=asyncio.create_task(b.put(event))
+            await asyncio.sleep(.1)
+            assert not pending.done()
+        await asyncio.wait_for(pending,5)
+        assert await a.pending()
+    finally:
+        await a.close();await b.close()
+
+
+@pytest.mark.asyncio
+async def test_short_notifications_and_escaped_mention(tmp_path):
+    from src.services.comment_campaign_service import START_TEXT
+    env=await Harness(FakeDB(),tmp_path).open()
+    try:
+        await env.profile(7);camp=await env.begin();await env.service.ingest(env.comment(101))
+        camp=await env.finish()
+        text=await env.service.final_text(camp)
+        assert len(START_TEXT)<200 and len(text)<200
+        assert 'User&lt;7&gt;' in text and '2000 Coin' in text
+        assert 'Спасибо' not in text
+    finally:
+        await env.close()
