@@ -43,3 +43,8 @@ Thumbs.db
 __pycache__/
 *.py[cod]
 *.class
+
+# Durable local comment-campaign ingress (mount persistent storage in production)
+/var/
+*.sqlite3-wal
+*.sqlite3-shm

@@ -48,6 +48,13 @@ class Container:
     _captcha_service: Optional["CaptchaService"] = field(default=None, init=False, repr=False)
 
     @property
+    def comment_campaign_service(self):
+        if getattr(self, '_comment_campaign_service', None) is None:
+            from src.services.comment_campaign_service import CommentCampaignService
+            self._comment_campaign_service = CommentCampaignService(self)
+        return self._comment_campaign_service
+
+    @property
     def paid_hedgehog_service(self):
         if getattr(self, '_paid_hedgehog_service', None) is None:
             from src.services.paid_hedgehog_service import PaidHedgehogService

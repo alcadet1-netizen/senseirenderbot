@@ -1,0 +1,144 @@
+# Автоматические Coin-акции в комментариях SenseiDurova
+
+## Архитектура и область изменений
+
+Python/aiogram 3, Motor/MongoDB, существующие `users.id`, `users.coins`, `transactions`. Новая параллельная валюта/баланс не создаётся. Используется существующий `UserService.get_or_create`, включая обычные стартовые условия регистрации. Награды кампании — **эмиссия Coin**, а не незаявленное списание игрового банка. В журнале `tx_type=comment_campaign_reward`, `xp_change=0`.
+
+Планировщик — MongoDB-backed job queue (`due_at`, lease, фазы), без Redis/Celery. SQLite/aiosqlite (уже есть в dependencies) — локальный durable inbox Telegram-событий перед обработкой MongoDB. На production его **обязательно** разместить на persistent disk. Не храните очередь в ephemeral filesystem Render.
+
+Главные файлы:
+- `src/services/comment_campaign_service.py` — обнаружение, сбор, выбор победителя, транзакционные выплаты, scheduler/recovery;
+- `src/infra/comment_campaign_inbox.py` — WAL ingress и подтверждённые удаления самим ботом;
+- `src/bot/middlewares/comment_campaign.py` — захват Update до игровых фильтров/троттлинга;
+- `src/bot/middlewares/{cleanup,moderation}.py` — уведомления об успешных удалениях комментариев самим ботом;
+- `src/core/{config,container}.py`, `src/main.py` — конфигурация, DI, startup/shutdown, channel_post updates;
+- `scripts/migrate_comment_campaigns.py`, `scripts/start_test_mongo.py` — миграция и тестовый replica set;
+- `tests/campaign_support.py`, `tests/unit/test_comment_campaigns.py`, `tests/integration/test_comment_campaigns.py` — общие сценарии на fake и настоящей БД.
+
+## Как определяется обсуждение
+
+При первом запуске `getChat(@SenseiDurova)` используется только как discovery, если числовой ID ещё не задан/не сохранён. Затем числовые ID канала и связанной supergroup закрепляются в MongoDB `settings/_id=comment_campaign_channel`; после перезапуска используется закреплённый ID, а не потенциально сменившийся username. При явных env-ID проверяется реальная связь `linked_chat_id`.
+
+`channel_post` сохраняет наблюдение публикации. Акция создаётся **только** после `is_automatic_forward=true` в нужной discussion group и `MessageOriginChannel.chat.id == TARGET_CHANNEL_ID`. ID исходной публикации берётся из `forward_origin.message_id`, время начала — из `forward_origin.date`. Ручные пересылки и чужие каналы акции не создают.
+
+Связь комментария с акцией — `message_thread_id` либо ответ на корневое сообщение/объявление/уже известного участника цепочки. Маршруты ответов сохраняются в БД, включая промежуточные сообщения ботов/служебные сообщения (сами они не награждаются). Просто сообщение в группе без связи с этим тредом не считается. Если Telegram не передал thread ID и родительское сообщение вообще не было получено ботом, нельзя надёжно угадать тред — такой комментарий не учитывается.
+
+Пересланные части альбома с общим `media_group_id` discussion group объединяются в одну акцию. Все исходные message ID сохраняются как aliases в `campaign_posts`; маршруты всех частей ведут к одному campaign ID. Разные посты/треды обрабатываются независимо.
+
+Bot API не предоставляет `getDiscussionMessage` и историю произвольного треда. Если автоматическая пересылка не появилась, через 60 секунд в журнале предупреждение `no_discussion_observed`; акция не создаётся. Это может означать отключённые комментарии, отсутствие доставки или прав, а не доказанный ответ Telegram «комментарии отключены». Новая пересылка, пришедшая позже, но до deadline, всё ещё может создать акцию.
+
+## Правила и тексты
+
+По умолчанию:
+- начало: время публикации, конец: `started_at + 4 часа`;
+- окно `[started_at, deadline)`; сообщения ровно в deadline уже не включаются;
+- каждый отдельный человеческий комментарий — отдельная единица, включая несколько комментариев одного участника и отдельные сообщения медиаальбома-комментария;
+- боты (включая текущего), anonymous sender_chat, автоматические пересылки, платежные/служебные сообщения исключены;
+- допустимый пользовательский контент перечислен в config; сервисные типы не включаются даже при ошибочном добавлении в список;
+- существующие banned-профили не участвуют в выборе победителя; блокировка после выбора приостанавливает выдачу такому профилю;
+- единица-победитель получает **2000 вместо 100**, остальные — по 100;
+- в `REWARD_PER_UNIQUE_USER=true` выбирается первый подходящий комментарий пользователя (по message ID), он один участвует и в базовой выплате, и в выборе победителя;
+- `WINNER_REWARD_MODE=bonus`: победителю 100 + 2000 = 2100; остальные по 100;
+- параметры наград и режима сохраняются snapshot в акции: смена env не переигрывает уже начатую акцию.
+
+Стартовый текст с настройками по умолчанию точно соответствует заданному. Финальный текст соответствует заданному, имя экранируется и упоминается через `tg://user?id=...`. Если есть pending-регистрации или заблокированные выдачи, текст честно дополнен оговоркой, а не заявляет о совершённых выплатах. При нуле валидных комментариев используется отдельный текст «награды не начислены».
+
+### Удалённые комментарии
+
+**Общих updates об удалении обычных group messages и надёжного read-only `getMessage` в Bot API нет.** Произвольные чужие удаления проверить нельзя. Поэтому по умолчанию полученный комментарий остаётся учтённым, если нет известного удаления до фиксации итогового набора.
+
+Успешные удаления самим ботом в `CommandCleanupMiddleware` и `ModerationMiddleware` записываются в durable inbox/tombstones и исключаются до sealing. Удаления другими администраторами, пользователем, Telegram или иными неинструментированными участками кода не отслеживаются. После sealing набор/победитель заморожены; удаления не меняют уже зафиксированную выборку и выплаты. Удалять/пересылать сообщения для «проверки существования» бот не будет: это побочный эффект, а не надёжная read-only проверка.
+
+## Гарантии денег и восстановление
+
+- MongoDB **replica set или mongos**, sessions, транзакции `snapshot` + `majority`. Standalone — функция не запускается, без небезопасного fallback; остальные функции бота продолжают работать.
+- Уникальный campaign ID связан с channel/post. Winner выбирается reservoir sampling через `secrets.randbelow`, только по зафиксированным eligible-комментариям, пакетами. Счётчик выборки и текущий кандидат сохраняются транзакционно; после завершения планирования победитель не меняется при retry.
+- Сбор комментариев пишет version fence в campaign. Sealing также пишет campaign внутри транзакции, поэтому они не могут независимо закоммититься на устаревшем snapshot.
+- Операция начисления: `_id=comment_campaign:{channel_id}:{post_id}:{comment_id}:{kind}`. Для total winner — только `winner_total`; base ему не создаётся. Для bonus — отдельные `base` и `winner_bonus`.
+- **Каждая операция**: user `$inc coins`, запись rewards и уникальный журнал — одна Mongo transaction. Нет попытки вместить неограниченную 4-часовую кампанию в одну огромную Mongo transaction. При сбое часть операций может быть уже выплачена, но кампания остаётся незавершённой; повтор безопасно завершает остальные, не удваивая завершённые. `completed` выставляется после обработки всех операций и публикации результата.
+- Статусы `active / processing / completed / failed`; фазы announcement/wait/plan/payout/final. На ошибка Telegram/DB сохраняется причина и retry time; после перезапуска просроченные/processing/failed нетерминальные задачи подхватываются автоматически.
+- Один lease owner на campaign, атомарный claim, expiry и write fencing внутри финансовых транзакций. Протухший воркер не может начислять после захвата новым. Работа пакетная, lease продлевается между выплатами.
+- Финальное сообщение не управляет идемпотентностью выплат. Если его отправка не удалась, повторяется только незавершённая стадия final.
+- Telegram `sendMessage` не имеет ключа идемпотентности: если Telegram принял сообщение, а соединение/запись message ID оборвались, при retry возможно повторное объявление. Это **не** повторная награда. Удаление оригинального root приводит к ошибке reply и retry, а не публикации результатов в чужом треде.
+
+### Регистрация
+
+Комментарий сначала сохраняется, затем вызывается существующий `UserService.get_or_create`. Его обычные starter rewards не заменяются и не считаются наградой кампании. Если профиль создать нельзя, комментарий не теряется; операция имеет `pending_registration`. После нормальной регистрации worker выдаёт pending транзакционно (повторный worker не удваивает награду). Итоговое сообщение дополнено инструкцией `/start`. Banned-выдачи остаются `blocked_banned`; автоматического разбанивания/выплаты таким профилям нет.
+
+### Очередь и временные ограничения
+
+После deadline даётся `CAMPAIGN_SETTLEMENT_GRACE_SECONDS` на дренирование входящих событий; **время допустимых комментариев не продлевается**. После рестарта сначала дренируется локальный inbox. Sealing откладывается, если в нём ещё есть необработанные события. Нормальная задержка подведения — grace + polling + работа очереди. «Ровно по часам» без учёта сети и очереди не обещается.
+
+SQLite `WAL + synchronous=FULL`, commit до выхода capture middleware. Mongo outage после принятия события оставляет его в очереди. Очередь нужно резервировать/мониторить вместе с persistent disk; ошибка диска логируется CRITICAL. Polling Telegram не является exactly-once durable брокером: сбой до локального commit или потеря диска не восстанавливается этой системой. Также Telegram хранит updates ограниченное время (обычно до 24 часов); бесконечный offline или неполученную историю треда Bot API восстановить не может. Не запускайте несколько polling-процессов одного bot token (Telegram конфликтует); несколько campaign workers допустимы с общим Mongo и общим доступом к durable inbox. Разные локальные диски не дают общей гарантии backlog barrier.
+
+## Коллекции / миграция
+
+| Коллекция | Назначение |
+|---|---|
+| `users` | существующий `coins`, уникальный `id` |
+| `transactions` | уникальный `_id` начисления, amount, user, campaign, comment, kind |
+| `comment_campaigns` | post/root/chat IDs, started/deadline, snapshot rules, status/phase, lease, winner, counters/cursors, sent-message IDs |
+| `campaign_comments` | уникальный campaign/message, author metadata, date/type, eligibility, известное удаление; без текста комментария |
+| `campaign_message_routes` | ancestry message → campaign |
+| `campaign_posts` | наблюдения/aliases публикаций и отсутствие discussion root |
+| `campaign_rewards` | amount/kind/user/comment, paid/pending_registration/blocked_banned, время выплаты |
+| `campaign_deleted_messages` | tombstones известных удалений |
+| `settings` | закреплённые числовые target/discussion IDs и первое enabled_at |
+| `schema_migrations` | marker `comment_campaign_v1` |
+
+```sh
+python -m scripts.migrate_comment_campaigns --check
+python -m scripts.migrate_comment_campaigns
+```
+
+Миграция идемпотентна, создаёт коллекции лениво/индексы и marker, не изменяет старые балансы. При дубликатах `users.id` или конфликте существующего неуникального индекса выполнение остановится. Сначала оператор проверяет/согласованно исправляет данные и индекс; скрипт не удаляет и не сливает пользователей автоматически. При включении feature startup также проверяет/создаёт индексы. SQLite-таблицы `campaign_inbox`, `campaign_deleted_inbox` создаются автоматически в файле queue.
+
+## Env и запуск
+
+В `.env.example` перечислены все переменные. Основные:
+
+```dotenv
+COMMENT_CAMPAIGNS_ENABLED=true
+TARGET_CHANNEL_ID=0
+DISCUSSION_CHAT_ID=0
+CAMPAIGN_DURATION_HOURS=4
+BASE_REWARD=100
+WINNER_REWARD=2000
+REWARD_PER_UNIQUE_USER=false
+WINNER_REWARD_MODE=total
+CAMPAIGN_INBOX_PATH=/var/data/comment_campaign_inbox.sqlite3
+CAMPAIGN_POLL_SECONDS=5
+CAMPAIGN_LEASE_SECONDS=180
+CAMPAIGN_RETRY_SECONDS=60
+CAMPAIGN_SETTLEMENT_GRACE_SECONDS=30
+CAMPAIGN_BATCH_SIZE=25
+```
+
+`BOT_TOKEN`, `MONGO_URI`, `MONGO_DB` — прежние настройки проекта. Пароли/токены в чат не присылать. Нового Redis URL/API-ключа не требуется. `CAMPAIGN_ALLOWED_CONTENT_TYPES` позволяет сузить список допустимых пользовательских типов. Лучше заменить 0 на проверенные числовые `-100...` IDs; если оставлены 0, бот resolve/pin сделает сам, а IDs появятся в startup log/`settings`.
+
+1. Подготовить MongoDB replica set/mongos и backup; проверить/применить миграцию.
+2. Подключить discussion supergroup к каналу в настройках Telegram.
+3. Добавить бота **администратором канала и группы**. В канале — право публикации; в группе — доступ к сообщениям и отправке ответов/сообщений. Group admin даёт полный поток сообщений без ограничения privacy mode. Право удаления нужно только для уже имеющейся модерации, не для основного розыгрыша.
+4. Настроить persistent disk и путь inbox, доступный одному владельцу процесса (новые файлы chmod 0600); оставить запас места и мониторинг.
+5. Установить env, включить feature и запустить обычный `bash start.sh` (или штатный Render start command). Отдельный cron/scheduler не нужен.
+6. Проверить startup `Comment campaigns ready channel=... discussion=...`; при `DISABLED` исправить topology/права/связь/индексы и перезапустить. Не считать вывод успешных unit-тестов подтверждением прав живого бота.
+7. Опубликовать новый тестовый пост. Для staging можно уменьшить duration; проверить объявление именно под ним, journal/rewards и final IDs. Вернуть duration=4 до production. Уже начатые акции не меняют snapshot.
+
+Для публикаций до первого включения feature акции не создаются. Если первоначальное объявление не удалось доставить до конца окна, campaign остаётся terminal failed и выплаты не запускаются. Failed финальные сообщения, наоборот, повторяются независимо от уже выплаченных денег.
+
+## Тесты
+
+```sh
+BOT_TOKEN=123456:TEST python -m pytest -q
+# Optional local integration replica set:
+docker run --detach --name campaign-mongo --publish 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+python -m scripts.start_test_mongo
+CAMPAIGN_TEST_MONGO_URI='mongodb://127.0.0.1:27017/?replicaSet=rs0' BOT_TOKEN=123456:TEST \
+  python -m pytest tests/integration/test_comment_campaigns.py -q
+```
+
+CI автоматически поднимает настоящий MongoDB 7 replica set и выполняет тот же набор сценариев. Интеграционные тесты используют отдельные случайные БД `sensei_campaign_test_*` и удаляют только их; production `MONGO_URI` для них не используется. Без `CAMPAIGN_TEST_MONGO_URI` они явно skipped, а не выдаются за выполненные.
+
+Сценарии: старт/дубликат root, несколько авторов/комментариев, unique/bonus, боты/служебные/чужие треды/deadline, вложенные ответы, restart/параллельные посты, Telegram start/final failures, фиксированный winner и write fencing, rollback БД, pending registration, durable ingress restart, ручные пересылки, rules snapshot, известное удаление, альбом, параллельные воркеры, повторная задача, потеря route cache и защита от преждевременного retry deadline.
+
+Проверки прав/связи на живом канале и фактический Telegram end-to-end не выполняются локальными тестами; их нужно провести после настройки deployment.

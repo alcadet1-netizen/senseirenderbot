@@ -11,6 +11,7 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand
 from src.bot.handlers.donate import DonationPaymentMiddleware
+from src.bot.middlewares.comment_campaign import CommentCampaignMiddleware
 
 from src.bot import create_bot, create_dispatcher
 from src.bot.handlers import setup_routers
@@ -99,6 +100,8 @@ async def on_startup(bot: Bot, container: Container) -> None:
     if restored > 0:
         logger.info(f"✅ Restored {restored} Banzai workers")
 
+    await container.comment_campaign_service.start(bot)
+
     # Устанавливаем команды
     await setup_bot_commands(bot)
     logger.info("✅ Bot commands set")
@@ -111,6 +114,9 @@ async def on_shutdown(bot: Bot, container: Container | None = None) -> None:
     logger.info(" Shutting down...")
 
     if container:
+        campaigns = getattr(container, '_comment_campaign_service', None)
+        if campaigns is not None:
+            await campaigns.stop()
         # Возвращаем ставки из активных дуэлей
         try:
             await container.duel_service.shutdown()
@@ -158,6 +164,8 @@ async def main() -> None:
     site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get('PORT', '10000')))
     await site.start()
 
+    dp.update.outer_middleware(CommentCampaignMiddleware(container.comment_campaign_service))
+
     # Future Bot API widget queries are extras until aiogram types catch up.
     dp.update.outer_middleware(HedgehogWidgetMiddleware(container))
 
@@ -200,7 +208,7 @@ async def main() -> None:
         logger.info("🔄 Starting polling...")
         await dp.start_polling(
             bot,
-            allowed_updates=[*dp.resolve_used_update_types(), "widget_query", "shared_widget_query"],
+            allowed_updates=list(dict.fromkeys([*dp.resolve_used_update_types(), "channel_post", "message", "widget_query", "shared_widget_query"])),
             close_bot_session=True,
         )
     finally:

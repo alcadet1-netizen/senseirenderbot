@@ -4,6 +4,7 @@ from typing import Any, Awaitable, Callable, Dict
 
 from aiogram import BaseMiddleware
 from aiogram.types import Message
+from src.bot.middlewares.comment_campaign import campaign_message_deleted
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ class CommandCleanupMiddleware(BaseMiddleware):
             logger.info(f"[CLEANUP] Attempting to delete command message: {event.text}")
             try:
                 await event.delete()
+                await campaign_message_deleted(data.get("container"), event.chat.id, event.message_id)
                 logger.info(f"[CLEANUP] Deleted command message")
             except Exception as e:
                 logger.error(f"[CLEANUP] Failed to delete command message: {e}")
