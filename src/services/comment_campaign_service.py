@@ -30,6 +30,10 @@ class InboxMismatch(RuntimeError):
     """Fatal: do not start another Telegram poller with an independent inbox."""
 
 
+class BankInsufficient(RuntimeError):
+    pass
+
+
 class LeaseLost(RuntimeError):
     pass
 
@@ -47,6 +51,7 @@ class CommentCampaignService:
         self.deleted = self.db.campaign_deleted_messages
         self.users = self.db.users
         self.journal = self.db.transactions
+        self.bank = self.db.bank
         self.clock = clock or (lambda: datetime.now(UTC))
         self.channel_id = self.cfg.target_channel_id
         self.discussion_id = self.cfg.discussion_chat_id
@@ -387,6 +392,12 @@ class CommentCampaignService:
             ops.append(('winner_bonus', rules['winner']))
         return ops
 
+    async def debit_bank(self, amount, tx):
+        # Never call the legacy bank helper: it can reset an empty bank.
+        result = await self.bank.update_one({'_id': 'single', 'coins': {'$gte': amount}},
+            {'$inc': {'coins': -amount}}, session=tx)
+        return result.matched_count == 1
+
     async def credit(self, cid, owner, row, kind, amount):
         key = f'comment_campaign:{cid}:{row["message_id"]}:{kind}'
 
@@ -403,10 +414,12 @@ class CommentCampaignService:
                 comment_id=row['message_id'], user_id=row['user_id'], kind=kind, amount=amount, status=status, next_check_at=self.now())
             await self.rewards.update_one({'_id': key}, {'$setOnInsert': record}, upsert=True, session=tx)
             if status == 'paid':
+                if not await self.debit_bank(amount, tx):
+                    raise BankInsufficient('SenseiBank has insufficient funds; payout will retry')
                 await self.users.update_one({'id': row['user_id']}, {'$inc': {'coins': amount}}, session=tx)
                 await self.journal.insert_one(dict(_id=key, user_id=row['user_id'],
                     tx_type='comment_campaign_reward', coins_change=amount, xp_change=0,
-                    campaign_id=cid, comment_id=row['message_id'], reward_kind=kind, created_at=self.now()), session=tx)
+                    campaign_id=cid, comment_id=row['message_id'], reward_kind=kind, funding_source='senseibank', bank_change=-amount, created_at=self.now()), session=tx)
                 await self.rewards.update_one({'_id': key}, {'$set': {'status': 'paid', 'paid_at': self.now()}}, session=tx)
             # Fence also writes: a lease takeover must conflict with this commit.
             await self.campaigns.update_one({'_id': cid}, {'$inc': {'settlement_version': 1}}, session=tx)
@@ -442,10 +455,13 @@ class CommentCampaignService:
         total = rules['winner'] + (rules['base'] if rules['winner_mode'] == 'bonus' else 0)
         pending = await self.rewards.count_documents({'campaign_id': camp['_id'], 'status': 'pending_registration'})
         blocked = await self.rewards.count_documents({'campaign_id': camp['_id'], 'status': 'blocked_banned'})
+        waiting_bank = await self.rewards.count_documents({'campaign_id': camp['_id'], 'status': 'pending_bank'})
         text = f'🏆 Итоги\n\nПобедитель: {mention} — {total} Coin.'
-        text += '\nНачисления обработаны.' if pending or blocked else '\nCoin начислены участникам.'
+        text += '\nНачисления обработаны.' if pending or blocked or waiting_bank else '\nCoin начислены участникам.'
         if pending:
             text += '\nЕсть сохранённые награды: для получения нажмите /start в боте.'
+        if waiting_bank:
+            text += '\nЧасть наград ожидает пополнения SenseiBank.'
         if blocked:
             text += '\nНаграды заблокированных профилей не выданы.'
         return text
@@ -497,17 +513,21 @@ class CommentCampaignService:
     async def resume_pending_reward(self, record):
         async def release(tx):
             current = await self.rewards.find_one({'_id': record['_id']}, session=tx)
-            if not current or current['status'] != 'pending_registration':
+            if not current or current['status'] not in ('pending_registration', 'pending_bank'):
                 return
             profile = await self.users.find_one({'id': current['user_id']}, session=tx)
             if not profile or profile.get('is_banned'):
                 await self.rewards.update_one({'_id': current['_id']}, {'$set': {'next_check_at': self.now()+timedelta(seconds=self.cfg.campaign_retry_seconds)}}, session=tx)
                 return
+            if not await self.debit_bank(current['amount'], tx):
+                await self.rewards.update_one({'_id': current['_id']}, {'$set': {
+                    'status': 'pending_bank', 'next_check_at': self.now()+timedelta(seconds=self.cfg.campaign_retry_seconds)}}, session=tx)
+                return
             await self.users.update_one({'id': current['user_id']}, {'$inc': {'coins': current['amount']}}, session=tx)
             await self.journal.insert_one(dict(_id=current['_id'], user_id=current['user_id'],
                 tx_type='comment_campaign_reward', coins_change=current['amount'], xp_change=0,
                 campaign_id=current['campaign_id'], comment_id=current['comment_id'],
-                reward_kind=current['kind'], created_at=self.now()), session=tx)
+                reward_kind=current['kind'], funding_source='senseibank', bank_change=-current['amount'], created_at=self.now()), session=tx)
             await self.rewards.update_one({'_id': current['_id']}, {'$set': {'status': 'paid', 'paid_at': self.now()}}, session=tx)
         await self.transaction(release)
 
@@ -528,7 +548,7 @@ class CommentCampaignService:
                     await self.update_owned(camp, {'status': 'failed', 'last_error': type(exc).__name__,
                         'last_error_detail': getattr(exc, 'message', 'Infrastructure error; inspect application logs')[:500].replace(self.cfg.bot_token, '[REDACTED]'),
                         'lease_until': self.now(), 'due_at': self.now()+timedelta(seconds=self.cfg.campaign_retry_seconds)})
-        pending = await self.rewards.find({'status': 'pending_registration', 'next_check_at': {'$lte': self.now()}}).limit(self.cfg.campaign_batch_size).to_list(length=self.cfg.campaign_batch_size)
+        pending = await self.rewards.find({'status': {'$in': ['pending_registration', 'pending_bank']}, 'next_check_at': {'$lte': self.now()}}).limit(self.cfg.campaign_batch_size).to_list(length=self.cfg.campaign_batch_size)
         for record in pending:
             await self.resume_pending_reward(record)
         missing = await self.posts.find({'state': 'awaiting_discussion', 'check_at': {'$lte': self.now()}}).limit(self.cfg.campaign_batch_size).to_list(length=self.cfg.campaign_batch_size)

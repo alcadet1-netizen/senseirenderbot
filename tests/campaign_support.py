@@ -123,7 +123,10 @@ class Harness:
         self.bot=NS(send_message=AsyncMock(side_effect=send),get_chat=AsyncMock(side_effect=chat),
             get_me=AsyncMock(return_value=NS(id=999)),
             get_chat_member=AsyncMock(return_value=NS(status='administrator',can_post_messages=True)))
-    async def open(self): await self.service.initialize(self.bot);return self
+    async def open(self):
+        await self.db.bank.update_one({'_id':'single'}, {'$setOnInsert':{'coins':1_000_000}}, upsert=True)
+        await self.service.initialize(self.bot)
+        return self
     async def close(self): await self.service.stop()
     async def profile(self,uid,banned=False):
         await self.db.users.insert_one(dict(id=uid,coins=0,xp=10,is_banned=banned))
@@ -269,6 +272,7 @@ class CampaignCases:
             await env.service.tick()
         assert await env.wallet(7)==0
         assert await env.db.campaign_rewards.count_documents({})==0
+        assert (await env.db.bank.find_one({'_id':'single'}))['coins']==1_000_000
         assert (await env.db.comment_campaigns.find_one({'_id':camp['_id']}))['winner']==winner
         env.clock[0]+=timedelta(seconds=2)
         await env.finish();assert await env.wallet(7)==2000
@@ -435,3 +439,64 @@ class CampaignCases:
         assert (await env.db.comment_campaigns.find_one({'_id':'-100111:1'}))['sealed']
         # Updates admitted after the cutoff do not retroactively change a draw.
         assert await env.service.inbox.pending()
+
+    async def test_bank_conservation_and_replay(self,campaign_env):
+        env=campaign_env;await env.profile(7);await env.begin()
+        await env.service.ingest(env.comment(101));await env.service.ingest(env.comment(102))
+        await env.finish()
+        assert await env.wallet(7)==2100
+        assert (await env.db.bank.find_one({'_id':'single'}))['coins']==997900
+        for _ in range(5): await env.service.tick()
+        assert (await env.db.bank.find_one({'_id':'single'}))['coins']==997900
+        assert await env.db.transactions.count_documents({'funding_source':'senseibank'})==2
+
+    async def test_empty_bank_waits_without_reset_and_resumes(self,campaign_env):
+        env=campaign_env;await env.profile(7);await env.begin();await env.service.ingest(env.comment(101))
+        await env.db.bank.update_one({'_id':'single'},{'$set':{'coins':1999}})
+        env.clock[0]+=timedelta(hours=4,seconds=1)
+        for _ in range(8): await env.service.tick()
+        assert await env.wallet(7)==0
+        assert (await env.db.bank.find_one({'_id':'single'}))['coins']==1999
+        assert await env.db.transactions.count_documents({})==0
+        await env.db.bank.update_one({'_id':'single'},{'$inc':{'coins':1}})
+        await env.finish()
+        assert await env.wallet(7)==2000
+        assert (await env.db.bank.find_one({'_id':'single'}))['coins']==0
+
+    async def test_pending_reward_waits_for_bank_after_registration(self,campaign_env):
+        env=campaign_env;await env.begin()
+        with patch.object(env.container.user_service,'get_or_create',side_effect=RuntimeError('offline')):
+            await env.service.ingest(env.comment(101,77))
+        await env.finish();await env.profile(77)
+        await env.db.bank.update_one({'_id':'single'},{'$set':{'coins':0}})
+        env.clock[0]+=timedelta(seconds=2);await env.service.tick()
+        assert await env.wallet(77)==0
+        assert await env.db.campaign_rewards.count_documents({'status':'pending_bank'})==1
+        await env.db.bank.update_one({'_id':'single'},{'$inc':{'coins':2000}})
+        env.clock[0]+=timedelta(seconds=2);await env.service.tick();await env.service.tick()
+        assert await env.wallet(77)==2000
+        assert (await env.db.bank.find_one({'_id':'single'}))['coins']==0
+
+    async def test_parallel_campaigns_cannot_overdraw_bank(self,campaign_env):
+        env=campaign_env;await env.profile(7);await env.profile(8)
+        await env.begin(1,100);await env.begin(2,200)
+        await env.service.ingest(env.comment(101,7,parent=100))
+        await env.service.ingest(env.comment(201,8,parent=200))
+        await env.db.bank.update_one({'_id':'single'},{'$set':{'coins':2000}})
+        other=CommentCampaignService(env.container,clock=lambda:env.clock[0]);await other.initialize(env.bot)
+        env.clock[0]+=timedelta(hours=4,seconds=1)
+        try:
+            for _ in range(15): await asyncio.gather(env.service.tick(),other.tick())
+            assert await env.wallet(7)+await env.wallet(8)==2000
+            assert (await env.db.bank.find_one({'_id':'single'}))['coins']==0
+            assert await env.db.transactions.count_documents({'funding_source':'senseibank'})==1
+        finally: await other.stop()
+
+    async def test_missing_bank_is_not_created_for_rewards(self,campaign_env):
+        env=campaign_env;await env.profile(7);await env.begin();await env.service.ingest(env.comment(101))
+        await env.db.bank.delete_many({})
+        env.clock[0]+=timedelta(hours=4,seconds=1)
+        for _ in range(8): await env.service.tick()
+        assert await env.wallet(7)==0
+        assert await env.db.bank.count_documents({})==0
+        assert await env.db.transactions.count_documents({})==0
