@@ -17,12 +17,9 @@ from pymongo.write_concern import WriteConcern
 logger = logging.getLogger(__name__)
 UTC = timezone.utc
 
-START_TEXT = ('🎉 Розыгрыш Coin начался!\n\n'
-              'За каждый комментарий под этим постом вы получите 100 Coin.\n'
-              'Один случайный комментарий получит 2000 Coin!\n\n'
-              '⏳ Итоги и начисление наград — через 4 часа.')
+START_TEXT = '🎉 Coin за комментарии\n\n100 Coin за каждый комментарий.\nОдному случайному комментарию — 2000 Coin вместо 100.\nИтоги через 4 ч.'
 USER_CONTENT_TYPES = frozenset('text,photo,video,animation,audio,voice,video_note,document,sticker,poll,contact,location,venue,dice'.split(','))
-EMPTY_TEXT = '🏁 Розыгрыш завершён. За 4 часа не было подходящих комментариев, поэтому награды не начислены.'
+EMPTY_TEXT = '🏁 Розыгрыш завершён. Подходящих комментариев нет — начислений нет.'
 
 
 def utc(value):
@@ -111,6 +108,17 @@ class CommentCampaignService:
         self.bot = bot
         self.inbox = CampaignInbox(self.cfg.campaign_inbox_path, me.id)
         await self.inbox.open()
+        try:
+            # Separate local inboxes must never participate in one settlement.
+            # A persistent shared volume is required for multiple workers.
+            binding = await self.db.settings.find_one_and_update({'_id': f'campaign_inbox:{me.id}'},
+                {'$setOnInsert': {'identity': self.inbox.identity}}, upsert=True,
+                return_document=ReturnDocument.AFTER)
+            if binding['identity'] != self.inbox.identity:
+                raise RuntimeError('Campaign workers require the same persistent inbox; different disk detected')
+        except BaseException:
+            await self.inbox.close()
+            raise
         self.ready = True
         logger.info('Comment campaigns ready channel=%s discussion=%s', self.channel_id, self.discussion_id)
 
@@ -151,15 +159,19 @@ class CommentCampaignService:
                 or utc(origin.date) < self.enabled_at):
             return None
         cid = self.campaign_id(origin.message_id)
-        end = utc(origin.date)+timedelta(hours=self.cfg.campaign_duration_hours)
-        if end <= self.now():
-            logger.warning('Discussion received after campaign window; no retroactive launch post=%s', cid)
-            return None
         album = getattr(message, 'media_group_id', None)
-        existing_album = await self.campaigns.find_one({'discussion_chat_id': self.discussion_id,
-            'discussion_media_group_id': album}) if album else None
-        if existing_album:
-            cid = existing_album['_id']
+        existing = await self.campaigns.find_one({'_id': cid})
+        if not existing and album:
+            existing = await self.campaigns.find_one({'discussion_chat_id': self.discussion_id,
+                'discussion_media_group_id': album})
+        if existing:
+            cid = existing['_id']
+            end = utc(existing['deadline'])
+        else:
+            end = utc(origin.date)+timedelta(hours=self.cfg.campaign_duration_hours)
+            if end <= self.now():
+                logger.warning('Discussion received after campaign window; no retroactive launch post=%s', cid)
+                return None
         document = {
             'channel_id': self.channel_id, 'post_id': origin.message_id,
             'discussion_chat_id': self.discussion_id, 'discussion_message_id': message.message_id,
@@ -409,29 +421,26 @@ class CommentCampaignService:
 
     def start_text(self, campaign):
         rules = campaign['rules']
-        unit = 'первый комментарий каждого участника' if rules['unique'] else 'каждый комментарий'
-        mode = 'дополнительно получит' if rules['winner_mode'] == 'bonus' else 'получит'
-        duration = f'{rules["duration"]:g}'
-        return (f'🎉 Розыгрыш Coin начался!\n\nЗа {unit} под этим постом вы получите {rules["base"]} Coin.\n'
-                f'Один случайный комментарий {mode} {rules["winner"]} Coin!\n\n'
-                f'⏳ Итоги и начисление наград — через {duration} часа.')
+        unit = 'первый комментарий участника' if rules['unique'] else 'каждый комментарий'
+        mode = 'дополнительно' if rules['winner_mode'] == 'bonus' else f'вместо {rules["base"]}'
+        return (f'🎉 Coin за комментарии\n\n{rules["base"]} Coin за {unit}.\n'
+                f'Одному случайному комментарию — {rules["winner"]} Coin {mode}.\n'
+                f'Итоги через {rules["duration"]:g} ч.')
 
     async def final_text(self, camp):
-        rules = camp['rules']
         if not camp['eligible_count']:
-            return EMPTY_TEXT.replace('4 часа', f'{rules["duration"]:g} часа')
-        winner = camp['winner']
+            return EMPTY_TEXT
+        rules, winner = camp['rules'], camp['winner']
         mention = f'<a href="tg://user?id={winner["user_id"]}">{html.escape(winner["first_name"] or "Участник")}</a>'
         total = rules['winner'] + (rules['base'] if rules['winner_mode'] == 'bonus' else 0)
-        text = (f'🏆 Розыгрыш завершён!\n\n💰 Награды по {rules["base"]} Coin начислены участникам.\n'
-                f'🎊 Победитель случайного розыгрыша: {mention}\n💎 Награда победителя: {total} Coin.\n\nСпасибо за участие!')
         pending = await self.rewards.count_documents({'campaign_id': camp['_id'], 'status': 'pending_registration'})
         blocked = await self.rewards.count_documents({'campaign_id': camp['_id'], 'status': 'blocked_banned'})
+        text = f'🏆 Итоги\n\nПобедитель: {mention} — {total} Coin.'
+        text += '\nНачисления обработаны.' if pending or blocked else '\nCoin начислены участникам.'
         if pending:
-            text = text.replace('начислены участникам.', 'начислены зарегистрированным участникам.')
-            text += '\n\nНаграды незарегистрированных участников сохранены: откройте бота и нажмите /start.'
+            text += '\nЕсть сохранённые награды: для получения нажмите /start в боте.'
         if blocked:
-            text += '\n\nНачисления заблокированным профилям приостановлены.'
+            text += '\nНаграды заблокированных профилей не выданы.'
         return text
 
     async def process(self, campaign):
@@ -446,7 +455,7 @@ class CommentCampaignService:
                 text=self.start_text(camp), parse_mode=None,
                 reply_parameters=ReplyParameters(message_id=camp['discussion_message_id'], allow_sending_without_reply=False)), timeout=20)
             await self.update_owned(camp, {'start_message_id': sent.message_id, 'status': 'active', 'last_error': None,
-                'phase': 'wait', 'due_at': utc(camp['deadline'])+timedelta(seconds=self.cfg.campaign_settlement_grace_seconds)})
+                'phase': 'wait', 'due_at': utc(camp['deadline'])+timedelta(seconds=camp['rules'].get('grace', 0))})
             await self.routes.update_one({'_id': f'{camp["discussion_chat_id"]}:{sent.message_id}'},
                 {'$setOnInsert': dict(chat_id=camp['discussion_chat_id'], message_id=sent.message_id, campaign_id=cid)}, upsert=True)
             logger.info('Campaign announced campaign=%s message=%s', cid, sent.message_id)
@@ -455,15 +464,15 @@ class CommentCampaignService:
             if self.now() < close_at:
                 await self.update_owned(camp, {'due_at': close_at, 'status': 'active'})
                 return
-            if self.inbox and await self.inbox.pending():
-                # Never close over comments still awaiting durable ingestion.
-                await self.update_owned(camp, {'due_at': self.now()+timedelta(seconds=self.cfg.campaign_poll_seconds)})
-                return
             async def seal(tx):
                 await self.fence(cid, owner, tx)
                 await self.campaigns.update_one({'_id': cid}, {'$set': {'sealed': True,
                     'status': 'processing', 'phase': 'plan'}}, session=tx)
-            await self.transaction(seal)
+            async with self.inbox.settlement_barrier() as empty:
+                if not empty:
+                    await self.update_owned(camp, {'due_at': self.now()+timedelta(seconds=self.cfg.campaign_poll_seconds)})
+                    return
+                await asyncio.wait_for(self.transaction(seal), timeout=15)
         elif camp['phase'] == 'plan':
             await self.plan_batch(cid, owner)
         elif camp['phase'] == 'payout':
