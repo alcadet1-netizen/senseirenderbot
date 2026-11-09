@@ -110,6 +110,7 @@ async def test_handler_native_widget_and_admin_setting():
 async def test_middleware_strict_reply_and_ambiguous_send_not_retried():
     from src.bot.handlers.fly import FlyReactionMiddleware
     db,s,_=fixture()
+    s.container.digest_service=NS(chat_sage_reply=AsyncMock(return_value='А что хочется улучшить в виджете?'))
     middleware=FlyReactionMiddleware(s.container)
     middleware.service=s
     event=NS(text='Интересно как устроен этот новый виджет',from_user=NS(id=7,is_bot=False),
