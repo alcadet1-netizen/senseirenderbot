@@ -27,10 +27,6 @@ def utc(value):
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
-class InboxMismatch(RuntimeError):
-    """Fatal: do not start another Telegram poller with an independent inbox."""
-
-
 class BankInsufficient(RuntimeError):
     pass
 
@@ -120,22 +116,8 @@ class CommentCampaignService:
         self.channel_id, self.discussion_id, self.bot_id = channel.id, discussion.id, me.id
         self.enabled_at = utc(pinned['enabled_at'])
         self.bot = bot
-        self.inbox = CampaignInbox(self.cfg.campaign_inbox_path, me.id)
+        self.inbox = CampaignInbox(self.db, me.id, self.transaction)
         await self.inbox.open()
-        try:
-            # Separate local inboxes must never participate in one settlement.
-            # A persistent shared volume is required for multiple workers.
-            binding = await self.db.settings.find_one_and_update({'_id': f'campaign_inbox:{me.id}'},
-                {'$setOnInsert': {'identity': self.inbox.identity}}, upsert=True,
-                return_document=ReturnDocument.AFTER)
-            if binding['identity'] != self.inbox.identity:
-                raise InboxMismatch(
-                    'Persistent campaign inbox does not match Mongo binding. Restore the original inbox '
-                    'on a persistent disk and check CAMPAIGN_INBOX_PATH; do not delete/rebind identity '
-                    'or reset rewards. Polling is refused to protect queued comments.')
-        except BaseException:
-            await self.inbox.close()
-            raise
         self.settlement_not_before = self.now()+timedelta(seconds=self.cfg.campaign_settlement_grace_seconds)
         self.ready = True
         logger.info('Comment campaigns ready channel=%s discussion=%s', self.channel_id, self.discussion_id)
@@ -323,8 +305,8 @@ class CommentCampaignService:
         relevant = ((event.channel_post and event.channel_post.chat.id == self.channel_id)
                     or (event.message and event.message.chat.id == self.discussion_id))
         if relevant:
-            # Commit locally before acknowledging the middleware; Mongo outages
-            # do not discard updates already admitted to this durable queue.
+            # Commit to Mongo before dispatch; polling admission retries before
+            # allowing Telegram offset advancement.
             await self.inbox.put(event)
             self.wake_event.set()
             if event.message and event.message.is_automatic_forward:
@@ -344,9 +326,9 @@ class CommentCampaignService:
             if root_campaign:
                 # Announce before ingesting the following comment batch.
                 break
-        for chat_id, mid in await self.inbox.deletion_batch(self.cfg.campaign_batch_size):
+        for chat_id, mid, generation in await self.inbox.deletion_batch(self.cfg.campaign_batch_size):
             await self.mark_deleted(chat_id, mid)
-            await self.inbox.ack_deletion(chat_id, mid)
+            await self.inbox.ack_deletion(chat_id, mid, generation)
             processed = True
         return processed
 
@@ -602,11 +584,8 @@ class CommentCampaignService:
                 await self.fence(cid, owner, tx)
                 await self.campaigns.update_one({'_id': cid}, {'$set': {'sealed': True,
                     'status': 'processing', 'phase': 'plan'}}, session=tx)
-            async with self.inbox.settlement_barrier() as empty:
-                if not empty:
-                    await self.update_owned(camp, {'due_at': self.now()+timedelta(seconds=self.cfg.campaign_poll_seconds)})
-                    return
-                await asyncio.wait_for(self.transaction(seal), timeout=15)
+            if not await asyncio.wait_for(self.inbox.seal_if_empty(seal), timeout=15):
+                await self.update_owned(camp, {'due_at': self.now()+timedelta(seconds=self.cfg.campaign_poll_seconds)})
         elif camp['phase'] == 'plan':
             await self.plan_batch(cid, owner)
         elif camp['phase'] == 'payout':

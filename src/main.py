@@ -11,7 +11,6 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand
 from src.bot.handlers.donate import DonationPaymentMiddleware
-from src.bot.middlewares.comment_campaign import CommentCampaignMiddleware
 
 from src.bot import create_bot, create_dispatcher
 from src.bot.handlers import setup_routers
@@ -175,8 +174,6 @@ async def main() -> None:
     site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get('PORT', '10000')))
     await site.start()
 
-    dp.update.outer_middleware(CommentCampaignMiddleware(container.comment_campaign_service))
-
     # Future Bot API widget queries are extras until aiogram types catch up.
     dp.update.outer_middleware(HedgehogWidgetMiddleware(container))
 
@@ -214,6 +211,8 @@ async def main() -> None:
         if settings.native_widget_transport == 'mtproto':
             from src.infra.mtproto.widgets import MtprotoWidgets
             container.native_widget_transport = await MtprotoWidgets.start(container, bot.id)
+        from src.bot.campaign_polling import install_campaign_admission
+        install_campaign_admission(dp, container.comment_campaign_service)
         logger.info("🔄 Starting polling...")
         await dp.start_polling(
             bot,

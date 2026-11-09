@@ -3,7 +3,6 @@ import pytest
 
 from src.bot.middlewares.comment_campaign import CommentCampaignMiddleware
 from src.services.comment_campaign_service import CommentCampaignService
-from src.infra.comment_campaign_inbox import CampaignInbox
 from tests.campaign_support import FakeDB, Harness
 
 
@@ -50,41 +49,13 @@ async def test_capture_durable_before_game_handler_and_worker_stops(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_disk_failure_is_not_silently_acknowledged(tmp_path):
+async def test_mongo_failure_is_not_silently_acknowledged(tmp_path):
     env=await Harness(FakeDB(),tmp_path).open()
-    env.service.inbox.put=AsyncMock(side_effect=OSError('disk unavailable'))
+    env.service.inbox.put=AsyncMock(side_effect=OSError('Mongo unavailable'))
     handler=AsyncMock()
     with pytest.raises(OSError): await CommentCampaignMiddleware(env.service)(handler,env.root(),{})
     handler.assert_not_called()
     await env.close()
-
-
-@pytest.mark.parametrize('path',['',':memory:','  '])
-def test_nonpersistent_inbox_path_refused(path):
-    with pytest.raises(ValueError): CampaignInbox(path,999)
-
-
-@pytest.mark.asyncio
-async def test_barrier_blocks_other_connection_without_losing_capture(tmp_path):
-    import asyncio
-    from types import SimpleNamespace
-    a=CampaignInbox(str(tmp_path/'shared.sqlite3'),999)
-    b=CampaignInbox(str(tmp_path/'shared.sqlite3'),999)
-    await a.open();await b.open()
-    await b.db.execute('PRAGMA busy_timeout=1')
-    event=SimpleNamespace(update_id=123,model_dump_json=lambda **kw:'{}')
-    try:
-        assert a.identity==b.identity
-        async with a.settlement_barrier() as empty:
-            assert empty
-            pending=asyncio.create_task(b.put(event))
-            await asyncio.sleep(.1)
-            assert not pending.done()
-        await asyncio.wait_for(pending,5)
-        assert await a.pending()
-    finally:
-        await a.close();await b.close()
-
 
 @pytest.mark.asyncio
 async def test_short_notifications_and_escaped_mention(tmp_path):

@@ -75,7 +75,7 @@ class Collection:
     async def update_one(self,query,updates,**kwargs):
         row=await self.find_one_and_update(query,updates,**kwargs)
         return NS(matched_count=int(row is not None))
-    async def delete_many(self,query):
+    async def delete_many(self,query,**kwargs):
         for key,row in list(self.docs.items()):
             if matches(row,query): del self.docs[key]
 
@@ -109,7 +109,7 @@ class Harness:
         self.db=db
         self.clock=[datetime(2026,11,6,12,tzinfo=UTC)]
         self.cfg=Settings(_env_file=None,BOT_TOKEN='123456:TEST',COMMENT_CAMPAIGNS_ENABLED=True,
-            TARGET_CHANNEL_ID=-100111,DISCUSSION_CHAT_ID=-100222,CAMPAIGN_INBOX_PATH=str(tmp_path/'inbox.sqlite3'),
+            TARGET_CHANNEL_ID=-100111,DISCUSSION_CHAT_ID=-100222,
             CAMPAIGN_BATCH_SIZE=2,CAMPAIGN_RETRY_SECONDS=1,CAMPAIGN_SETTLEMENT_GRACE_SECONDS=0,**options)
         self.container=NS(settings=self.cfg,mongo_client=NS(database=db),user_service=UserService(NS(database=db)))
         self.service=CommentCampaignService(self.container,clock=lambda:self.clock[0])
@@ -403,42 +403,28 @@ class CampaignCases:
         assert camp['eligible_count']==1 and await env.wallet(7)==2000
         assert await env.db.comment_campaigns.count_documents({})==1
 
-    async def test_distinct_inbox_disables_second_worker(self,campaign_env,tmp_path):
+    async def test_workers_share_mongo_inbox_and_identity(self,campaign_env):
         env=campaign_env
-        import pytest
-        from src.services.comment_campaign_service import InboxMismatch
         other=CommentCampaignService(env.container,clock=lambda:env.clock[0])
-        env.cfg.campaign_inbox_path=str(tmp_path/'different.sqlite3')
+        await other.initialize(env.bot)
         try:
-            with pytest.raises(InboxMismatch):
-                await other.start(env.bot)
-            assert not other.ready and other.task is None
-            assert env.service.ready
-        finally:
-            await other.stop()
+            assert other.inbox.identity==env.service.inbox.identity
+            await env.service.capture(env.root())
+            assert await other.inbox.pending()
+            await other.tick()
+            assert not await env.service.inbox.pending()
+        finally: await other.stop()
 
-    async def test_capture_cannot_commit_between_empty_check_and_seal(self,campaign_env):
+    async def test_pending_ingress_prevents_sealing(self,campaign_env):
         env=campaign_env;await env.begin()
         env.clock[0]+=timedelta(hours=4,seconds=1)
-        reached=asyncio.Event();release=asyncio.Event()
-        original=env.service.transaction
-        async def paused(callback):
-            reached.set();await release.wait()
-            return await original(callback)
-        with patch.object(env.service,'transaction',side_effect=paused):
-            closing=asyncio.create_task(env.service.tick())
-            await asyncio.wait_for(reached.wait(),5)
-            entering=asyncio.create_task(env.service.capture(env.comment(101,date=env.clock[0]-timedelta(hours=1))))
-            try:
-                await asyncio.sleep(.05)
-                assert not entering.done(), 'Admission must wait for settlement barrier'
-            finally:
-                release.set()
-                await asyncio.wait_for(closing,5)
-                await asyncio.wait_for(entering,5)
-        assert (await env.db.comment_campaigns.find_one({'_id':'-100111:1'}))['sealed']
-        # Updates admitted after the cutoff do not retroactively change a draw.
-        assert await env.service.inbox.pending()
+        await env.service.capture(env.comment(101,date=env.clock[0]-timedelta(hours=1)))
+        called=AsyncMock()
+        assert not await env.service.inbox.seal_if_empty(called)
+        called.assert_not_called()
+        await env.service.drain_inbox()
+        assert await env.service.inbox.seal_if_empty(called)
+        called.assert_awaited_once()
 
     async def test_bank_conservation_and_replay(self,campaign_env):
         env=campaign_env;await env.profile(7);await env.begin()
@@ -656,3 +642,78 @@ class CampaignCases:
         assert row['final_delivery_status']=='blocked' and row['payouts_done']
         env.bot.edit_message_text.assert_not_awaited()
         assert await env.wallet(7)==2000
+
+    async def test_preserves_existing_identity_and_mongo_campaign_data(self,campaign_env):
+        env=campaign_env;camp=await env.begin()
+        old=env.service.inbox.identity
+        other=CommentCampaignService(env.container,clock=lambda:env.clock[0])
+        await other.initialize(env.bot)
+        try:
+            assert other.inbox.identity==old
+            row=await env.db.settings.find_one({'_id':other.inbox.key})
+            assert row['identity']==old and row['backend']=='mongodb'
+            assert (await env.db.comment_campaigns.find_one({'_id':camp['_id']}))==camp
+        finally: await other.stop()
+
+    async def test_mongo_inbox_dedup_restart_and_deletion_generation(self,campaign_env):
+        env=campaign_env
+        event=env.root()
+        await env.service.capture(event);await env.service.capture(event)
+        rows=await env.service.inbox.batch(100)
+        assert len(rows)==1 and rows[0][1]==event.model_dump_json(exclude_none=True)
+        await env.service.inbox.deleted(-100222,101)
+        chat,mid,old= (await env.service.inbox.deletion_batch(100))[0]
+        await env.service.inbox.deleted(chat,mid)
+        await env.service.inbox.ack_deletion(chat,mid,old)
+        assert len(await env.service.inbox.deletion_batch(100))==1
+        chat,mid,current= (await env.service.inbox.deletion_batch(100))[0]
+        await env.service.inbox.ack_deletion(chat,mid,current)
+        await env.service.inbox.ack(event.update_id)
+        assert not await env.service.inbox.pending()
+
+    async def test_mongo_fence_serializes_admission_and_sealing(self,campaign_env):
+        env=campaign_env;reached=asyncio.Event();release=asyncio.Event()
+        async def sealing(tx):
+            reached.set();await release.wait()
+        closing=asyncio.create_task(env.service.inbox.seal_if_empty(sealing))
+        await asyncio.wait_for(reached.wait(),5)
+        entering=asyncio.create_task(env.service.capture(env.root()))
+        try:
+            await asyncio.sleep(.1)
+            assert not entering.done()
+        finally:
+            release.set()
+            assert await asyncio.wait_for(closing,10)
+            await asyncio.wait_for(entering,10)
+        assert await env.service.inbox.pending()
+
+    async def test_existing_legacy_binding_is_adopted_without_reset(self,campaign_env):
+        env=campaign_env
+        await env.db.settings.update_one({'_id':env.service.inbox.key},
+            {'$set':{'identity':'legacy-sqlite-uuid','backend':'sqlite','custom_field':'keep'}})
+        other=CommentCampaignService(env.container,clock=lambda:env.clock[0])
+        await other.initialize(env.bot)
+        try:
+            row=await env.db.settings.find_one({'_id':other.inbox.key})
+            assert other.inbox.identity=='legacy-sqlite-uuid'
+            assert row['custom_field']=='keep' and row['backend']=='mongodb'
+            await env.service.capture(env.root())
+            await other.stop()
+            await other.initialize(env.bot)
+            assert await other.inbox.pending()
+            await other.tick()
+            assert await env.db.comment_campaigns.count_documents({})==1
+        finally: await other.stop()
+
+    async def test_failed_ack_does_not_remove_durable_update(self,campaign_env):
+        env=campaign_env;await env.service.capture(env.root())
+        original=env.service.inbox.fence
+        async def abort(tx):
+            await original(tx)
+            raise RuntimeError('transaction failed')
+        import pytest
+        with patch.object(env.service.inbox,'fence',side_effect=abort):
+            with pytest.raises(RuntimeError): await env.service.inbox.ack(env.root().update_id)
+        assert await env.service.inbox.pending()
+        await env.service.tick()
+        assert not await env.service.inbox.pending()

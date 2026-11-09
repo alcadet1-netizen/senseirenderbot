@@ -53,7 +53,6 @@ class Settings(BaseSettings):
     winner_reward: int = Field(default=2000, ge=0, le=1_000_000_000, alias='WINNER_REWARD')
     reward_per_unique_user: bool = Field(default=False, alias='REWARD_PER_UNIQUE_USER')
     winner_reward_mode: Literal['total', 'bonus'] = Field(default='total', alias='WINNER_REWARD_MODE')
-    campaign_inbox_path: str = Field(default='var/comment_campaign_inbox.sqlite3', alias='CAMPAIGN_INBOX_PATH')
     campaign_poll_seconds: float = Field(default=5, ge=.1, le=60, alias='CAMPAIGN_POLL_SECONDS')
     campaign_lease_seconds: int = Field(default=180, ge=60, le=3600, alias='CAMPAIGN_LEASE_SECONDS')
     campaign_retry_seconds: int = Field(default=60, ge=1, le=3600, alias='CAMPAIGN_RETRY_SECONDS')
