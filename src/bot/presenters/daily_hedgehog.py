@@ -88,5 +88,10 @@ async def send_reward_notice(message, user, container, result, session):
     if time.time() >= active['deadline']:
         caption = reward_caption + '\n\nВремя ласки вышло. До завтра ♡'
         markup = None
-    await message.answer_photo(picture(container, str(user.id)), caption=caption, reply_markup=markup, parse_mode=None)
+    photo = picture(container, str(user.id))
+    # Both free and Stars delivery pass here. Claim in Mongo, not a process lock:
+    # another update/process may already be sending this session's notice.
+    if not await container.daily_pet_service.reserve_notice(session['token'], user.id):
+        return
+    await message.answer_photo(photo, caption=caption, reply_markup=markup, parse_mode=None)
     await container.daily_pet_service.mark_delivered(session['token'], user.id)

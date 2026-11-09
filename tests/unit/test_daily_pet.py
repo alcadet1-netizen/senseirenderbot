@@ -251,7 +251,7 @@ async def test_expired_private_link_can_open_readonly_result_without_new_coins()
 
 
 @pytest.mark.asyncio
-async def test_failed_photo_delivery_can_retry_without_duplicate_reward_or_new_window():
+async def test_ambiguous_photo_delivery_does_not_retry_or_renew_window():
     from aiogram.exceptions import TelegramNetworkError
     from aiogram.methods import SendPhoto
     from src.bot.presenters.hedgehog_presenter import launch_hedgehog
@@ -271,10 +271,9 @@ async def test_failed_photo_delivery_can_retry_without_duplicate_reward_or_new_w
         await launch_hedgehog(message, user, container)
     assert db.users.docs[7]['coins'] == before
     assert db.users.docs[7]['daily_pet']['deadline'] == 115
-    assert message.answer_photo.call_args.kwargs['reply_markup'] is None
-    caption = message.answer_photo.call_args.kwargs['caption']
-    assert 'Время ласки вышло' in caption
-    assert 'на переход' not in caption and 'Принятый тап' not in caption
+    message.answer_photo.assert_awaited_once()
+    assert db.users.docs[7]['daily_pet']['notice_state'] == 'sending'
+    assert not db.users.docs[7]['daily_pet']['delivered']
 
 
 @pytest.mark.asyncio
@@ -300,3 +299,60 @@ def test_hedgehog_uses_single_canvas_without_css_transform_geometry():
         assert "getContext('2d')" in html and 'bezierCurveTo' in html
         assert "paint(frame%2?1:2)" in html
         assert len(zlib.compress(html.encode(), 9)) <= 3900
+
+
+@pytest.mark.asyncio
+async def test_notice_reservation_survives_restart_and_deadline():
+    db, service, _, mongo = setup()
+    result, token = await issue(service)
+    coins = db.users.docs[7]['coins']
+    other = DailyPetService(mongo, service.daily)
+    claims = await asyncio.gather(service.reserve_notice(token, 7), other.reserve_notice(token, 7))
+    assert sum(claims) == 1
+    # Do not release a send claim even after the play window expires or a restart.
+    with patch('src.services.daily_pet_service.time.time', return_value=1000):
+        assert not await DailyPetService(mongo, service.daily).reserve_notice(token, 7)
+    assert db.users.docs[7]['coins'] == coins
+    await service.mark_delivered(token, 7)
+    assert (await service.owned(token, 7))['notice_state'] == 'sent'
+    assert not await other.reserve_notice(token, 7)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_reward_notices_send_one_photo_even_if_first_send_slow():
+    from src.bot.presenters.daily_hedgehog import send_reward_notice
+    db, service, container, mongo = setup()
+    result, session = await service.claim(7)
+    user = SimpleNamespace(id=7, first_name='User')
+    started, release = asyncio.Event(), asyncio.Event()
+    async def send(*args, **kwargs):
+        started.set()
+        await release.wait()
+    message = SimpleNamespace(bot=SimpleNamespace(me=AsyncMock(return_value=SimpleNamespace(username='bot'))),
+                              answer_photo=AsyncMock(side_effect=send))
+    first = asyncio.create_task(send_reward_notice(message,user,container,result,session))
+    await asyncio.wait_for(started.wait(), 2)
+    # A second worker sees the same session while Telegram hasn't replied yet.
+    second_container = SimpleNamespace(**vars(container))
+    second_container.daily_pet_service = DailyPetService(mongo,service.daily)
+    await send_reward_notice(message,user,second_container,result,session)
+    release.set()
+    await first
+    message.answer_photo.assert_awaited_once()
+    assert (await service.owned(session['token'],7))['delivered']
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_photo_failure_never_resends_same_notice():
+    from src.bot.presenters.daily_hedgehog import send_reward_notice
+    db, service, container, _ = setup()
+    result, session = await service.claim(7)
+    coins = db.users.docs[7]['coins']
+    user = SimpleNamespace(id=7, first_name='User')
+    message = SimpleNamespace(bot=SimpleNamespace(me=AsyncMock(return_value=SimpleNamespace(username='bot'))),
+                              answer_photo=AsyncMock(side_effect=TimeoutError()))
+    with pytest.raises(TimeoutError):
+        await send_reward_notice(message,user,container,result,session)
+    await send_reward_notice(message,user,container,result,session)
+    message.answer_photo.assert_awaited_once()
+    assert db.users.docs[7]['coins'] == coins
