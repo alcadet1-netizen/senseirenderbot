@@ -194,6 +194,8 @@ async def main() -> None:
     dp.message.middleware(UserActivityMiddleware(container))
     dp.message.middleware(ChatActivityMiddleware())
     dp.message.middleware(DigestMiddleware(container))
+    from src.bot.middlewares.popugai import PopugaiMiddleware
+    dp.message.middleware(PopugaiMiddleware(container))
     dp.message.middleware(CommandCleanupMiddleware())
     from src.bot.handlers.fly import FlyReactionMiddleware
     dp.message.middleware(FlyReactionMiddleware(container))
@@ -214,6 +216,7 @@ async def main() -> None:
     # Startup failures must also close the health server and DB resources.
     try:
         await on_startup(bot, container)
+        await container.popugai_service.ensure_indexes()
         from src.services.fly_service import FlyService
         await FlyService(container).ensure_indexes()
         if settings.native_widget_transport == 'mtproto':

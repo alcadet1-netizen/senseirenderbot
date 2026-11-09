@@ -2,6 +2,8 @@
 ⚙️ Обработчики настроек чата.
 """
 
+import math
+
 from aiogram import Router, F, Bot
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
@@ -168,7 +170,7 @@ async def cmd_popugai(message: Message, command: CommandObject, bot: Bot, contai
             )
             return
 
-        percent = int(chance * 100)
+        percent = f'{chance * 100:g}'
         await message.answer(
             f"🦜 Попугай включен. Текущий шанс ответа: <b>{percent}%</b>.\n\n"
             "Измени его командой /popugai X (в процентах) или выключи /popugai off.",
@@ -196,26 +198,16 @@ async def cmd_popugai(message: Message, command: CommandObject, bot: Bot, contai
         )
         return
 
-    if value <= 0:
-        await service.set_reply_chance(chat_id, 0.0)
-        await message.answer("🦜 Попугай в этом чате <b>выключен</b>.", parse_mode="HTML")
+    if not math.isfinite(value):
+        await message.answer('Укажите конечное число процентов от 0 до 100.', parse_mode=None)
         return
-
-    if value > 100:
-        value = 100.0
-
-    if value > 1:
-        # Treat as percentage (e.g., 15 -> 0.15)
-        chance = value / 100.0
-        percent = int(value)
-    else:
-        # Treat as decimal probability (e.g., 0.15 -> 0.15)
-        chance = value
-        percent = int(chance * 100)
+    chance = max(0.0, min(100.0, value)) / 100.0
+    percent = f'{chance * 100:g}'
 
     await service.set_reply_chance(chat_id, chance)
     await message.answer(
         f"🦜 Попугай в этом чате включен.\n"
-        f"Текущий шанс ответа: <b>{percent}%</b>.",
+        f"Текущий шанс ответа: <b>{percent}%</b>.\n"
+        "Запоминаю стикеры и GIF этого чата и отвечаю ими на сообщения.",
         parse_mode="HTML"
     )
