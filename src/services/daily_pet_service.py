@@ -78,6 +78,24 @@ class DailyPetService:
             return_document=ReturnDocument.AFTER)
         return saved['daily_pet'] if saved else await self.owned(token, user_id)
 
+    async def reserve_notice(self, token, user_id):
+        """At-most-once send admission, persisted before contacting Telegram.
+
+        Do not expire this claim: a timeout/crash may follow a successful send.
+        The existing token is the idempotency key; rewards are unaffected.
+        """
+        for _ in range(8):
+            session = await self.owned(token, user_id)
+            if session.get('delivered') or session.get('notice_state'):
+                return False
+            saved = await self.users.find_one_and_update(
+                {'id': user_id, 'daily_pet': session},
+                {'$set': {'daily_pet': {**session, 'notice_state': 'sending'}}},
+                return_document=ReturnDocument.AFTER)
+            if saved:
+                return True
+        raise GameError('Уведомление готовится. Повторное начисление не выполняется.')
+
     async def mark_delivered(self, token, user_id):
         for _ in range(8):
             session = await self.owned(token, user_id)
@@ -85,7 +103,7 @@ class DailyPetService:
                 return
             saved = await self.users.find_one_and_update(
                 {'id': user_id, 'daily_pet': session},
-                {'$set': {'daily_pet': {**session, 'delivered': True}}},
+                {'$set': {'daily_pet': {**session, 'delivered': True, 'notice_state': 'sent'}}},
                 return_document=ReturnDocument.AFTER)
             if saved:
                 return

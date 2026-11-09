@@ -1,0 +1,11 @@
+# One photo notice per hedgehog session
+
+Both free and Stars reward delivery call `send_reward_notice`. Previously they sent a photo before recording `daily_pet.delivered`. Concurrent callers or a retry after an ambiguous Telegram/network failure could send the same reward notice twice. The second attempt could show the expired caption: this does not imply that a timeout task sent it or that rewards were credited twice.
+
+Before `answer_photo`, `DailyPetService.reserve_notice` atomically compares and replaces the owned `daily_pet` session in MongoDB, setting `notice_state=sending`. Only one worker can win. The comparison includes the entire session, preserving concurrent tap changes through reread/retry. Existing `delivered=true` sessions are also excluded. Successful delivery sets `delivered=true` and `notice_state=sent`. Both free and paid sessions use the same admission method. No database migration or production mutation is required.
+
+The reservation has no lease expiry and is not automatically cleared after a failure or restart. Telegram sendPhoto has no caller-supplied idempotency key: after a timeout we cannot distinguish an accepted photo from an unsent one. This deliberately favors at-most-one application-level send attempt over guaranteed delivery. A crash between reservation and send may result in no photo. `notice_state=sending` is therefore pending-or-unknown, not proof of delivery. An operator must investigate it before any manual recovery; do not reset it blindly or recharge the user. Rewards remain credited and the original 15-second deadline is not renewed.
+
+No end-of-window message or timer is added. No changes to XP, bank funding, Stars prices, streaks, tap bonuses, native widgets, or existing photo artwork. Previously sent duplicate photos are not deleted. This protection cannot eliminate retries performed internally by transport infrastructure outside this application.
+
+Verification: unit tests with two service instances, blocked first send, ambiguous timeout, restart and expired deadline. CI uses a disposable real Mongo database to verify exactly one reservation winner among twenty service instances and unchanged balances. Live Telegram delivery is a separate deployment check.
