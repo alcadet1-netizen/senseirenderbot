@@ -11,7 +11,10 @@ from src.core.container import Container
 from src.core.constants import BOSSES
 from src.bot.presenters.boss_presenter import BossPresenter
 
+from src.bot.filters.admin import AdminFilter
 router = Router(name="boss_editor")
+router.message.filter(AdminFilter())
+router.callback_query.filter(AdminFilter())
 
 
 class BossEditorCallback(CallbackData, prefix="boss_edit"):
