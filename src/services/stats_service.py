@@ -31,94 +31,41 @@ class StatsService:
         self._cache_lock = asyncio.Lock()
 
     async def get_admin_stats(self) -> dict:
-        """Получить полную статистику для админа."""
-        # Check cache
-        now = datetime.now(timezone.utc).timestamp()
+        """One refresh per process; one users scan instead of three."""
         async with self._cache_lock:
-            if (self._admin_stats_cache is not None and
-                self._cache_timestamp is not None and
-                now - self._cache_timestamp < self._cache_ttl):
+            now = datetime.now(timezone.utc).timestamp()
+            if (self._admin_stats_cache is not None and self._cache_timestamp is not None
+                    and now - self._cache_timestamp < self._cache_ttl):
                 return self._admin_stats_cache
-
-        # Calculate stats
-        try:
-            # Total users
-            total_users = await self.users.count_documents({})
-
-            # Bank stats
-            bank_doc = await self.bank.find_one({"_id": "single"})
-            bank_balance = bank_doc.get("coins", 0.0) if bank_doc else 0.0
-            bank_stats = {
-                "balance": bank_balance,
-                "initial_coins": getattr(settings, 'bank_initial_coins', 1000000.0),
-                "total_emitted": 0,  # Would need to calculate from transactions
-                "total_withdrawn": 0  # Would need to calculate from transactions
-            }
-
-            # Circulation - total coins in users' hands (not in bank)
-            # We'll calculate this by summing all user coins
-            pipeline = [
-                {"$group": {"_id": None, "total": {"$sum": "$coins"}}}
-            ]
-            cursor = self.users.aggregate(pipeline)
-            result = await cursor.to_list(length=1)
-            total_user_coins = result[0]["total"] if result else 0
-
-            # For simplicity, we'll assume bank balance + user coins = total supply
-            # Circulation would be user coins
-            circulation = total_user_coins
-
-            # Total active (non-burned) tickets
-            total_tickets = await self.tickets.count_documents({"burned": False})
-
-            # Transaction stats by type
-            pipeline = [
-                {"$group": {"_id": "$tx_type", "count": {"$sum": 1}, "total_amount": {"$sum": "$coins_change"}}}
-            ]
-            cursor = self.transactions.aggregate(pipeline)
-            tx_stats_list = await cursor.to_list(length=None)
-            tx_stats = {}
-            for item in tx_stats_list:
-                tx_type = item["_id"] or "unknown"
-                tx_stats[tx_type] = {
-                    "count": item["count"],
-                    "total_amount": item["total_amount"]
-                }
-
-            # Total messages
-            pipeline = [
-                {"$group": {"_id": None, "total": {"$sum": "$messages_count"}}}
-            ]
-            cursor = self.users.aggregate(pipeline)
-            result = await cursor.to_list(length=1)
-            total_messages = result[0]["total"] if result else 0
-
-            stats = {
-                "users": {"total": total_users},
-                "bank": bank_stats,
-                "circulation": circulation,
-                "tickets": {"active": total_tickets},
-                "messages": {"total": total_messages},
-                "transactions": tx_stats,
-            }
-
-            # Update cache
-            self._admin_stats_cache = stats
-            self._cache_timestamp = now
-
-            return stats
-
-        except Exception as e:
-            logger.error(f"Error getting admin stats: {e}")
-            # Return empty stats on error
-            return {
-                "users": {"total": 0},
-                "bank": {"balance": 0, "initial_coins": 0, "total_emitted": 0, "total_withdrawn": 0},
-                "circulation": 0,
-                "tickets": {"active": 0},
-                "messages": {"total": 0},
-                "transactions": {},
-            }
+            try:
+                users = await self.users.aggregate([{'$group': {
+                    '_id': None, 'count': {'$sum': 1}, 'coins': {'$sum': '$coins'},
+                    'messages': {'$sum': '$messages_count'}}}]).to_list(length=1)
+                totals = users[0] if users else {}
+                bank = await self.bank.find_one({'_id': 'single'}) or {}
+                tickets = await self.tickets.count_documents({'burned': False})
+                rows = await self.transactions.aggregate([{'$group': {
+                    '_id': '$tx_type', 'count': {'$sum': 1},
+                    'total_amount': {'$sum': '$coins_change'}}}]).to_list(length=None)
+                stats = {
+                    'users': {'total': totals.get('count', 0)},
+                    'bank': {'balance': bank.get('coins', 0.0),
+                             'initial_coins': getattr(settings, 'bank_initial_coins', 1000000.0),
+                             'total_emitted': 0, 'total_withdrawn': 0},
+                    'circulation': totals.get('coins', 0),
+                    'tickets': {'active': tickets},
+                    'messages': {'total': totals.get('messages', 0)},
+                    'transactions': {row['_id'] or 'unknown': {
+                        'count': row['count'], 'total_amount': row['total_amount']} for row in rows}}
+                self._admin_stats_cache = stats
+                self._cache_timestamp = datetime.now(timezone.utc).timestamp()
+                return stats
+            except Exception:
+                logger.error('Admin statistics refresh failed', exc_info=True)
+                # Retain existing API contract, but never cache a failed refresh.
+                return {'users': {'total': 0}, 'bank': {'balance': 0, 'initial_coins': 0,
+                    'total_emitted': 0, 'total_withdrawn': 0}, 'circulation': 0,
+                    'tickets': {'active': 0}, 'messages': {'total': 0}, 'transactions': {}}
 
     async def reset_new_season(self) -> dict:
         """Сброс сезона."""

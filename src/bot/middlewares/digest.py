@@ -25,7 +25,8 @@ class DigestMiddleware(BaseMiddleware):
         start = time.time()
         logger.info(f"[DIGEST] Start processing message chat_id={event.chat.id}")
         # Only handle text messages in groups/supergroups
-        if isinstance(event, Message) and event.text and event.chat.type in ("group", "supergroup"):
+        if (isinstance(event, Message) and event.text and event.from_user and not event.sender_chat
+                and event.chat.type in ("group", "supergroup")):
             # Check if allowed chats are set and if current chat is allowed
             allowed_chats = self.container.settings.allowed_chats
             if not allowed_chats or event.chat.id in allowed_chats:

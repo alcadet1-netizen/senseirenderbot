@@ -54,6 +54,7 @@ class EconomyService:
         # For now, we use asyncio.Lock per key.
         # Cache for total coins in circulation to avoid heavy aggregation on every message
         self._total_circulation_cache = (0.0, 0)  # (value, expiry_timestamp)
+        self._circulation_lock = asyncio.Lock()
         self._cache_ttl = 10.0  # seconds
 
     def _get_lock(self, key: str) -> asyncio.Lock:
@@ -304,18 +305,18 @@ class EconomyService:
         if now < expiry:
             return cached_value
 
-        # Cache expired or empty, compute new value
-        # We'll use the aggregation pipeline to sum the coins field in users collection
-        pipeline = [
-            {"$group": {"_id": None, "total": {"$sum": "$coins"}}}
-        ]
-        cursor = self.users.aggregate(pipeline)
-        result = await cursor.to_list(length=1)
-        total = result[0].get("total", 0.0) if result else 0.0
-
-        # Update cache
-        self._total_circulation_cache = (total, now + self._cache_ttl)
-        return total
+        # Single-flight: concurrent messages share one expensive users scan.
+        # This does not synchronize money writes or change the existing 10s TTL.
+        async with self._circulation_lock:
+            now = time.time()
+            cached_value, expiry = self._total_circulation_cache
+            if now < expiry:
+                return cached_value
+            pipeline = [{"$group": {"_id": None, "total": {"$sum": "$coins"}}}]
+            result = await self.users.aggregate(pipeline).to_list(length=1)
+            total = result[0].get("total", 0.0) if result else 0.0
+            self._total_circulation_cache = (total, time.time() + self._cache_ttl)
+            return total
 
     async def _generate_ticket_code(self) -> str:
         """Генерировать уникальный код билета."""

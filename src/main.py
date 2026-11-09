@@ -217,6 +217,7 @@ async def main() -> None:
     try:
         await on_startup(bot, container)
         await container.popugai_service.ensure_indexes()
+        await container.throttle_service.ensure_indexes()
         from src.services.fly_service import FlyService
         await FlyService(container).ensure_indexes()
         if settings.native_widget_transport == 'mtproto':
