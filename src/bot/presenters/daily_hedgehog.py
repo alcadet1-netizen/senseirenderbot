@@ -4,7 +4,7 @@ import asyncio
 import time
 
 
-from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 
 from src.bot.native_widgets import send_native_widget
 from src.widgets.daily_pet import to_daily_pet_html
@@ -44,7 +44,7 @@ async def send_daily_hedgehog(message, user, container):
         await message.answer('🦔 Бесплатная Ежа сегодня уже получена.\n'
                              'Ещё попытки: 1 ⭐ → 5 ⭐ → 10 ⭐ → 20 ⭐…\n'
                              'Каждая даёт полную награду; серия растёт раз в сутки. Цены сбрасываются в 00:00 UTC.',
-                             reply_markup=repeat_keyboard(), parse_mode=None)
+                             reply_markup=repeat_keyboard(user.id), parse_mode=None)
     except GameError as exc:
         await message.answer(str(exc), parse_mode=None)
 
@@ -72,7 +72,7 @@ async def open_pet(message, user, container, token):
         await message.answer('Не удалось подготовить личного ежа. Основная награда уже начислена.', parse_mode=None)
 
 
-async def send_reward_notice(message, user, container, result, session):
+async def send_reward_notice(message, user, container, result, session, *, notice=None):
     me = await message.bot.me()
     link = f'https://t.me/{me.username}?start=pet_{session["token"]}'
     reward_caption = (f'🦔 {user.first_name or "Друг"}, награда ваша!\n'
@@ -93,5 +93,10 @@ async def send_reward_notice(message, user, container, result, session):
     # another update/process may already be sending this session's notice.
     if not await container.daily_pet_service.reserve_notice(session['token'], user.id):
         return
-    await message.answer_photo(photo, caption=caption, reply_markup=markup, parse_mode=None)
+    if notice:
+        await message.bot.edit_message_media(
+            chat_id=notice['chat_id'], message_id=notice['message_id'],
+            media=InputMediaPhoto(media=photo, caption=caption, parse_mode=None), reply_markup=markup)
+    else:
+        await message.answer_photo(photo, caption=caption, reply_markup=markup, parse_mode=None)
     await container.daily_pet_service.mark_delivered(session['token'], user.id)
