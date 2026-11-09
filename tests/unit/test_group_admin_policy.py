@@ -99,3 +99,98 @@ async def test_forbidden_membership_lookup_cached_without_reaction():
     for _ in range(3): await GroupAdminMiddleware()(handler,update(),{'bot':b})
     handler.assert_not_awaited()
     b.get_chat_member.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_cold_cache_uses_one_lookup():
+    import asyncio
+    from src.bot.middlewares.group_admin import GroupAdminAccess
+    access = GroupAdminAccess()
+    started, release = asyncio.Event(), asyncio.Event()
+    async def lookup(*args):
+        started.set()
+        await release.wait()
+        return NS(status='administrator')
+    b = bot('administrator'); b.get_chat_member.side_effect = lookup
+    tasks = [asyncio.create_task(access.allowed(b, -100222)) for _ in range(40)]
+    await started.wait()
+    release.set()
+    assert all(await asyncio.gather(*tasks))
+    b.get_chat_member.assert_awaited_once()
+    assert not access._locks  # no permanent per-chat lock accumulation
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('action', ['deny', 'invalidate'])
+async def test_membership_change_during_lookup_cannot_cache_stale_admin(action):
+    import asyncio
+    from src.bot.middlewares.group_admin import GroupAdminAccess
+    access = GroupAdminAccess()
+    started, release = asyncio.Event(), asyncio.Event()
+    async def lookup(*args):
+        started.set()
+        await release.wait()
+        return NS(status='administrator')
+    b = bot('administrator'); b.get_chat_member.side_effect = lookup
+    task = asyncio.create_task(access.allowed(b, -100222))
+    await started.wait()
+    getattr(access, action)(b.id, -100222)
+    release.set()
+    assert await task is False
+    if action == 'deny':
+        assert await access.allowed(b, -100222) is False
+        b.get_chat_member.assert_awaited_once()
+    else:
+        assert (b.id, -100222) not in access.cache
+
+
+@pytest.mark.asyncio
+async def test_transient_failure_backoff_and_recovery():
+    from src.bot.middlewares.group_admin import GroupAdminAccess
+    now = [0]
+    access = GroupAdminAccess(clock=lambda: now[0])
+    b = bot('administrator'); b.get_chat_member.side_effect = TimeoutError()
+    with pytest.raises(TimeoutError):
+        await access.allowed(b, -100222)
+    for _ in range(20):
+        assert not await access.allowed(b, -100222)
+    b.get_chat_member.assert_awaited_once()
+    now[0] = 5
+    b.get_chat_member.side_effect = None
+    assert await access.allowed(b, -100222)
+
+
+@pytest.mark.asyncio
+async def test_cache_lru_bound_and_ttl_expiry():
+    from src.bot.middlewares.group_admin import GroupAdminAccess
+    now = [0]
+    access = GroupAdminAccess(max_entries=2, clock=lambda: now[0])
+    b = bot('administrator')
+    assert await access.allowed(b, -1)
+    assert await access.allowed(b, -2)
+    assert await access.allowed(b, -1)
+    assert await access.allowed(b, -3)
+    assert len(access.cache) == 2 and (b.id, -2) not in access.cache
+    now[0] = 60
+    b.get_chat_member.return_value = NS(status='member')
+    assert not await access.allowed(b, -1)
+    assert not access._locks
+
+
+@pytest.mark.asyncio
+async def test_cancelled_lookup_does_not_block_following_check():
+    import asyncio
+    from src.bot.middlewares.group_admin import GroupAdminAccess
+    access = GroupAdminAccess()
+    started = asyncio.Event()
+    async def lookup(*args):
+        started.set()
+        await asyncio.Event().wait()
+    b = bot('administrator'); b.get_chat_member.side_effect = lookup
+    task = asyncio.create_task(access.allowed(b, -100222))
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    b.get_chat_member.side_effect = None
+    assert await asyncio.wait_for(access.allowed(b, -100222), timeout=1)
