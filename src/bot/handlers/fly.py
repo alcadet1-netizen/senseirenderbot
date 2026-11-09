@@ -38,7 +38,7 @@ async def command(message, container):
             enabled = False
         await message.answer(('Редкие реплики включены.' if enabled else 'Редкие реплики выключены.') +
             (' Глобальный выключатель активен; настройка чата сохранена.' if globally_disabled else '') +
-            ' Лимит: 8 в сутки, пауза 15 минут. Модель внимания, не настоящий мозг мухи.', parse_mode=None)
+            ' Редкие ИИ-ответы через API «Сенсей мудрец»: выбранное сообщение передаётся провайдеру Groq без истории и имени автора. Лимит: 8 попыток в сутки, пауза 15 минут.', parse_mode=None)
         return
     try:
         if message.chat.type in {'group', 'supergroup'}:
@@ -67,7 +67,7 @@ class FlyReactionMiddleware(BaseMiddleware):
     async def __call__(self, handler, event, data):
         result = await handler(event, data)
         try:
-            if not self.service.container.settings.fly_reactions_enabled:
+            if data.get('automatic_reply_attempted') or not self.service.container.settings.fly_reactions_enabled:
                 return result
             from src.services.fly_service import features
             if not features(event) or not await group_admin_access.allowed(event.bot, event.chat.id):
@@ -80,7 +80,15 @@ class FlyReactionMiddleware(BaseMiddleware):
                 return result
             reserved = await self.service.reserve(event)
             if reserved:
-                key, text = reserved
+                key, _ = reserved
+                text = await self.service.container.digest_service.chat_sage_reply(event.text)
+                if not text:
+                    await self.service.db.fly_decisions.update_one({'_id': key}, {'$set': {'status': 'ai_silent_or_unavailable'}})
+                    return result
+                # Permissions can change while the external model is thinking.
+                if not await group_admin_access.allowed(event.bot, event.chat.id):
+                    await self.service.db.fly_decisions.update_one({'_id': key}, {'$set': {'status': 'access_lost'}})
+                    return result
                 try:
                     await event.answer(text, parse_mode=None,
                         reply_parameters=ReplyParameters(message_id=event.message_id, allow_sending_without_reply=False))
