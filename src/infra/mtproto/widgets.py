@@ -180,7 +180,7 @@ class MtprotoWidgets:
         async with self._connection_lock:
             await self.client.disconnect()
 
-    async def send_widget(self, chat_id, html, *, allow_queries=True):
+    async def send_widget(self, chat_id, html, *, allow_queries=True, caption='🦔 Ёжик · ежедневный бонус'):
         import zlib
         encoded = html.encode('utf-8')
         if '\x00' in html or len(encoded) > 32768 or len(zlib.compress(encoded, 9)) > 4096:
@@ -204,7 +204,7 @@ class MtprotoWidgets:
         request = self.functions.messages.SendMediaRequest(
             peer=peer, media=self.types.InputMediaWidget(
                 width=340, height=0, html=html, allow_queries=allow_queries, shared_widget=False,
-            ), message='🦔 Ёжик · ежедневный бонус', random_id=secrets.randbits(63) or 1,
+            ), message=caption, random_id=secrets.randbits(63) or 1,
             noforwards=False,
         )
         return await self._request(request, 'send_media')

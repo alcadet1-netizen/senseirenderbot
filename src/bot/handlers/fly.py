@@ -46,9 +46,9 @@ async def command(message, container):
                 await message.answer('Открой личку бота и вызови /senseifly от своего аккаунта.', parse_mode=None)
                 return
             await send_private_widget_to_chat(message.bot, container, message.from_user.id,
-                                              message.chat.id, fly_html())
+                                              message.chat.id, fly_html(), caption='Sensei FLY LAB')
         else:
-            await send_native_widget(message.bot, container, message.chat.id, fly_html(), allow_queries=False)
+            await send_native_widget(message.bot, container, message.chat.id, fly_html(), allow_queries=False, caption='Sensei FLY LAB')
     except WIDGET_TRANSPORT_ERRORS as exc:
         failure = describe_failure(exc, message.bot)
         await message.answer(
