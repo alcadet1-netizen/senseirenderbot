@@ -16,7 +16,8 @@ TOPICS = {
     'crypto': (r'\b(?:крипт\w*|биткоин\w*|грам|gram|bitcoin|ton)\b',
                'А что привлекло внимание: технология или обсуждение вокруг неё?', 'Сенсей наблюдает. Громкое обсуждение — ещё не доказательство.'),
 }
-SENSITIVE = re.compile(r'смерт|умер|болез|больниц|суицид|уби[йт]|войн|насили|паспорт|телефон|адрес|плат[её]ж|оплат|донат|кошел|seed|парол|банк|ненави|сука|бляд|хуй', re.I)
+# Filter likely credentials/contact data, not conversation topics or profanity.
+PRIVATE = re.compile(r'(?i)(?:seed\s*(?:phrase|фраз)|парол[ья]\s*[:=]|api[_ -]?key\s*[:=]|sk-[a-z0-9]{12,}|\d{7,})')
 
 
 def features(message):
@@ -24,17 +25,16 @@ def features(message):
     user = message.from_user
     if (not user or user.is_bot or message.sender_chat or message.is_automatic_forward
             or getattr(message, 'forward_origin', None)
-            or any(e.type in {'url', 'text_link', 'mention', 'text_mention', 'bot_command', 'email', 'phone_number'}
+            or any(e.type in {'bot_command', 'email', 'phone_number'}
                    for e in (getattr(message, 'entities', None) or []))
-            or message.chat.type not in {'group', 'supergroup'} or not 20 <= len(text) <= 600
-            or '/' in text or '@' in text or re.search(r'\d{5,}|https?://|www\.', text)
-            or SENSITIVE.search(text)):
+            or message.chat.type not in {'group', 'supergroup'} or not text.strip()
+            or text.lstrip().startswith('/') or PRIVATE.search(text)):
         return None
+    digest = hashlib.sha256(' '.join(text.lower().split()).encode()).hexdigest()
     for topic, (pattern, question, remark) in TOPICS.items():
         if re.search(pattern, text, re.I):
-            digest = hashlib.sha256(' '.join(text.lower().split()).encode()).hexdigest()
             return topic, digest, question, remark
-    return None
+    return 'general', digest, '', ''
 
 
 class FlyService:
@@ -58,7 +58,7 @@ class FlyService:
             return None
         topic, digest, question, remark = signals
         now = self.clock()
-        # Sample once outside transaction retries. Only allowlisted themes are eligible.
+        # Sample once outside transaction retries; no topic allowlist.
         sampled = self.roll() < 150
         async def choose(tx):
             cfg = await self.db.fly_settings.find_one({'_id': message.chat.id}, session=tx)

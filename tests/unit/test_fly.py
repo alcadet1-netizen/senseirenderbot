@@ -61,10 +61,16 @@ async def test_concurrent_messages_only_one_reply_and_daily_limit():
     assert await s.reserve(message('Новый бот умеет что-нибудь интересное сегодня',mid=51,uid=501))
 
 
-@pytest.mark.parametrize('text', ['/senseifly', 'Номер телефона 1234567 и новый бот', 'Оплата за игру не проходит сегодня',
-    'Про смерть и про новую игру сегодня', 'Просто доброе утро всем участникам', 'https://example.com новый виджет'])
-def test_sensitive_unknown_commands_and_links_silent(text):
+@pytest.mark.parametrize('text', ['/senseifly', 'Номер телефона 1234567 и новый бот', 'пароль: секрет'])
+def test_commands_and_private_data_silent(text):
     assert features(message(text)) is None
+
+
+@pytest.mark.parametrize('text', ['Привет', 'Да ну нахуй!', 'Оплата за игру не проходит сегодня',
+    'Про смерть и про новую игру сегодня', 'Просто доброе утро всем участникам',
+    'https://example.com новый виджет', 'Как сварить суп?', 'a'*3000])
+def test_no_topic_or_short_message_allowlist(text):
+    assert features(message(text)) is not None
 
 
 def test_widget_is_small_offline_native_and_honest():
@@ -158,9 +164,10 @@ def test_forward_hidden_link_and_unicode_normalization():
     forwarded=msg.model_copy(update={'forward_origin':NS(type='user')})
     assert features(forwarded) is None
     hidden=msg.model_copy(update={'entities':[NS(type='text_link')]})
-    assert features(hidden) is None
-    assert features(message('Интересно как работает этот бот １２３４５６')) is None
-    assert features(message('Интересно как работает этот бот ／команда')) is None
+    assert features(hidden) is not None
+    assert features(message('Интересно как работает этот бот １２３４５６７')) is None
+    assert features(message('Интересно как работает этот бот ／команда')) is not None
+    assert features(message('／команда')) is None
 
 
 @pytest.mark.asyncio
