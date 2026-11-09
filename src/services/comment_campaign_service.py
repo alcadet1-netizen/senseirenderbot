@@ -129,7 +129,10 @@ class CommentCampaignService:
                 {'$setOnInsert': {'identity': self.inbox.identity}}, upsert=True,
                 return_document=ReturnDocument.AFTER)
             if binding['identity'] != self.inbox.identity:
-                raise InboxMismatch('Campaign workers require the same persistent inbox; different disk detected')
+                raise InboxMismatch(
+                    'Persistent campaign inbox does not match Mongo binding. Restore the original inbox '
+                    'on a persistent disk and check CAMPAIGN_INBOX_PATH; do not delete/rebind identity '
+                    'or reset rewards. Polling is refused to protect queued comments.')
         except BaseException:
             await self.inbox.close()
             raise
