@@ -1,3 +1,4 @@
+from aiogram.exceptions import TelegramBadRequest
 from aiogram import Router, Bot, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -8,7 +9,10 @@ from src.bot.utils import check_owner
 from src.services.broadcast_service import BroadcastMessage, MediaType
 from src.core.container import Container
 
+from src.bot.filters.admin import AdminFilter
 router = Router(name="broadcast")
+router.message.filter(AdminFilter())
+router.callback_query.filter(AdminFilter())
 
 async def send_msg(bot: Bot, uid: int, m: BroadcastMessage) -> bool:
     try:
