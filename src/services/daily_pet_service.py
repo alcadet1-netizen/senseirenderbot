@@ -92,6 +92,9 @@ class DailyPetService:
         raise GameError('Уведомление отправлено; окно поглаживаний не продлевается.')
 
     async def widget_action(self, token, user_id, action, query_id, *, received_at=None):
+        native = received_at is None
+        if native:
+            received_at = time.time()  # Trusted server arrival, before database/lock waits.
         if action not in {'v', 'p'}:
             raise GameError('Неверное действие.')
         session = await self.owned(token, user_id)
@@ -99,7 +102,7 @@ class DailyPetService:
             raise GameError('Уведомление ежа ещё готовится.')
         if action == 'p' and (time.time() if received_at is None else received_at) < session['deadline']:
             try:
-                session = await self.tap(token, user_id, query_id, received_at=received_at)
+                session = await self.tap(token, user_id, query_id, received_at=received_at, rate_limit=not native)
             except PetRateLimit:
                 raise
             except GameError:
@@ -111,7 +114,7 @@ class DailyPetService:
                 'taps': session['taps'], 'extra_coins': session['extra_coins'],
                 'base_coins': session['base_coins']}
 
-    async def tap(self, token, user_id, query_id, *, received_at=None):
+    async def tap(self, token, user_id, query_id, *, received_at=None, rate_limit=True):
         if not isinstance(query_id, str) or not 1 <= len(query_id) <= 128:
             raise GameError('Неверное поглаживание.')
         async with self._locks[user_id]:
@@ -119,7 +122,7 @@ class DailyPetService:
                 session = await self.owned(token, user_id)
                 if session.get('paid_order'):
                     from src.services.paid_hedgehog_service import PaidHedgehogService
-                    return await PaidHedgehogService(self.mongo).tap(token, user_id, query_id, received_at=received_at)
+                    return await PaidHedgehogService(self.mongo).tap(token, user_id, query_id, received_at=received_at, rate_limit=rate_limit)
                 if session['state'] == 'pending':
                     raise GameError('Ёж ещё готовится. Нажмите ещё раз.')
                 if query_id in session['queries']:
@@ -127,7 +130,7 @@ class DailyPetService:
                 accepted_at = time.time() if received_at is None else received_at
                 if accepted_at >= session['deadline'] or accepted_at < session['deadline'] - session.get('duration', 10):
                     raise GameError(f"{session.get('duration', 10)} секунд истекли. Основная награда ваша. Дополнительно: +{session['extra_coins']} монет.")
-                slot = int(accepted_at * 10) if received_at is not None else None
+                slot = int(accepted_at * 10) if received_at is not None and rate_limit else None
                 if slot is not None and slot in session.get('web_slots', []):
                     raise PetRateLimit('Тапы слишком частые: не более одного за 100 мс. Эффекты работают на каждом касании.')
                 bank = await self.bank.find_one({'_id': 'main'})

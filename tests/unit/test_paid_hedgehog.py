@@ -51,6 +51,7 @@ async def fixture():
     free=DailyPetService(mongo,daily)
     result,pet=await free.claim(7)
     await free.activate(pet['token'],7,100)
+    db.bank.docs['single']={'_id':'single','coins':100000}
     return db,free,PaidHedgehogService(mongo),result
 
 
@@ -68,7 +69,7 @@ def test_prices():
 @pytest.mark.asyncio
 async def test_paid_rewards_once_no_streak_increase_and_atomic_bank():
     db,free,paid,base=await fixture()
-    before=copy.deepcopy(db.users.docs[7]); bank=db.bank.docs['main']['balance']
+    before=copy.deepcopy(db.users.docs[7]); bank=db.bank.docs['single']['coins']
     with patch('src.services.paid_hedgehog_service.time.time',return_value=120):
         order=await paid.quote(7)
         assert order['stars']==1
@@ -80,7 +81,7 @@ async def test_paid_rewards_once_no_streak_increase_and_atomic_bank():
     assert user['xp']-before['xp']==base['total_xp']
     assert user['daily_streak']==before['daily_streak']
     assert user['last_daily']==before['last_daily']
-    assert bank-db.bank.docs['main']['balance']==receipt['reward']['total_coins']
+    assert bank-db.bank.docs['single']['coins']==receipt['reward']['total_coins']
     assert db.paid_pet_days.docs[f'7:{utc_day()}']['count']==1
     with patch('src.services.daily_pet_service.time.time',return_value=121):
         await free.activate(receipt['pet_token'],7,121)
@@ -88,7 +89,7 @@ async def test_paid_rewards_once_no_streak_increase_and_atomic_bank():
         await paid.tap(receipt['pet_token'],7,'tap1')
         await paid.tap(receipt['pet_token'],7,'tap1')
     assert db.users.docs[7]['daily_pet']['taps']==1
-    assert bank-db.bank.docs['main']['balance']==db.users.docs[7]['coins']-before['coins']
+    assert bank-db.bank.docs['single']['coins']==db.users.docs[7]['coins']-before['coins']
 
 
 @pytest.mark.asyncio
@@ -126,14 +127,14 @@ async def test_checkout_owner_amount_day_and_concurrent_charge_guards():
 @pytest.mark.asyncio
 async def test_transaction_rolls_back_bank_and_user_on_journal_failure_and_can_resume():
     db,free,paid,base=await fixture()
-    user=copy.deepcopy(db.users.docs[7]);bank=db.bank.docs['main']['balance']
+    user=copy.deepcopy(db.users.docs[7]);bank=db.bank.docs['single']['coins']
     with patch('src.services.paid_hedgehog_service.time.time',return_value=120):
         order=await paid.quote(7)
         await paid.checkout(order['_id'],7,1,'checkout')
         with patch.object(db.transactions,'update_one',side_effect=RuntimeError('db down')):
             with pytest.raises(RuntimeError): await paid.receive(7,payment(order))
         assert db.users.docs[7]==user
-        assert db.bank.docs['main']['balance']==bank
+        assert db.bank.docs['single']['coins']==bank
         assert db.paid_pet_payments.docs['charge1']['state']=='received'
         assert (await paid.pending(7))['state']=='fulfilled'
 
@@ -156,12 +157,12 @@ async def test_paid_shared_bank_is_not_overcredited_and_unfunded_payment_refunde
         first=await paid.quote(7);second=await paid.quote(8)
         await paid.checkout(first['_id'],7,1,'q7');await paid.checkout(second['_id'],8,1,'q8')
         before=sum(db.users.docs[uid]['coins'] for uid in (7,8))
-        db.bank.docs['main']['balance']=base['coins']+base['bonus_coins']
-        available=db.bank.docs['main']['balance']
+        db.bank.docs['single']['coins']=base['coins']+base['bonus_coins']
+        available=db.bank.docs['single']['coins']
         outcomes=await asyncio.gather(paid.receive(7,payment(first,'charge7')),paid.receive(8,payment(second,'charge8')))
     assert sorted(o['state'] for o in outcomes)==['fulfilled','refund_required']
     assert sum(db.users.docs[uid]['coins'] for uid in (7,8))-before==available
-    assert db.bank.docs['main']['balance']==0
+    assert db.bank.docs['single']['coins']==0
 
 
 @pytest.mark.asyncio
@@ -175,7 +176,7 @@ async def test_banned_user_or_changed_day_cannot_checkout_and_paid_bank_shortage
         with patch('src.services.paid_hedgehog_service.utc_day',return_value='2099-02-01'):
             with pytest.raises(GameError): await paid.checkout(order['_id'],7,1,'q')
         await paid.checkout(order['_id'],7,1,'q')
-        before=db.users.docs[7]['coins'];db.bank.docs['main']['balance']=0
+        before=db.users.docs[7]['coins'];db.bank.docs['single']['coins']=0
         result=await paid.receive(7,payment(order))
     assert result['state']=='refund_required'
     assert db.users.docs[7]['coins']==before
@@ -189,10 +190,10 @@ async def test_paid_tap_transaction_rolls_back_debit_when_journal_fails():
         order=await paid.quote(7);await paid.checkout(order['_id'],7,1,'q')
         result=await paid.receive(7,payment(order))
     await free.activate(result['pet_token'],7,120)
-    before=copy.deepcopy(db.users.docs[7]);bank=db.bank.docs['main']['balance']
+    before=copy.deepcopy(db.users.docs[7]);bank=db.bank.docs['single']['coins']
     with patch('src.services.paid_hedgehog_service.time.time',return_value=121),patch.object(db.transactions,'update_one',side_effect=RuntimeError('db down')):
         with pytest.raises(RuntimeError): await paid.tap(result['pet_token'],7,'tap-rollback')
-    assert db.users.docs[7]==before and db.bank.docs['main']['balance']==bank
+    assert db.users.docs[7]==before and db.bank.docs['single']['coins']==bank
 
 
 @pytest.mark.asyncio
@@ -253,10 +254,40 @@ async def test_unfunded_paid_order_returns_stars_without_consuming_price():
     db,free,paid,base=await fixture()
     with patch('src.services.paid_hedgehog_service.time.time',return_value=120):
         order=await paid.quote(7);await paid.checkout(order['_id'],7,1,'q')
-        db.bank.docs['main']['balance']=0
+        db.bank.docs['single']['coins']=0
         result=await paid.receive(7,payment(order))
     msg=NS(bot=AsyncMock(),answer=AsyncMock())
     await deliver(msg,NS(paid_hedgehog_service=paid),result)
     msg.bot.refund_star_payment.assert_awaited_once_with(user_id=7,telegram_payment_charge_id='charge1')
     assert db.paid_pet_payments.docs['charge1']['state']=='refunded'
     assert not db.paid_pet_days.docs
+
+
+@pytest.mark.asyncio
+async def test_offer_sends_stars_invoice_using_real_bank_schema():
+    from unittest.mock import AsyncMock
+    from src.bot.handlers.paid_hedgehog import offer
+    db,free,paid,base=await fixture()
+    # No parallel main.balance bank may be necessary to buy a repeat.
+    db.bank.docs.pop('main')
+    query=NS(answer=AsyncMock(),from_user=NS(id=7),
+        message=NS(chat=NS(id=-100222),answer=AsyncMock()),bot=NS(send_invoice=AsyncMock()))
+    container=NS(settings=NS(maintenance_mode=False),paid_hedgehog_service=paid)
+    with patch('src.services.paid_hedgehog_service.time.time',return_value=120):
+        await offer(query,container)
+    query.bot.send_invoice.assert_awaited_once()
+    invoice=query.bot.send_invoice.call_args.kwargs
+    assert invoice['currency']=='XTR' and invoice['prices'][0].amount==1
+    query.message.answer.assert_not_awaited()
+    assert db.bank.docs['single']['coins']==100000  # quote is not a debit
+
+
+@pytest.mark.asyncio
+async def test_paid_does_not_use_or_refill_legacy_bank():
+    db,free,paid,base=await fixture()
+    db.bank.docs['single']['coins']=0
+    db.bank.docs['main']['balance']=10**9
+    with patch('src.services.paid_hedgehog_service.time.time',return_value=120):
+        with pytest.raises(GameError,match='недостаточно'): await paid.quote(7)
+    assert db.bank.docs['single']['coins']==0
+    assert not db.paid_pet_orders.docs

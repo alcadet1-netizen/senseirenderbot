@@ -22,8 +22,13 @@ class CommandCleanupMiddleware(BaseMiddleware):
         # Выполняем хендлер
         result = await handler(event, data)
 
-        # Если это сообщение и оно начинается с /, пытаемся удалить
-        if isinstance(event, Message) and event.text and event.text.startswith('/'):
+        # Delete only the user's invocation, never the bot's result. Exact
+        # aliases must not match ordinary conversation mentioning a hedgehog.
+        daily_aliases = {"ежа", "фарм", "фармить", "фарма", "ферма"}
+        if (isinstance(event, Message) and event.text
+                and (event.text.startswith('/') or (
+                    event.from_user and not event.from_user.is_bot
+                    and event.text.lower() in daily_aliases))):
             logger.info(f"[CLEANUP] Attempting to delete command message: {event.text}")
             try:
                 await event.delete()
