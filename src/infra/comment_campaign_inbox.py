@@ -1,114 +1,78 @@
-"""Small durable local ingress queue; mount its directory on persistent storage."""
-import asyncio
+"""Mongo-only durable ingress. All mutations and sealing share a write fence."""
 import uuid
-from contextlib import asynccontextmanager
-from pathlib import Path
-
-import aiosqlite
+from pymongo import ReturnDocument
 
 
 class CampaignInbox:
-    def __init__(self, path, bot_id):
-        if not path.strip() or path == ':memory:':
-            raise ValueError('Campaign inbox requires a persistent filesystem path')
-        self.path = path
-        self.bot_id = bot_id
-        self.db = None
-        self.lock = asyncio.Lock()
+    def __init__(self, db, bot_id, transaction):
+        self.db, self.bot_id, self.transaction = db, bot_id, transaction
+        self.key = f'campaign_inbox:{bot_id}'
+        self.updates = db.campaign_inbox_updates
+        self.deletions = db.campaign_inbox_deletions
 
     async def open(self):
-        Path(self.path).parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        self.db = await aiosqlite.connect(self.path)
-        Path(self.path).chmod(0o600)
-        await self.db.execute('PRAGMA journal_mode=WAL')
-        await self.db.execute('PRAGMA synchronous=FULL')
-        await self.db.execute('PRAGMA busy_timeout=5000')
-        await self.db.execute('CREATE TABLE IF NOT EXISTS campaign_inbox '
-            '(bot_id INTEGER NOT NULL, update_id INTEGER NOT NULL, payload TEXT NOT NULL, '
-            'PRIMARY KEY(bot_id,update_id))')
-        await self.db.execute('CREATE TABLE IF NOT EXISTS campaign_deleted_inbox '
-            '(bot_id INTEGER NOT NULL, chat_id INTEGER NOT NULL, message_id INTEGER NOT NULL, '
-            'PRIMARY KEY(bot_id,chat_id,message_id))')
-        await self.db.execute('CREATE TABLE IF NOT EXISTS campaign_inbox_identity (id INTEGER PRIMARY KEY, value TEXT NOT NULL)')
-        await self.db.execute('INSERT OR IGNORE INTO campaign_inbox_identity VALUES(1,?)', (uuid.uuid4().hex,))
-        async with self.db.execute('SELECT value FROM campaign_inbox_identity WHERE id=1') as cursor:
-            self.identity = (await cursor.fetchone())[0]
-        await self.db.commit()
+        await self.updates.create_index([('bot_id', 1), ('update_id', 1)], unique=True)
+        await self.deletions.create_index([('bot_id', 1), ('chat_id', 1), ('message_id', 1)], unique=True)
+        # Keep the pre-existing identity; old local backlog is explicitly retired
+        # by the operator, never reset Mongo campaigns or financial records.
+        async def initialize(tx):
+            row = await self.db.settings.find_one_and_update({'_id': self.key},
+                {'$setOnInsert': {'identity': uuid.uuid4().hex},
+                 '$set': {'backend': 'mongodb', 'schema_version': 2}, '$inc': {'revision': 1}},
+                upsert=True, return_document=ReturnDocument.AFTER, session=tx)
+            return row['identity']
+        self.identity = await self.transaction(initialize)
 
-    @asynccontextmanager
-    async def settlement_barrier(self):
-        # Lock both this connection and other processes sharing the SQLite file.
-        # No admitted insert/ack may interleave pending-check and Mongo sealing.
-        async with self.lock:
-            try:
-                await self.write('BEGIN IMMEDIATE')
-                yield not await self._pending()
-            finally:
-                await self.db.rollback()
+    async def fence(self, tx):
+        await self.db.settings.update_one({'_id': self.key}, {'$inc': {'revision': 1}}, session=tx)
 
-    async def write(self, sql, parameters=()):
-        # Another process may be holding the settlement barrier. Busy is not
-        # an ingress failure: retain the update and retry until lock release.
-        while True:
-            try:
-                return await self.db.execute(sql, parameters)
-            except aiosqlite.OperationalError as exc:
-                if getattr(exc, 'sqlite_errorcode', None) not in (5, 6):
-                    raise
-                await asyncio.sleep(.05)
+    async def mutate(self, collection, key, row=None, generation=None, replace=False):
+        async def apply(tx):
+            await self.fence(tx)
+            if row is None:
+                query = {'_id': key}
+                if generation is not None:
+                    query['generation'] = generation
+                await collection.delete_many(query, session=tx)
+            else:
+                await collection.update_one({'_id': key}, {'$set' if replace else '$setOnInsert': row}, upsert=True, session=tx)
+        await self.transaction(apply)
 
     async def put(self, event):
-        async with self.lock:
-            await self.write('INSERT OR IGNORE INTO campaign_inbox VALUES(?,?,?)',
-                (self.bot_id, event.update_id, event.model_dump_json(exclude_none=True)))
-            await self.db.commit()
+        await self.mutate(self.updates, f'{self.bot_id}:{event.update_id}',
+            dict(bot_id=self.bot_id, update_id=event.update_id, payload=event.model_dump_json(exclude_none=True)))
 
     async def deleted(self, chat_id, message_id):
-        async with self.lock:
-            await self.write('INSERT OR IGNORE INTO campaign_deleted_inbox VALUES(?,?,?)',
-                (self.bot_id, chat_id, message_id))
-            await self.db.commit()
-
-    async def deletion_batch(self, size):
-        async with self.lock:
-            async with self.db.execute('SELECT chat_id,message_id FROM campaign_deleted_inbox WHERE bot_id=? LIMIT ?',
-                    (self.bot_id,size)) as cursor:
-                return await cursor.fetchall()
-
-
-    async def ack_deletion(self, chat_id, message_id):
-        async with self.lock:
-            await self.write('DELETE FROM campaign_deleted_inbox WHERE bot_id=? AND chat_id=? AND message_id=?',
-                (self.bot_id,chat_id,message_id))
-            await self.db.commit()
-
+        await self.mutate(self.deletions, f'{self.bot_id}:{chat_id}:{message_id}',
+            dict(bot_id=self.bot_id, chat_id=chat_id, message_id=message_id, generation=uuid.uuid4().hex), replace=True)
 
     async def batch(self, size):
-        async with self.lock:
-            async with self.db.execute('SELECT update_id,payload FROM campaign_inbox '
-                    'WHERE bot_id=? ORDER BY update_id LIMIT ?', (self.bot_id, size)) as cursor:
-                return await cursor.fetchall()
+        rows = await self.updates.find({'bot_id': self.bot_id}).sort('update_id', 1).limit(size).to_list(length=size)
+        return [(r['update_id'], r['payload']) for r in rows]
 
+    async def deletion_batch(self, size):
+        rows = await self.deletions.find({'bot_id': self.bot_id}).limit(size).to_list(length=size)
+        return [(r['chat_id'], r['message_id'], r['generation']) for r in rows]
 
     async def ack(self, update_id):
-        async with self.lock:
-            await self.write('DELETE FROM campaign_inbox WHERE bot_id=? AND update_id=?', (self.bot_id, update_id))
-            await self.db.commit()
+        await self.mutate(self.updates, f'{self.bot_id}:{update_id}')
 
+    async def ack_deletion(self, chat_id, message_id, generation):
+        await self.mutate(self.deletions, f'{self.bot_id}:{chat_id}:{message_id}', generation=generation)
 
-    async def pending(self):
-        async with self.lock:
-            return await self._pending()
+    async def pending(self, tx=None):
+        return bool(await self.updates.find_one({'bot_id': self.bot_id}, session=tx)
+            or await self.deletions.find_one({'bot_id': self.bot_id}, session=tx))
 
-    async def _pending(self):
-        async with self.db.execute('SELECT 1 FROM campaign_inbox WHERE bot_id=? LIMIT 1', (self.bot_id,)) as cursor:
-            if await cursor.fetchone() is not None:
-                return True
-        async with self.db.execute('SELECT 1 FROM campaign_deleted_inbox WHERE bot_id=? LIMIT 1', (self.bot_id,)) as cursor:
-            return await cursor.fetchone() is not None
+    async def seal_if_empty(self, callback):
+        async def seal(tx):
+            await self.fence(tx)
+            if await self.pending(tx):
+                return False
+            await callback(tx)
+            return True
+        return await self.transaction(seal)
 
     async def close(self):
-        async with self.lock:
-            if self.db:
-                await self.db.close()
-                self.db = None
+        # MongoClient lifecycle belongs to the container.
+        pass
