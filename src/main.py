@@ -222,9 +222,11 @@ async def main() -> None:
         from src.bot.campaign_polling import install_campaign_admission
         install_campaign_admission(dp, container.comment_campaign_service)
         logger.info("🔄 Starting polling...")
+        # Financial pre-checkout is handled by update middleware, so router
+        # introspection does not discover it. Telegram must still deliver it.
         await dp.start_polling(
             bot,
-            allowed_updates=list(dict.fromkeys([*dp.resolve_used_update_types(), "channel_post", "message", "widget_query", "shared_widget_query"])),
+            allowed_updates=list(dict.fromkeys([*dp.resolve_used_update_types(), "channel_post", "message", "pre_checkout_query", "widget_query", "shared_widget_query"])),
             close_bot_session=True,
         )
     finally:
