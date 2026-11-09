@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 async def setup_bot_commands(bot: Bot) -> None:
     """Установка команд бота."""
     commands = [
+        BotCommand(command="senseifly", description="Лаборатория внимания Сенсея"),
         BotCommand(command="donate", description="❤️ Поддержать проект"),
         BotCommand(command="paysupport", description="Поддержка по вопросам оплаты"),
         BotCommand(command="senseihelp", description="📋 Помощь"),
@@ -194,6 +195,8 @@ async def main() -> None:
     dp.message.middleware(ChatActivityMiddleware())
     dp.message.middleware(DigestMiddleware(container))
     dp.message.middleware(CommandCleanupMiddleware())
+    from src.bot.handlers.fly import FlyReactionMiddleware
+    dp.message.middleware(FlyReactionMiddleware(container))
 
     # Регистрируем middleware для callback
     dp.callback_query.middleware(LoggingMiddleware())
@@ -211,6 +214,8 @@ async def main() -> None:
     # Startup failures must also close the health server and DB resources.
     try:
         await on_startup(bot, container)
+        from src.services.fly_service import FlyService
+        await FlyService(container).ensure_indexes()
         if settings.native_widget_transport == 'mtproto':
             from src.infra.mtproto.widgets import MtprotoWidgets
             container.native_widget_transport = await MtprotoWidgets.start(container, bot.id)

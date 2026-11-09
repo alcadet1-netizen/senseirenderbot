@@ -68,6 +68,20 @@ for (const name of ['profile', 'top', 'katana-success', 'katana-failure']) {
     console.log(name + ' / ' + theme + ': strict sandbox, render ops, controls OK');
   }
 }
+const flyHtml=fs.readFileSync(new URL('./widget-samples/fly.html',import.meta.url),'utf8');
+for(const theme of ['light','dark']){
+ const boot=await runWidget(flyHtml,{policy:'strict',theme,timerRounds:0,context:{canQuery:false,chatType:'group'}});
+ assert.deepEqual(boot.diags,[]);
+ const button=boot.ops.flat().find(op=>op.op==='el'&&op.attrs?.id==='new');
+ assert.ok(button);
+ const run=await runWidget(flyHtml,{policy:'strict',theme,timerRounds:2,context:{canQuery:false,chatType:'group'},
+ events:[{type:'click',targetId:button.id,gesture:1}],probes:["document.getElementById('why').textContent"]});
+ assert.deepEqual(run.diags,[]);
+ assert.equal(run.requests.length,0);
+ assert.ok(run.probes[0].includes('Новизна'));
+ assert.ok(run.ops.flat().some(op=>op.op==='canvas'));
+ console.log('fly / '+theme+': native canvas, novelty explanation, no requests OK');
+}
 const gameHtml = fs.readFileSync(new URL('./widget-samples/hedgehog.html', import.meta.url), 'utf8');
 for (const theme of ['light', 'dark']) {
   const boot = await runWidget(gameHtml, { policy:'strict', theme, timerRounds:0 });
