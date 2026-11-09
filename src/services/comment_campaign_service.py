@@ -8,7 +8,7 @@ from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 
 from aiogram.types import MessageOriginChannel, ReplyParameters, Update
-from aiogram.exceptions import TelegramNetworkError, TelegramServerError, TelegramRetryAfter
+from aiogram.exceptions import TelegramNetworkError, TelegramServerError, TelegramRetryAfter, TelegramBadRequest
 from src.infra.comment_campaign_inbox import CampaignInbox
 from pymongo import ASCENDING, ReturnDocument
 from pymongo.errors import DuplicateKeyError, ConnectionFailure
@@ -527,6 +527,51 @@ class CommentCampaignService:
             text += '\nНаграды заблокированных профилей не выданы.'
         return text
 
+    async def block_final_delivery(self, camp, reason):
+        # Payouts are already processed. Never rewind their phase/cursors.
+        await self.update_owned(camp, {'status': 'failed', 'terminal': True,
+            'final_delivery_status': 'blocked', 'last_error': reason,
+            'last_error_detail': 'Final result needs operator repair; financial plan unchanged'})
+        logger.error('Campaign result delivery blocked campaign=%s reason=%s; payouts unchanged', camp['_id'], reason)
+
+    async def deliver_final(self, camp, text):
+        if camp.get('final_delivery_mode') != 'edit_announcement':
+            try:
+                sent = await asyncio.wait_for(self.bot.send_message(chat_id=camp['discussion_chat_id'], text=text,
+                    parse_mode='HTML', reply_parameters=ReplyParameters(
+                        message_id=camp['discussion_message_id'], allow_sending_without_reply=False)), timeout=20)
+                return sent.message_id, 'reply'
+            except TelegramBadRequest as exc:
+                error = exc.message.casefold()
+                if not any(code in error for code in ('message to be replied not found', 'reply message not found')):
+                    raise
+                # Persist the recovery path BEFORE doing another Telegram request.
+                # A timeout/restart must not hammer the known-broken root again.
+                await self.update_owned(camp, {'final_delivery_mode': 'edit_announcement',
+                    'final_delivery_status': 'recovering', 'final_reply_error': 'reply_target_missing'})
+                logger.warning('Campaign root unavailable campaign=%s; replacing original announcement with results', camp['_id'])
+        announcement = camp.get('start_message_id')
+        if not announcement:
+            await self.block_final_delivery(camp, 'final_announcement_id_missing')
+            return None
+        await self.touch(camp)
+        try:
+            await asyncio.wait_for(self.bot.edit_message_text(chat_id=camp['discussion_chat_id'],
+                message_id=announcement, text=text, parse_mode='HTML'), timeout=20)
+        except TelegramBadRequest as exc:
+            error = exc.message.casefold()
+            if 'message is not modified' in error:
+                # Telegram accepted the earlier edit, but its acknowledgement or
+                # our completion write was lost. This edit is idempotent.
+                pass
+            elif any(code in error for code in ('message to edit not found',
+                    "message can't be edited", 'message can not be edited', 'message_id_invalid')):
+                await self.block_final_delivery(camp, 'final_announcement_unavailable')
+                return None
+            else:
+                raise
+        return announcement, 'edit_announcement'
+
     async def process(self, campaign):
         cid, owner = campaign['_id'], campaign['lease_owner']
         camp = await self.fence(cid, owner)
@@ -567,10 +612,13 @@ class CommentCampaignService:
             if not camp['payouts_done']:
                 raise RuntimeError('Final announcement before payout plan completed')
             text = await self.final_text(camp)
-            sent = await asyncio.wait_for(self.bot.send_message(chat_id=camp['discussion_chat_id'], text=text,
-                parse_mode='HTML', reply_parameters=ReplyParameters(message_id=camp['discussion_message_id'], allow_sending_without_reply=False)), timeout=20)
-            await self.update_owned(camp, {'final_message_id': sent.message_id, 'status': 'completed',
-                'terminal': True, 'completed_at': self.now(), 'last_error': None})
+            delivery = await self.deliver_final(camp, text)
+            if delivery is None:
+                return
+            message_id, mode = delivery
+            await self.update_owned(camp, {'final_message_id': message_id, 'status': 'completed',
+                'terminal': True, 'completed_at': self.now(), 'last_error': None, 'last_error_detail': None,
+                'final_delivery_mode': mode, 'final_delivery_status': 'delivered'})
             logger.info('Campaign completed campaign=%s winner=%s', cid, camp['winner'])
 
     async def resume_pending_reward(self, record):
