@@ -165,7 +165,7 @@ class PaidHedgehogService:
             return result
         return await self.transaction(fulfill)
 
-    async def tap(self, token, uid, query_id, *, received_at=None):
+    async def tap(self, token, uid, query_id, *, received_at=None, rate_limit=True):
         from src.services.daily_pet_service import PetRateLimit
 
         async def apply(tx):
@@ -181,7 +181,7 @@ class PaidHedgehogService:
             now = time.time() if received_at is None else received_at
             if not pet['deadline']-15 <= now < pet['deadline']:
                 raise GameError('15 секунд истекли. Подтверждённые награды сохранены.')
-            slot = int(now*10) if received_at is not None else None
+            slot = int(now*10) if received_at is not None and rate_limit else None
             if slot is not None and slot in pet.get('web_slots', []):
                 raise PetRateLimit('Тапы слишком частые. Эффекты работают на каждом касании.')
             bank = await self.db.bank.find_one({'_id': 'single'}, session=tx)

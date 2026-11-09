@@ -94,10 +94,11 @@ function show(r){
  clearInterval(clock);draw();if(!ended)clock=setInterval(draw,100);
 }
 function ask(action){
- if(busy)return;busy=true;
+ // Each tap must request during its own gesture, even while earlier replies wait.
+ if(action!=='p'&&busy)return;if(action!=='p')busy=true;
  TelegramWidget.request('dp:'+action+':'+token).then(function(answer){
-  busy=false;try{show(JSON.parse(answer.result));}catch(e){note.textContent='Ответ потерялся. Обнови результат: принятый бонус сохранён.';}
- },function(e){busy=false;note.textContent='Telegram ограничивает частоту запросов. Подтверждённые бонусы сохранены.';});
+  if(action!=='p')busy=false;try{show(JSON.parse(answer.result));}catch(e){note.textContent='Ответ потерялся. Обнови результат: принятый бонус сохранён.';}
+ },function(e){if(action!=='p')busy=false;note.textContent='Telegram ограничивает частоту запросов. Подтверждённые бонусы сохранены.';});
 }
 function touch(){
  if(TelegramWidget.isForward||TelegramWidget.isPreview)return;
