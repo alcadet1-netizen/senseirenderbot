@@ -40,3 +40,36 @@ async def test_bot_defaults_allow_copying():
         assert SendWidget(chat_id=7, html='<html></html>').protect_content is False
     finally:
         await bot.session.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('value', [True, False, None])
+async def test_copy_permission_enforced_without_mutating_request(value):
+    from aiogram.methods import SendPhoto
+    bot = AntiSpamBot(token='123:ABC')
+    try:
+        for method in (SendMessage(chat_id=7, text='copy', protect_content=value),
+                       SendPhoto(chat_id=7, photo='file_id', protect_content=value)):
+            with patch('aiogram.Bot.__call__', new_callable=AsyncMock) as call:
+                await bot(method)
+            outgoing = call.call_args.args[0]
+            assert outgoing.protect_content is False
+            assert method.protect_content is value
+            assert outgoing is not method
+    finally:
+        await bot.session.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('protected', [True, False, None])
+async def test_private_copy_probe_reports_telegram_result(protected):
+    from types import SimpleNamespace as NS
+    from src.bot.handlers.widget_check import cmd_copy_check
+    msg = NS(chat=NS(type='private'), answer=AsyncMock(
+        return_value=NS(has_protected_content=protected)))
+    await cmd_copy_check(msg)
+    assert msg.answer.await_count == 2
+    for call in msg.answer.call_args_list:
+        assert call.kwargs['protect_content'] is False
+        assert call.kwargs['parse_mode'] is None
+    assert ('has_protected_content=true' in msg.answer.call_args.args[0]) is bool(protected)

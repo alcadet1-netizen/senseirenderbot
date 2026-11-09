@@ -116,3 +116,27 @@ async def cmd_ega(message, container):
                              'Балансы и ежедневная попытка не менялись.', parse_mode=None)
     except (OSError, ValueError):
         await message.answer('Не удалось собрать тестовый виджет Ежа. Награды не менялись.', parse_mode=None)
+
+
+@router.message(Command('senseicopycheck'))
+async def cmd_copy_check(message):
+    """A plain-text, private-only probe. No DB writes or chat setting changes."""
+    if message.chat.type != 'private':
+        await message.answer('Проверка копирования: /senseicopycheck в личке бота.',
+                             parse_mode=None, protect_content=False)
+        return
+    sent = await message.answer(
+        'Проверка копирования Sensei. Обычный текст без защиты. '
+        'Попробуй скопировать это сообщение или переслать его в Избранное.',
+        parse_mode=None, protect_content=False)
+    protected = bool(sent.has_protected_content)
+    await message.answer(
+        ('Telegram вернул has_protected_content=true: сообщение защищено на стороне Telegram, '
+         'несмотря на protect_content=false в запросе. Проверь настройку запрета '
+         'копирования/пересылки в профиле этого личного чата, если она доступна.'
+         if protected else
+         'Telegram не отметил проверочное сообщение как защищённое '
+         '(has_protected_content=false/отсутствует). Если оно не копируется, '
+         'проверь ограничение копирования в настройках этого личного чата и сравни '
+         'с официальным Telegram Desktop. Старые сообщения эта проверка не меняет.'),
+        parse_mode=None, protect_content=False)
