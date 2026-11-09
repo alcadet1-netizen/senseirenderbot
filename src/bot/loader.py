@@ -28,7 +28,7 @@ def create_bot() -> Bot:
 
     return AntiSpamBot(
         token=settings.bot_token,
-        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML, protect_content=False),
         session=session
     )
 

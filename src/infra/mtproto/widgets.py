@@ -205,6 +205,7 @@ class MtprotoWidgets:
             peer=peer, media=self.types.InputMediaWidget(
                 width=340, height=0, html=html, allow_queries=allow_queries, shared_widget=False,
             ), message='🦔 Ёжик · ежедневный бонус', random_id=secrets.randbits(63) or 1,
+            noforwards=False,
         )
         return await self._request(request, 'send_media')
 

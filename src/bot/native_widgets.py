@@ -29,6 +29,7 @@ class SendWidget(TelegramMethod[dict[str, Any]]):
     height: int = 0
     allow_queries: bool = True
     is_shared: bool = False
+    protect_content: bool = False
 
 
 class AnswerWidgetQuery(TelegramMethod[bool]):

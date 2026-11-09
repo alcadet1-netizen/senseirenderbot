@@ -165,3 +165,21 @@ async def test_command_reports_global_kill_switch_truthfully():
     assert (await db.fly_settings.find_one({'_id':-100222}))['enabled']
     assert 'Глобальный выключатель' in msg.answer.call_args.args[0]
     assert 'реплики включены' not in msg.answer.call_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_widget_policy_rejection_is_explained_without_retry_or_rewards(caplog):
+    from src.bot.handlers.fly import command
+    from src.infra.mtproto.widgets import MtprotoWidgetError
+    _,s,_=fixture()
+    msg=NS(text='/senseifly',bot=NS(token='123456:SECRET'),chat=NS(id=-100222,type='supergroup'),
+        from_user=NS(id=7),answer=AsyncMock())
+    with patch('src.bot.handlers.fly.send_native_widget',new=AsyncMock(
+            side_effect=MtprotoWidgetError('INPUT_MEDIA_WIDGET_NOT_ALLOWED'))) as send:
+        await command(msg,s.container)
+    send.assert_awaited_once()
+    text=msg.answer.call_args.args[0]
+    assert 'widget_policy' in text and 'Telegram отклонил' in text
+    assert '/senseifly status' in text and 'Mini App' in text
+    assert not any(record.exc_info for record in caplog.records)
+    assert not s.db.collections
