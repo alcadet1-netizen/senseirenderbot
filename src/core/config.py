@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     campaign_batch_size: int = Field(default=25, ge=1, le=200, alias='CAMPAIGN_BATCH_SIZE')
     campaign_allowed_content_types: str = Field(default='text,photo,video,animation,audio,voice,video_note,document,sticker,poll,contact,location,venue,dice', alias='CAMPAIGN_ALLOWED_CONTENT_TYPES')
 
+    # Reactions remain OFF in every chat until its administrator opts in.
+    fly_reactions_enabled: bool = Field(default=True, alias="FLY_REACTIONS_ENABLED")
+
     # CRYPTO API
     ton_api_key: str = Field(default="", alias="TON_API_KEY")
     xrocket_pay_token: str = Field(default="", alias="XROCKET_PAY_TOKEN")
