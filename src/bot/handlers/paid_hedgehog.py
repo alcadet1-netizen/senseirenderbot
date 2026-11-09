@@ -27,16 +27,20 @@ async def offer(query, container):
         if container.settings.maintenance_mode or MaintenanceService.is_enabled():
             raise GameError('Оплата временно недоступна: обслуживание.')
         order = await container.paid_hedgehog_service.quote(query.from_user.id)
-        await query.bot.send_invoice(chat_id=query.message.chat.id, title='Ещё одна Ежа',
+        sent = await query.bot.send_invoice(chat_id=query.message.chat.id, title='Ещё одна Ежа',
             description=f"Повторная награда и 15 секунд ласки. Серия не увеличивается. Попытка №{order['number']}: {order['stars']} ⭐.",
             payload=f"petbuy:{order['_id']}", currency='XTR', provider_token='',
             prices=[LabeledPrice(label='Повторная Ежа', amount=order['stars'])])
+        logger.info('Paid hedgehog invoice sent user=%s order=%s stars=%s chat=%s message=%s',
+            query.from_user.id, order['_id'], order['stars'], query.message.chat.id, sent.message_id)
     except GameError as exc:
+        logger.warning('Paid hedgehog offer rejected user=%s reason=%s', query.from_user.id, exc)
         await query.message.answer(str(exc), parse_mode=None)
     except TelegramAPIError:
+        logger.exception('Paid hedgehog invoice Telegram error user=%s', query.from_user.id)
         await query.message.answer('Не удалось открыть оплату. Попробуйте позже.', parse_mode=None)
     except Exception:
-        logger.error('Paid hedgehog invoice unavailable')
+        logger.exception('Paid hedgehog invoice unavailable user=%s', query.from_user.id)
         await query.message.answer('Платные попытки временно недоступны. Деньги не списаны.', parse_mode=None)
 
 

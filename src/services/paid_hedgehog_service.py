@@ -60,8 +60,8 @@ class PaidHedgehogService:
             amount = price(count)
             result = copy.deepcopy(user['hedgehog_result'])
             result['total_coins'] = result['coins'] + result['bonus_coins']
-            bank = await self.db.bank.find_one({'_id': 'main'}, session=tx)
-            if max(0, int((bank or {}).get('balance', 0))) < result['total_coins']:
+            bank = await self.db.bank.find_one({'_id': 'single'}, session=tx)
+            if max(0, int((bank or {}).get('coins', 0))) < result['total_coins']:
                 raise GameError('В банке недостаточно монет для полной награды. Оплата пока недоступна.')
             return await self.orders.find_one_and_update(
                 {'_id': f'{uid}:{day}:{count+1}'},
@@ -90,8 +90,8 @@ class PaidHedgehogService:
             if (order['state'] == 'checkout' and order.get('checkout_id') != query_id
                     and order.get('checkout_at', 0) > time.time()-900):
                 raise GameError('Этот счёт уже обрабатывается. Не оплачивайте его повторно.')
-            bank = await self.db.bank.find_one({'_id': 'main'}, session=tx)
-            if max(0, int((bank or {}).get('balance', 0))) < order['reward']['total_coins']:
+            bank = await self.db.bank.find_one({'_id': 'single'}, session=tx)
+            if max(0, int((bank or {}).get('coins', 0))) < order['reward']['total_coins']:
                 raise GameError('В банке недостаточно монет. Оплата не принята.')
             await self.orders.update_one({'_id': oid}, {'$set': dict(state='checkout',
                 checkout_id=query_id, checkout_at=time.time())}, session=tx)
@@ -136,10 +136,10 @@ class PaidHedgehogService:
             pet = user.get('daily_pet', {})
             if pet and (pet.get('state') == 'pending' or pet.get('deadline', 0) > time.time()):
                 raise GameError('Оплаченная попытка сохранена. После текущей игры напишите /senseidaily.')
-            bank = await self.db.bank.find_one({'_id': 'main'}, session=tx)
+            bank = await self.db.bank.find_one({'_id': 'single'}, session=tx)
             reward = copy.deepcopy(order['reward'])
             coins = reward['total_coins']
-            if max(0, int((bank or {}).get('balance', 0))) < coins:
+            if max(0, int((bank or {}).get('coins', 0))) < coins:
                 await self.payments.update_one({'_id': charge}, {'$set': {'state': 'refund_required'}}, session=tx)
                 await self.orders.update_one({'_id': oid}, {'$set': {'state': 'ready', 'checkout_id': None, 'checkout_at': 0}}, session=tx)
                 return {**receipt, 'state': 'refund_required'}
@@ -147,8 +147,8 @@ class PaidHedgehogService:
                 deadline=None, duration=15, delivered=False, taps=0, extra_coins=0, queries=[],
                 base_coins=coins, paid_order=oid, reward=reward)
             if coins:
-                debit = await self.db.bank.update_one({'_id': 'main', 'balance': {'$gte': coins}},
-                    {'$inc': {'balance': -coins}}, session=tx)
+                debit = await self.db.bank.update_one({'_id': 'single', 'coins': {'$gte': coins}},
+                    {'$inc': {'coins': -coins}}, session=tx)
                 if debit.matched_count != 1:
                     raise GameError('Банк изменился. Повторите /senseidaily; оплата сохранена.')
             await self.users.update_one({'id': uid}, {'$inc': {'coins': coins, 'xp': reward['total_xp']},
@@ -184,9 +184,9 @@ class PaidHedgehogService:
             slot = int(now*10) if received_at is not None else None
             if slot is not None and slot in pet.get('web_slots', []):
                 raise PetRateLimit('Тапы слишком частые. Эффекты работают на каждом касании.')
-            bank = await self.db.bank.find_one({'_id': 'main'}, session=tx)
+            bank = await self.db.bank.find_one({'_id': 'single'}, session=tx)
             delta = min(max(0, pet['base_coins']*(pet['taps']+1)//10-pet['extra_coins']),
-                        max(0, int((bank or {}).get('balance', 0))))
+                        max(0, int((bank or {}).get('coins', 0))))
             updated = copy.deepcopy(pet)
             updated['taps'] += 1
             updated['extra_coins'] += delta
@@ -194,8 +194,8 @@ class PaidHedgehogService:
             if slot is not None:
                 updated.setdefault('web_slots', []).append(slot)
             if delta:
-                debit = await self.db.bank.update_one({'_id': 'main', 'balance': {'$gte': delta}},
-                    {'$inc': {'balance': -delta}}, session=tx)
+                debit = await self.db.bank.update_one({'_id': 'single', 'coins': {'$gte': delta}},
+                    {'$inc': {'coins': -delta}}, session=tx)
                 if debit.matched_count != 1:
                     raise GameError('Банк изменился. Повторите запрос.')
             await self.users.update_one({'id': uid}, {'$set': {'daily_pet': updated},
