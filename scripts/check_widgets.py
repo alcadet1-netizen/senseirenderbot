@@ -70,17 +70,25 @@ for (const name of ['profile', 'top', 'katana-success', 'katana-failure']) {
 }
 const flyHtml=fs.readFileSync(new URL('./widget-samples/fly.html',import.meta.url),'utf8');
 for(const theme of ['light','dark']){
- const boot=await runWidget(flyHtml,{policy:'strict',theme,timerRounds:0,context:{canQuery:false,chatType:'group'}});
+ const boot=await runWidget(flyHtml,{policy:'strict',theme,timerRounds:0,context:{canQuery:false,chatType:'group'},probes:['frame',"document.getElementById('start').disabled","document.querySelectorAll('button').length"]});
+ assert.equal(boot.timers,0);
+ assert.deepEqual(boot.probes,['0','false','1']);
  assert.deepEqual(boot.diags,[]);
- const button=boot.ops.flat().find(op=>op.op==='el'&&op.attrs?.id==='new');
+ assert.ok(!boot.logs.some(x=>x.level==='error'),JSON.stringify(boot.logs));
+ const button=boot.ops.flat().find(op=>op.op==='el'&&op.attrs?.id==='start');
  assert.ok(button);
- const run=await runWidget(flyHtml,{policy:'strict',theme,timerRounds:2,context:{canQuery:false,chatType:'group'},
- events:[{type:'click',targetId:button.id,gesture:1}],probes:["document.getElementById('why').textContent"]});
+ const run=await runWidget(flyHtml,{policy:'strict',theme,timerRounds:8,context:{canQuery:false,chatType:'group'},
+ events:[{type:'click',targetId:button.id,gesture:1}],probes:['frame','pts.length','edges.length',"document.getElementById('start').disabled",'v.some(function(x){return x>0;})']});
  assert.deepEqual(run.diags,[]);
+ assert.ok(!run.logs.some(x=>x.level==='error'),JSON.stringify(run.logs));
  assert.equal(run.requests.length,0);
- assert.ok(run.probes[0].includes('Новизна'));
+ assert.ok(Number(run.probes[0])>0);
+ assert.equal(Number(run.probes[1]),1000);
+ assert.equal(Number(run.probes[2]),1000);
+ assert.equal(String(run.probes[3]),'true');
+ assert.equal(String(run.probes[4]),'true');
  assert.ok(run.ops.flat().some(op=>op.op==='canvas'));
- console.log('fly / '+theme+': native canvas, novelty explanation, no requests OK');
+ console.log('fly / '+theme+': native canvas, 1000-node dynamics, click-only start, no requests OK');
 }
 const gameHtml = fs.readFileSync(new URL('./widget-samples/hedgehog.html', import.meta.url), 'utf8');
 for (const theme of ['light', 'dark']) {
@@ -135,6 +143,7 @@ const petHtml=fs.readFileSync(new URL('./widget-samples/daily-pet.html',import.m
 for(const theme of ['light','dark']){
   const boot=await runWidget(petHtml,{policy:'strict',theme,timerRounds:0});
   assert.deepEqual(boot.diags,[]);
+ assert.ok(!boot.logs.some(x=>x.level==='error'),JSON.stringify(boot.logs));
   assert.equal(boot.requests.length,0);
   const drawing=boot.ops.flat().filter(op=>op.op==='canvas');
   assert.ok(drawing.length>0, 'Native SDK must emit canvas commands');
