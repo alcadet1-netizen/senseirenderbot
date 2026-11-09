@@ -14,6 +14,8 @@ async def test_reminder_retry():
     
     # Mock Bot
     bot = AsyncMock()
+    bot.id = 123456789
+    bot.get_chat_member.return_value = MagicMock(status="administrator")
     
     # Mock Chat
     chat = MagicMock()

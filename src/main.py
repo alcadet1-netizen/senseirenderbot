@@ -174,10 +174,13 @@ async def main() -> None:
     site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get('PORT', '10000')))
     await site.start()
 
+    from src.bot.middlewares.group_admin import GroupAdminMiddleware
+    # Receipts must reconcile even if the bot lost group privileges.
+    dp.update.outer_middleware(DonationPaymentMiddleware(container))
+    dp.update.outer_middleware(GroupAdminMiddleware())
+
     # Future Bot API widget queries are extras until aiogram types catch up.
     dp.update.outer_middleware(HedgehogWidgetMiddleware(container))
-
-    dp.update.outer_middleware(DonationPaymentMiddleware(container))
 
     # Регистрируем middleware для сообщений
     dp.message.middleware(LoggingMiddleware())

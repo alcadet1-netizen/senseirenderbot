@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from aiogram import Bot
 
+from src.bot.middlewares.group_admin import group_admin_access, access_denied
 from src.core.config import settings
 from src.infra.mongo.client import MongoClient
 from src.texts.reminders import get_inactive_reminder
@@ -81,6 +82,8 @@ class ChatActivityService:
 
         Returns True if message was sent successfully, False otherwise.
         """
+        if not await group_admin_access.allowed(bot, chat_id):
+            return False
         max_retries = 3
         for attempt in range(max_retries):
             try:
@@ -90,10 +93,8 @@ class ChatActivityService:
                 return True
             except Exception as e:
                 err_str = str(e).lower()
-                # If it's a fatal error (bot kicked, chat not found, forbidden, migrated), don't retry
-                if "kicked" in err_str or "chat not found" in err_str or "forbidden" in err_str or "migrated" in err_str:
-                    logger.warning(f"❌ Bot kicked/blocked/migrated in {chat_id}. Removing from monitoring.")
-                    await self.chat_activities.delete_one({"chat_id": chat_id})
+                if access_denied(e):
+                    group_admin_access.deny(bot.id, chat_id)
                     return False
 
                 # For other errors, retry if we have attempts left
@@ -119,6 +120,8 @@ class ChatActivityService:
         for chat_doc in inactive_chats:
             chat_id = chat_doc["chat_id"]
             try:
+                if not await group_admin_access.allowed(bot, chat_id):
+                    continue
                 # Check chat type to avoid spamming private chats
                 chat = await bot.get_chat(chat_id)
                 if chat.type not in ("group", "supergroup"):
@@ -136,9 +139,8 @@ class ChatActivityService:
 
             except Exception as e:
                 err_str = str(e).lower()
-                if "kicked" in err_str or "chat not found" in err_str or "forbidden" in err_str or "migrated" in err_str:
-                    logger.warning(f"❌ Bot kicked/blocked/migrated in {chat_id}. Removing from monitoring.")
-                    await self.chat_activities.delete_one({"chat_id": chat_id})
+                if access_denied(e):
+                    group_admin_access.deny(bot.id, chat_id)
                     continue
 
                 logger.error(f"❌ Error checking chat {chat_id}: {e}")
