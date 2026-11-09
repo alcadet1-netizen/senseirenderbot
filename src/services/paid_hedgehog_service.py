@@ -69,6 +69,15 @@ class PaidHedgehogService:
                     reward=result, state='ready')}, upsert=True, return_document=ReturnDocument.AFTER, session=tx)
         return await self.transaction(create)
 
+    async def bind_notice(self, oid, uid, chat_id, message_id, *, photo=False):
+        # First anchor wins, persisted before publishing an invoice link.
+        await self.orders.update_one({'_id': oid, 'user_id': uid, 'notice': None},
+            {'$set': {'notice': {'chat_id': chat_id, 'message_id': message_id, 'photo': photo}}})
+        order = await self.orders.find_one({'_id': oid, 'user_id': uid})
+        if not order or not order.get('notice'):
+            raise GameError('Не удалось сохранить уведомление оплаты. Повторите команду.')
+        return order
+
     async def checkout(self, oid, uid, amount, query_id):
         await self.available()
 

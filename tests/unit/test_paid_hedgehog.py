@@ -206,6 +206,7 @@ async def test_real_payment_dispatch_and_duplicate_receipt_do_not_reset_or_repay
     db,free,paid,base=await fixture()
     with patch('src.services.paid_hedgehog_service.time.time',return_value=120):
         order=await paid.quote(7)
+        await paid.bind_notice(order['_id'],7,7,91)
     container=NS(paid_hedgehog_service=paid,daily_pet_service=free,
         settings=NS(maintenance_mode=False,BASE_DIR=Path('.')))
     dp=Dispatcher();session=AsyncMock(return_value=True)
@@ -228,6 +229,9 @@ async def test_real_payment_dispatch_and_duplicate_receipt_do_not_reset_or_repay
         await dp.feed_update(bot,event)
     assert db.users.docs[7]['daily_pet']['deadline']==deadline
     assert db.users.docs[7]['coins']-before==base['coins']+base['bonus_coins']
+    methods=[call.args[1] for call in session.call_args_list]
+    assert sum(m.__api_method__=='editMessageMedia' for m in methods)==1
+    assert not any(m.__api_method__ in {'sendPhoto','sendInvoice','sendMessage'} for m in methods)
     await dp.storage.close()
 
 
@@ -256,7 +260,7 @@ async def test_unfunded_paid_order_returns_stars_without_consuming_price():
         order=await paid.quote(7);await paid.checkout(order['_id'],7,1,'q')
         db.bank.docs['single']['coins']=0
         result=await paid.receive(7,payment(order))
-    msg=NS(bot=AsyncMock(),answer=AsyncMock())
+    msg=NS(bot=AsyncMock(),answer=AsyncMock(),from_user=NS(id=7))
     await deliver(msg,NS(paid_hedgehog_service=paid),result)
     msg.bot.refund_star_payment.assert_awaited_once_with(user_id=7,telegram_payment_charge_id='charge1')
     assert db.paid_pet_payments.docs['charge1']['state']=='refunded'
@@ -264,19 +268,23 @@ async def test_unfunded_paid_order_returns_stars_without_consuming_price():
 
 
 @pytest.mark.asyncio
-async def test_offer_sends_stars_invoice_using_real_bank_schema():
+async def test_offer_updates_notice_with_stars_link_using_real_bank_schema():
     from unittest.mock import AsyncMock
     from src.bot.handlers.paid_hedgehog import offer
     db,free,paid,base=await fixture()
     # No parallel main.balance bank may be necessary to buy a repeat.
     db.bank.docs.pop('main')
-    query=NS(answer=AsyncMock(),from_user=NS(id=7),
-        message=NS(chat=NS(id=-100222),answer=AsyncMock()),bot=NS(send_invoice=AsyncMock()))
+    query=NS(data='petbuy:offer:7',answer=AsyncMock(),from_user=NS(id=7),
+        message=NS(chat=NS(id=-100222,type='supergroup'),message_id=91,photo=[],answer=AsyncMock()),
+        bot=NS(send_invoice=AsyncMock(),create_invoice_link=AsyncMock(return_value='https://t.me/$invoice'),
+               edit_message_text=AsyncMock()))
     container=NS(settings=NS(maintenance_mode=False),paid_hedgehog_service=paid)
     with patch('src.services.paid_hedgehog_service.time.time',return_value=120):
         await offer(query,container)
-    query.bot.send_invoice.assert_awaited_once()
-    invoice=query.bot.send_invoice.call_args.kwargs
+    query.bot.send_invoice.assert_not_awaited()
+    query.bot.edit_message_text.assert_awaited_once()
+    assert query.bot.edit_message_text.call_args.kwargs['message_id']==91
+    invoice=query.bot.create_invoice_link.call_args.kwargs
     assert invoice['currency']=='XTR' and invoice['prices'][0].amount==1
     query.message.answer.assert_not_awaited()
     assert db.bank.docs['single']['coins']==100000  # quote is not a debit
@@ -291,3 +299,66 @@ async def test_paid_does_not_use_or_refill_legacy_bank():
         with pytest.raises(GameError,match='недостаточно'): await paid.quote(7)
     assert db.bank.docs['single']['coins']==0
     assert not db.paid_pet_orders.docs
+
+
+@pytest.mark.asyncio
+async def test_payment_edits_one_persisted_notice_and_replay_is_silent():
+    from pathlib import Path
+    from unittest.mock import AsyncMock
+    from src.bot.handlers.paid_hedgehog import deliver
+    db,free,paid,base=await fixture()
+    with patch('src.services.paid_hedgehog_service.time.time',return_value=120):
+        order=await paid.quote(7)
+        bound=await paid.bind_notice(order['_id'],7,-100222,91)
+        # Repeated click from another message cannot redirect the receipt.
+        assert (await paid.bind_notice(order['_id'],7,7,999))['notice']==bound['notice']
+        await paid.checkout(order['_id'],7,1,'checkout')
+        receipt=await paid.receive(7,payment(order))
+    bot=NS(me=AsyncMock(return_value=NS(username='bot')),edit_message_media=AsyncMock())
+    message=NS(bot=bot,from_user=NS(id=7,first_name='Test'),answer_photo=AsyncMock(),answer=AsyncMock())
+    container=NS(paid_hedgehog_service=paid,daily_pet_service=free,settings=NS(BASE_DIR=Path('.')))
+    await deliver(message,container,receipt)
+    deadline=(await free.owned(receipt['pet_token'],7))['deadline']
+    await deliver(message,container,receipt)
+    bot.edit_message_media.assert_awaited_once()
+    assert bot.edit_message_media.call_args.kwargs['chat_id']==-100222
+    assert bot.edit_message_media.call_args.kwargs['message_id']==91
+    message.answer_photo.assert_not_awaited()
+    message.answer.assert_not_awaited()
+    assert (await free.owned(receipt['pet_token'],7))['deadline']==deadline
+
+
+@pytest.mark.asyncio
+async def test_other_user_cannot_open_owned_repeat_button():
+    from unittest.mock import AsyncMock
+    from src.bot.handlers.paid_hedgehog import offer
+    q=NS(data='petbuy:offer:7',from_user=NS(id=8),answer=AsyncMock())
+    await offer(q,NS())
+    assert q.answer.call_args.kwargs['show_alert'] is True
+
+
+@pytest.mark.asyncio
+async def test_precheckout_wrong_currency_is_rejected_without_settlement():
+    from unittest.mock import AsyncMock
+    from src.bot.handlers.paid_hedgehog import pre_checkout
+    q=NS(currency='USD',answer=AsyncMock())
+    service=NS(checkout=AsyncMock())
+    await pre_checkout(q,NS(settings=NS(maintenance_mode=False),paid_hedgehog_service=service))
+    assert q.answer.call_args.kwargs['ok'] is False
+    service.checkout.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_invoice_api_failure_edits_existing_message_only():
+    from unittest.mock import AsyncMock
+    from src.bot.handlers.paid_hedgehog import offer
+    db,free,paid,base=await fixture()
+    q=NS(data='petbuy:offer:7',from_user=NS(id=7),answer=AsyncMock(),
+        message=NS(chat=NS(id=7,type='private'),message_id=91,photo=[],answer=AsyncMock()),
+        bot=NS(create_invoice_link=AsyncMock(side_effect=TimeoutError()),edit_message_text=AsyncMock()))
+    with patch('src.services.paid_hedgehog_service.time.time',return_value=120):
+        await offer(q,NS(settings=NS(maintenance_mode=False),paid_hedgehog_service=paid))
+    q.message.answer.assert_not_awaited()
+    q.bot.edit_message_text.assert_awaited_once()
+    assert q.bot.edit_message_text.call_args.kwargs['message_id']==91
+    assert not db.paid_pet_payments.docs
