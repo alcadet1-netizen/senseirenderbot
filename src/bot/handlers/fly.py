@@ -33,7 +33,11 @@ async def command(message, container):
         else:
             enabled = args == ['on']
             await service.db.fly_settings.update_one({'_id': message.chat.id}, {'$set': {'enabled': enabled}}, upsert=True)
+        globally_disabled = not container.settings.fly_reactions_enabled
+        if globally_disabled:
+            enabled = False
         await message.answer(('Редкие реплики включены.' if enabled else 'Редкие реплики выключены.') +
+            (' Глобальный выключатель активен; настройка чата сохранена.' if globally_disabled else '') +
             ' Лимит: 8 в сутки, пауза 15 минут. Модель внимания, не настоящий мозг мухи.', parse_mode=None)
         return
     try:

@@ -2,6 +2,7 @@
 import hashlib
 import re
 import secrets
+import unicodedata
 from datetime import datetime, timezone, timedelta
 
 from pymongo.read_concern import ReadConcern
@@ -19,9 +20,12 @@ SENSITIVE = re.compile(r'смерт|умер|болез|больниц|суиц�
 
 
 def features(message):
-    text = message.text or ''
+    text = unicodedata.normalize('NFKC', message.text or '')
     user = message.from_user
     if (not user or user.is_bot or message.sender_chat or message.is_automatic_forward
+            or getattr(message, 'forward_origin', None)
+            or any(e.type in {'url', 'text_link', 'mention', 'text_mention', 'bot_command', 'email', 'phone_number'}
+                   for e in (getattr(message, 'entities', None) or []))
             or message.chat.type not in {'group', 'supergroup'} or not 20 <= len(text) <= 600
             or '/' in text or '@' in text or re.search(r'\d{5,}|https?://|www\.', text)
             or SENSITIVE.search(text)):
@@ -68,10 +72,20 @@ class FlyService:
             novel = bool(state.get('topic') and state['topic'] != topic)
             day = now.date().isoformat()
             count = state.get('count', 0) if state.get('day') == day else 0
-            allowed = (sampled and digest != state.get('digest') and count < 8
+            # Bounded, time-decaying habituation: A/B/A must not bypass repetition suppression.
+            recent = [item for item in state.get('recent', [])
+                      if now.timestamp() - item['at'] < 21600]
+            repeated = any(item['digest'] == digest for item in recent)
+            # Preserve immediate-repeat suppression for pre-history state during rollout.
+            if 'recent' not in state:
+                repeated = repeated or digest == state.get('digest')
+            allowed = (sampled and not repeated and count < 8
                 and now.timestamp()-state.get('last_reply', 0) >= 900
                 and now.timestamp()-person.get('last_reply', 0) >= 21600)
-            updates = {'topic': topic, 'digest': digest, 'day': day, 'count': count}
+            recent = [item for item in recent if item['digest'] != digest]
+            recent.append({'digest': digest, 'at': now.timestamp()})
+            updates = {'topic': topic, 'digest': digest, 'day': day, 'count': count,
+                       'recent': recent[-32:]}
             if allowed:
                 updates.update(count=count+1, last_reply=now.timestamp())
                 await self.db.fly_user_state.update_one({'_id': f'{message.chat.id}:{message.from_user.id}'},
@@ -79,6 +93,6 @@ class FlyService:
             # Every decision writes this document: concurrent messages serialize limits.
             await self.db.fly_chat_state.update_one({'_id': message.chat.id}, {'$set': updates}, upsert=True, session=tx)
             await self.db.fly_decisions.insert_one(dict(_id=key, created_at=now, expires_at=now+timedelta(days=7),
-                topic=topic, novelty=novel, selected=allowed, status='reserved' if allowed else 'silent'), session=tx)
+                topic=topic, novelty=novel, repeated=repeated, selected=allowed, status='reserved' if allowed else 'silent'), session=tx)
             return (key, question if novel else remark) if allowed else None
         return await self.transaction(choose)

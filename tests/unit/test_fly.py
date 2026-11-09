@@ -116,3 +116,52 @@ async def test_middleware_strict_reply_and_ambiguous_send_not_retried():
     event.answer.assert_awaited_once()
     assert event.answer.call_args.kwargs['reply_parameters'].allow_sending_without_reply is False
     assert (await db.fly_decisions.find_one({'_id':'-100222:1'}))['status']=='send_failed_or_unknown'
+
+
+@pytest.mark.asyncio
+async def test_alternating_repeats_habituate_and_recover():
+    db,s,clock=fixture()
+    await db.fly_settings.update_one({'_id':-100222},{'$set':{'enabled':True}},upsert=True)
+    assert await s.reserve(message())
+    clock[0]+=timedelta(minutes=16)
+    assert await s.reserve(message('Новая игра с удивительной механикой',mid=2,uid=8))
+    clock[0]+=timedelta(minutes=16)
+    assert await s.reserve(message(mid=3,uid=9)) is None
+    decision=await db.fly_decisions.find_one({'_id':'-100222:3'})
+    assert decision['repeated'] and not decision['selected']
+    clock[0]+=timedelta(hours=7)
+    assert await s.reserve(message('Новая игра с удивительной механикой',mid=4,uid=10))
+    assert await s.reserve(message(mid=3,uid=9)) is None  # replay stays silent after recovery
+
+
+@pytest.mark.asyncio
+async def test_habituation_memory_bounded():
+    db,s,_=fixture()
+    await db.fly_settings.update_one({'_id':-100222},{'$set':{'enabled':True}},upsert=True)
+    for i in range(50):
+        await s.reserve(message('Интересно устроен виджет '+str(i),mid=i,uid=i+100))
+    state=await db.fly_chat_state.find_one({'_id':-100222})
+    assert len(state['recent'])==32
+    assert all(set(item)=={'digest','at'} for item in state['recent'])
+
+
+def test_forward_hidden_link_and_unicode_normalization():
+    msg=message()
+    forwarded=msg.model_copy(update={'forward_origin':NS(type='user')})
+    assert features(forwarded) is None
+    hidden=msg.model_copy(update={'entities':[NS(type='text_link')]})
+    assert features(hidden) is None
+    assert features(message('Интересно как работает этот бот １２３４５６')) is None
+    assert features(message('Интересно как работает этот бот ／команда')) is None
+
+
+@pytest.mark.asyncio
+async def test_command_reports_global_kill_switch_truthfully():
+    from src.bot.handlers.fly import command
+    db,s,_=fixture();s.container.settings.fly_reactions_enabled=False
+    msg=NS(text='/senseifly on',bot=NS(get_chat_member=AsyncMock(return_value=NS(status='administrator'))),
+        chat=NS(id=-100222,type='supergroup'),from_user=NS(id=7),answer=AsyncMock())
+    await command(msg,s.container)
+    assert (await db.fly_settings.find_one({'_id':-100222}))['enabled']
+    assert 'Глобальный выключатель' in msg.answer.call_args.args[0]
+    assert 'реплики включены' not in msg.answer.call_args.args[0]
