@@ -67,7 +67,7 @@ class FlyReactionMiddleware(BaseMiddleware):
     async def __call__(self, handler, event, data):
         result = await handler(event, data)
         try:
-            if not self.service.container.settings.fly_reactions_enabled:
+            if data.get('automatic_reply_attempted') or not self.service.container.settings.fly_reactions_enabled:
                 return result
             from src.services.fly_service import features
             if not features(event) or not await group_admin_access.allowed(event.bot, event.chat.id):

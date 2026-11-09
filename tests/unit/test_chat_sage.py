@@ -16,7 +16,8 @@ async def test_only_short_valid_json_can_be_sent(raw,expected):
     assert await svc.chat_sage_reply('Интересно как устроен новый виджет')==expected
     args=svc.ai_factory.generate_text.call_args
     assert args.kwargs['provider_name']=='groq'
-    assert args.kwargs['max_tokens']==220
+    assert args.kwargs['max_tokens']==600
+    assert args.kwargs['json_mode'] is True
     assert 'message' in args.args[1]
 
 
@@ -46,3 +47,15 @@ async def test_silent_model_consumes_reservation_and_never_sends_fallback():
     svc.container.digest_service.chat_sage_reply.assert_awaited_once_with(event.text)
     event.answer.assert_not_awaited()
     assert (await db.fly_decisions.find_one({'_id':'-100222:1'}))['status']=='ai_silent_or_unavailable'
+
+
+@pytest.mark.asyncio
+async def test_popugai_attempt_prevents_second_automatic_reply():
+    from tests.unit.test_fly import fixture, message
+    from src.bot.handlers.fly import FlyReactionMiddleware
+    db,svc,_=fixture()
+    svc.container.digest_service=NS(chat_sage_reply=AsyncMock())
+    middleware=FlyReactionMiddleware(svc.container);middleware.service=svc
+    handler=AsyncMock(return_value='ok')
+    assert await middleware(handler,message(),{'automatic_reply_attempted':True})=='ok'
+    svc.container.digest_service.chat_sage_reply.assert_not_awaited()

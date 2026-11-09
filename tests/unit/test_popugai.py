@@ -19,7 +19,7 @@ def message(**changes):
 
 def service():
     return NS(add_media=AsyncMock(),get_reply_chance=AsyncMock(return_value=1),
-              get_random_media=AsyncMock(return_value=('sticker','saved')))
+              get_random_media=AsyncMock(return_value=('sticker','saved')),reserve_reply=AsyncMock(return_value=True))
 
 
 @pytest.mark.asyncio
@@ -74,7 +74,7 @@ async def test_no_admin_or_outage_never_blocks_other_handlers():
 
 @pytest.mark.asyncio
 async def test_mongo_atomic_dedup_refresh_and_chat_isolation():
-    db=NS(popugai_chances=Collection(),popugai_media=Collection())
+    db=NS(popugai_chances=Collection(),popugai_media=Collection(),popugai_decisions=Collection())
     svc=PopugaiService(NS(database=db))
     await svc.add_media(-1,'gif','old','unique')
     await svc.add_media(-1,'gif','new','unique')
@@ -96,3 +96,27 @@ async def test_command_uses_percent_not_probability(arg,expected):
     with patch('src.bot.handlers.chat_settings.is_admin',new=AsyncMock(return_value=True)):
         await cmd_popugai(msg,CommandObject(prefix='/',command='popugai',args=arg),msg.bot,NS(popugai_service=s))
     s.set_reply_chance.assert_awaited_once_with(-1007,expected)
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_send_blocks_sage_and_duplicate_reservation_blocks_send():
+    s=service();msg=message();data={};handler=AsyncMock()
+    msg.bot.session.side_effect=TimeoutError()
+    with patch('src.bot.middlewares.popugai.group_admin_access.allowed',new=AsyncMock(return_value=True)):
+        await PopugaiMiddleware(NS(popugai_service=s))(handler,msg,data)
+    assert data['automatic_reply_attempted'] is True
+    handler.assert_awaited_once()
+    s.reserve_reply.return_value=False;msg.bot.session.reset_mock()
+    with patch('src.bot.middlewares.popugai.group_admin_access.allowed',new=AsyncMock(return_value=True)):
+        await PopugaiMiddleware(NS(popugai_service=s))(handler,msg,{})
+    msg.bot.session.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_existing_settings_update_without_duplicate_chat_id():
+    db=NS(popugai_chances=Collection([{'_id':'legacy','chat_id':-1,'chance':.5}]),
+          popugai_media=Collection(),popugai_decisions=Collection())
+    svc=PopugaiService(NS(database=db))
+    await svc.set_reply_chance(-1,.01)
+    assert len(db.popugai_chances.docs)==1
+    assert await svc.get_reply_chance(-1)==.01

@@ -598,7 +598,7 @@ class DigestService:
         try:
             raw = await asyncio.wait_for(self.ai_factory.generate_text(
                 system, json.dumps({'message': text[:2000]}, ensure_ascii=False),
-                provider_name='groq', max_tokens=220), timeout=8)
+                provider_name='groq', max_tokens=600, json_mode=True), timeout=8)
             value = json.loads(raw)
             reply = value.get('reply') if isinstance(value, dict) else None
             if (not isinstance(reply, str) or not 1 <= len(reply.strip()) <= 240

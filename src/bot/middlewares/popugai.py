@@ -18,18 +18,18 @@ class PopugaiMiddleware(BaseMiddleware):
                 and event.from_user and not event.from_user.is_bot and not event.sender_chat
                 and not event.successful_payment):
             text = event.text or event.caption or ''
-            command = text.startswith('/') or any(e.type == 'bot_command' for e in
+            command = text.lstrip().startswith('/') or any(e.type == 'bot_command' for e in
                 [*(event.entities or []), *(event.caption_entities or [])])
             if not command and (event.sticker or event.animation or event.text or event.caption):
                 try:
                     # Explicit fail-closed check also protects independently installed middleware.
                     if await group_admin_access.allowed(event.bot, event.chat.id):
-                        await self.observe(event)
+                        await self.observe(event, data)
                 except Exception as exc:
                     logger.warning('Popugai unavailable error_type=%s', type(exc).__name__)
         return await handler(event, data)
 
-    async def observe(self, message):
+    async def observe(self, message, data=None):
         service = self.container.popugai_service
         media = message.sticker or message.animation
         if media:
@@ -41,8 +41,12 @@ class PopugaiMiddleware(BaseMiddleware):
         item = await service.get_random_media(message.chat.id)
         if not item:
             return
+        if not await service.reserve_reply(message.chat.id, message.message_id):
+            return
+        if data is not None:
+            data['automatic_reply_attempted'] = True
         kind, file_id = item
-        reply = ReplyParameters(message_id=message.message_id, allow_sending_without_reply=True)
+        reply = ReplyParameters(message_id=message.message_id, allow_sending_without_reply=False)
         if kind == 'sticker':
             await message.answer_sticker(sticker=file_id, reply_parameters=reply)
         else:

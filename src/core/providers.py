@@ -43,7 +43,7 @@ class AIProviderFactory:
         name = name or self.active_provider
         return self.providers.get(name)
 
-    async def generate_text(self, system: str, user: str, provider_name: str = None, max_tokens: int = 2000) -> str:
+    async def generate_text(self, system: str, user: str, provider_name: str = None, max_tokens: int = 2000, json_mode: bool = False) -> str:
         provider = self.get_provider(provider_name)
         if not provider:
             return "❌ Unknown provider"
@@ -90,6 +90,11 @@ class AIProviderFactory:
             "max_tokens": max_tokens
         }
         
+        if json_mode:
+            payload['response_format'] = {'type': 'json_object'}
+            if provider.name == 'Groq' and provider.model.startswith('openai/gpt-oss'):
+                payload['reasoning_effort'] = 'low'
+
         # SambaNova specific adjustments if needed (usually openai compatible)
 
         try:
