@@ -71,7 +71,13 @@ def test_widget_is_small_offline_native_and_honest():
     html=fly_html()
     assert len(html.encode())<=32768 and len(zlib.compress(html.encode(),9))<=4096
     assert 'TelegramWidget.ready()' in html and '<canvas' in html
-    assert 'Не коннектом' in html
+    assert 'Sensei FLY LAB' in html
+    assert 'Визуальная симуляция нейронной сети мухи' in html
+    assert html.count('<button ')==1
+    assert 'Запустить симуляцию нейронов' in html
+    assert 'настоящего мозга' not in html
+    assert 'id="stats"' not in html and 'id="why"' not in html
+    assert 'draw(false);TelegramWidget.ready()' in html
     assert 'TelegramWidget.request' not in html and 'fetch(' not in html
 
 
