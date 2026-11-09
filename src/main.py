@@ -113,19 +113,25 @@ async def on_shutdown(bot: Bot, container: Container | None = None) -> None:
     """Действия при остановке."""
     logger.info(" Shutting down...")
 
-    if container:
-        campaigns = getattr(container, '_comment_campaign_service', None)
-        if campaigns is not None:
-            await campaigns.stop()
-        # Возвращаем ставки из активных дуэлей
-        try:
-            await container.duel_service.shutdown()
-            logger.info("✅ Active duels refunded")
-        finally:
-            # Close even if one settlement fails; never mask it as a success.
-            await container.mongo_client.close()
-            logger.info("✅ MongoDB disconnected")
-
+    try:
+        if container:
+            try:
+                campaigns = getattr(container, '_comment_campaign_service', None)
+                if campaigns is not None:
+                    await campaigns.stop()
+            finally:
+                # Cleanup must also run when startup failed before polling, or
+                # when another service fails to stop.
+                try:
+                    await container.duel_service.shutdown()
+                    logger.info("✅ Active duels refunded")
+                finally:
+                    await container.mongo_client.close()
+                    logger.info("✅ MongoDB disconnected")
+    finally:
+        # start_polling normally owns this, but was never entered on a failed
+        # startup. aiogram's session close is safe after an earlier close too.
+        await bot.session.close()
     logger.info("👋 Goodbye!")
 
 

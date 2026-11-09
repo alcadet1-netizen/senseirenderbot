@@ -118,3 +118,32 @@ async def test_shutdown_waits_for_inflight_creation_escrow_registration():
     await stopping
     assert duel.finished and duel.timeout_task.cancelled()
     assert service.users.update_one.await_count == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('failure', ['campaign', 'refund', 'mongo', None])
+async def test_startup_failure_cleanup_always_closes_bot_http_session(failure):
+    from src.main import on_shutdown
+    def operation(name):
+        return AsyncMock(side_effect=RuntimeError(name) if failure==name else None)
+    campaigns=SimpleNamespace(stop=operation('campaign'))
+    container=SimpleNamespace(_comment_campaign_service=campaigns,
+        duel_service=SimpleNamespace(shutdown=operation('refund')),
+        mongo_client=SimpleNamespace(close=operation('mongo')))
+    bot=SimpleNamespace(session=SimpleNamespace(close=AsyncMock()))
+    if failure:
+        with pytest.raises(RuntimeError,match=failure): await on_shutdown(bot,container)
+    else:
+        await on_shutdown(bot,container)
+    campaigns.stop.assert_awaited_once()
+    container.duel_service.shutdown.assert_awaited_once()
+    container.mongo_client.close.assert_awaited_once()
+    bot.session.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_shutdown_without_container_closes_bot_session():
+    from src.main import on_shutdown
+    bot=SimpleNamespace(session=SimpleNamespace(close=AsyncMock()))
+    await on_shutdown(bot)
+    bot.session.close.assert_awaited_once()
