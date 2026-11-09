@@ -459,3 +459,23 @@ async def test_real_update_container_and_difference_decode_and_preprocess(tl):
         assert processed[0]._entities[7].id == 7
     peer = await client.get_input_entity(7)
     assert peer.user_id == 7 and peer.access_hash == 123
+
+
+@pytest.mark.asyncio
+async def test_forward_widget_uses_exact_created_message_and_no_protection(tl):
+    client = connected_client(return_value='forwarded')
+    client.get_input_entity.side_effect = [tl.types.InputPeerUser(7,123), tl.types.InputPeerChat(42)]
+    transport = MtprotoWidgets(client,None,tl.types,tl.functions,tl.utils)
+    from datetime import datetime, timezone
+    media = tl.types.MessageMediaWidget(340,0,b'payload')
+    message = tl.types.Message(id=456, peer_id=tl.types.PeerUser(7),
+                              date=datetime.now(timezone.utc),message='',media=media)
+    update = tl.types.UpdateNewMessage(message=message,pts=1,pts_count=1)
+    result = SimpleNamespace(updates=[update])
+    assert await transport.forward_widget(7,-42,result)=='forwarded'
+    request = client.call_args.args[0]
+    assert isinstance(request,tl.functions.messages.ForwardMessagesRequest)
+    assert request.id==[456] and request.noforwards is False
+    assert request.from_peer.user_id==7 and request.to_peer.chat_id==42
+    with pytest.raises(MtprotoWidgetError,match='SOURCE_MESSAGE_ID'):
+        await transport.forward_widget(7,-42,SimpleNamespace(updates=[]))

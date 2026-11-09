@@ -86,11 +86,12 @@ async def test_global_kill_switch():
 async def test_handler_native_widget_and_admin_setting():
     from src.bot.handlers.fly import command
     db,s,_=fixture()
-    msg=NS(text='/senseifly',bot=NS(get_chat_member=AsyncMock()),chat=NS(id=-100222,type='supergroup'),
+    msg=NS(text='/senseifly',bot=NS(get_chat_member=AsyncMock()),chat=NS(id=7,type='private'),
         from_user=NS(id=7),answer=AsyncMock())
     with patch('src.bot.handlers.fly.send_native_widget',new=AsyncMock()) as send:
         await command(msg,s.container)
         assert send.call_args.kwargs['allow_queries'] is False
+    msg.chat=NS(id=-100222,type='supergroup')
     msg.text='/senseifly on';msg.bot.get_chat_member.return_value=NS(status='member')
     await command(msg,s.container)
     assert await db.fly_settings.find_one({'_id':-100222}) is None
@@ -172,7 +173,7 @@ async def test_widget_policy_rejection_is_explained_without_retry_or_rewards(cap
     from src.bot.handlers.fly import command
     from src.infra.mtproto.widgets import MtprotoWidgetError
     _,s,_=fixture()
-    msg=NS(text='/senseifly',bot=NS(token='123456:SECRET'),chat=NS(id=-100222,type='supergroup'),
+    msg=NS(text='/senseifly',bot=NS(token='123456:SECRET'),chat=NS(id=7,type='private'),
         from_user=NS(id=7),answer=AsyncMock())
     with patch('src.bot.handlers.fly.send_native_widget',new=AsyncMock(
             side_effect=MtprotoWidgetError('INPUT_MEDIA_WIDGET_NOT_ALLOWED'))) as send:
@@ -183,3 +184,42 @@ async def test_widget_policy_rejection_is_explained_without_retry_or_rewards(cap
     assert '/senseifly status' in text and 'Mini App' in text
     assert not any(record.exc_info for record in caplog.records)
     assert not s.db.collections
+
+
+@pytest.mark.asyncio
+async def test_group_lab_available_to_non_admin_and_uses_private_forward():
+    from src.bot.handlers.fly import command
+    _,s,_=fixture()
+    msg=NS(text='/senseifly',bot=NS(get_chat_member=AsyncMock()),
+        chat=NS(id=-100222,type='supergroup'),from_user=NS(id=7,is_bot=False),
+        sender_chat=None,answer=AsyncMock())
+    with patch('src.bot.handlers.fly.send_private_widget_to_chat',new=AsyncMock()) as send:
+        await command(msg,s.container)
+    assert send.call_args.args[2:4] == (7,-100222)
+    msg.bot.get_chat_member.assert_not_awaited()
+    msg.answer.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_private_creation_failure_does_not_try_direct_group_send():
+    from src.bot.native_widgets import send_private_widget_to_chat
+    from src.infra.mtproto.widgets import MtprotoWidgetError
+    _,s,_=fixture()
+    bot=NS(forward_message=AsyncMock())
+    with patch('src.bot.native_widgets.send_native_widget',new=AsyncMock(
+            side_effect=MtprotoWidgetError('PEER_NOT_CACHED'))) as send:
+        with pytest.raises(MtprotoWidgetError):
+            await send_private_widget_to_chat(bot,s.container,7,-100222,'html')
+    assert send.call_args.args[2]==7
+    bot.forward_message.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_bot_api_forwards_only_created_message():
+    from src.bot.native_widgets import send_private_widget_to_chat
+    _,s,_=fixture()
+    bot=NS(forward_message=AsyncMock())
+    with patch('src.bot.native_widgets.send_native_widget',new=AsyncMock(return_value={'message_id':123})):
+        await send_private_widget_to_chat(bot,s.container,7,-100222,'html')
+    bot.forward_message.assert_awaited_once_with(chat_id=-100222,from_chat_id=7,
+                                               message_id=123,protect_content=False)
