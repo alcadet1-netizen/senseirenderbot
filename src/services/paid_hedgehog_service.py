@@ -70,13 +70,23 @@ class PaidHedgehogService:
         return await self.transaction(create)
 
     async def bind_notice(self, oid, uid, chat_id, message_id, *, photo=False):
-        # First anchor wins, persisted before publishing an invoice link.
-        await self.orders.update_one({'_id': oid, 'user_id': uid, 'notice': None},
-            {'$set': {'notice': {'chat_id': chat_id, 'message_id': message_id, 'photo': photo}}})
-        order = await self.orders.find_one({'_id': oid, 'user_id': uid})
-        if not order or not order.get('notice'):
-            raise GameError('Не удалось сохранить уведомление оплаты. Повторите команду.')
-        return order
+        async def bind(tx):
+            order = await self.orders.find_one({'_id': oid, 'user_id': uid}, session=tx)
+            if not order:
+                raise GameError('Не удалось сохранить уведомление оплаты. Повторите команду.')
+            previous = order.get('notice')
+            # Checkout and binding serialize on the same transactional order.
+            # Once checkout starts, never move a paid/in-flight reward.
+            newer = (not previous or previous['chat_id'] != chat_id
+                     or message_id > previous['message_id'])
+            if order['state'] == 'ready' and newer:
+                notice = dict(chat_id=chat_id, message_id=message_id, photo=photo)
+                await self.orders.update_one({'_id': oid}, {'$set': {'notice': notice}}, session=tx)
+                order['notice'] = notice
+            if not order.get('notice'):
+                raise GameError('Оплата уже обрабатывается. Не оплачивайте повторно.')
+            return order
+        return await self.transaction(bind)
 
     async def checkout(self, oid, uid, amount, query_id):
         await self.available()

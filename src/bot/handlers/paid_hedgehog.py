@@ -51,11 +51,20 @@ async def offer(query, container):
         if container.settings.maintenance_mode or MaintenanceService.is_enabled():
             raise GameError('Оплата временно недоступна: обслуживание.')
         order = await container.paid_hedgehog_service.quote(query.from_user.id)
+        previous_notice = order.get('notice')
         stage = 'bind_notice'
         order = await container.paid_hedgehog_service.bind_notice(
             order['_id'], query.from_user.id, notice['chat_id'], notice['message_id'], photo=photo)
         notice = {k: order['notice'][k] for k in ('chat_id', 'message_id')}
         photo = order['notice'].get('photo', False)
+        if previous_notice and any(previous_notice[k] != notice[k] for k in ('chat_id', 'message_id')):
+            # Best effort cleanup only: never roll back a durable anchor or a payment.
+            try:
+                await query.bot.edit_message_reply_markup(
+                    chat_id=previous_notice['chat_id'], message_id=previous_notice['message_id'], reply_markup=None)
+            except TelegramAPIError:
+                logger.warning('Stars old offer keyboard cleanup unavailable')
+
         # Invoice link opens Telegram's mandatory Stars confirmation without a
         # separate invoice message. No reward on this action.
         stage = 'create_invoice_link'
@@ -73,7 +82,7 @@ async def offer(query, container):
         logger.info('Stars offer ready user=%s anchor_chat=%s anchor_message=%s redirected=%s',
                     query.from_user.id, notice['chat_id'], notice['message_id'], notice != clicked_notice)
         if notice != clicked_notice:
-            await query.answer('Счёт обновлён в предыдущем уведомлении оплаты. Используйте кнопку «Оплатить» там.',
+            await query.answer('Оплата находится в последнем уведомлении Ежа. Используйте кнопку «Оплатить» там. Если уже подтвердили — не платите повторно.',
                                show_alert=True)
         else:
             await query.answer()

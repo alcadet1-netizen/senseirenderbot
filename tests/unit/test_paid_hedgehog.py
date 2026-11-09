@@ -310,9 +310,9 @@ async def test_payment_edits_one_persisted_notice_and_replay_is_silent():
     with patch('src.services.paid_hedgehog_service.time.time',return_value=120):
         order=await paid.quote(7)
         bound=await paid.bind_notice(order['_id'],7,-100222,91)
-        # Repeated click from another message cannot redirect the receipt.
-        assert (await paid.bind_notice(order['_id'],7,7,999))['notice']==bound['notice']
+        # Checkout freezes the reward anchor, even if another offer is clicked.
         await paid.checkout(order['_id'],7,1,'checkout')
+        assert (await paid.bind_notice(order['_id'],7,7,999))['notice']==bound['notice']
         receipt=await paid.receive(7,payment(order))
     bot=NS(me=AsyncMock(return_value=NS(username='bot')),edit_message_media=AsyncMock())
     message=NS(bot=bot,from_user=NS(id=7,first_name='Test'),answer_photo=AsyncMock(),answer=AsyncMock())
@@ -385,7 +385,7 @@ async def test_offer_rejection_is_visible_and_logged(caplog):
 
 
 @pytest.mark.asyncio
-async def test_repeated_offer_points_to_saved_notice_without_silent_click(caplog):
+async def test_repeated_offer_moves_to_latest_notice(caplog):
     import logging
     from unittest.mock import AsyncMock
     from src.bot.handlers.paid_hedgehog import offer
@@ -395,12 +395,30 @@ async def test_repeated_offer_points_to_saved_notice_without_silent_click(caplog
         await paid.bind_notice(order['_id'],7,7,90)
     q=NS(data='petbuy:offer:7',from_user=NS(id=7),answer=AsyncMock(),
          message=NS(chat=NS(id=7,type='private'),message_id=91,photo=[]),
-         bot=NS(create_invoice_link=AsyncMock(return_value='https://t.me/$invoice'),edit_message_text=AsyncMock()))
+         bot=NS(create_invoice_link=AsyncMock(return_value='https://t.me/$invoice'),edit_message_text=AsyncMock(),
+                edit_message_reply_markup=AsyncMock()))
     with caplog.at_level(logging.INFO), patch('src.services.paid_hedgehog_service.time.time',return_value=120):
         await offer(q,NS(settings=NS(maintenance_mode=False),paid_hedgehog_service=paid))
-    assert q.bot.edit_message_text.call_args.kwargs['message_id']==90
-    q.answer.assert_awaited_once()
-    assert q.answer.call_args.kwargs['show_alert'] is True
-    assert 'предыдущем' in q.answer.call_args.args[0]
-    assert 'redirected=True' in caplog.text
+    assert q.bot.edit_message_text.call_args.kwargs['message_id']==91
+    q.bot.edit_message_reply_markup.assert_awaited_once_with(chat_id=7,message_id=90,reply_markup=None)
+    q.answer.assert_awaited_once_with()
+    assert 'redirected=False' in caplog.text
     assert 'https://t.me/$invoice' not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_latest_notice_does_not_move_back_and_checkout_freezes_it():
+    db,free,paid,base=await fixture()
+    with patch('src.services.paid_hedgehog_service.time.time',return_value=120):
+        order=await paid.quote(7)
+        await paid.bind_notice(order['_id'],7,7,90)
+        latest=await paid.bind_notice(order['_id'],7,7,100,photo=True)
+        assert latest['notice']==dict(chat_id=7,message_id=100,photo=True)
+        older=await paid.bind_notice(order['_id'],7,7,91)
+        assert older['notice']==latest['notice']
+        await paid.checkout(order['_id'],7,1,'q')
+        locked=await paid.bind_notice(order['_id'],7,7,101)
+        assert locked['notice']==latest['notice']
+        await paid.receive(7,payment(order))
+        fulfilled=await paid.bind_notice(order['_id'],7,7,102)
+        assert fulfilled['notice']==latest['notice']
