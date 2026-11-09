@@ -28,3 +28,15 @@ async def test_no_deletion_logic():
         
         # Verify NO deletion
         bot.delete_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_bot_defaults_allow_copying():
+    from src.bot.loader import create_bot
+    from src.bot.native_widgets import SendWidget
+    bot = create_bot()
+    try:
+        assert bot.default.protect_content is False
+        assert SendWidget(chat_id=7, html='<html></html>').protect_content is False
+    finally:
+        await bot.session.close()

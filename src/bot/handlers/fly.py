@@ -7,7 +7,7 @@ from aiogram.types import ReplyParameters
 
 from src.bot.middlewares.group_admin import group_admin_access
 from src.bot.native_widgets import send_native_widget
-from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS
+from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure
 from src.services.fly_service import FlyService
 from src.widgets.fly import fly_html
 
@@ -42,9 +42,13 @@ async def command(message, container):
         return
     try:
         await send_native_widget(message.bot, container, message.chat.id, fly_html(), allow_queries=False)
-    except WIDGET_TRANSPORT_ERRORS:
-        logger.warning('Fly lab native transport unavailable', exc_info=True)
-        await message.answer('Нативный виджет сейчас недоступен. Лаборатория — демонстрация модели внимания, без наград.', parse_mode=None)
+    except WIDGET_TRANSPORT_ERRORS as exc:
+        failure = describe_failure(exc, message.bot)
+        await message.answer(
+            'Лаборатория Fly не отправлена. ' + failure.advice +
+            f' Код: {failure.category} / {failure.reference}. '
+            'Реакции в чате настраиваются отдельно: /senseifly status. '
+            'Mini App вместо нативного виджета не открываю.', parse_mode=None)
 
 
 class FlyReactionMiddleware(BaseMiddleware):

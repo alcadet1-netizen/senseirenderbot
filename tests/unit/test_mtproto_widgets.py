@@ -71,6 +71,7 @@ async def test_mtproto_send_uses_sendmedia_and_never_bot_api(tl):
     request = client.call_args.args[0]
     assert isinstance(request, tl.functions.messages.SendMediaRequest)
     assert isinstance(request.media, tl.types.InputMediaWidget)
+    assert request.noforwards is False
     assert request.media.allow_queries and not request.media.shared_widget
     assert request.media.html == '<html>OK</html>' and request.random_id
     assert request.allow_paid_floodskip is None and request.allow_paid_stars is None
