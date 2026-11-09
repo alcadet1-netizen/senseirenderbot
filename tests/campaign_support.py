@@ -120,7 +120,7 @@ class Harness:
             if chat_id in (-100111,'@SenseiDurova'):
                 return NS(id=-100111,type='channel',linked_chat_id=-100222)
             return NS(id=-100222,type='supergroup',linked_chat_id=-100111)
-        self.bot=NS(send_message=AsyncMock(side_effect=send),get_chat=AsyncMock(side_effect=chat),
+        self.bot=NS(send_message=AsyncMock(side_effect=send),edit_message_text=AsyncMock(return_value=True),get_chat=AsyncMock(side_effect=chat),
             get_me=AsyncMock(return_value=NS(id=999)),
             get_chat_member=AsyncMock(return_value=NS(status='administrator',can_post_messages=True)))
     async def open(self):
@@ -563,3 +563,96 @@ class CampaignCases:
         assert await env.service.inbox.pending()
         await env.service.tick()
         assert await env.db.campaign_comments.count_documents({'campaign_id':'-100111:2'})==1
+
+    async def prepare_final_delivery(self,env):
+        await env.profile(7);await env.begin();await env.service.ingest(env.comment(101))
+        env.clock[0]+=timedelta(hours=4,seconds=1)
+        for _ in range(30):
+            camp=await env.db.comment_campaigns.find_one({'_id':'-100111:1'})
+            if camp['phase']=='final': return camp
+            await env.service.tick()
+        raise AssertionError('Final phase not reached')
+
+    async def test_missing_final_root_edits_own_announcement_without_repaying(self,campaign_env):
+        from aiogram.exceptions import TelegramBadRequest
+        from aiogram.methods import SendMessage
+        env=campaign_env;camp=await self.prepare_final_delivery(env)
+        env.bot.send_message.side_effect=TelegramBadRequest(method=SendMessage(chat_id=-100222,text='result'),
+            message='Bad Request: message to be replied not found')
+        await env.service.tick()
+        done=await env.db.comment_campaigns.find_one({'_id':camp['_id']})
+        assert done['status']=='completed' and done['final_delivery_mode']=='edit_announcement'
+        assert done['final_message_id']==camp['start_message_id']
+        edit=env.bot.edit_message_text.await_args.kwargs
+        assert edit['chat_id']==-100222 and edit['message_id']==camp['start_message_id']
+        assert '2000 Sensei Coin' in edit['text']
+        for _ in range(5): await env.service.tick()
+        assert await env.wallet(7)==2000
+        assert (await env.db.bank.find_one({'_id':'single'}))['coins']==998000
+        assert await env.db.transactions.count_documents({})==1
+        assert env.bot.send_message.await_count==2 and env.bot.edit_message_text.await_count==1
+
+    async def test_fallback_restart_and_already_edited_response_are_idempotent(self,campaign_env):
+        from aiogram.exceptions import TelegramBadRequest
+        from aiogram.methods import SendMessage, EditMessageText
+        env=campaign_env;camp=await self.prepare_final_delivery(env)
+        env.bot.send_message.side_effect=TelegramBadRequest(method=SendMessage(chat_id=-100222,text='result'),
+            message='Bad Request: message to be replied not found')
+        env.bot.edit_message_text.side_effect=TimeoutError('edit response lost')
+        await env.service.tick()
+        row=await env.db.comment_campaigns.find_one({'_id':camp['_id']})
+        assert row['phase']=='final' and row['final_delivery_mode']=='edit_announcement' and not row['terminal']
+        await env.service.stop()
+        env.service=CommentCampaignService(env.container,clock=lambda:env.clock[0]);await env.service.initialize(env.bot)
+        env.clock[0]+=timedelta(seconds=2)
+        env.bot.edit_message_text.side_effect=TelegramBadRequest(method=EditMessageText(text='result',chat_id=-100222,
+            message_id=camp['start_message_id']),message='Bad Request: message is not modified')
+        await env.service.tick()
+        assert (await env.db.comment_campaigns.find_one({'_id':camp['_id']}))['status']=='completed'
+        assert env.bot.send_message.await_count==2  # No repeated request to missing root.
+        assert await env.wallet(7)==2000
+        assert (await env.db.bank.find_one({'_id':'single'}))['coins']==998000
+
+    async def test_missing_root_and_missing_announcement_block_without_flat_chat_fallback(self,campaign_env):
+        from aiogram.exceptions import TelegramBadRequest
+        from aiogram.methods import SendMessage, EditMessageText
+        env=campaign_env;camp=await self.prepare_final_delivery(env)
+        env.bot.send_message.side_effect=TelegramBadRequest(method=SendMessage(chat_id=-100222,text='result'),
+            message='Bad Request: message to be replied not found')
+        env.bot.edit_message_text.side_effect=TelegramBadRequest(method=EditMessageText(text='result',chat_id=-100222,
+            message_id=camp['start_message_id']),message='Bad Request: message to edit not found')
+        await env.service.tick()
+        row=await env.db.comment_campaigns.find_one({'_id':camp['_id']})
+        assert row['terminal'] and row['status']=='failed' and row['final_delivery_status']=='blocked'
+        assert row['phase']=='final' and row['payouts_done'] and row['final_message_id'] is None
+        for _ in range(4):
+            env.clock[0]+=timedelta(minutes=2);await env.service.tick()
+        assert env.bot.send_message.await_count==2 and env.bot.edit_message_text.await_count==1
+        assert await env.wallet(7)==2000
+        assert (await env.db.bank.find_one({'_id':'single'}))['coins']==998000
+
+    async def test_unrelated_bad_request_does_not_edit_announcement(self,campaign_env):
+        from aiogram.exceptions import TelegramBadRequest
+        from aiogram.methods import SendMessage
+        env=campaign_env;camp=await self.prepare_final_delivery(env)
+        env.bot.send_message.side_effect=TelegramBadRequest(method=SendMessage(chat_id=-100222,text='result'),
+            message="Bad Request: can't parse entities")
+        await env.service.tick()
+        row=await env.db.comment_campaigns.find_one({'_id':camp['_id']})
+        assert not row['terminal'] and 'final_delivery_mode' not in row
+        env.bot.edit_message_text.assert_not_awaited()
+        assert await env.wallet(7)==2000
+
+    async def test_missing_root_without_stored_announcement_requires_operator(self,campaign_env):
+        from aiogram.exceptions import TelegramBadRequest
+        from aiogram.methods import SendMessage
+        env=campaign_env;camp=await self.prepare_final_delivery(env)
+        await env.db.comment_campaigns.update_one({'_id':camp['_id']},{'$set':{'start_message_id':None}})
+        env.bot.send_message.side_effect=TelegramBadRequest(method=SendMessage(chat_id=-100222,text='result'),
+            message='Bad Request: message to be replied not found')
+        await env.service.tick()
+        row=await env.db.comment_campaigns.find_one({'_id':camp['_id']})
+        assert row['terminal'] and row['last_error']=='final_announcement_id_missing'
+        assert row['final_delivery_status']=='blocked' and row['payouts_done']
+        env.bot.edit_message_text.assert_not_awaited()
+        assert await env.wallet(7)==2000
