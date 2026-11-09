@@ -479,3 +479,14 @@ async def test_forward_widget_uses_exact_created_message_and_no_protection(tl):
     assert request.from_peer.user_id==7 and request.to_peer.chat_id==42
     with pytest.raises(MtprotoWidgetError,match='SOURCE_MESSAGE_ID'):
         await transport.forward_widget(7,-42,SimpleNamespace(updates=[]))
+
+
+@pytest.mark.asyncio
+async def test_custom_fly_caption_does_not_change_hedgehog_default(tl):
+    client=connected_client(return_value='updates')
+    client.get_input_entity.return_value=tl.types.InputPeerUser(7,123)
+    transport=MtprotoWidgets(client,None,tl.types,tl.functions,tl.utils)
+    await transport.send_widget(7,'<html>OK</html>',allow_queries=False,caption='Sensei FLY LAB')
+    assert client.call_args.args[0].message=='Sensei FLY LAB'
+    await transport.send_widget(7,'<html>OK</html>')
+    assert client.call_args.args[0].message=='🦔 Ёжик · ежедневный бонус'

@@ -229,3 +229,42 @@ async def test_bot_api_forwards_only_created_message():
         await send_private_widget_to_chat(bot,s.container,7,-100222,'html')
     bot.forward_message.assert_awaited_once_with(chat_id=-100222,from_chat_id=7,
                                                message_id=123,protect_content=False)
+
+
+def test_animation_with_readonly_browser_screen_and_full_timer_cycle():
+    import json
+    import shutil
+    import subprocess
+    if not shutil.which('node'):
+        pytest.skip('Node required for browser-global regression')
+    script=fly_html().split('<script>')[1].split('</script>')[0]
+    harness=r'''
+const vm=require('node:vm');let ops=0,timers=new Map(),id=0;
+const ctx=new Proxy({}, {get:(o,k)=>k in o?o[k]:(...args)=>{
+ if(args.some(v=>typeof v==='number'&&!Number.isFinite(v)))throw Error('nonfinite');ops++;
+},set:(o,k,v)=>(o[k]=v,true)});
+const button={disabled:false};const sandbox={Math,document:{getElementById:k=>k==='net'?{getContext:()=>ctx}:button},
+ TelegramWidget:{ready:()=>{}},setInterval:fn=>{timers.set(++id,fn);return id;},clearInterval:k=>timers.delete(k)};
+Object.defineProperty(sandbox,'screen',{value:{width:300},writable:false});
+vm.createContext(sandbox);vm.runInContext(INPUT,sandbox);
+if(timers.size!==0||ops<600)throw Error('blank boot/autoplay');
+button.onclick();button.onclick();if(timers.size!==1)throw Error('duplicate timers');
+const first=sandbox.v.slice();const x=sandbox.projected[0].x;
+for(let i=0;i<359;i++){for(const fn of [...timers.values()])fn();}
+if(timers.size!==0||button.disabled||sandbox.frame!==360)throw Error('did not stop');
+if(!sandbox.v.some((v,i)=>v!==first[i])||x===sandbox.projected[0].x)throw Error('static');
+button.onclick();if(timers.size!==1||sandbox.frame!==1)throw Error('restart failed');
+console.log(JSON.stringify({nodes:sandbox.v.length,particles:sandbox.pts.length}));
+'''.replace('INPUT',json.dumps(script))
+    result=subprocess.run(['node','-e',harness],capture_output=True,text=True,timeout=30,check=True)
+    assert json.loads(result.stdout)=={'nodes':20000,'particles':600}
+
+
+@pytest.mark.asyncio
+async def test_fly_caption_is_not_hedgehog():
+    from src.bot.handlers.fly import command
+    _,s,_=fixture()
+    msg=NS(text='/senseifly',bot=NS(),chat=NS(id=7,type='private'),answer=AsyncMock())
+    with patch('src.bot.handlers.fly.send_native_widget',new=AsyncMock()) as send:
+        await command(msg,s.container)
+    assert send.call_args.kwargs['caption']=='Sensei FLY LAB'

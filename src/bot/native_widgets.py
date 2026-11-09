@@ -116,20 +116,22 @@ class HedgehogWidgetMiddleware(BaseMiddleware):
         return None
 
 
-async def send_native_widget(bot, container, chat_id, html, *, allow_queries=True):
+async def send_native_widget(bot, container, chat_id, html, *, allow_queries=True, caption=None):
     """One explicit route for both real games and admin probes; no fallback."""
     transport = getattr(container, 'native_widget_transport', None)
     if transport is not None:
-        return await transport.send_widget(chat_id, html, allow_queries=allow_queries)
+        options = {'caption': caption} if caption is not None else {}
+        return await transport.send_widget(chat_id, html, allow_queries=allow_queries, **options)
     if getattr(container.settings, 'native_widget_transport', 'bot_api') == 'mtproto':
         from src.infra.mtproto.widgets import MtprotoWidgetError
         raise MtprotoWidgetError('MTPROTO_TRANSPORT_NOT_READY')
     return await bot(SendWidget(chat_id=chat_id, html=html, allow_queries=allow_queries))
 
 
-async def send_private_widget_to_chat(bot, container, user_id, chat_id, html):
+async def send_private_widget_to_chat(bot, container, user_id, chat_id, html, *, caption=None):
     """User-initiated private creation, followed by one explicit forward; no fallback."""
-    sent = await send_native_widget(bot, container, user_id, html, allow_queries=False)
+    options = {'caption': caption} if caption is not None else {}
+    sent = await send_native_widget(bot, container, user_id, html, allow_queries=False, **options)
     transport = getattr(container, 'native_widget_transport', None)
     if transport is not None:
         return await transport.forward_widget(user_id, chat_id, sent)
