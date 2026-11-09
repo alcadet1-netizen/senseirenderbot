@@ -29,9 +29,9 @@ async def test_menu_fixed_amounts_and_exact_xrocket_url():
     await cmd_donate(msg)
     call=msg.answer.call_args
     buttons=call.kwargs['reply_markup'].inline_keyboard
-    assert [[b.callback_data for b in row] for row in buttons[:2]] == [['donate:5','donate:15'],['donate:50','donate:100']]
+    assert [[b.callback_data for b in row] for row in buttons[:2]] == [['coinbuy:1','coinbuy:5'],['coinbuy:10','coinbuy:50']]
     assert buttons[2][0].url == XROCKET_URL == 'https://t.me/xrocket?start=inv_uBCMaE7YvzGJYwF'
-    assert 'пожертвования' in call.args[0]
+    assert 'SenseiBank' in call.args[0]
 
 
 @pytest.mark.asyncio

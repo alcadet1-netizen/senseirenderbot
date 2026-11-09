@@ -1,4 +1,5 @@
 """Voluntary Telegram Stars donations, strictly separate from game economy."""
+import asyncio
 import logging
 import re
 from datetime import datetime, timezone
@@ -7,6 +8,9 @@ from aiogram import BaseMiddleware, F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandObject
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, Update
+
+from src.services.star_coin_service import StarCoinService, PACKAGES, PREFIX, valid
+from src.services.hedgehog_service import GameError
 
 router = Router(name='donate')
 logger = logging.getLogger(__name__)
@@ -20,18 +24,84 @@ def valid_payment(payload, user_id, currency, amount):
 
 
 @router.message(Command('donate'))
-async def cmd_donate(message):
-    buttons = [[InlineKeyboardButton(text=f'⭐ {amount}', callback_data=f'donate:{amount}')
-                for amount in AMOUNTS[row:row+2]] for row in (0, 2)]
+async def cmd_donate(message, container=None):
+    if container is not None:
+        try:
+            service = StarCoinService(container.mongo_client)
+            pending = await service.pending(message.from_user.id)
+            if pending:
+                await coin_received(message, container, payment=pending)
+                return
+        except Exception:
+            logger.error('Stars coin recovery unavailable')
+            await message.answer('Не удалось проверить платежи. Повторите /donate позже или /paysupport.', parse_mode=None)
+            return
+    buttons = [[InlineKeyboardButton(text=f'⭐ {stars} → {PACKAGES[stars]:,} Coin',
+                    callback_data=f'coinbuy:{stars}') for stars in list(PACKAGES)[row:row+2]] for row in (0, 2)]
     buttons.append([InlineKeyboardButton(text='💎 Поддержать через xRocket', url=XROCKET_URL)])
     await message.answer(
-        '❤️ Поддержать проект\n\n'
-        'Проект существует в том числе на ваши пожертвования. '
-        'Если вам нравится бот, вы можете поддержать автора.\n\n'
-        'Выберите сумму в Telegram Stars или воспользуйтесь xRocket. '
-        'Пожертвование добровольное и не даёт игровых наград.',
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode=None,
-    )
+        '⭐ SenseiCoin за Telegram Stars\n\n'
+        '1 ⭐ → 500 Coin\n5 ⭐ → 3 500 Coin\n10 ⭐ → 8 000 Coin\n50 ⭐ → 45 000 Coin\n\n'
+        'Монеты переводятся из SenseiBank после подтверждения оплаты. XP не начисляется.\n'
+        'xRocket — отдельное добровольное пожертвование без начисления монет.',
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode=None)
+
+
+@router.callback_query(F.data.startswith('coinbuy:'))
+async def coin_invoice(query, container):
+    match = re.fullmatch(r'coinbuy:(1|5|10|50)', query.data or '')
+    if not match or not query.message:
+        await query.answer('Откройте /donate заново.', show_alert=True)
+        return
+    stars = int(match[1])
+    try:
+        await StarCoinService(container.mongo_client).check(query.from_user.id, stars)
+    except GameError as exc:
+        await query.answer(str(exc)[:200], show_alert=True)
+        return
+    await query.answer()
+    try:
+        link = await query.bot.create_invoice_link(title='SenseiCoin из SenseiBank',
+            description=f'{stars} Stars → {PACKAGES[stars]} SenseiCoin. Без XP.',
+            payload=f'{PREFIX}{query.from_user.id}:{stars}', currency='XTR', provider_token='',
+            prices=[LabeledPrice(label='SenseiCoin', amount=stars)])
+        await query.message.edit_text(f'⭐ {stars} → {PACKAGES[stars]:,} SenseiCoin\n'
+            'После оплаты монеты поступят из SenseiBank. Не оплачивайте счёт повторно.',
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text=f'Оплатить {stars} ⭐', url=link)]]), parse_mode=None)
+    except TelegramAPIError:
+        logger.warning('Stars coin invoice unavailable')
+
+
+async def coin_checkout(query, container):
+    try:
+        if not valid(query.invoice_payload, query.from_user.id, query.currency, query.total_amount):
+            raise GameError('Неверный счёт. Откройте /donate заново.')
+        await asyncio.wait_for(StarCoinService(container.mongo_client).check(
+            query.from_user.id, query.total_amount), timeout=7)
+        await query.answer(ok=True)
+    except GameError as exc:
+        await query.answer(ok=False, error_message=str(exc)[:200])
+    except Exception:
+        await query.answer(ok=False, error_message='Оплата временно недоступна.')
+
+
+async def coin_received(message, container, *, payment=None):
+    service = StarCoinService(container.mongo_client)
+    try:
+        receipt = await service.receive(message.from_user.id, payment or message.successful_payment)
+        if receipt['state'] == 'fulfilled':
+            await message.answer(f"✅ Платёж учтён: {receipt['stars']} ⭐ → {receipt['coins']:,} SenseiCoin из SenseiBank.\n"
+                                 'Повторная обработка квитанции не начисляет монеты снова.', parse_mode=None)
+        elif receipt['state'] in {'refund_required', 'refunded'}:
+            if receipt['state'] != 'refunded':
+                await message.bot.refund_star_payment(user_id=receipt['user_id'],
+                    telegram_payment_charge_id=receipt['_id'])
+                await service.receipts.update_one({'_id': receipt['_id']}, {'$set': {'state': 'refunded'}})
+            await message.answer('Stars возвращены: пакет не выдан, монеты не начислялись.', parse_mode=None)
+    except Exception:
+        logger.error('Stars coin payment requires reconciliation')
+        await message.answer('Платёж требует проверки. Повторите /donate для восстановления или /paysupport. Не оплачивайте повторно.', parse_mode=None)
 
 
 @router.callback_query(F.data.startswith('donate:'))
@@ -94,11 +164,15 @@ class DonationPaymentMiddleware(BaseMiddleware):
     async def __call__(self, handler, event, data):
         if isinstance(event, Update):
             if event.pre_checkout_query:
+                if event.pre_checkout_query.invoice_payload.startswith('coinbuy:'):
+                    return await coin_checkout(event.pre_checkout_query, self.container)
                 if event.pre_checkout_query.invoice_payload.startswith('petbuy:'):
                     from src.bot.handlers.paid_hedgehog import pre_checkout
                     return await pre_checkout(event.pre_checkout_query, self.container)
                 return await donation_pre_checkout(event.pre_checkout_query)
             message = event.message
+            if message and message.successful_payment and message.successful_payment.invoice_payload.startswith('coinbuy:'):
+                return await coin_received(message, self.container)
             if message and message.successful_payment and message.successful_payment.invoice_payload.startswith('petbuy:'):
                 from src.bot.handlers.paid_hedgehog import successful_payment
                 return await successful_payment(message, self.container)

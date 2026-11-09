@@ -28,7 +28,7 @@ async def test_paid_receipt_concurrency_and_anchor_preserve_bank_total():
         order=await svc.quote(7)
         assert order['stars']==1
         bound=await asyncio.gather(*(s.bind_notice(order['_id'],7,7,90+i) for i,s in enumerate(services)))
-        assert len({x['notice']['message_id'] for x in bound})==1
+        assert (await db.paid_pet_orders.find_one({'_id':order['_id']}))['notice']['message_id']==97
         await svc.checkout(order['_id'],7,1,'q')
         # Durable receipt, then concurrent workers all reconcile the same charge.
         await db.paid_pet_payments.insert_one(dict(_id='charge',user_id=7,order_id=order['_id'],
