@@ -362,3 +362,45 @@ async def test_invoice_api_failure_edits_existing_message_only():
     q.bot.edit_message_text.assert_awaited_once()
     assert q.bot.edit_message_text.call_args.kwargs['message_id']==91
     assert not db.paid_pet_payments.docs
+
+
+@pytest.mark.asyncio
+async def test_offer_rejection_is_visible_and_logged(caplog):
+    import logging
+    from unittest.mock import AsyncMock
+    from src.bot.handlers.paid_hedgehog import offer
+    db,free,paid,base=await fixture()
+    db.bank.docs['single']['coins']=0
+    q=NS(data='petbuy:offer:7',from_user=NS(id=7),answer=AsyncMock(),
+         message=NS(chat=NS(id=7,type='private'),message_id=91,photo=[]),
+         bot=NS(create_invoice_link=AsyncMock(),edit_message_text=AsyncMock()))
+    with caplog.at_level(logging.INFO), patch('src.services.paid_hedgehog_service.time.time',return_value=120):
+        await offer(q,NS(settings=NS(maintenance_mode=False),paid_hedgehog_service=paid))
+    q.answer.assert_awaited_once()
+    assert q.answer.call_args.kwargs['show_alert'] is True
+    assert 'недостаточно' in q.answer.call_args.args[0]
+    assert 'Stars offer rejected' in caplog.text and 'stage=quote' in caplog.text
+    q.bot.create_invoice_link.assert_not_awaited()
+    q.bot.edit_message_text.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_repeated_offer_points_to_saved_notice_without_silent_click(caplog):
+    import logging
+    from unittest.mock import AsyncMock
+    from src.bot.handlers.paid_hedgehog import offer
+    db,free,paid,base=await fixture()
+    with patch('src.services.paid_hedgehog_service.time.time',return_value=120):
+        order=await paid.quote(7)
+        await paid.bind_notice(order['_id'],7,7,90)
+    q=NS(data='petbuy:offer:7',from_user=NS(id=7),answer=AsyncMock(),
+         message=NS(chat=NS(id=7,type='private'),message_id=91,photo=[]),
+         bot=NS(create_invoice_link=AsyncMock(return_value='https://t.me/$invoice'),edit_message_text=AsyncMock()))
+    with caplog.at_level(logging.INFO), patch('src.services.paid_hedgehog_service.time.time',return_value=120):
+        await offer(q,NS(settings=NS(maintenance_mode=False),paid_hedgehog_service=paid))
+    assert q.bot.edit_message_text.call_args.kwargs['message_id']==90
+    q.answer.assert_awaited_once()
+    assert q.answer.call_args.kwargs['show_alert'] is True
+    assert 'предыдущем' in q.answer.call_args.args[0]
+    assert 'redirected=True' in caplog.text
+    assert 'https://t.me/$invoice' not in caplog.text

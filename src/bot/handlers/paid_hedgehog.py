@@ -38,35 +38,53 @@ async def offer(query, container):
     if not owner and query.message and query.message.chat.type != 'private':
         await query.answer('Обновите уведомление командой /senseidaily.', show_alert=True)
         return
-    await query.answer()
     if not query.message:
+        await query.answer()
         return
     notice = {'chat_id': query.message.chat.id, 'message_id': query.message.message_id}
+    clicked_notice = dict(notice)
     photo = bool(query.message.photo)
+    stage = 'quote'
+    logger.info('Stars offer started user=%s chat=%s message=%s',
+                query.from_user.id, notice['chat_id'], notice['message_id'])
     try:
         if container.settings.maintenance_mode or MaintenanceService.is_enabled():
             raise GameError('Оплата временно недоступна: обслуживание.')
         order = await container.paid_hedgehog_service.quote(query.from_user.id)
+        stage = 'bind_notice'
         order = await container.paid_hedgehog_service.bind_notice(
             order['_id'], query.from_user.id, notice['chat_id'], notice['message_id'], photo=photo)
         notice = {k: order['notice'][k] for k in ('chat_id', 'message_id')}
         photo = order['notice'].get('photo', False)
         # Invoice link opens Telegram's mandatory Stars confirmation without a
         # separate invoice message. No reward on this action.
+        stage = 'create_invoice_link'
         link = await query.bot.create_invoice_link(title='Ещё одна Ежа',
             description=f"Полная награда и 15 секунд ласки. Попытка №{order['number']}; серия не увеличивается.",
             payload=f"petbuy:{order['_id']}", currency='XTR', provider_token='',
             prices=[LabeledPrice(label='Повторная Ежа', amount=order['stars'])])
         markup = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text=f"Оплатить {order['stars']} ⭐", url=link)]])
+        stage = 'edit_notice'
         await edit_notice(query.bot, notice,
             f"🦔 Повторная Ежа · попытка №{order['number']}\nСтоимость: {order['stars']} ⭐.\n"
             'После подтверждения Telegram это уведомление обновится. Не оплачивайте счёт повторно.',
             markup=markup, photo=photo)
+        logger.info('Stars offer ready user=%s anchor_chat=%s anchor_message=%s redirected=%s',
+                    query.from_user.id, notice['chat_id'], notice['message_id'], notice != clicked_notice)
+        if notice != clicked_notice:
+            await query.answer('Счёт обновлён в предыдущем уведомлении оплаты. Используйте кнопку «Оплатить» там.',
+                               show_alert=True)
+        else:
+            await query.answer()
     except GameError as exc:
+        logger.info('Stars offer rejected user=%s stage=%s reason=%s', query.from_user.id, stage, str(exc))
+        await query.answer(str(exc)[:200], show_alert=True)
         await edit_notice(query.bot, notice, str(exc), photo=photo, markup=repeat_keyboard(query.from_user.id))
-    except Exception:
-        logger.warning('Paid hedgehog invoice preparation unavailable')
+    except Exception as exc:
+        logger.warning('Stars offer failed user=%s stage=%s error_type=%s',
+                       query.from_user.id, stage, type(exc).__name__)
+        await query.answer('Не удалось подготовить оплату. Stars этим нажатием не списываются.', show_alert=True)
         # Do not assert a payment outcome based on an ambiguous transport error.
         try:
             await edit_notice(query.bot, notice,
@@ -82,7 +100,9 @@ async def pre_checkout(query, container):
         await asyncio.wait_for(container.paid_hedgehog_service.checkout(
             query.invoice_payload.removeprefix('petbuy:'), query.from_user.id, query.total_amount, query.id), timeout=7)
         await query.answer(ok=True)
+        logger.info('Stars checkout approved user=%s', query.from_user.id)
     except GameError as exc:
+        logger.info('Stars checkout rejected reason=%s', str(exc))
         await query.answer(ok=False, error_message=str(exc)[:200])
     except Exception:
         logger.error('Paid hedgehog checkout unavailable')
