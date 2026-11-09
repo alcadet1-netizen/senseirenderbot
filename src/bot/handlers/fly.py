@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from aiogram.types import ReplyParameters
 
 from src.bot.middlewares.group_admin import group_admin_access
-from src.bot.native_widgets import send_native_widget
+from src.bot.native_widgets import send_native_widget, send_private_widget_to_chat
 from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure
 from src.services.fly_service import FlyService
 from src.widgets.fly import fly_html
@@ -41,11 +41,20 @@ async def command(message, container):
             ' Лимит: 8 в сутки, пауза 15 минут. Модель внимания, не настоящий мозг мухи.', parse_mode=None)
         return
     try:
-        await send_native_widget(message.bot, container, message.chat.id, fly_html(), allow_queries=False)
+        if message.chat.type in {'group', 'supergroup'}:
+            if not message.from_user or message.from_user.is_bot or message.sender_chat:
+                await message.answer('Открой личку бота и вызови /senseifly от своего аккаунта.', parse_mode=None)
+                return
+            await send_private_widget_to_chat(message.bot, container, message.from_user.id,
+                                              message.chat.id, fly_html())
+        else:
+            await send_native_widget(message.bot, container, message.chat.id, fly_html(), allow_queries=False)
     except WIDGET_TRANSPORT_ERRORS as exc:
         failure = describe_failure(exc, message.bot)
         await message.answer(
-            'Лаборатория Fly не отправлена. ' + failure.advice +
+            'Лаборатория Fly не доставлена в этот чат. ' + failure.advice +
+            ' Для вызова из группы сначала открой личку бота и нажми Start. '
+            'Если создание прошло, личный экземпляр остаётся у тебя; пересылку Telegram может запретить.' +
             f' Код: {failure.category} / {failure.reference}. '
             'Реакции в чате настраиваются отдельно: /senseifly status. '
             'Mini App вместо нативного виджета не открываю.', parse_mode=None)

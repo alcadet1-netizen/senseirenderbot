@@ -209,6 +209,21 @@ class MtprotoWidgets:
         )
         return await self._request(request, 'send_media')
 
+    async def forward_widget(self, source_chat_id, target_chat_id, sent):
+        """Forward only the message created by this explicit private send."""
+        ids = {u.message.id for u in getattr(sent, 'updates', [])
+               if isinstance(u, (self.types.UpdateNewMessage, self.types.UpdateNewChannelMessage))
+               and isinstance(u.message, self.types.Message)
+               and isinstance(u.message.media, self.types.MessageMediaWidget)}
+        if len(ids) != 1:
+            raise MtprotoWidgetError('WIDGET_SOURCE_MESSAGE_ID_UNAVAILABLE')
+        source = await self._network_call(lambda: self.client.get_input_entity(source_chat_id), 'resolve_peer')
+        target = await self._network_call(lambda: self.client.get_input_entity(target_chat_id), 'resolve_peer')
+        request = self.functions.messages.ForwardMessagesRequest(
+            from_peer=source, to_peer=target, id=list(ids),
+            random_id=[secrets.randbits(63) or 1], noforwards=False)
+        return await self._request(request, 'forward_widget')
+
     async def __call__(self, method):
         # Adapter for the existing authenticated widget-query handler.
         from src.bot.native_widgets import AnswerWidgetQuery

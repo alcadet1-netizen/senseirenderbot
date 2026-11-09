@@ -125,3 +125,17 @@ async def send_native_widget(bot, container, chat_id, html, *, allow_queries=Tru
         from src.infra.mtproto.widgets import MtprotoWidgetError
         raise MtprotoWidgetError('MTPROTO_TRANSPORT_NOT_READY')
     return await bot(SendWidget(chat_id=chat_id, html=html, allow_queries=allow_queries))
+
+
+async def send_private_widget_to_chat(bot, container, user_id, chat_id, html):
+    """User-initiated private creation, followed by one explicit forward; no fallback."""
+    sent = await send_native_widget(bot, container, user_id, html, allow_queries=False)
+    transport = getattr(container, 'native_widget_transport', None)
+    if transport is not None:
+        return await transport.forward_widget(user_id, chat_id, sent)
+    from src.infra.mtproto.widgets import MtprotoWidgetError
+    message_id = sent.get('message_id') if isinstance(sent, dict) else getattr(sent, 'message_id', None)
+    if type(message_id) is not int or message_id <= 0:
+        raise MtprotoWidgetError('WIDGET_SOURCE_MESSAGE_ID_UNAVAILABLE')
+    return await bot.forward_message(chat_id=chat_id, from_chat_id=user_id,
+                                     message_id=message_id, protect_content=False)
