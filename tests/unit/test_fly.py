@@ -248,9 +248,11 @@ const button={disabled:false};const sandbox={Math,document:{getElementById:k=>k=
 Object.defineProperty(sandbox,'screen',{value:{width:300},writable:false});
 vm.createContext(sandbox);vm.runInContext(INPUT,sandbox);
 if(timers.size!==0||ops<600)throw Error('blank boot/autoplay');
+if(!sandbox.pts.every(p=>Math.hypot(p.x,p.y)<=117.01))throw Error('outside circular chamber');
 button.onclick();button.onclick();if(timers.size!==1)throw Error('duplicate timers');
 const first=sandbox.v.slice();const x=sandbox.projected[0].x;
-for(let i=0;i<359;i++){for(const fn of [...timers.values()])fn();}
+for(let i=0;i<359;i++){for(const fn of [...timers.values()])fn();
+if(!sandbox.projected.every(p=>Math.hypot(p.x-150,p.y-158)<121))throw Error('motion escaped chamber');}
 if(timers.size!==0||button.disabled||sandbox.frame!==360)throw Error('did not stop');
 if(!sandbox.v.some((v,i)=>v!==first[i])||x===sandbox.projected[0].x)throw Error('static');
 button.onclick();if(timers.size!==1||sandbox.frame!==1)throw Error('restart failed');
