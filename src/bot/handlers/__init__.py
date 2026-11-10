@@ -26,7 +26,6 @@ from src.bot.handlers.trade import router as trade_router
 from src.bot.handlers.digest import router as digest_router
 from src.bot.handlers.referral import router as referral_router
 from src.bot.handlers.broadcast import router as broadcast_router
-from src.bot.handlers.music import router as music_router
 from src.bot.handlers.boss_commands import router as boss_router
 from src.bot.handlers.boss_admin import router as boss_admin_router
 from src.bot.handlers.boss_editor import router as boss_editor_router
@@ -48,13 +47,12 @@ def setup_routers() -> Router:
     main_router.include_router(donate_router)
 
     # Порядок важен!
-    # 1. Игровые роутеры (банзай, музыка, боссы, проверка сенсея, рулетка, бомба, волна)
+    # 1. Игровые роутеры (банзай, боссы, проверка сенсея, рулетка, бомба, волна)
     #    — первыми, потому что активная игра должна перехватывать текстовые сообщения
     #    до статических триггеров пользователей. Команды (начинающиеся с /) исключаются
     #    фильтром ~F.text.startswith("/") в обработчиках игр, поэтому они всё равно
     #    дойдут до user_router.
     main_router.include_router(banzai_router)  # Banzai game handler
-    main_router.include_router(music_router)
     main_router.include_router(boss_router)
     main_router.include_router(boss_admin_router)
     main_router.include_router(boss_editor_router)

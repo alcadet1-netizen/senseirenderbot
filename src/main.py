@@ -179,6 +179,8 @@ async def main() -> None:
     # Receipts must reconcile even if the bot lost group privileges.
     dp.update.outer_middleware(DonationPaymentMiddleware(container))
     dp.update.outer_middleware(GroupAdminMiddleware())
+    from src.bot.middlewares.removed_music import RemovedMusicMiddleware
+    dp.update.outer_middleware(RemovedMusicMiddleware())
 
     # Future Bot API widget queries are extras until aiogram types catch up.
     dp.update.outer_middleware(HedgehogWidgetMiddleware(container))
@@ -217,6 +219,7 @@ async def main() -> None:
     try:
         await on_startup(bot, container)
         await container.popugai_service.ensure_indexes()
+        await container.throttle_service.ensure_indexes()
         from src.services.fly_service import FlyService
         await FlyService(container).ensure_indexes()
         if settings.native_widget_transport == 'mtproto':
