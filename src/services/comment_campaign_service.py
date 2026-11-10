@@ -517,7 +517,7 @@ class CommentCampaignService:
         await self.update_owned(camp, {'status': 'failed', 'terminal': True,
             'final_delivery_status': 'blocked', 'last_error': reason,
             'last_error_detail': 'Final result needs operator repair; financial plan unchanged'})
-        logger.error('Campaign result delivery blocked campaign=%s reason=%s; payouts unchanged', camp['_id'], reason)
+        logger.warning('Campaign result delivery blocked campaign=%s reason=%s; payouts unchanged', camp['_id'], reason)
 
     async def deliver_final(self, camp, text):
         if camp.get('final_delivery_mode') != 'edit_announcement':
@@ -557,6 +557,16 @@ class CommentCampaignService:
                 raise
         return announcement, 'edit_announcement'
 
+    async def cancel_unannounced_missing_root(self, camp):
+        # Only initial announcement: there is no published game or payout plan.
+        # Missing reply target is not proof of channel deletion, so store the
+        # observable reason rather than claiming to have received a delete event.
+        await self.update_owned(camp, {'status': 'cancelled', 'terminal': True,
+            'sealed': True, 'cancelled_at': self.now(),
+            'cancellation_reason': 'announcement_reply_target_missing',
+            'last_error': None, 'last_error_detail': None})
+        logger.info('Campaign cancelled before announcement campaign=%s reason=reply_target_missing', camp['_id'])
+
     async def process(self, campaign):
         cid, owner = campaign['_id'], campaign['lease_owner']
         camp = await self.fence(cid, owner)
@@ -565,9 +575,19 @@ class CommentCampaignService:
                 await self.update_owned(camp, {'status': 'failed', 'terminal': True,
                     'last_error': 'Announcement not delivered before deadline'})
                 return
-            sent = await asyncio.wait_for(self.bot.send_message(chat_id=camp['discussion_chat_id'],
-                text=self.start_text(camp), parse_mode=None,
-                reply_parameters=ReplyParameters(message_id=camp['discussion_message_id'], allow_sending_without_reply=False)), timeout=20)
+            if await self.deleted.find_one({'_id': f"{camp['discussion_chat_id']}:{camp['discussion_message_id']}"}):
+                await self.cancel_unannounced_missing_root(camp)
+                return
+            try:
+                sent = await asyncio.wait_for(self.bot.send_message(chat_id=camp['discussion_chat_id'],
+                    text=self.start_text(camp), parse_mode=None,
+                    reply_parameters=ReplyParameters(message_id=camp['discussion_message_id'], allow_sending_without_reply=False)), timeout=20)
+            except TelegramBadRequest as exc:
+                if not any(code in exc.message.casefold() for code in (
+                        'message to be replied not found', 'reply message not found')):
+                    raise
+                await self.cancel_unannounced_missing_root(camp)
+                return
             await self.update_owned(camp, {'start_message_id': sent.message_id, 'status': 'active', 'last_error': None,
                 'phase': 'wait', 'due_at': utc(camp['deadline'])+timedelta(seconds=camp['rules'].get('grace', 0))})
             await self.routes.update_one({'_id': f'{camp["discussion_chat_id"]}:{sent.message_id}'},

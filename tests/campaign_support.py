@@ -717,3 +717,44 @@ class CampaignCases:
         assert await env.service.inbox.pending()
         await env.service.tick()
         assert not await env.service.inbox.pending()
+
+    async def test_deleted_root_before_announcement_cancels_without_retry_or_payout(self,campaign_env):
+        from aiogram.exceptions import TelegramBadRequest
+        from aiogram.methods import SendMessage
+        env=campaign_env;await env.profile(7)
+        bank=(await env.db.bank.find_one({'_id':'single'}))['coins']
+        env.bot.send_message.side_effect=TelegramBadRequest(method=SendMessage(chat_id=-100222,text='start'),
+            message='Bad Request: message to be replied not found')
+        camp=await env.begin()
+        assert camp['terminal'] and camp['sealed'] and camp['status']=='cancelled'
+        assert camp['cancellation_reason']=='announcement_reply_target_missing'
+        assert camp['last_error'] is None and camp['start_message_id'] is None
+        await env.service.ingest(env.comment(101))
+        await env.service.stop()
+        env.service=CommentCampaignService(env.container,clock=lambda:env.clock[0]);await env.service.initialize(env.bot)
+        for _ in range(5):
+            env.clock[0]+=timedelta(hours=1);await env.service.tick()
+        assert env.bot.send_message.await_count==1
+        assert await env.wallet(7)==0
+        assert (await env.db.bank.find_one({'_id':'single'}))['coins']==bank
+        assert await env.db.transactions.count_documents({})==0
+        assert await env.db.campaign_rewards.count_documents({})==0
+
+    async def test_known_deleted_root_skips_announcement_request(self,campaign_env):
+        env=campaign_env
+        await env.service.ingest(env.root())
+        await env.service.mark_deleted(-100222,100)
+        await env.service.tick()
+        camp=await env.db.comment_campaigns.find_one({'_id':'-100111:1'})
+        assert camp['terminal'] and camp['status']=='cancelled'
+        env.bot.send_message.assert_not_awaited()
+
+    async def test_unrelated_announcement_bad_request_still_requires_retry(self,campaign_env):
+        from aiogram.exceptions import TelegramBadRequest
+        from aiogram.methods import SendMessage
+        env=campaign_env
+        env.bot.send_message.side_effect=TelegramBadRequest(method=SendMessage(chat_id=-100222,text='start'),
+            message="Bad Request: can't parse entities")
+        camp=await env.begin()
+        assert not camp['terminal'] and camp['status']=='failed'
+        assert 'cancellation_reason' not in camp
