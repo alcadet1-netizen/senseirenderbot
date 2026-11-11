@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from aiogram.types import Message
-from src.services.fly_service import FlyService, features
+from src.services.fly_service import FlyService, features, DAILY_ATTEMPT_LIMIT
 from src.widgets.fly import fly_html
 from tests.campaign_support import FakeDB
 
@@ -39,9 +39,9 @@ async def test_novel_topic_question_and_chat_user_cooldowns():
     db,s,clock=fixture()
     await db.fly_settings.update_one({'_id':-100222},{'$set':{'enabled':True}},upsert=True)
     assert await s.reserve(message())
-    clock[0]+=timedelta(minutes=16)
+    clock[0]+=timedelta(minutes=3)
     assert await s.reserve(message('Давайте обсудим новую игру с интересной механикой',mid=2)) is None
-    clock[0]+=timedelta(minutes=16)
+    clock[0]+=timedelta(minutes=3)
     result=await s.reserve(message('Вернёмся к тому, как работает нейронная технология',mid=3,uid=8))
     assert result and result[1].endswith('?')
 
@@ -52,13 +52,13 @@ async def test_concurrent_messages_only_one_reply_and_daily_limit():
     await db.fly_settings.update_one({'_id':-100222},{'$set':{'enabled':True}},upsert=True)
     values=await asyncio.gather(*(s.reserve(message(mid=i,uid=i+20)) for i in range(10)))
     assert sum(x is not None for x in values)==1
-    for i in range(1,8):
-        clock[0]+=timedelta(minutes=16)
+    for i in range(1,DAILY_ATTEMPT_LIMIT):
+        clock[0]+=timedelta(minutes=3)
         assert await s.reserve(message('Интересно устроен виджет '+('а'*i),mid=20+i,uid=200+i))
-    clock[0]+=timedelta(minutes=16)
-    assert await s.reserve(message('Новый бот теперь работает заметно интереснее',mid=50,uid=500)) is None
+    clock[0]+=timedelta(minutes=3)
+    assert await s.reserve(message('Новый бот теперь работает заметно интереснее',mid=1000,uid=500)) is None
     clock[0]+=timedelta(days=1)
-    assert await s.reserve(message('Новый бот умеет что-нибудь интересное сегодня',mid=51,uid=501))
+    assert await s.reserve(message('Новый бот умеет что-нибудь интересное сегодня',mid=1001,uid=501))
 
 
 @pytest.mark.parametrize('text', ['/senseifly', 'Номер телефона 1234567 и новый бот', 'пароль: секрет'])
@@ -278,3 +278,26 @@ async def test_fly_caption_is_not_hedgehog():
     with patch('src.bot.handlers.fly.send_native_widget',new=AsyncMock()) as send:
         await command(msg,s.container)
     assert send.call_args.kwargs['caption']=='Sensei FLY LAB'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('roll,selected',[(149,True),(150,True),(799,True),(800,False),(9999,False)])
+async def test_more_social_eight_percent_boundary(roll,selected):
+    db,s,_=fixture();s.roll=lambda:roll
+    await db.fly_settings.update_one({'_id':-100222},{'$set':{'enabled':True}},upsert=True)
+    assert (await s.reserve(message()) is not None)==selected
+
+
+@pytest.mark.asyncio
+async def test_more_social_chat_and_author_cooldown_boundaries():
+    db,s,clock=fixture()
+    await db.fly_settings.update_one({'_id':-100222},{'$set':{'enabled':True}},upsert=True)
+    assert await s.reserve(message())
+    clock[0]+=timedelta(seconds=119)
+    assert await s.reserve(message('Как приготовить вкусный суп?',mid=2,uid=8)) is None
+    clock[0]+=timedelta(seconds=1)
+    assert await s.reserve(message('Как лучше приготовить картошку?',mid=3,uid=8))
+    clock[0]+=timedelta(seconds=479)
+    assert await s.reserve(message('Кто смотрел этот фильм вчера?',mid=4,uid=7)) is None
+    clock[0]+=timedelta(seconds=1)
+    assert await s.reserve(message('Что думаете о новом фильме?',mid=5,uid=7))

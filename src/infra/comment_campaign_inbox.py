@@ -1,6 +1,21 @@
 """Mongo-only durable ingress. All mutations and sealing share a write fence."""
+import json
 import uuid
+from aiogram.utils.serialization import deserialize_telegram_object
 from pymongo import ReturnDocument
+
+
+def serialize_update(event):
+    """Use aiogram's transport serializer for nested Default sentinels.
+
+    No str/default=str fallback: unknown objects must still fail admission rather
+    than silently corrupt the durable event. Bot-specific defaults are NOT used:
+    absent inbound preview options must not acquire outgoing bot preferences.
+    """
+    prepared = deserialize_telegram_object(event, include_api_method_name=False)
+    if prepared.files:
+        raise ValueError('Inbound campaign update unexpectedly contains upload files')
+    return json.dumps(prepared.data, ensure_ascii=False, allow_nan=False)
 
 
 class CampaignInbox:
@@ -40,7 +55,7 @@ class CampaignInbox:
 
     async def put(self, event):
         await self.mutate(self.updates, f'{self.bot_id}:{event.update_id}',
-            dict(bot_id=self.bot_id, update_id=event.update_id, payload=event.model_dump_json(exclude_none=True)))
+            dict(bot_id=self.bot_id, update_id=event.update_id, payload=serialize_update(event)))
 
     async def deleted(self, chat_id, message_id):
         await self.mutate(self.deletions, f'{self.bot_id}:{chat_id}:{message_id}',

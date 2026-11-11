@@ -8,7 +8,8 @@ from aiogram.types import ReplyParameters
 from src.bot.middlewares.group_admin import group_admin_access
 from src.bot.native_widgets import send_native_widget, send_private_widget_to_chat
 from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure
-from src.services.fly_service import FlyService
+from src.services.fly_service import (FlyService, REPLY_CHANCE_BPS, DAILY_ATTEMPT_LIMIT,
+    CHAT_COOLDOWN_SECONDS, USER_COOLDOWN_SECONDS)
 from src.widgets.fly import fly_html
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ async def command(message, container):
             enabled = False
         await message.answer(('Редкие реплики включены.' if enabled else 'Редкие реплики выключены.') +
             (' Глобальный выключатель активен; настройка чата сохранена.' if globally_disabled else '') +
-            ' Редкие ИИ-ответы через API «Сенсей мудрец»: выбранное сообщение передаётся провайдеру Groq без истории и имени автора. Лимит: 8 попыток в сутки, пауза 15 минут.', parse_mode=None)
+            f' ИИ-ответы через API «Сенсей мудрец»: выбранное сообщение передаётся провайдеру Groq без истории и имени автора. Шанс: {REPLY_CHANCE_BPS / 100:g}%. Лимит: {DAILY_ATTEMPT_LIMIT} попыток в сутки, пауза {CHAT_COOLDOWN_SECONDS // 60} мин. в чате и {USER_COOLDOWN_SECONDS // 60} мин. для одного автора.', parse_mode=None)
         return
     try:
         if message.chat.type in {'group', 'supergroup'}:
