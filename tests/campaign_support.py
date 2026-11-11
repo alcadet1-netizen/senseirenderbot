@@ -660,7 +660,10 @@ class CampaignCases:
         event=env.root()
         await env.service.capture(event);await env.service.capture(event)
         rows=await env.service.inbox.batch(100)
-        assert len(rows)==1 and rows[0][1]==event.model_dump_json(exclude_none=True)
+        assert len(rows)==1
+        restored=Update.model_validate_json(rows[0][1])
+        assert restored.update_id==event.update_id
+        assert restored.message.forward_origin==event.message.forward_origin
         await env.service.inbox.deleted(-100222,101)
         chat,mid,old= (await env.service.inbox.deletion_batch(100))[0]
         await env.service.inbox.deleted(chat,mid)
@@ -758,3 +761,28 @@ class CampaignCases:
         camp=await env.begin()
         assert not camp['terminal'] and camp['status']=='failed'
         assert 'cancellation_reason' not in camp
+
+    async def test_nested_aiogram_defaults_capture_replay_and_dedup(self,campaign_env):
+        from aiogram.types import LinkPreviewOptions
+        import json
+        env=campaign_env
+        root=env.root()
+        root=root.model_copy(update={'message':root.message.model_copy(update={
+            'link_preview_options':LinkPreviewOptions(is_disabled=False)})})
+        await env.service.capture(root)
+        await env.service.capture(root)
+        rows=await env.service.inbox.batch(10)
+        assert len(rows)==1
+        raw=json.loads(rows[0][1])
+        assert raw['message']['link_preview_options']=={'is_disabled':False}
+        assert raw['message']['forward_origin']['message_id']==1
+        await env.service.tick()
+        camp=await env.db.comment_campaigns.find_one({'_id':'-100111:1'})
+        assert camp['phase']=='wait' and env.bot.send_message.await_count==1
+        assert not await env.service.inbox.pending()
+        await env.profile(7)
+        comment=env.comment(101)
+        parent=comment.message.reply_to_message.model_copy(update={'link_preview_options':LinkPreviewOptions()})
+        comment=comment.model_copy(update={'message':comment.message.model_copy(update={'reply_to_message':parent})})
+        await env.service.capture(comment);await env.service.tick()
+        assert await env.db.campaign_comments.count_documents({'campaign_id':camp['_id']})==1

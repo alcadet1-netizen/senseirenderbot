@@ -8,6 +8,12 @@ from datetime import datetime, timezone, timedelta
 from pymongo.read_concern import ReadConcern
 from pymongo.write_concern import WriteConcern
 
+# Shared policy for transactional admission, status text and regression tests.
+REPLY_CHANCE_BPS = 800  # 8% of eligible messages
+DAILY_ATTEMPT_LIMIT = 48
+CHAT_COOLDOWN_SECONDS = 120
+USER_COOLDOWN_SECONDS = 600
+
 TOPICS = {
     'technology': (r'\b(?:код|бот|программ\w*|нейрон\w*|виджет\w*|технолог\w*)\b',
                    'А что здесь хочется улучшить в первую очередь?', 'Сенсей слушает. Иногда хорошее решение начинается с простого вопроса.'),
@@ -59,7 +65,7 @@ class FlyService:
         topic, digest, question, remark = signals
         now = self.clock()
         # Sample once outside transaction retries; no topic allowlist.
-        sampled = self.roll() < 150
+        sampled = self.roll() < REPLY_CHANCE_BPS
         async def choose(tx):
             cfg = await self.db.fly_settings.find_one({'_id': message.chat.id}, session=tx)
             if not cfg or not cfg.get('enabled'):
@@ -79,9 +85,9 @@ class FlyService:
             # Preserve immediate-repeat suppression for pre-history state during rollout.
             if 'recent' not in state:
                 repeated = repeated or digest == state.get('digest')
-            allowed = (sampled and not repeated and count < 8
-                and now.timestamp()-state.get('last_reply', 0) >= 900
-                and now.timestamp()-person.get('last_reply', 0) >= 21600)
+            allowed = (sampled and not repeated and count < DAILY_ATTEMPT_LIMIT
+                and now.timestamp()-state.get('last_reply', 0) >= CHAT_COOLDOWN_SECONDS
+                and now.timestamp()-person.get('last_reply', 0) >= USER_COOLDOWN_SECONDS)
             recent = [item for item in recent if item['digest'] != digest]
             recent.append({'digest': digest, 'at': now.timestamp()})
             updates = {'topic': topic, 'digest': digest, 'day': day, 'count': count,

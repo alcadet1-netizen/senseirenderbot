@@ -59,3 +59,32 @@ async def test_cancel_during_failed_admission_does_not_ack():
     await entered.wait();task.cancel()
     with pytest.raises(asyncio.CancelledError): await task
     assert not advanced
+
+
+@pytest.mark.asyncio
+async def test_default_preview_persists_before_real_polling_offset_advances(tmp_path):
+    from aiogram.types import LinkPreviewOptions
+    from tests.campaign_support import Harness, FakeDB
+    env=await Harness(FakeDB(),tmp_path).open()
+    try:
+        root=env.root()
+        root=root.model_copy(update={'message':root.message.model_copy(update={'link_preview_options':LinkPreviewOptions()})})
+        events=[root,env.comment(101)]
+        offsets=[]
+        class Bot:
+            id=999
+            session=SimpleNamespace(timeout=30)
+            async def __call__(self,request,**kwargs):
+                offsets.append(request.offset)
+                if len(offsets)==1:return events
+                raise asyncio.CancelledError
+        dp=Dispatcher();install_campaign_admission(dp,env.service)
+        stream=dp._listen_updates(Bot())
+        assert (await anext(stream)).update_id==100
+        assert [row[0] for row in await env.service.inbox.batch(10)]==[100]
+        assert (await anext(stream)).update_id==101
+        assert [row[0] for row in await env.service.inbox.batch(10)]==[100,101]
+        with pytest.raises(asyncio.CancelledError):await anext(stream)
+        assert offsets==[None,102]
+    finally:
+        await env.close()
