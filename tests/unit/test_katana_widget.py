@@ -323,3 +323,15 @@ def test_five_blade_styles_are_visually_distinct():
     images = [render_upgrade(KatanaUpgrade('Name', n, n + 0.3, 100, True))
               .crop((40, 115, 700, 180)).tobytes() for n in (5, 25, 45, 65, 85)]
     assert len(set(images)) == 5
+
+
+@pytest.mark.parametrize('school', range(5))
+def test_reference_art_is_bundled_and_used_without_mutating_cached_source(school):
+    from src.widgets.forge import katana_art
+    art = katana_art(school)
+    original = art.tobytes()
+    length = school * 20 + 5
+    frame = render_upgrade(KatanaUpgrade('Name', length, length + 0.3, 100, True))
+    assert frame.size == (760, 320)
+    assert katana_art(school).tobytes() == original
+    assert art.width > 500 and art.height > 100
