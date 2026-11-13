@@ -107,8 +107,9 @@ class CommentCampaignService:
             member = await bot.get_chat_member(chat_id, me.id)
             if member.status not in {'administrator', 'creator'}:
                 raise RuntimeError(f'Bot must be administrator in {chat_id}')
-            if chat_id == channel.id and member.status != 'creator' and not member.can_post_messages:
-                raise RuntimeError('Bot needs channel post permission')
+            # We observe channel posts; announcements/results are sent only to
+            # discussion_chat_id. Channel publishing permission is not needed.
+            # Keep administrator checks in both chats for reliable ingress.
         pinned = await self.db.settings.find_one_and_update({'_id': 'comment_campaign_channel'},
             {'$set': {'channel_id': channel.id, 'discussion_id': discussion.id},
              '$setOnInsert': {'enabled_at': self.now().replace(microsecond=0)}},
