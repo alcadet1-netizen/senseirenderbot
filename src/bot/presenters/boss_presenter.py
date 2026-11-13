@@ -1,163 +1,81 @@
+"""One compact, escaped boss-card renderer for editor and live battles."""
+import html
 import time
-from typing import Optional, List, Dict, Any
-from src.core.visuals import Visuals
+from datetime import datetime, timezone
 from src.core.constants import BOSSES, BOSS_COOLDOWN_MINUTES
 
+
+def clean(value, limit=32):
+    return html.escape(' '.join(str(value or '').split())[:limit])
+
+
 class BossPresenter:
-    """
-    Presenter for Boss Fights.
-    Handles rendering of boss cards, status bars, and battle logs.
-    """
-
     @classmethod
-    def render_boss_caption(cls, state: Dict[str, Any], last_action: str | None = None, boss_phrase: str | None = None) -> str:
-        """Генерация красивого HTML сообщения босса (Framed Style)."""
-        boss_config = BOSSES.get(state["boss_id"], {})
-        name = boss_config.get("name", "Unknown Boss")
-        hp = max(0, state["hp"])
-        max_hp = state["max_hp"]
-
-        width = 30
-        lines = [
-            Visuals.frame_top_left(width),
-            Visuals.frame_line_left(f"👹 {name}", width, "center"),
-        ]
-
-        # Intro or Phrase
-        phrase = boss_phrase or state.get("intro")
-        if phrase:
-            # Wrap long phrases
-            words = phrase.split()
-            current_line = ""
-            for word in words:
-                if len(current_line) + len(word) + 1 > width - 4:
-                    lines.append(Visuals.frame_line_left(f"<i>{current_line}</i>", width, "center"))
-                    current_line = word
-                else:
-                    current_line = f"{current_line} {word}" if current_line else word
-            if current_line:
-                lines.append(Visuals.frame_line_left(f"<i>{current_line}</i>", width, "center"))
-
-        lines.append(Visuals.frame_separator_left(width))
-
-        # --- HP ---
-        percent = int((hp / max_hp) * 100) if max_hp > 0 else 0
-        hp_bar = Visuals.progress_bar(hp, max_hp, length=12, style="red_block")
-        lines.append(Visuals.frame_line_left(f"🩸 HP: {hp}/{max_hp}", width))
-        lines.append(Visuals.frame_line_left(f"{hp_bar} {percent}%", width))
-
-        # --- Shield & Status ---
-        break_until = state.get("break_until", 0)
-        is_break = time.time() < break_until
-        shield = state.get("shield", 0)
-        max_shield = state.get("max_shield", 0)
-
-        if is_break:
-            remaining = int(break_until - time.time())
-            lines.append(Visuals.frame_separator_left(width))
-            lines.append(Visuals.frame_line_left(f"🛡️ ЩИТ СЛОМАН! (x2 УРОН)", width, "center"))
-            lines.append(Visuals.frame_line_left(f"{Visuals.wait_raw()} СТАН: {remaining} сек", width, "center"))
-        elif max_shield > 0:
-            shield_bar = Visuals.progress_bar(shield, max_shield, length=12, style="blue_block")
-            lines.append(Visuals.frame_line_left(f"🛡️ ЩИТ: {shield}/{max_shield}", width))
-            lines.append(Visuals.frame_line_left(f"{shield_bar}", width))
-
-        # --- Combo & Phase ---
-        combo_count = state.get("combo_count", 0)
-
-        phase = "I"
-        status_text = "Норма"
-        if percent <= 10:
-            phase = "IV"
-            status_text = "💀 СМЕРТЬ"
-        elif percent <= 25:
-            phase = "III"
-            status_text = "🩸 КРОВЬ"
-        elif percent <= 50:
-            phase = "II"
-            status_text = "😡 ЯРОСТЬ"
-
-        lines.append(Visuals.frame_separator_left(width))
-        lines.append(Visuals.frame_line_left(f"📊 Фаза {phase}: {status_text}", width))
-
-        if combo_count > 1:
-            multiplier = 1.0 + (min(combo_count, 50) * 0.02)
-            lines.append(Visuals.frame_line_left(f"{Visuals.fire_raw()} COMBO: x{combo_count} (x{multiplier:.2f})", width))
-
-        if state.get("deadline"):
-            remaining_time = int(state["deadline"] - time.time())
-            if remaining_time > 0:
-                lines.append(Visuals.frame_line_left(f"{Visuals.wait_raw()} Таймер: {remaining_time // 60} мин", width))
-            else:
-                lines.append(Visuals.frame_line_left(f"{Visuals.wait_raw()} Время вышло...", width))
-
-        # --- Leaderboard ---
-        hits = list((state.get("hits") or {}).values())
+    def render_boss_caption(cls, state, last_action=None, boss_phrase=None):
+        config = BOSSES.get(state['boss_id'], {})
+        name = clean(config.get('name', 'Босс'), 48)
+        hits = state.get('hits') or {}
+        lines = [f'👹 <b>{name}</b>']
+        settlement = state.get('settlement')
+        if state.get('is_expired'):
+            lines += ['⏰ <b>Время вышло — босс сбежал.</b>']
+        elif state.get('is_dead'):
+            lines += ['🏆 <b>Босс повержен!</b>' if state.get('settlement_kind') == 'win'
+                      else '⛔ <b>Бой остановлен администратором.</b>' if state.get('stopped_by_admin') else '🏁 <b>Бой завершён.</b>']
+        else:
+            hp = max(0, state.get('hp', 0))
+            maximum = max(1, state.get('max_hp', 1))
+            percent = min(100, int(hp / maximum * 100))
+            filled = min(10, max(0, round(hp / maximum * 10)))
+            lines += [f'❤️ <b>{hp:,} / {maximum:,} HP · {percent}%</b>',
+                      '▰' * filled + '▱' * (10-filled)]
+            now = time.time()
+            shield = max(0, state.get('shield', 0))
+            if state.get('break_until', 0) > now:
+                lines += [f'💥 <b>Щит разрушен</b> · ещё {max(1,int(state["break_until"]-now))} с']
+            elif state.get('max_shield', 0):
+                lines += [f'🛡 Щит: <b>{shield} / {state["max_shield"]}</b>']
+            phase = 'IV · Последний рывок' if percent <= 10 else 'III · Финальная фаза' if percent <= 25 else 'II · Ярость' if percent <= 50 else 'I · Начало боя'
+            lines += [f'🔥 <b>{phase}</b>']
+            if state.get('weakness_until', 0) > now:
+                lines += ['🎯 <b>Уязвимость · урон ×2</b>']
+            if state.get('combo_count', 0) > 1:
+                lines += [f'⚔️ Серия: {int(state["combo_count"])}']
+            if state.get('deadline'):
+                end = datetime.fromtimestamp(state['deadline'], timezone.utc).strftime('%d.%m %H:%M:%S UTC')
+                lines += [f'⏳ Завершение: <b>{end}</b>']
+            phrase = boss_phrase or state.get('intro')
+            if phrase:
+                lines += [f'<i>{clean(phrase, 72)}</i>']
         if hits:
-            lines.append(Visuals.frame_separator_left(width))
-            lines.append(Visuals.frame_line_left(f"{Visuals.trophy_raw()} MVP Урона:", width))
-            top = sorted(hits, key=lambda x: x.get("dmg", 0), reverse=True)[:3]
-            medals = ["🥇", "🥈", "🥉"]
-            for i, t in enumerate(top):
-                p_name = Visuals.escape((t.get("name") or "")[:12])
-                dmg_val = int(t.get("dmg", 0) or 0)
-                crits = t.get("crits", 0)
-                # Shorten: "User: 5000 (3c)"
-                info = f"{dmg_val}"
-                if crits > 0: info += f" ({crits}c)"
-                lines.append(Visuals.frame_line_left(f"{medals[i]} {p_name}: {info}", width))
-
-        # --- Battle Log ---
-        battle_log = state.get("battle_log", [])
-        if battle_log:
-            lines.append(Visuals.frame_separator_left(width))
-            lines.append(Visuals.frame_line_left("📝 Лог битвы:", width))
-            # Show last 5
-            for entry in battle_log[-5:]:
-                user_name = Visuals.escape((entry.get('name') or '')[:10])
-
-                icon = "💥"
-                dmg_text = f"-{entry['dmg']}"
-
-                if entry.get("evaded"):
-                    icon = "💨"
-                    dmg_text = "MISS"
-                elif entry.get("is_break"):
-                    icon = "💔"
-                elif entry.get("is_ult"):
-                    icon = "⚡"
-                    dmg_text = f"-{entry['dmg']} (ULT)"
-                elif entry.get("crit"):
-                    icon = "🩸"
-                    dmg_text = f"-{entry['dmg']}!"
-
-                if entry.get("is_gram_reward"):
-                    amount = entry.get("gram_amount", 0)
-                    lines.append(Visuals.frame_line_left(f"💎 {user_name}: +{amount} GRAM", width))
-                else:
-                    lines.append(Visuals.frame_line_left(f"{icon} {user_name} {dmg_text}", width))
-
-        lines.append(Visuals.frame_bottom_left(width))
-
-        caption = "<pre>\n" + "\n".join(lines) + "\n</pre>"
-
+            lines += ['', f'👥 Участников: <b>{len(hits)}</b> · 🏆 <b>Лидеры урона</b>']
+            top = sorted(hits.items(), key=lambda item: (-item[1].get('dmg', 0), item[0]))[:3]
+            for medal, (_, user) in zip(('🥇','🥈','🥉'), top):
+                lines += [f'{medal} {clean(user.get("name"), 18)} — {int(user.get("dmg",0)):,}']
+        if state.get('ended_at') and state.get('start_time'):
+            duration = max(0, int(state['ended_at']-state['start_time']))
+            lines += [f'⏱ Длительность: {duration//60} мин. {duration%60} с']
+        if state.get('settlement_kind') == 'win' and state.get('battle_log'):
+            last = state['battle_log'][-1]
+            lines += [f'⚔️ Последний удар: {clean(last.get("name"), 24)}']
+        if settlement:
+            if settlement['kind'] == 'win':
+                lines += [f'💰 Выдано из банка: <b>{settlement["total"]:,.2f} Coin</b> · получателей: {settlement["count"]}']
+            else:
+                lines += [f'💰 Штраф переведён в банк: <b>{settlement["total"]:,.2f} Coin</b> · участников: {settlement["count"]}']
+        elif state.get('settlement_kind'):
+            lines += ['⏳ Расчёт монет ожидает подтверждения.']
+        if not state.get('is_dead') and not state.get('is_expired'):
+            reward = config.get('coins_reward', 0)
+            lines += ['', f'🎁 Фонд победы: {reward:,} Coin из банка',
+                      f'⚔️ Атака · перерыв {BOSS_COOLDOWN_MINUTES} мин. · ⚡ ульта или /ulta',
+                      'Катана + уровень 5+. GRAM — случайный бонус, не гарантия.',
+                      '⚠️ При побеге: −100 Coin с участника.']
         if last_action:
-            caption += f"\n{last_action}"
-
-        return caption
+            # Public argument is plain text, not trusted HTML.
+            lines += [clean(last_action, 64)]
+        return '\n'.join(lines)
 
     @classmethod
-    def fatality_message(cls) -> str:
-        """Сообщение о фаталити (killboss)."""
-        width = 30
-        lines = [
-            Visuals.frame_top_left(width),
-            Visuals.frame_line_left("💀 FATALITY", width, "center"),
-            Visuals.frame_separator_left(width),
-            Visuals.frame_line_left("Сенсей убил босса", width),
-            Visuals.frame_line_left("с одного удара.", width),
-            Visuals.frame_separator_left(width),
-            Visuals.frame_line_left(f"{Visuals.cross()} Битва остановлена", width),
-            Visuals.frame_bottom_left(width)
-        ]
-        return "<pre>\n" + "\n".join(lines) + "\n</pre>"
+    def fatality_message(cls):
+        return '⛔ <b>Бой остановлен администратором.</b>\nНаграды не выдаются.'

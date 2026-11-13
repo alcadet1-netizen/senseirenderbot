@@ -2,6 +2,7 @@
 ⚔️ Обработчик битвы с боссом.
 """
 
+import math
 import asyncio
 import logging
 import random
@@ -51,146 +52,26 @@ router = Router(name="boss_commands")
 
 def get_boss_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚔️ Атаковать!", callback_data="hit_boss")]
+        [InlineKeyboardButton(text="⚔️ Атака", callback_data="hit_boss")]
     ])
 
-def render_boss_caption(state: dict, last_action: str = None) -> str:
-    """Генерация красивого HTML сообщения босса."""
-    boss_config = BOSSES[state["boss_id"]]
-    hp = max(0, state["hp"])
-    max_hp = state["max_hp"]
-
-    w = 30
-
-    def fit(text: str) -> str:
-        text = str(text)
-        max_len = max(0, w - 2)
-        if len(text) <= max_len:
-            return text
-        return text[: max(0, max_len - 1)] + "…"
-
-    lines = [
-        Visuals.frame_top_left(w),
-        Visuals.frame_line_left(fit(f"👹 {boss_config['name']}"), w),
-        Visuals.frame_separator_left(w),
-    ]
-
-    intro = state.get("intro")
-    if intro:
-        lines.append(Visuals.frame_line_left(fit(f"🗣 {intro}"), w))
-
-    # HP Logic
-    percent = int((hp / max_hp) * 100) if max_hp > 0 else 0
-
-    hp_emoji = "💚"
-    if percent <= 20:
-        hp_emoji = "❤️"
-    elif percent <= 50:
-        hp_emoji = "💛"
-
-    bar = Visuals.progress_bar(hp, max_hp, length=10, style="block")
-
-    lines.append(Visuals.frame_line_left(fit(f"{hp_emoji} {bar} {percent}%"), w))
-    lines.append(Visuals.frame_line_left(fit(f"   {hp}/{max_hp} HP"), w))
-
-    # Status
-    status = "Норма"
-    weakness_until = state.get("weakness_until", 0)
-    is_weak = time.time() < weakness_until
-
-    if is_weak:
-        status = "😵 УЯЗВИМ! (x2 УРОН)"
-    elif percent <= 30:
-        status = "🤬 ЯРОСТЬ!"
-    elif percent <= 50:
-        status = "😠 Ранен"
-
-    phase = "I"
-    if percent <= 10:
-        phase = "IV"
-    elif percent <= 25:
-        phase = "III"
-    elif percent <= 50:
-        phase = "II"
-    lines.append(Visuals.frame_line_left(fit(f"📊 Фаза {phase}: {status}"), w))
-
-    # Combo Streak
-    combo_count = state.get("combo_count", 0)
-    if combo_count > 1:
-        lines.append(Visuals.frame_line_left(fit(f"🔥 COMBO: x{combo_count}!"), w))
-
-    lines.append(Visuals.frame_separator_left(w))
-
-    # Stats
-    reward = Visuals._fmt_coins(boss_config.get('coins_reward', 0))
-    lines.append(Visuals.frame_line_left(fit(f"💰 Награда: {reward}"), w))
-    dmg = f"{boss_config['damage_range'][0]}-{boss_config['damage_range'][1]}"
-    lines.append(Visuals.frame_line_left(fit(f"⚔️ Урон: {dmg}"), w))
-    lines.append(Visuals.frame_line_left(fit(f"⏱ Кулдаун: {BOSS_COOLDOWN_MINUTES}м"), w))
-    lines.append(Visuals.frame_line_left(fit("⚡ Ульта: /ulta"), w))
-
-    if state.get("deadline"):
-        remaining = int(state["deadline"] - time.time())
-        if remaining > 0:
-            lines.append(Visuals.frame_line_left(fit(f"⏳ {remaining // 60} мин."), w))
-        else:
-            lines.append(Visuals.frame_line_left(fit("⏳ Время вышло..."), w))
-
-    hits = list((state.get("hits") or {}).values())
-    if hits:
-        top = sorted(hits, key=lambda x: x.get("dmg", 0), reverse=True)[:3]
-        medals = ["🥇", "🥈", "🥉"]
-        lines.append(Visuals.frame_separator_left(w))
-        lines.append(Visuals.frame_line_left(fit("🏆 Топ урона:"), w))
-        for i, t in enumerate(top):
-            name = Visuals.escape((t.get("name") or "")[:10])
-            dmg_val = int(t.get("dmg", 0) or 0)
-            lines.append(Visuals.frame_line_left(fit(f"{medals[i]} {name}: {dmg_val}"), w))
-
-    # Battle Log
-    battle_log = state.get("battle_log", [])
-    if battle_log:
-        lines.append(Visuals.frame_separator_left(w))
-        lines.append(Visuals.frame_line_left(fit("📝 Ход битвы:"), w))
-        for entry in battle_log[-6:]: # Show last 6
-             icon = "💥"
-             dmg_text = f"-{entry['dmg']}"
-
-             if entry.get("evaded"):
-                 icon = "💨"
-                 dmg_text = "ПРОМАХ!"
-             elif entry.get("is_weakness"):
-                 icon = "🎯"
-             elif entry.get("is_ult"):
-                 icon = "⚡"
-             elif entry.get("crit"):
-                 icon = "🩸"
-
-             user_name_raw = entry.get('name') or ''
-             if len(user_name_raw) > 10:
-                 user_name_raw = user_name_raw[:9] + "…"
-             user_name = Visuals.escape(user_name_raw)
-
-             log_line = f"{icon} {user_name}: {dmg_text}"
-             lines.append(Visuals.frame_line_left(fit(log_line), w))
-
-    lines.append(Visuals.frame_bottom_left(w))
-
-    caption = "<pre>\n" + "\n".join(lines) + "\n</pre>"
-
-    if last_action:
-        caption += f"\n{last_action}"
-
-    return caption
+from src.bot.presenters.boss_presenter import BossPresenter
+render_boss_caption = BossPresenter.render_boss_caption
 
 async def launch_boss(
     bot, chat_id, boss_id, container, duration=None, reward_settings=None
 ):
     boss_service = container.boss_service
 
-    state = await boss_service.start_boss(
-        boss_id, duration_hours=duration, reward_settings=reward_settings
-    )
+    from src.services.boss_settlement_service import settle_boss
+    async with boss_service._lock:
+        current = await boss_service.get_state()
+        if current and (current.get('settlement_kind') or
+                (current.get('deadline') and current['deadline'] <= time.time())):
+            await settle_boss(container.mongo_client)
+        state = await boss_service.start_boss(
+            boss_id, duration_hours=duration, reward_settings=reward_settings
+        )
 
     # Image
     image_path = await boss_service.get_boss_image(boss_id)
@@ -225,9 +106,28 @@ async def launch_boss(
 from aiogram.fsm.context import FSMContext
 from src.bot.handlers.boss_editor import BossEditorFSM
 
-@router.message(Command("senseiboss"), AdminFilter())
+@router.message(Command("senseiboss"))
 async def sensei_boss(message: Message, command: CommandObject, container: Container, state: FSMContext):
     boss_service = container.boss_service
+    if message.chat.type in {'group', 'supergroup'}:
+        member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
+        if member.status not in {'administrator', 'creator'}:
+            await message.answer('⛔ Запускать босса может администратор чата.')
+            return
+        try:
+            hours = float(command.args or '1')
+            if not math.isfinite(hours) or not 0 < hours <= 24:
+                raise ValueError
+        except ValueError:
+            await message.answer('⚔️ /senseiboss 1 — случайный босс на 1 час. Допустимо: больше 0, до 24 часов.')
+            return
+        try:
+            await launch_boss(message.bot, message.chat.id, random.choice(list(BOSSES)), container, duration=hours)
+        except ValueError as exc:
+            await message.answer(str(exc))
+        return
+    if not await AdminFilter()(message):
+        return
 
     # Check if boss exists
     current_state = await boss_service.get_state()
@@ -256,6 +156,8 @@ async def kill_boss(message: Message, container: Container):
         return
 
     await boss_service.stop_boss()
+    from src.services.boss_runtime import refresh_boss
+    await refresh_boss(message.bot, container, force=True)
     await message.answer(
         "💀 <b>Босс был убит Сенсеем с одного удара.</b>\n❌ Битва остановлена, награды не выданы.",
         parse_mode="HTML"
@@ -266,7 +168,8 @@ async def kill_boss(message: Message, container: Container):
 @router.message(F.text.lower().in_({"файт", "fight", "атака", "attack", "бить", "hit"}))
 async def cmd_fight(message: Message, container: Container):
     state = await container.boss_service.get_state()
-    if not state or state.get("is_dead") or state.get("is_expired") or state.get("hp", 0) <= 0:
+    if (not state or state.get('chat_id') != message.chat.id or state.get("is_dead")
+            or state.get("is_expired") or state.get("hp", 0) <= 0):
         return
     try:
         await message.delete()
@@ -274,39 +177,18 @@ async def cmd_fight(message: Message, container: Container):
         pass
     await process_boss_attack(message, container, is_ult=False)
 
+@router.message(Command("ulta"))
 @router.message(F.text.lower().in_({"ульта", "ult", "ultra", "ultimate", "/ulta"}))
 async def cmd_ult(message: Message, container: Container):
     state = await container.boss_service.get_state()
-    if not state or state.get("is_dead") or state.get("is_expired") or state.get("hp", 0) <= 0:
+    if (not state or state.get('chat_id') != message.chat.id or state.get("is_dead")
+            or state.get("is_expired") or state.get("hp", 0) <= 0):
         return
     try:
         await message.delete()
     except Exception:
         pass
     await process_boss_attack(message, container, is_ult=True)
-
-async def update_boss_message(bot, chat_id, message_id, has_photo, text, reply_markup=None):
-    """Редактирует сообщение босса по ID."""
-    try:
-        if has_photo:
-            await bot.edit_message_caption(
-                chat_id=chat_id,
-                message_id=message_id,
-                caption=text,
-                parse_mode="HTML",
-                reply_markup=reply_markup
-            )
-        else:
-            await bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=text,
-                parse_mode="HTML",
-                reply_markup=reply_markup
-            )
-    except Exception as e:
-        if "message is not modified" not in str(e):
-            pass # Log error?
 
 async def process_boss_attack(event: CallbackQuery | Message, container: Container, is_ult: bool):
     """
@@ -317,8 +199,20 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
     economy_service = container.economy_service
 
     user = event.from_user
+    if user is None:
+        return
     user_id = user.id
     is_callback = isinstance(event, CallbackQuery)
+
+    battle = await boss_service.get_state()
+    origin = event.message if is_callback else event
+    if origin is None or not battle or battle.get('chat_id') != origin.chat.id:
+        if is_callback:
+            await safe_answer(event, 'Этот бой недоступен в этом чате.', show_alert=True)
+        return
+    if is_callback and battle.get('message_id') != origin.message_id:
+        await safe_answer(event, 'Это кнопка предыдущего боя.', show_alert=True)
+        return
 
     # Get user data for katana
     user_data = await container.user_service.get_or_create(
@@ -360,12 +254,12 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
 
     try:
         # result returns: BossAttackResult object
-        result_obj = await boss_service.attack_boss(user_id, user.first_name, damage, is_ult=is_ult)
+        result_obj = await boss_service.attack_boss(user_id, user.first_name, damage, is_ult=is_ult,
+            expected_battle=battle.get('battle_id', battle.get('start_time')), expected_chat=origin.chat.id)
 
         state = result_obj.state
         result = result_obj.result_type
         actual_dmg = result_obj.actual_damage
-        event_type = result_obj.event
 
     except ValueError as e:
         # Cooldown or requirements
@@ -418,19 +312,10 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
             return
 
     if result == "expired":
-        # Handle expiration penalty — штраф со участников при сбежавшем боссе.
-        participants = [int(uid) for uid in state["hits"].keys()]
-        await economy_service.process_boss_loss(participants, 100.0)
-
-        msg = "⏰ Время вышло! Босс сбежал!"
+        from src.services.boss_runtime import refresh_boss
+        await refresh_boss(event.bot, container, force=True)
         if is_callback:
-            await safe_answer(event, msg, show_alert=True)
-
-        await update_boss_message(
-            event.bot, chat_id, message_id, has_photo,
-            "❌ <b>Босс сбежал!</b>\nВремя истекло. Все участники потеряли 100 монет.\n💰 Монеты ушли в банк Сенсея.",
-            reply_markup=None
-        )
+            await safe_answer(event, 'Время вышло — босс сбежал.', show_alert=True)
         return
 
     if result == "dead":
@@ -452,8 +337,8 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
                  pass
 
         # Update message to show "Miss" in log
-        caption = render_boss_caption(state, last_action=None)
-        await update_boss_message(event.bot, chat_id, message_id, has_photo, caption, reply_markup=get_boss_keyboard())
+        from src.services.boss_runtime import refresh_boss
+        await refresh_boss(event.bot, container)
         return
 
     # Result is "hit" or "killed"
@@ -466,88 +351,22 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
     user_total_dmg = user_stats.get("dmg", 0)
     combo_count = result_obj.combo_count
 
-    # Handle events
-    if event_type == "hp_75":
-        await update_boss_message(
-            event.bot,
-            chat_id,
-            message_id,
-            has_photo,
-            render_boss_caption(state, "👁️ <b>БОСС ЗАМЕТИЛ ТЕБЯ.</b>"),
-            reply_markup=get_boss_keyboard(),
-        )
-        msg = await event.bot.send_message(chat_id, "👁️ <b>БОСС ПРОСНУЛСЯ.</b>\nКто первый дойдёт до MVP?", parse_mode="HTML")
-        asyncio.create_task(delete_message_delayed(msg, 5))
-
-    elif event_type == "hp_50":
-        await update_boss_message(
-            event.bot,
-            chat_id,
-            message_id,
-            has_photo,
-            render_boss_caption(state, "⚠️ <b>БОСС В ЯРОСТИ! (HP < 50%)</b>"),
-            reply_markup=get_boss_keyboard(),
-        )
-        msg = await event.bot.send_message(chat_id, "⚠️ <b>ЯРОСТЬ!</b>\nТемп растёт. COMBO решает.", parse_mode="HTML")
-        asyncio.create_task(delete_message_delayed(msg, 5))
-
-    elif event_type == "hp_25":
-        await update_boss_message(
-            event.bot,
-            chat_id,
-            message_id,
-            has_photo,
-            render_boss_caption(state, "🩸 <b>ФИНАЛЬНАЯ ФАЗА! (HP < 25%)</b>"),
-            reply_markup=get_boss_keyboard(),
-        )
-        msg = await event.bot.send_message(chat_id, "🩸 <b>ФИНАЛЬНАЯ ФАЗА.</b>\nНе дай ему уйти!", parse_mode="HTML")
-        asyncio.create_task(delete_message_delayed(msg, 5))
-
-    elif event_type == "hp_10":
-        await update_boss_message(
-            event.bot,
-            chat_id,
-            message_id,
-            has_photo,
-            render_boss_caption(state, "🔥 <b>ПОСЛЕДНИЙ РЫВОК! (HP < 10%)</b>"),
-            reply_markup=get_boss_keyboard(),
-        )
-        msg = await event.bot.send_message(chat_id, "🔥 <b>10% HP!</b>\nСейчас решит один удар.", parse_mode="HTML")
-        asyncio.create_task(delete_message_delayed(msg, 5))
-
-    elif event_type == "weakness_started":
-        await update_boss_message(
-            event.bot,
-            chat_id,
-            message_id,
-            has_photo,
-            render_boss_caption(state, "😵 <b>БОСС ПОТЕРЯЛ РАВНОВЕСИЕ! (x2 УРОН)</b>"),
-            reply_markup=get_boss_keyboard(),
-        )
-        msg = await event.bot.send_message(chat_id, "😵 <b>БОСС УЯЗВИМ!</b>\nНаносите двойной урон в течение 15 секунд!", parse_mode="HTML")
-        asyncio.create_task(delete_message_delayed(msg, 5))
-
     # Prepare messages
-    action_type = "УЛЬТА" if is_ult else "удар"
 
     # User mention (like Banzai): @username or tg://user link
-    user_display = user.username or user.full_name or f"User {user_id}"
+    user_display = Visuals.escape(user.username or user.full_name or f"User {user_id}")
     if user.username:
         user_mention = f"@{user.username}"
     else:
         user_mention = f'<a href="tg://user?id={user_id}">{user_display}</a>'
 
-    alert_text = f"💥 {user_mention} нанёс -{actual_dmg} HP! (Всего: {user_total_dmg})"
+    alert_text = f"⚔️ {user_mention} · <b>−{actual_dmg} HP</b>\nВсего: {user_total_dmg}"
     if combo_count > 1:
-        alert_text = f"🔥 COMBO x{combo_count}! {user_mention} нанёс -{actual_dmg} HP! (Всего: {user_total_dmg})"
+        alert_text += f" · серия {combo_count}"
 
     if is_ult:
-        alert_text = f"✨ CRITICAL! 💥 УЛЬТА! {user_mention} нанёс -{actual_dmg} HP! (Всего: {user_total_dmg})"
+        alert_text = f"⚡ Ульта · {user_mention} · <b>−{actual_dmg} HP</b>\nВсего: {user_total_dmg}"
     else:
-        # Critical visual for normal hits if damage is high (e.g. > 15)
-        if actual_dmg > 18: # Base max is around 20 + katana
-             alert_text = f"⚡ CRITICAL! {user_mention} нанёс -{actual_dmg} HP!"
-
         # Show progress towards ult for normal hits
         from src.core.constants import BOSS_ULT_REQUIRED_HITS
         if hit_count < BOSS_ULT_REQUIRED_HITS:
@@ -568,34 +387,17 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
                     reward_amount = round(random.uniform(reward_settings["reward_min"], reward_settings["reward_max"]), 4)
                     logger.info(f"[BOSS GRAM] user={user_id} DROP CHANCE PASSED amount={reward_amount}")
 
-                    # Если пул наград исчерпан, сбрасываем его, чтобы розыгрыш мог продолжиться
-                    # (пул ограничивает выдачу за одного босса, а не блокирует GRAM навсегда).
-                    pool_ok = await boss_service.check_pool_availability(reward_amount)
-                    if not pool_ok:
-                        await boss_service.reset_pool()
-                        pool_ok = await boss_service.check_pool_availability(reward_amount)
-                        logger.info(f"[BOSS GRAM] user={user_id} pool was full, reset and re-checked: {pool_ok}")
-
-                    if pool_ok:
-                        logger.info(f"[BOSS GRAM] user={user_id} pool OK")
-
-                        # Attempt transfer directly — xRocket transfer API is the source of truth
-                        # for sufficient funds (get_balance() endpoint returns 404 on pay.xrocket.tg).
-                        try:
-                            success = await container.xrocket_service.transfer(user_id, "GRAM", reward_amount)
-                            logger.info(f"[BOSS GRAM] user={user_id} transfer success={success}")
-                        except Exception as e:
-                            # Log error but don't fail the attack
-                            logger.error(f"[BOSS GRAM] user={user_id} XRocket transfer error: {e}")
-                            success = False
-
-                        if success:
-                            await boss_service.increment_pool_used(reward_amount)
-                            alert_text += f"\n💎 <b>LUCKY HIT!</b> +{reward_amount} GRAM (xRocket)"
-                        else:
-                            logger.warning(f"[BOSS GRAM] user={user_id} transfer rejected by xRocket (insufficient funds or API error)")
-                    else:
-                        logger.info(f"[BOSS GRAM] user={user_id} pool NOT available (reward_amount={reward_amount})")
+                    from src.services.boss_reward_service import award_boss_gram
+                    event_key = f"cb:{event.id}" if is_callback else f"msg:{origin.chat.id}:{origin.message_id}"
+                    try:
+                        payout = await award_boss_gram(container, state, user_id, reward_amount, event_key)
+                    except Exception:
+                        logger.exception('Boss GRAM receipt requires reconciliation')
+                        payout = 'needs_review'
+                    if payout == 'confirmed':
+                        alert_text += f"\n💎 <b>LUCKY HIT!</b> +{reward_amount} GRAM — xRocket подтвердил перевод."
+                    elif payout == 'needs_review':
+                        alert_text += "\n⏳ GRAM: перевод требует проверки, повторная отправка автоматически не выполняется."
                 else:
                     logger.info(f"[BOSS GRAM] user={user_id} drop chance NOT passed (drop_chance={reward_settings['drop_chance']})")
             else:
@@ -617,51 +419,16 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
     if is_callback:
         await safe_answer(event)
 
-    if result == "killed":
-        # Distribute rewards
-        coins_reward = boss_config.get("coins_reward", 0)
-        participants = [int(uid) for uid in state["hits"].keys()]
-
-        distribution_result = await economy_service.distribute_boss_reward(participants, float(coins_reward))
-
-        reward_text = f"🎁 Награда: {boss_config['reward']}"
-        if distribution_result["success"] and distribution_result["total_distributed"] > 0:
-            per_user = distribution_result["reward_per_user"]
-            reward_text += f"\n💰 {Visuals._fmt_coins(distribution_result['total_distributed'])} монет разделено между {distribution_result['count']} участниками ({Visuals._fmt_coins(per_user)} каждому) из банка Сенсея!"
-        elif coins_reward > 0:
-            reward_text += "\n⚠️ Банк Сенсея пуст! Монеты не выплачены."
-
-        hit_desc = f"Последний удар ({action_type})"
-
-        # --- LEADERBOARD ---
-        leaderboard = await boss_service.get_leaderboard(limit=3)
-        lb_text = "\n\n🏆 <b>MVP Битвы:</b>"
-        medals = ["🥇", "🥈", "🥉"]
-        for idx, entry in enumerate(leaderboard):
-            medal = medals[idx] if idx < 3 else "🎖"
-            lb_text += f"\n{medal} {Visuals.escape(entry['name'])}: {entry['dmg']} урона"
-
-        final_text = f"🏆 <b>Босс повержен!</b>\n\n💀 {hit_desc}: {Visuals.escape(user.first_name)}\n{reward_text}{lb_text}"
-
-        await update_boss_message(
-            event.bot, chat_id, message_id, has_photo,
-            final_text,
-            reply_markup=None
-        )
-
-        # Victory notification
-        await event.bot.send_message(
-            chat_id=chat_id,
-            text=f"🎉 <b>ПОБЕДА!</b>\nБосс <b>{boss_config['name']}</b> был уничтожен!\n\n{reward_text}",
-            parse_mode="HTML"
-        )
-        return
-
-    # Update message if not killed
-    # Log is now inside the frame, so we don't need last_hit_text appended below
-    caption = render_boss_caption(state, last_action=None)
-    await update_boss_message(event.bot, chat_id, message_id, has_photo, caption, reply_markup=get_boss_keyboard())
+    # One authoritative card; no duplicate phase/victory announcements.
+    from src.services.boss_runtime import refresh_boss
+    await refresh_boss(event.bot, container, force=result == 'killed')
 
 @router.callback_query(F.data == "hit_boss")
 async def hit_boss(callback: CallbackQuery, container: Container):
     await process_boss_attack(callback, container, is_ult=False)
+
+
+@router.callback_query(F.data == "ult_boss")
+async def ult_boss(callback: CallbackQuery):
+    # Retire buttons already published by an earlier build; do not execute ult.
+    await safe_answer(callback, "Ульта вызывается сообщением «ульта» или /ulta.", show_alert=True)

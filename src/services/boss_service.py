@@ -2,6 +2,8 @@
 👹 Сервис для битв с боссами.
 """
 
+import uuid
+from pymongo.errors import DuplicateKeyError
 import json
 import logging
 import os
@@ -117,6 +119,8 @@ class BossService:
         # For locking, we'll use a simple asyncio.Lock assuming single instance.
         # If multiple instances are needed, we should implement a distributed lock via MongoDB.
         self._lock = asyncio.Lock()
+        self._card_lock = asyncio.Lock()
+        self._last_card_edit = 0.0
 
         # Defaults
         self.DEFAULT_DROP_CHANCE = 0.05
@@ -156,7 +160,7 @@ class BossService:
         """
         await self.boss_state.update_one(
             {"_id": "boss_state"},
-            {"$set": state},
+            {"$set": {key:value for key,value in state.items() if key != 'gram_reserved'}},
             upsert=True
         )
 
@@ -267,6 +271,8 @@ class BossService:
         state = {
             "_id": "boss_state",  # Fixed ID to ensure single document
             "boss_id": boss_id,
+            "battle_id": uuid.uuid4().hex,
+            "gram_reserved": 0.0,
             "hp": hp,
             "max_hp": hp,
             "shield": shield,
@@ -290,7 +296,16 @@ class BossService:
             "updated_at": datetime.now(timezone.utc)
         }
 
-        await self._save_boss_state_doc(state)
+        try:
+            await self.boss_state.update_one(
+                {'_id':'boss_state', '$or':[
+                    {'is_dead':True, 'settlement_kind':{'$exists':False}},
+                    {'is_expired':True, 'settlement_kind':{'$exists':False}},
+                    {'settlement':{'$type':'object'}},
+                ]}, {'$set':state, '$unset':{'settlement':'', 'settlement_kind':'',
+                    'card_synced':'', 'card_missing':'', 'chat_id':'', 'message_id':'', 'has_photo':'', 'stopped_by_admin':'', 'ended_at':''}}, upsert=True)
+        except DuplicateKeyError:
+            raise ValueError('Бой уже идёт. Дождитесь завершения или /killboss.')
         return state
 
     async def set_message_data(self, chat_id: int, message_id: int, has_photo: bool = False):
@@ -310,10 +325,12 @@ class BossService:
         if state:
             state["hp"] = 0
             state["is_dead"] = True
+            state["stopped_by_admin"] = True
+            state["ended_at"] = time.time()
             state["updated_at"] = datetime.now(timezone.utc)
             await self._save_boss_state_doc(state)
 
-    async def attack_boss(self, user_id: int, user_name: str, damage: int, is_ult: bool = False) -> BossAttackResult:
+    async def attack_boss(self, user_id: int, user_name: str, damage: int, is_ult: bool = False, expected_battle=None, expected_chat=None) -> BossAttackResult:
         """
         Нанести удар или ульту по боссу.
         """
@@ -322,6 +339,10 @@ class BossService:
             state = await self._get_boss_state_doc()
             if not state:
                 return BossAttackResult(None, "dead", 0)
+            if expected_chat is not None and state.get('chat_id') != expected_chat:
+                raise ValueError('Бой проходит в другом чате.')
+            if expected_battle is not None and state.get('battle_id', state.get('start_time')) != expected_battle:
+                raise ValueError('Этот бой уже завершён. Используйте новую карточку.')
 
             if state.get("is_dead") or state.get("is_expired"):
                 return BossAttackResult(state, "dead", 0)
@@ -329,6 +350,7 @@ class BossService:
             # Check expiration
             if state.get("deadline") and time.time() > state["deadline"]:
                 state["is_expired"] = True
+                state["settlement_kind"] = "loss"
                 state["updated_at"] = datetime.now(timezone.utc)
                 await self._save_boss_state_doc(state)
                 return BossAttackResult(state, "expired", 0)
@@ -510,6 +532,8 @@ class BossService:
             if state["hp"] <= 0:
                 state["hp"] = 0
                 state["is_dead"] = True
+                state["settlement_kind"] = "win"
+                state["ended_at"] = time.time()
                 result_type = "killed"
 
             state["updated_at"] = datetime.now(timezone.utc)

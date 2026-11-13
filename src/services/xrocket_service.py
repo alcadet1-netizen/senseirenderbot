@@ -3,6 +3,7 @@
 """
 
 import logging
+import math
 import uuid
 import aiohttp
 from typing import Optional
@@ -25,8 +26,8 @@ class XRocketService:
         """
         Перевод средств пользователю Telegram.
         """
-        if not self.api_key:
-            logger.warning("xRocket API key is missing")
+        if not self.api_key or not math.isfinite(amount) or amount <= 0:
+            logger.warning("xRocket transfer unavailable: missing key or invalid amount")
             return False
 
         url = f"{self.BASE_URL}/transfer"
@@ -43,25 +44,25 @@ class XRocketService:
         }
 
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=12)) as session:
                 async with session.post(url, json=payload, headers=self.headers) as response:
                     if 200 <= response.status < 300:
                         data = await response.json()
                         # Success response usually contains 'success': true or data
                         # xRocket API often returns { "success": true, "data": { ... } }
                         # Some responses come with status 201 Created but success:true.
-                        if data.get("success") is False:
-                            logger.error(f"XRocket transfer failed: {data}")
+                        if not isinstance(data, dict) or data.get("success") is not True:
+                            logger.error("XRocket transfer not confirmed")
                             return False
 
                         logger.info(f"XRocket transfer success: {user_id} {amount} {currency} (status={response.status})")
                         return True
                     else:
                         text = await response.text()
-                        logger.error(f"XRocket API Error {response.status}: {text}")
+                        logger.error("XRocket API rejected request status=%s", response.status)
                         return False
         except Exception as e:
-            logger.error(f"XRocket connection error: {e}")
+            logger.error("XRocket request outcome unknown error_type=%s", type(e).__name__)
             return False
 
     async def get_balance(self) -> float:
@@ -72,7 +73,7 @@ class XRocketService:
         url = f"{self.BASE_URL}/balance"
 
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=12)) as session:
                 async with session.get(url, headers=self.headers) as response:
                     if response.status == 200:
                         data = await response.json()
@@ -86,8 +87,8 @@ class XRocketService:
                             return 0.0
                     else:
                         text = await response.text()
-                        logger.error(f"XRocket API Error {response.status}: {text}")
+                        logger.error("XRocket API rejected request status=%s", response.status)
                         return 0.0
         except Exception as e:
-            logger.error(f"XRocket connection error: {e}")
+            logger.error("XRocket request outcome unknown error_type=%s", type(e).__name__)
             return 0.0

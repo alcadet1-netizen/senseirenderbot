@@ -101,6 +101,8 @@ async def on_startup(bot: Bot, container: Container) -> None:
         logger.info(f"✅ Restored {restored} Banzai workers")
 
     await container.comment_campaign_service.start(bot)
+    from src.services.boss_runtime import start_boss_monitor
+    await start_boss_monitor(bot, container)
 
     # Устанавливаем команды
     await setup_bot_commands(bot)
@@ -116,9 +118,13 @@ async def on_shutdown(bot: Bot, container: Container | None = None) -> None:
     try:
         if container:
             try:
-                campaigns = getattr(container, '_comment_campaign_service', None)
-                if campaigns is not None:
-                    await campaigns.stop()
+                try:
+                    from src.services.boss_runtime import stop_boss_monitor
+                    await stop_boss_monitor(container)
+                finally:
+                    campaigns = getattr(container, '_comment_campaign_service', None)
+                    if campaigns is not None:
+                        await campaigns.stop()
             finally:
                 # Cleanup must also run when startup failed before polling, or
                 # when another service fails to stop.
