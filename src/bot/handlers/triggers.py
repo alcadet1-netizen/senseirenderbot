@@ -20,6 +20,8 @@ from src.bot.presenters.hedgehog_presenter import launch_hedgehog
 from src.bot.handlers.roulette import cmd_senseiroulette as roulette_handler
 from src.texts.phrases import get_random_phrase, check_easter_egg, get_random_pour_phrase, ERROR_COOLDOWN
 
+from src.texts.donate_prompts import get_random_donate_phrase
+
 logger = logging.getLogger(__name__)
 
 router = Router(name="triggers")
@@ -350,5 +352,5 @@ async def catch_all_message(message: Message):
 
     # 2. Случайная фраза (очень редкая)
     if random.random() < RANDOM_MESSAGE_CHANCE:
-        phrase = get_random_phrase()
+        phrase = get_random_donate_phrase()
         await message.answer(phrase, parse_mode="HTML")
