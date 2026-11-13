@@ -12,7 +12,7 @@ async def test_position_counts_ahead_and_total_without_writes():
                aggregate=MagicMock(return_value=NS(to_list=AsyncMock(return_value=[{'ahead':6,'total':128}]))))
     service = UserService.__new__(UserService)
     service.users = users
-    assert await service.get_katana_position(7) == {'rank':7,'total':128}
+    assert await service.get_katana_position(7) == {'rank':7,'total':128,'length':25}
     pipeline = users.aggregate.call_args.args[0]
     assert pipeline[0] == {'$match':{'has_katana':True}}
     comparison = pipeline[1]['$group']['ahead']['$sum']['$cond'][0]['$or']
@@ -53,3 +53,42 @@ async def test_live_rank_is_in_showcase_caption(position):
         assert '№7 из 128' in caption
     else:
         assert 'недоступно' in caption and '№1' not in caption
+
+
+@pytest.mark.asyncio
+async def test_owner_caption_is_bounded_plain_text_and_can_disable_animation():
+    message = NS(answer_photo=AsyncMock(),answer_animation=AsyncMock())
+    await send_current_katana(message,25,position={'rank':2,'total':90},
+                              owner_name='<b>Игрок</b>\n'+'X'*200,animate=False)
+    message.answer_animation.assert_not_awaited()
+    message.answer_photo.assert_awaited_once()
+    kwargs = message.answer_photo.call_args.kwargs
+    assert kwargs['parse_mode'] is None
+    assert len(kwargs['caption'].splitlines()[0]) <= 82
+    assert '№2 из 90' in kwargs['caption']
+
+
+@pytest.mark.asyncio
+async def test_command_uses_rank_length_instead_of_stale_profile():
+    from src.bot.handlers.user_commands import cmd_mykatana
+    from unittest.mock import patch
+    message = NS(from_user=NS(id=7,username='User',full_name='Player'),answer=AsyncMock())
+    service = NS(get_profile=AsyncMock(return_value={'has_katana':True,'katana_length':19.9}),
+                 get_katana_position=AsyncMock(return_value={'rank':3,'total':10,'length':20.2}))
+    container = NS(user_service=service,settings=NS(widget_animations_enabled=False))
+    with patch('src.bot.handlers.user_commands.send_current_katana',new_callable=AsyncMock) as send:
+        await cmd_mykatana(message,container)
+    send.assert_awaited_once_with(message,20.2,position={'rank':3,'total':10,'length':20.2},
+                                 owner_name='Player',animate=False)
+
+
+@pytest.mark.asyncio
+async def test_ranking_failure_still_delivers_card_without_false_rank():
+    from src.bot.handlers.user_commands import cmd_mykatana
+    from unittest.mock import patch
+    message = NS(from_user=NS(id=7,username='User',full_name='Player'),answer=AsyncMock())
+    service = NS(get_profile=AsyncMock(return_value={'has_katana':True,'katana_length':19.9}),
+                 get_katana_position=AsyncMock(side_effect=TimeoutError))
+    with patch('src.bot.handlers.user_commands.send_current_katana',new_callable=AsyncMock) as send:
+        await cmd_mykatana(message,NS(user_service=service))
+    send.assert_awaited_once_with(message,19.9,position=None,owner_name='Player',animate=True)

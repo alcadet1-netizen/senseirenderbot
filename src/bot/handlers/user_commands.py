@@ -294,7 +294,15 @@ async def cmd_mykatana(message: Message, container: Container) -> None:
         except Exception:
             logger.warning("Katana leaderboard lookup unavailable")
             position = None
-        await send_current_katana(message, length, position=position)
+        if position is not None:
+            # Use the exact length used by the rank calculation, not an older
+            # profile read if an upgrade happened between the two requests.
+            length = position['length']
+        await send_current_katana(
+            message, length, position=position,
+            owner_name=message.from_user.full_name,
+            animate=getattr(getattr(container, 'settings', None), 'widget_animations_enabled', True),
+        )
         logger.info(f"✅ Mykatana info sent to {message.from_user.id}")
     except Exception as e:
         logger.error(f"❌ Error in cmd_mykatana: {e}", exc_info=True)

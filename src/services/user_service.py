@@ -391,7 +391,8 @@ class UserService:
         Reads only, no economy writes or in-memory leaderboard download.
         """
         try:
-            user = await self.users.find_one({'id': user_id, 'has_katana': True})
+            user = await self.users.find_one(
+                {'id': user_id, 'has_katana': True}, {'id': 1, 'katana_length': 1}, max_time_ms=1500)
             if not user:
                 return None
             # Compare Mongo's own field ordering, including legacy missing/null
@@ -406,10 +407,11 @@ class UserService:
                             {'$lt': ['$id', user_id]},
                         ]},
                     ]}, 1, 0]}}}},
-            ]).to_list(length=1)
+            ], maxTimeMS=1500).to_list(length=1)
             if not rows:
                 return None
-            return {'rank': rows[0]['ahead'] + 1, 'total': rows[0]['total']}
+            return {'rank': rows[0]['ahead'] + 1, 'total': rows[0]['total'],
+                    'length': user.get('katana_length') or 0.0}
         except Exception:
             logger.warning('Katana position unavailable', exc_info=True)
             return None
