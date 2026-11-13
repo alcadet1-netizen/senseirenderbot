@@ -190,6 +190,15 @@ async def test_rejected_attempt_does_not_show_growth(error):
         await cmd_upkatana(msg, container)
     send.assert_not_awaited()
     msg.answer.assert_awaited_once()
+    text = msg.answer.call_args.args[0]
+    if isinstance(error, InsufficientFundsError):
+        assert "/donate" in text
+        assert "SenseiCoin за Stars" in text
+        assert "Нужно: 100" in text and "У тебя: 5" in text
+        assert "дзен" in text
+    else:
+        assert "/donate" not in text
+    container.economy_service.upgrade_katana.assert_awaited_once_with(7)
 
 
 @pytest.mark.asyncio

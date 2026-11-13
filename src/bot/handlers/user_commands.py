@@ -261,7 +261,10 @@ async def cmd_upkatana(message: Message, container: Container):
             f"{mention}\n\n"
             f"❌ <b>Не хватает монет!</b>\n"
             f"Нужно: {e.required:,.0f}  💰\n"
-            f"У тебя: {e.available:,.0f}  💰",
+            f"У тебя: {e.available:,.0f}  💰\n\n"
+            "🥋 Кузнец проверил карманы и нашёл только дзен. "
+            "Хочешь пополнить запас? /donate — SenseiCoin за Stars. "
+            "Остроту катаны не гарантируем: кузнец всё ещё тот шутник.",
             parse_mode="HTML"
         )
 
