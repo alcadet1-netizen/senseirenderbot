@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import BufferedInputFile, Message
@@ -10,6 +11,16 @@ from src.widgets.katana import KatanaUpgrade, to_upgrade_gif, to_upgrade_png
 from src.widgets.limits import RENDER_SLOTS
 
 logger = logging.getLogger(__name__)
+
+
+async def render_receipt(renderer, receipt):
+    # Bound queue time, not the thread itself: releasing a slot while its thread
+    # still renders would defeat the CPU concurrency bound.
+    await asyncio.wait_for(RENDER_SLOTS.acquire(), timeout=0.5)
+    task = asyncio.create_task(asyncio.to_thread(renderer, receipt))
+    # Release on actual completion, including when the request is cancelled.
+    task.add_done_callback(lambda _: RENDER_SLOTS.release())
+    return await asyncio.shield(task)
 
 
 async def send_katana_upgrade(
@@ -24,24 +35,24 @@ async def send_katana_upgrade(
     text_receipt = caption + f"\n{dict(card.rows)['Клинок']} · Ранг {dict(card.rows)['Ранг']}"
     if animate:
         try:
-            async with RENDER_SLOTS:
-                payload = await asyncio.to_thread(to_upgrade_gif, receipt)
+            started = time.monotonic()
+            payload = await render_receipt(to_upgrade_gif, receipt)
+            logger.info("Katana GIF rendered version=reference-v2 seconds=%.3f bytes=%s", time.monotonic()-started, len(payload))
             await message.answer_animation(
                 BufferedInputFile(payload, filename="sensei-katana-upgrade.gif"),
                 caption=caption,
                 parse_mode=None,
             )
             return
-        except (TelegramBadRequest, OSError, ValueError):
+        except (TelegramBadRequest, OSError, ValueError, TimeoutError):
             logger.warning("Katana animation unavailable; falling back to PNG", exc_info=True)
     try:
-        async with RENDER_SLOTS:
-            payload = await asyncio.to_thread(to_upgrade_png, receipt)
+        payload = await render_receipt(to_upgrade_png, receipt)
         await message.answer_photo(
             BufferedInputFile(payload, filename="sensei-katana-upgrade.png"),
             caption=caption,
             parse_mode=None,
         )
-    except (TelegramBadRequest, OSError, ValueError):
+    except (TelegramBadRequest, OSError, ValueError, TimeoutError):
         logger.warning("Katana image unavailable; falling back to text", exc_info=True)
         await message.answer(text_receipt, parse_mode=None)
