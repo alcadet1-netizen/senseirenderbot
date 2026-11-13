@@ -76,10 +76,10 @@ def to_upgrade_png(receipt: KatanaUpgrade) -> bytes:
 @lru_cache(maxsize=8)
 def to_upgrade_gif(receipt: KatanaUpgrade) -> bytes:
     # Include hot steel, sparks and the cooled blade in one stable palette.
-    atlas = Image.new("RGB", (WIDTH, HEIGHT * 4))
-    for i, phase in enumerate((0.0, 0.22, 0.46, 1.0)):
+    atlas = Image.new("RGB", (WIDTH, HEIGHT * 6))
+    for i, phase in enumerate((0.0, 0.22, 0.46, 0.65, 0.84, 1.0)):
         atlas.paste(render_upgrade(receipt, phase), (0, i * HEIGHT))
-    palette = atlas.quantize(colors=128)
+    palette = atlas.quantize(colors=192)
     frames = [
         render_upgrade(receipt, i / (FRAME_COUNT - 1)).quantize(
             palette=palette,
@@ -93,7 +93,7 @@ def to_upgrade_gif(receipt: KatanaUpgrade) -> bytes:
         format="GIF",
         save_all=True,
         append_images=frames[1:],
-        duration=[80] * (FRAME_COUNT - 1) + [1400],
+        duration=[65] * (FRAME_COUNT - 1) + [1400],
         loop=0,
         disposal=1,
         optimize=False,
