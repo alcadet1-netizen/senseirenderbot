@@ -2,6 +2,8 @@
 👹 Сервис для битв с боссами.
 """
 
+import uuid
+from pymongo.errors import DuplicateKeyError
 import json
 import logging
 import os
@@ -267,6 +269,8 @@ class BossService:
         state = {
             "_id": "boss_state",  # Fixed ID to ensure single document
             "boss_id": boss_id,
+            "battle_id": uuid.uuid4().hex,
+            "gram_reserved": 0.0,
             "hp": hp,
             "max_hp": hp,
             "shield": shield,
@@ -290,7 +294,14 @@ class BossService:
             "updated_at": datetime.now(timezone.utc)
         }
 
-        await self._save_boss_state_doc(state)
+        try:
+            await self.boss_state.update_one(
+                {'_id':'boss_state', '$or':[
+                    {'is_dead':True}, {'is_expired':True}, {'hp':{'$lte':0}},
+                    {'deadline':{'$ne':None,'$lte':time.time()}},
+                ]}, {'$set':state}, upsert=True)
+        except DuplicateKeyError:
+            raise ValueError('Бой уже идёт. Дождитесь завершения или /killboss.')
         return state
 
     async def set_message_data(self, chat_id: int, message_id: int, has_photo: bool = False):
@@ -313,7 +324,7 @@ class BossService:
             state["updated_at"] = datetime.now(timezone.utc)
             await self._save_boss_state_doc(state)
 
-    async def attack_boss(self, user_id: int, user_name: str, damage: int, is_ult: bool = False) -> BossAttackResult:
+    async def attack_boss(self, user_id: int, user_name: str, damage: int, is_ult: bool = False, expected_battle=None, expected_chat=None) -> BossAttackResult:
         """
         Нанести удар или ульту по боссу.
         """
@@ -322,6 +333,10 @@ class BossService:
             state = await self._get_boss_state_doc()
             if not state:
                 return BossAttackResult(None, "dead", 0)
+            if expected_chat is not None and state.get('chat_id') != expected_chat:
+                raise ValueError('Бой проходит в другом чате.')
+            if expected_battle is not None and state.get('battle_id', state.get('start_time')) != expected_battle:
+                raise ValueError('Этот бой уже завершён. Используйте новую карточку.')
 
             if state.get("is_dead") or state.get("is_expired"):
                 return BossAttackResult(state, "dead", 0)

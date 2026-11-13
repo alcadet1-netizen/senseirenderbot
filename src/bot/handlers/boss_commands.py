@@ -2,6 +2,8 @@
 ⚔️ Обработчик битвы с боссом.
 """
 
+import html
+import math
 import asyncio
 import logging
 import random
@@ -51,7 +53,8 @@ router = Router(name="boss_commands")
 
 def get_boss_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚔️ Атаковать!", callback_data="hit_boss")]
+        [InlineKeyboardButton(text="⚔️ Удар", callback_data="hit_boss"),
+         InlineKeyboardButton(text="⚡ Ульта", callback_data="ult_boss")]
     ])
 
 def render_boss_caption(state: dict, last_action: str = None) -> str:
@@ -143,7 +146,7 @@ def render_boss_caption(state: dict, last_action: str = None) -> str:
         lines.append(Visuals.frame_separator_left(w))
         lines.append(Visuals.frame_line_left(fit("🏆 Топ урона:"), w))
         for i, t in enumerate(top):
-            name = Visuals.escape((t.get("name") or "")[:10])
+            name = (t.get("name") or "")[:10]
             dmg_val = int(t.get("dmg", 0) or 0)
             lines.append(Visuals.frame_line_left(fit(f"{medals[i]} {name}: {dmg_val}"), w))
 
@@ -152,7 +155,7 @@ def render_boss_caption(state: dict, last_action: str = None) -> str:
     if battle_log:
         lines.append(Visuals.frame_separator_left(w))
         lines.append(Visuals.frame_line_left(fit("📝 Ход битвы:"), w))
-        for entry in battle_log[-6:]: # Show last 6
+        for entry in battle_log[-3:]: # Show last 6
              icon = "💥"
              dmg_text = f"-{entry['dmg']}"
 
@@ -169,14 +172,15 @@ def render_boss_caption(state: dict, last_action: str = None) -> str:
              user_name_raw = entry.get('name') or ''
              if len(user_name_raw) > 10:
                  user_name_raw = user_name_raw[:9] + "…"
-             user_name = Visuals.escape(user_name_raw)
+             user_name = user_name_raw
 
              log_line = f"{icon} {user_name}: {dmg_text}"
              lines.append(Visuals.frame_line_left(fit(log_line), w))
 
     lines.append(Visuals.frame_bottom_left(w))
 
-    caption = "<pre>\n" + "\n".join(lines) + "\n</pre>"
+    caption = "<pre>\n" + html.escape("\n".join(lines)) + "\n</pre>"
+    caption += "\n⚔️ Кнопка — удар · /ulta — ульта\nУчастие: катана и уровень 5+. GRAM — случайный бонус, не гарантия.\nПобеда: монеты из банка. Побег: −100 монет с участника."
 
     if last_action:
         caption += f"\n{last_action}"
@@ -225,9 +229,28 @@ async def launch_boss(
 from aiogram.fsm.context import FSMContext
 from src.bot.handlers.boss_editor import BossEditorFSM
 
-@router.message(Command("senseiboss"), AdminFilter())
+@router.message(Command("senseiboss"))
 async def sensei_boss(message: Message, command: CommandObject, container: Container, state: FSMContext):
     boss_service = container.boss_service
+    if message.chat.type in {'group', 'supergroup'}:
+        member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
+        if member.status not in {'administrator', 'creator'}:
+            await message.answer('⛔ Запускать босса может администратор чата.')
+            return
+        try:
+            hours = float(command.args or '1')
+            if not math.isfinite(hours) or not 0 < hours <= 24:
+                raise ValueError
+        except ValueError:
+            await message.answer('⚔️ /senseiboss 1 — случайный босс на 1 час. Допустимо: больше 0, до 24 часов.')
+            return
+        try:
+            await launch_boss(message.bot, message.chat.id, random.choice(list(BOSSES)), container, duration=hours)
+        except ValueError as exc:
+            await message.answer(str(exc))
+        return
+    if not await AdminFilter()(message):
+        return
 
     # Check if boss exists
     current_state = await boss_service.get_state()
@@ -320,6 +343,16 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
     user_id = user.id
     is_callback = isinstance(event, CallbackQuery)
 
+    battle = await boss_service.get_state()
+    origin = event.message if is_callback else event
+    if not battle or battle.get('chat_id') != origin.chat.id:
+        if is_callback:
+            await safe_answer(event, 'Этот бой недоступен в этом чате.', show_alert=True)
+        return
+    if is_callback and battle.get('message_id') != origin.message_id:
+        await safe_answer(event, 'Это кнопка предыдущего боя.', show_alert=True)
+        return
+
     # Get user data for katana
     user_data = await container.user_service.get_or_create(
         user_id=user_id,
@@ -360,7 +393,8 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
 
     try:
         # result returns: BossAttackResult object
-        result_obj = await boss_service.attack_boss(user_id, user.first_name, damage, is_ult=is_ult)
+        result_obj = await boss_service.attack_boss(user_id, user.first_name, damage, is_ult=is_ult,
+            expected_battle=battle.get('battle_id', battle.get('start_time')), expected_chat=origin.chat.id)
 
         state = result_obj.state
         result = result_obj.result_type
@@ -531,7 +565,7 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
     action_type = "УЛЬТА" if is_ult else "удар"
 
     # User mention (like Banzai): @username or tg://user link
-    user_display = user.username or user.full_name or f"User {user_id}"
+    user_display = Visuals.escape(user.username or user.full_name or f"User {user_id}")
     if user.username:
         user_mention = f"@{user.username}"
     else:
@@ -568,34 +602,17 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
                     reward_amount = round(random.uniform(reward_settings["reward_min"], reward_settings["reward_max"]), 4)
                     logger.info(f"[BOSS GRAM] user={user_id} DROP CHANCE PASSED amount={reward_amount}")
 
-                    # Если пул наград исчерпан, сбрасываем его, чтобы розыгрыш мог продолжиться
-                    # (пул ограничивает выдачу за одного босса, а не блокирует GRAM навсегда).
-                    pool_ok = await boss_service.check_pool_availability(reward_amount)
-                    if not pool_ok:
-                        await boss_service.reset_pool()
-                        pool_ok = await boss_service.check_pool_availability(reward_amount)
-                        logger.info(f"[BOSS GRAM] user={user_id} pool was full, reset and re-checked: {pool_ok}")
-
-                    if pool_ok:
-                        logger.info(f"[BOSS GRAM] user={user_id} pool OK")
-
-                        # Attempt transfer directly — xRocket transfer API is the source of truth
-                        # for sufficient funds (get_balance() endpoint returns 404 on pay.xrocket.tg).
-                        try:
-                            success = await container.xrocket_service.transfer(user_id, "GRAM", reward_amount)
-                            logger.info(f"[BOSS GRAM] user={user_id} transfer success={success}")
-                        except Exception as e:
-                            # Log error but don't fail the attack
-                            logger.error(f"[BOSS GRAM] user={user_id} XRocket transfer error: {e}")
-                            success = False
-
-                        if success:
-                            await boss_service.increment_pool_used(reward_amount)
-                            alert_text += f"\n💎 <b>LUCKY HIT!</b> +{reward_amount} GRAM (xRocket)"
-                        else:
-                            logger.warning(f"[BOSS GRAM] user={user_id} transfer rejected by xRocket (insufficient funds or API error)")
-                    else:
-                        logger.info(f"[BOSS GRAM] user={user_id} pool NOT available (reward_amount={reward_amount})")
+                    from src.services.boss_reward_service import award_boss_gram
+                    event_key = f"cb:{event.id}" if is_callback else f"msg:{origin.chat.id}:{origin.message_id}"
+                    try:
+                        payout = await award_boss_gram(container, state, user_id, reward_amount, event_key)
+                    except Exception:
+                        logger.exception('Boss GRAM receipt requires reconciliation')
+                        payout = 'needs_review'
+                    if payout == 'confirmed':
+                        alert_text += f"\n💎 <b>LUCKY HIT!</b> +{reward_amount} GRAM — xRocket подтвердил перевод."
+                    elif payout == 'needs_review':
+                        alert_text += "\n⏳ GRAM: перевод требует проверки, повторная отправка автоматически не выполняется."
                 else:
                     logger.info(f"[BOSS GRAM] user={user_id} drop chance NOT passed (drop_chance={reward_settings['drop_chance']})")
             else:
@@ -665,3 +682,8 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
 @router.callback_query(F.data == "hit_boss")
 async def hit_boss(callback: CallbackQuery, container: Container):
     await process_boss_attack(callback, container, is_ult=False)
+
+
+@router.callback_query(F.data == "ult_boss")
+async def ult_boss(callback: CallbackQuery, container: Container):
+    await process_boss_attack(callback, container, is_ult=True)
