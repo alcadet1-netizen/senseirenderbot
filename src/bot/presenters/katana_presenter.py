@@ -58,13 +58,22 @@ async def send_katana_upgrade(
         await message.answer(text_receipt, parse_mode=None)
 
 
-async def send_current_katana(message: Message, length: float):
-    from src.widgets.katana_models import model_caption, model_index, model_preview_path
+async def send_current_katana(message: Message, length: float, *, animate: bool = True):
+    from src.widgets.katana_models import model_caption, model_index, model_preview_path, model_animation_path
     caption = model_caption(length)
+    index = model_index(length)
+    if animate:
+        try:
+            await message.answer_animation(
+                FSInputFile(model_animation_path(index)), caption=caption, parse_mode=None,
+                width=960, height=640,
+            )
+            return
+        except TelegramBadRequest:
+            logger.warning("Katana showcase rejected; falling back to static card")
     try:
         await message.answer_photo(
-            FSInputFile(model_preview_path(model_index(length))),
-            caption=caption, parse_mode=None,
+            FSInputFile(model_preview_path(index)), caption=caption, parse_mode=None,
         )
     except TelegramBadRequest:
         await message.answer(caption, parse_mode=None)

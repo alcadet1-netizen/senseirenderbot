@@ -1,11 +1,48 @@
 """Build chat-friendly static previews; run from repository root."""
 from pathlib import Path
 import sys
+import math
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from PIL import Image, ImageDraw
-from src.widgets.katana_models import MODEL_NAMES, model_path, model_preview_path
+from PIL import Image, ImageDraw, ImageChops, ImageFilter
+from src.widgets.katana_models import MODEL_NAMES, model_path, model_preview_path, model_animation_path
 from src.widgets.rendering import font
+
+
+COLORS = ('#ddbf8d', '#9de5ff', '#ff9f57', '#81cfff', '#be9bff',
+          '#ff9861', '#a5e8ff', '#b39aff', '#d0bcff', '#b0da7d',
+          '#ff9655', '#9ae2ff', '#ff759a', '#c38aff', '#ffe0a0')
+
+
+def animate_card(card, index):
+    """Offline deterministic showcase; no length/state animation on viewing."""
+    frames = []
+    steel = card.convert('L').crop((360,244,900,396)).point(lambda v: min(255,max(0,(v-95)*2)))
+    for frame in range(24):
+        phase = frame / 24
+        image = card.copy()
+        d = ImageDraw.Draw(image)
+        color = COLORS[index]
+        # Stable border geometry with a gently travelling constellation.
+        d.rounded_rectangle((36,188,923,452), radius=16, outline=color, width=2)
+        for j in range(10):
+            x = 70 + ((j*79+phase*140) % 820)
+            y = 216 + math.sin(j*2.4+phase*2*math.pi)*11
+            r = 1 + (math.sin(j+phase*2*math.pi)+1)/2
+            d.line((x-r,y,x+r,y), fill=color, width=1)
+            d.line((x,y-r,x,y+r), fill=color, width=1)
+        # A clipped, broad highlight follows the bright steel, never the labels.
+        sweep = Image.new('L',(540,152))
+        sd = ImageDraw.Draw(sweep)
+        x = -100 + phase*820
+        sd.polygon([(x-35,0),(x,0),(x+70,152),(x+35,152)],fill=95)
+        sweep = sweep.filter(ImageFilter.GaussianBlur(8))
+        image.paste(Image.new('RGB',(540,152),'#ffffff'),(360,244),ImageChops.multiply(sweep,steel))
+        frames.append(image)
+    palette = card.quantize(colors=192)
+    frames = [f.quantize(palette=palette,dither=Image.Dither.NONE) for f in frames]
+    frames[0].save(model_animation_path(index),format='GIF',save_all=True,
+                   append_images=frames[1:],duration=100,loop=0,disposal=1,optimize=False)
 
 
 def build():
@@ -23,6 +60,7 @@ def build():
         path = model_preview_path(index)
         path.parent.mkdir(parents=True, exist_ok=True)
         card.save(path, format='PNG', optimize=True)
+        animate_card(card, index)
 
 
 if __name__ == '__main__':

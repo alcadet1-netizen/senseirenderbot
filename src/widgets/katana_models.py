@@ -27,6 +27,10 @@ def model_preview_path(index: int) -> Path:
     return model_path(index).parent / 'previews' / f'{index:02d}.png'
 
 
+def model_animation_path(index: int) -> Path:
+    return model_preview_path(index).with_suffix('.gif')
+
+
 def model_caption(length: float) -> str:
     index = model_index(length)
     interval = f'{index*20} ≤ длина < {(index+1)*20} см' if index < 14 else 'от 280 см'
