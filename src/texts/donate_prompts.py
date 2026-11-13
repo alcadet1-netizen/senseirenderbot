@@ -1,0 +1,63 @@
+"""Short factual Stars/Coin invitations; selection frequency belongs to callers."""
+import random
+
+DONATE_CHAT_PHRASES = (
+    '🥋 Сенсей достиг дзена. Теперь копит SenseiCoin. /donate — пакеты за Stars, если хочется поддержать проект.',
+    '⭐ Звёзды с неба не хватаю — Stars принимаю через /donate. Взамен SenseiCoin из SenseiBank, без финансового просветления.',
+    '🦔 Ёж советует не колоться, а заглянуть в /donate: там SenseiCoin за Stars. Покупать необязательно, гладить воздух бесплатно.',
+    '💰 Кошелёк самурая тоже хочет приключений. /donate покажет пакеты SenseiCoin за Stars — решение за тобой.',
+    '🥢 Палочками монеты ловить неудобно. В /donate есть SenseiCoin за Stars — без акробатики и обещаний разбогатеть.',
+    '🧘 Просветление не продаётся. SenseiCoin за Stars — да: /donate. Не перепутай покупки.',
+    '🏯 В додзё ремонт кармы. Кто хочет поддержать проект и взять SenseiCoin за Stars — /donate. Остальным можно просто болтать.',
+    '🐉 Дракон охраняет сокровища, я охраняю кнопку /donate. Там пакеты SenseiCoin за Stars, а не билет в миллионеры.',
+)
+
+DONATE_INACTIVE_PHRASES = (
+    '🦗 Пока вы молчали, сверчки попросили зарплату. Хочешь поддержать проект? /donate — SenseiCoin за Stars. Без обязательств.',
+    '💤 Чат медитирует, Сенсей считает пылинки. /donate покажет пакеты SenseiCoin за Stars, если захочется поддержать додзё.',
+    '🥋 Тишина такая, что слышно, как ёж думает. Его мысль: «А что там в /donate?» SenseiCoin за Stars, колючий ты маркетолог.',
+    '⭐ Все ушли в астрал? Если вернёшься со Stars, /donate покажет пакеты SenseiCoin. Можно и без Stars — просто напиши что-нибудь.',
+    '🏯 В додзё тихо. Сенсей открыл ларёк: /donate — SenseiCoin за Stars. Вход свободный, покупать не обязательно.',
+    '🧘 Час тишины — бесплатный курс дзена. /donate — уже не курс, а пакеты SenseiCoin за Stars. Не путай духовное с игровым.',
+    '🦔 Ёж дежурит, чат спит. /donate поможет поддержать проект покупкой SenseiCoin за Stars. Ежу процент не положен.',
+    '🐉 Даже дракон уснул от тишины. Проснётся — спросит про /donate. Там SenseiCoin за Stars, а не гарантированный клад.',
+)
+
+
+def get_random_donate_phrase():
+    return random.choice(DONATE_CHAT_PHRASES)
+
+
+def get_inactive_donate_phrase():
+    return random.choice(DONATE_INACTIVE_PHRASES)
+
+
+KATANA_DONATE_PHRASES = (
+    '🥋 Кузнец проверил карманы и нашёл только дзен. /donate — SenseiCoin за Stars. Просветление точить не берём.',
+    '🔨 Кузнец за спасибо не куёт: у него ипотека на наковальню. /donate — SenseiCoin за Stars, если хочешь пополнить запас.',
+    '🗡️ Катана хочет апгрейд, кошелёк — обнимашки. Помирить их можно через /donate: SenseiCoin за Stars.',
+    '🦔 Ёж предложил расплатиться иголками. Кузнец не оценил. В /donate есть SenseiCoin за Stars — их хотя бы считают монетами.',
+    '💨 В кошельке сквозняк, кузнец простудился. /donate — SenseiCoin за Stars. Можно и накопить, пока он пьёт чай.',
+    '🧘 Дух богат, баланс придерживается аскезы. /donate — SenseiCoin за Stars. Духовный капитал кузнец не принимает.',
+    '🐉 Дракон одолжить отказался: всё в золоте и принципах. /donate покажет SenseiCoin за Stars — без переговоров с рептилиями.',
+    '🥢 Пока хватает только на заточку палочки для суши. /donate — SenseiCoin за Stars, если захочется вернуться к катане.',
+    '🏯 Кузнец посмотрел на баланс и включил режим «я в домике». /donate — SenseiCoin за Stars. Можно также накопить и постучать позже.',
+    '🪙 Монеты играют в прятки. Побеждают всухую. /donate — SenseiCoin за Stars, если надоело их искать.',
+    '⚔️ Катана записалась на апгрейд, кошелёк отменил запись. /donate — SenseiCoin за Stars. Секретарь у вас суровый.',
+    '🍵 Кузнец согласен подождать, но уже заварил третий чай. /donate — SenseiCoin за Stars. Покупать необязательно, чай пока есть.',
+)
+
+
+def get_katana_donate_phrase() -> str:
+    return random.choice(KATANA_DONATE_PHRASES)
+
+
+
+def katana_insufficient_text(required: float, available: float) -> str:
+    """One receipt for command and profile paths; no payment side effects."""
+    return (
+        f"❌ <b>Не хватает монет!</b>\n"
+        f"Нужно: {required:,.0f}  💰\n"
+        f"У тебя: {available:,.0f}  💰\n\n"
+        f"{get_katana_donate_phrase()}"
+    )

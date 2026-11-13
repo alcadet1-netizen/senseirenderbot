@@ -28,10 +28,24 @@ from src.bot.keyboards.inline import (
     get_katana_top_keyboard
 )
 from src.bot.handlers.user_commands import show_profile
+from src.bot.handlers.donate import show_donate_menu
+from src.texts.donate_prompts import katana_insufficient_text
 from src.bot.utils import check_owner
 import math
 
 router = Router(name="callbacks")
+
+
+@router.callback_query(MenuCb.filter(F.action == "donate_menu"))
+async def cb_donate_menu(query: CallbackQuery, callback_data: MenuCb, container: Container):
+    if not query.message or not await check_owner(query, callback_data.user_id):
+        return
+    try:
+        await query.answer()
+    except TelegramBadRequest:
+        # An expired callback acknowledgement must not block the menu.
+        pass
+    await show_donate_menu(query.message, container, query.from_user)
 
 
 @router.callback_query(F.data == "check_sub")
@@ -240,10 +254,19 @@ async def cb_do_upgrade_katana(query: CallbackQuery, callback_data: MenuCb, cont
         
     except InsufficientFundsError as e:
         try:
-            await query.answer(f"❌ Не хватает монет! Нужно {e.required:,.0f} 💰", show_alert=True)
+            await query.answer()
         except TelegramBadRequest:
             pass
-        await show_profile(query.message, container, query.from_user, is_edit=True)
+        try:
+            await query.message.edit_text(
+                katana_insufficient_text(e.required, e.available), parse_mode="HTML",
+                reply_markup=get_profile_keyboard(query.from_user.id),
+            )
+        except TelegramBadRequest as exc:
+            # A repeated click can select the same joke and balance again.
+            # The existing receipt already has the intended text and buttons.
+            if "message is not modified" not in exc.message.lower():
+                raise
         
     except CooldownError as e:
         try:

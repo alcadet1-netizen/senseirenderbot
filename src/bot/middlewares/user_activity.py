@@ -40,7 +40,7 @@ from src.core.constants import RANDOM_MESSAGE_CHANCE, THROTTLE_RATE_LIMIT_MESSAG
 from src.core.container import Container
 from src.core.visuals import Visuals
 from src.services.throttle_service import ThrottleService
-from src.texts.phrases import get_random_phrase
+from src.texts.donate_prompts import get_random_donate_phrase
 
 #
 #                                 CONFIGURATION
@@ -968,7 +968,7 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
         message = event.message if isinstance(event, CallbackQuery) else event
 
         try:
-            phrase = get_random_phrase()
+            phrase = get_random_donate_phrase()
             if phrase:
                 notification = Notification(
                     type=NotificationType.RANDOM_PHRASE,

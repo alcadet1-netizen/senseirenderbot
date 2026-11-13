@@ -1,11 +1,11 @@
-"""Voluntary Telegram Stars donations, strictly separate from game economy."""
+"""Bank-funded Stars coin purchases and compatible legacy voluntary donations."""
 import asyncio
 import logging
 import re
 from datetime import datetime, timezone
 
 from aiogram import BaseMiddleware, F, Router
-from aiogram.exceptions import TelegramAPIError
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, Update
 
@@ -25,12 +25,16 @@ def valid_payment(payload, user_id, currency, amount):
 
 @router.message(Command('donate'))
 async def cmd_donate(message, container=None):
+    await show_donate_menu(message, container, message.from_user)
+
+
+async def show_donate_menu(message, container, user):
     if container is not None:
         try:
             service = StarCoinService(container.mongo_client)
-            pending = await service.pending(message.from_user.id)
+            pending = await service.pending(user.id)
             if pending:
-                await coin_received(message, container, payment=pending)
+                await coin_received(message, container, payment=pending, user_id=user.id)
                 return
         except Exception:
             logger.error('Stars coin recovery unavailable')
@@ -47,6 +51,13 @@ async def cmd_donate(message, container=None):
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode=None)
 
 
+def safe_payment_error(exc):
+    # Never stringify the request (it can contain invoice links/credentials).
+    detail = getattr(exc, 'message', type(exc).__name__)
+    detail = re.sub(r'https?://\S+|[0-9]{5,}:[A-Za-z0-9_-]+|(?:sk-|vk1\.)\S+', '[REDACTED]', detail)
+    return detail[:300]
+
+
 @router.callback_query(F.data.startswith('coinbuy:'))
 async def coin_invoice(query, container):
     match = re.fullmatch(r'coinbuy:(1|5|10|50)', query.data or '')
@@ -54,23 +65,58 @@ async def coin_invoice(query, container):
         await query.answer('Откройте /donate заново.', show_alert=True)
         return
     stars = int(match[1])
+    stage = 'check'
     try:
-        await StarCoinService(container.mongo_client).check(query.from_user.id, stars)
+        await asyncio.wait_for(StarCoinService(container.mongo_client).check(query.from_user.id, stars), timeout=7)
     except GameError as exc:
         await query.answer(str(exc)[:200], show_alert=True)
         return
+    except Exception as exc:
+        logger.warning('Stars coin preparation failed stage=%s error=%s', stage, safe_payment_error(exc))
+        await query.answer('Не удалось проверить оплату. Повторите /donate позже.', show_alert=True)
+        return
     await query.answer()
+    stage = 'create_invoice_link'
     try:
-        link = await query.bot.create_invoice_link(title='SenseiCoin из SenseiBank',
+        link = await asyncio.wait_for(query.bot.create_invoice_link(title='SenseiCoin из SenseiBank',
             description=f'{stars} Stars → {PACKAGES[stars]} SenseiCoin. Без XP.',
             payload=f'{PREFIX}{query.from_user.id}:{stars}', currency='XTR', provider_token='',
-            prices=[LabeledPrice(label='SenseiCoin', amount=stars)])
-        await query.message.edit_text(f'⭐ {stars} → {PACKAGES[stars]:,} SenseiCoin\n'
-            'После оплаты монеты поступят из SenseiBank. Не оплачивайте счёт повторно.',
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text=f'Оплатить {stars} ⭐', url=link)]]), parse_mode=None)
-    except TelegramAPIError:
-        logger.warning('Stars coin invoice unavailable')
+            prices=[LabeledPrice(label='SenseiCoin', amount=stars)]), timeout=8)
+        markup = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text=f'Оплатить {stars} ⭐', url=link)]])
+        text = (f'⭐ {stars} → {PACKAGES[stars]:,} SenseiCoin\n'
+            'После оплаты монеты поступят из SenseiBank. Не оплачивайте счёт повторно.')
+        stage = 'publish_invoice'
+        if query.message.chat.type in {'group', 'supergroup'}:
+            # The group menu is shared, not owned by the payer. Editing it makes
+            # it disappear for everyone and lets other users overwrite its bill.
+            await query.bot.send_message(chat_id=query.message.chat.id,
+                message_thread_id=query.message.message_thread_id,
+                text=f'Счёт для {query.from_user.first_name or "участника"} (ID {query.from_user.id})\n'+text,
+                reply_markup=markup, parse_mode=None)
+        else:
+            try:
+                await query.message.edit_text(text, reply_markup=markup, parse_mode=None)
+            except TelegramBadRequest as exc:
+                if 'message is not modified' not in exc.message.lower():
+                    # Definitive rejection: no edited message was delivered.
+                    # Publish the already-created link, never create another bill.
+                    logger.info('Stars coin edit rejected; publishing saved link error=%s', safe_payment_error(exc))
+                    await query.bot.send_message(chat_id=query.message.chat.id, text=text,
+                        reply_markup=markup, parse_mode=None)
+        logger.info('Stars coin invoice ready user=%s stars=%s chat=%s',
+                    query.from_user.id, stars, query.message.chat.id)
+    except Exception as exc:
+        logger.warning('Stars coin invoice failed stage=%s user=%s stars=%s error_type=%s detail=%s',
+                       stage, query.from_user.id, stars, type(exc).__name__, safe_payment_error(exc))
+        # Do not retry an ambiguous publish. This action itself cannot debit Stars.
+        try:
+            await query.message.answer(
+                'Не удалось показать счёт Stars. Если кнопка оплаты появилась — используйте её один раз. '
+                'Иначе откройте /donate в личке бота. Если уже подтвердили платёж — /paysupport, не платите повторно.',
+                parse_mode=None)
+        except TelegramAPIError:
+            logger.warning('Stars coin failure notice unavailable')
 
 
 async def coin_checkout(query, container):
@@ -86,10 +132,11 @@ async def coin_checkout(query, container):
         await query.answer(ok=False, error_message='Оплата временно недоступна.')
 
 
-async def coin_received(message, container, *, payment=None):
+async def coin_received(message, container, *, payment=None, user_id=None):
     service = StarCoinService(container.mongo_client)
     try:
-        receipt = await service.receive(message.from_user.id, payment or message.successful_payment)
+        receipt = await service.receive(user_id if user_id is not None else message.from_user.id,
+                                        payment or message.successful_payment)
         if receipt['state'] == 'fulfilled':
             await message.answer(f"✅ Платёж учтён: {receipt['stars']} ⭐ → {receipt['coins']:,} SenseiCoin из SenseiBank.\n"
                                  'Повторная обработка квитанции не начисляет монеты снова.', parse_mode=None)

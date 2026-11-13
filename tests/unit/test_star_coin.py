@@ -85,7 +85,7 @@ async def test_command_recovers_durable_pending_without_second_payment():
 async def test_new_invoice_and_precheckout_validate_package_and_owner():
     from src.bot.handlers.donate import coin_invoice,coin_checkout
     db,svc=await setup();container=NS(mongo_client=NS(database=db))
-    q=NS(data='coinbuy:10',from_user=NS(id=7),message=NS(edit_text=AsyncMock()),answer=AsyncMock(),
+    q=NS(data='coinbuy:10',from_user=NS(id=7),message=NS(edit_text=AsyncMock(),chat=NS(id=7,type='private')),answer=AsyncMock(),
          bot=NS(create_invoice_link=AsyncMock(return_value='https://t.me/$test')))
     await coin_invoice(q,container)
     invoice=q.bot.create_invoice_link.call_args.kwargs
@@ -115,3 +115,76 @@ async def test_real_payment_dispatch_transfers_once():
     await dp.feed_update(bot,event);await dp.feed_update(bot,event)
     assert db.users.docs[7]['coins']==before+45000
     await dp.storage.close()
+
+
+@pytest.mark.asyncio
+async def test_group_purchase_does_not_edit_shared_menu_or_redirect_payer():
+    from src.bot.handlers.donate import coin_invoice
+    db,svc=await setup();container=NS(mongo_client=NS(database=db))
+    before=db.bank.docs['single']['coins']
+    message=NS(chat=NS(id=-100222,type='supergroup'),message_thread_id=33,
+               edit_text=AsyncMock(),answer=AsyncMock())
+    bot=NS(create_invoice_link=AsyncMock(return_value='https://t.me/$test'),send_message=AsyncMock())
+    for uid in (7,8):
+        if uid==8: db.users.docs[8]={'id':8,'coins':0}
+        q=NS(data='coinbuy:50',from_user=NS(id=uid,first_name='Buyer'),message=message,answer=AsyncMock(),bot=bot)
+        await coin_invoice(q,container)
+    message.edit_text.assert_not_awaited()
+    assert bot.send_message.await_count==2
+    assert [c.kwargs['payload'] for c in bot.create_invoice_link.call_args_list]==[
+        'coinbuy:v1:7:50','coinbuy:v1:8:50']
+    assert bot.send_message.call_args.kwargs['message_thread_id']==33
+    assert bot.send_message.call_args.kwargs['chat_id']==-100222
+    assert db.bank.docs['single']['coins']==before
+    assert not db.star_coin_payments.docs
+
+
+@pytest.mark.asyncio
+async def test_definitive_private_edit_failure_publishes_same_invoice_once():
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.methods import EditMessageText
+    from src.bot.handlers.donate import coin_invoice
+    db,svc=await setup();container=NS(mongo_client=NS(database=db))
+    error=TelegramBadRequest(method=EditMessageText(text='x',chat_id=7,message_id=1),
+        message="Bad Request: message can't be edited")
+    q=NS(data='coinbuy:5',from_user=NS(id=7),answer=AsyncMock(),
+        message=NS(chat=NS(id=7,type='private'),edit_text=AsyncMock(side_effect=error)),
+        bot=NS(create_invoice_link=AsyncMock(return_value='https://t.me/$same'),send_message=AsyncMock()))
+    await coin_invoice(q,container)
+    q.bot.create_invoice_link.assert_awaited_once()
+    q.bot.send_message.assert_awaited_once()
+    assert q.bot.send_message.call_args.kwargs['reply_markup'].inline_keyboard[0][0].url=='https://t.me/$same'
+
+
+@pytest.mark.asyncio
+async def test_invoice_api_rejection_has_stage_and_user_feedback(caplog):
+    import logging
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.methods import CreateInvoiceLink
+    from src.bot.handlers.donate import coin_invoice
+    db,svc=await setup();container=NS(mongo_client=NS(database=db))
+    error=TelegramBadRequest(method=CreateInvoiceLink(title='x',description='x',payload='x',currency='XTR',prices=[]),
+                            message='Bad Request: PAYMENT_PROVIDER_INVALID https://secret.test/token')
+    q=NS(data='coinbuy:50',from_user=NS(id=7),answer=AsyncMock(),
+        message=NS(chat=NS(id=7,type='private'),edit_text=AsyncMock(),answer=AsyncMock()),
+        bot=NS(create_invoice_link=AsyncMock(side_effect=error),send_message=AsyncMock()))
+    with caplog.at_level(logging.WARNING): await coin_invoice(q,container)
+    assert 'stage=create_invoice_link' in caplog.text
+    assert 'PAYMENT_PROVIDER_INVALID' in caplog.text
+    assert 'https://secret.test/token' not in caplog.text
+    q.message.answer.assert_awaited_once()
+    q.message.edit_text.assert_not_awaited();q.bot.send_message.assert_not_awaited()
+    assert not db.star_coin_payments.docs
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_publish_is_not_retried_or_new_invoice_created():
+    from src.bot.handlers.donate import coin_invoice
+    db,svc=await setup()
+    q=NS(data='coinbuy:1',from_user=NS(id=7,first_name='Buyer'),answer=AsyncMock(),
+         message=NS(chat=NS(id=-100222,type='supergroup'),message_thread_id=None,answer=AsyncMock()),
+         bot=NS(create_invoice_link=AsyncMock(return_value='https://t.me/$once'),send_message=AsyncMock(side_effect=TimeoutError())))
+    await coin_invoice(q,NS(mongo_client=NS(database=db)))
+    q.bot.create_invoice_link.assert_awaited_once();q.bot.send_message.assert_awaited_once()
+    q.message.answer.assert_awaited_once()
+    assert not db.star_coin_payments.docs

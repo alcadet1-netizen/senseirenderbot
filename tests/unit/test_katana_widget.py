@@ -190,6 +190,16 @@ async def test_rejected_attempt_does_not_show_growth(error):
         await cmd_upkatana(msg, container)
     send.assert_not_awaited()
     msg.answer.assert_awaited_once()
+    text = msg.answer.call_args.args[0]
+    if isinstance(error, InsufficientFundsError):
+        assert "/donate" in text
+        assert "SenseiCoin за Stars" in text
+        assert "Нужно: 100" in text and "У тебя: 5" in text
+        from src.texts.donate_prompts import KATANA_DONATE_PHRASES
+        assert any(text.endswith(phrase) for phrase in KATANA_DONATE_PHRASES)
+    else:
+        assert "/donate" not in text
+    container.economy_service.upgrade_katana.assert_awaited_once_with(7)
 
 
 @pytest.mark.asyncio
@@ -275,3 +285,24 @@ async def test_caption_is_compact_and_notification_has_no_controls():
     kwargs = msg.answer_animation.call_args.kwargs
     assert kwargs.get("reply_markup") is None
     assert kwargs["caption"].count("\n") == 1
+
+
+@pytest.mark.parametrize("index", range(12))
+@pytest.mark.asyncio
+async def test_each_katana_donate_variant_is_used_in_single_response(index):
+    from src.texts.donate_prompts import KATANA_DONATE_PHRASES
+
+    assert len(set(KATANA_DONATE_PHRASES)) >= 10
+    phrase = KATANA_DONATE_PHRASES[index]
+    assert "/donate" in phrase and "SenseiCoin за Stars" in phrase
+    assert len(phrase) < 250 and "<" not in phrase
+    msg = message()
+    service = SimpleNamespace(upgrade_katana=AsyncMock(side_effect=InsufficientFundsError(100, 5)))
+    with patch("src.texts.donate_prompts.random.choice", return_value=phrase) as choose:
+        await cmd_upkatana(msg, SimpleNamespace(economy_service=service))
+    choose.assert_called_once_with(KATANA_DONATE_PHRASES)
+    msg.answer.assert_awaited_once()
+    text = msg.answer.call_args.args[0]
+    assert text.endswith(phrase)
+    assert "Нужно: 100" in text and "У тебя: 5" in text
+    service.upgrade_katana.assert_awaited_once_with(7)
