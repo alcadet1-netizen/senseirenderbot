@@ -53,8 +53,7 @@ router = Router(name="boss_commands")
 
 def get_boss_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚔️ Удар", callback_data="hit_boss"),
-         InlineKeyboardButton(text="⚡ Ульта", callback_data="ult_boss")]
+        [InlineKeyboardButton(text="⚔️ Атака", callback_data="hit_boss")]
     ])
 
 def render_boss_caption(state: dict, last_action: str = None) -> str:
@@ -180,7 +179,7 @@ def render_boss_caption(state: dict, last_action: str = None) -> str:
     lines.append(Visuals.frame_bottom_left(w))
 
     caption = "<pre>\n" + html.escape("\n".join(lines)) + "\n</pre>"
-    caption += "\n⚔️ Кнопка — удар · /ulta — ульта\nУчастие: катана и уровень 5+. GRAM — случайный бонус, не гарантия.\nПобеда: монеты из банка. Побег: −100 монет с участника."
+    caption += "\n⚔️ Кнопка — атака · ульта или /ulta — ульта\nУчастие: катана и уровень 5+. GRAM — случайный бонус, не гарантия.\nПобеда: монеты из банка. Побег: −100 монет с участника."
 
     if last_action:
         caption += f"\n{last_action}"
@@ -297,6 +296,7 @@ async def cmd_fight(message: Message, container: Container):
         pass
     await process_boss_attack(message, container, is_ult=False)
 
+@router.message(Command("ulta"))
 @router.message(F.text.lower().in_({"ульта", "ult", "ultra", "ultimate", "/ulta"}))
 async def cmd_ult(message: Message, container: Container):
     state = await container.boss_service.get_state()
@@ -685,5 +685,6 @@ async def hit_boss(callback: CallbackQuery, container: Container):
 
 
 @router.callback_query(F.data == "ult_boss")
-async def ult_boss(callback: CallbackQuery, container: Container):
-    await process_boss_attack(callback, container, is_ult=True)
+async def ult_boss(callback: CallbackQuery):
+    # Retire buttons already published by an earlier build; do not execute ult.
+    await safe_answer(callback, "Ульта вызывается сообщением «ульта» или /ulta.", show_alert=True)

@@ -113,3 +113,30 @@ def test_names_cannot_inject_markup_in_boss_caption():
     text=render_boss_caption(dict(boss_id=bid,hp=b['hp'],max_hp=b['hp'],
         hits={'7':{'name':'<b>&name','dmg':15}},battle_log=[]))
     assert '&lt;b&gt;&amp;name' in text
+
+
+def test_boss_has_exactly_one_attack_button():
+    from src.bot.handlers.boss_commands import get_boss_keyboard
+    buttons=[b for row in get_boss_keyboard().inline_keyboard for b in row]
+    assert len(buttons)==1
+    assert buttons[0].text=='⚔️ Атака' and buttons[0].callback_data=='hit_boss'
+
+
+@pytest.mark.asyncio
+async def test_old_ult_button_only_explains_text_command():
+    from src.bot.handlers.boss_commands import ult_boss
+    callback=NS(answer=AsyncMock())
+    with patch('src.bot.handlers.boss_commands.process_boss_attack',new_callable=AsyncMock) as attack:
+        await ult_boss(callback)
+    attack.assert_not_awaited()
+    assert '/ulta' in callback.answer.call_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_text_ult_still_attacks_with_ult_flag():
+    from src.bot.handlers.boss_commands import cmd_ult
+    message=NS(delete=AsyncMock())
+    container=NS(boss_service=NS(get_state=AsyncMock(return_value={'hp':100})))
+    with patch('src.bot.handlers.boss_commands.process_boss_attack',new_callable=AsyncMock) as attack:
+        await cmd_ult(message,container)
+    attack.assert_awaited_once_with(message,container,is_ult=True)

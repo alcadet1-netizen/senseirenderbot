@@ -62,3 +62,10 @@ Initial full local run: 782 passed, 52 skipped, 2 xfailed, 2 warnings. Added tes
 for explicit xRocket success, ambiguity, duplicate suppression, exhausted pool,
 launch claims and escaping. Tests use mocks rather than a live Mongo replica set
 or xRocket wallet. See the subsequent full test result in the PR/turn summary.
+
+## UI correction
+
+The boss card now has exactly one button: «⚔️ Атака». Ult is invoked by a text
+message «ульта» or /ulta (including addressed Telegram command form). Old
+ult_boss callbacks only explain the command; they do not execute an ult.
+Targeted boss tests after this correction: 30 passed.
