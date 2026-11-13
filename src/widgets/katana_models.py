@@ -24,8 +24,11 @@ def model_path(index: int) -> Path:
 
 def model_caption(length: float) -> str:
     index = model_index(length)
-    interval = f'{index*20}–{(index+1)*20} см' if index < 14 else 'от 280 см'
-    return f'⚔️ {MODEL_NAMES[index]} · {length:.2f} см\nМодель {index+1}/15 · диапазон {interval}'
+    interval = f'{index*20} ≤ длина < {(index+1)*20} см' if index < 14 else 'от 280 см'
+    progress = (f'До модели «{MODEL_NAMES[index+1]}»: {(index+1)*20-length:.2f} см'
+                if index < 14 else 'Высшая модель коллекции')
+    return (f'⚔️ {MODEL_NAMES[index]} · {length:.2f} см\n'
+            f'Модель {index+1}/15 · {interval}\n{progress}')
 
 
 def render_model_png(length: float) -> bytes:

@@ -74,3 +74,38 @@ def test_length_motion_is_monotonic_with_soft_start_and_stop():
             assert abs(values[78]-values[77]) < abs(values[54]-values[53])
         else:
             assert len(set(values)) == 1
+
+
+@pytest.mark.parametrize('before,after', [(19.9,20.1),(20.1,19.9),(279.9,280.1)])
+def test_model_transition_starts_old_and_finishes_new(before, after):
+    from src.widgets.forge import model_mix
+    old, new, start = model_mix(before, after, 0)
+    assert old == model_index(before) and new == model_index(after)
+    assert start == 0
+    assert model_mix(before, after, 1)[2] == 1
+    assert 0 < model_mix(before, after, .64)[2] < 1
+
+
+@pytest.mark.asyncio
+async def test_current_model_sends_local_asset_without_render_queue():
+    from src.bot.presenters.katana_presenter import send_current_katana
+    from aiogram.types import FSInputFile
+    message = NS(answer_photo=AsyncMock(), answer=AsyncMock())
+    with patch('src.bot.presenters.katana_presenter.render_receipt', new_callable=AsyncMock) as render:
+        await send_current_katana(message, 245.5)
+    render.assert_not_awaited()
+    file = message.answer_photo.call_args.args[0]
+    assert isinstance(file, FSInputFile)
+    assert file.path == model_path(12)
+    caption = message.answer_photo.call_args.kwargs['caption']
+    assert '14.50 см' in caption and '240 ≤ длина < 260' in caption
+    message.answer.assert_not_awaited()
+
+
+def test_weapon_layers_have_transparent_surroundings():
+    from src.widgets.forge import katana_layers
+    for index in range(15):
+        handle, blade = katana_layers(index)
+        assert handle.getpixel((0,0))[3] == 0
+        assert blade.getpixel((0,0))[3] == 0
+        assert blade.getchannel('A').getextrema() == (0,255)

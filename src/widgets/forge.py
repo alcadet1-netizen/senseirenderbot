@@ -26,27 +26,41 @@ def katana_art(school):
 
 
 @lru_cache(maxsize=15)
+def katana_layers(school):
+    """Geometric art-direction masks, not automatic background segmentation.
+
+    Isolate the central weapon strip; outer landscape stays out of moving layers.
+    Small painted details inside the silhouette are intentionally retained.
+    """
+    art = katana_art(school).convert("RGBA")
+    mask = Image.new("L", art.size)
+    md = ImageDraw.Draw(mask)
+    md.polygon([(8, 47), (285, 44), (306, 12), (352, 17), (369, 58),
+                (828, 44), (807, 78), (350, 105), (342, 138),
+                (298, 136), (284, 104), (8, 98)], fill=255)
+    art.putalpha(mask.filter(ImageFilter.GaussianBlur(2.0)))
+    return art.crop((0, 0, 340, art.height)), art.crop((340, 0, art.width, art.height))
+
+
+@lru_cache(maxsize=15)
 def katana_handle(school):
-    art = katana_art(school)
-    return art.crop((0, 0, 340, art.height)).resize(
-        (145*SCALE, 95*SCALE), Image.Resampling.LANCZOS)
+    return katana_layers(school)[0].resize((145*SCALE, 95*SCALE), Image.Resampling.LANCZOS)
+
+
+def model_mix(before, after, phase):
+    old, new = model_index(before), model_index(after)
+    t = min(1.0, max(0.0, (phase - 0.52) / 0.24))
+    t = t*t*(3-2*t)
+    return old, new, t
 
 
 def paint_katana(image, school, length):
-    art = katana_art(school)
-    # Keep the ornate guard/handle rigid; only the steel changes length.
-    split = 340
+    # Transparent weapon layers: the workshop itself never stretches.
     handle = katana_handle(school)
-    blade = art.crop((split, 0, art.width, art.height)).resize((round((length+12)*SCALE), 95*SCALE), Image.Resampling.LANCZOS)
-    sprite = Image.new("RGB", (handle.width+blade.width, 95*SCALE))
-    sprite.paste(handle, (0, 0)); sprite.paste(blade, (handle.width, 0))
-    # Feather the photographic backdrop into the forge, not over the labels.
-    mask = Image.new("L", sprite.size, 255)
-    md = ImageDraw.Draw(mask)
-    for inset in range(14*SCALE):
-        alpha = round(255 * inset / (14*SCALE))
-        md.rectangle((inset, inset, sprite.width-1-inset, sprite.height-1-inset), outline=alpha)
-    image.paste(sprite, (40*SCALE, 96*SCALE), mask)
+    blade = katana_layers(school)[1].resize(
+        (round((length+12)*SCALE), 95*SCALE), Image.Resampling.LANCZOS)
+    image.paste(handle, (40*SCALE, 96*SCALE), handle)
+    image.paste(blade, (185*SCALE, 96*SCALE), blade)
     return image
 
 
@@ -145,7 +159,13 @@ def render_forge(receipt, phase=1.0):
         image = Image.alpha_composite(image.convert("RGBA"), clipped).convert("RGB")
         draw = ImageDraw.Draw(image)
     # Reference artwork replaces the old schematic line blade entirely.
-    image = paint_katana(image, school, length)
+    old_school, new_school, mix = model_mix(receipt.before, receipt.after, phase)
+    if old_school != new_school and mix < 1:
+        old_image = paint_katana(image.copy(), old_school, length)
+        new_image = paint_katana(image.copy(), new_school, length)
+        image = Image.blend(old_image, new_image, mix)
+    else:
+        image = paint_katana(image, new_school, length)
     draw = ImageDraw.Draw(image)
 
     # Two actual hammer swings. Particles are ballistic and deterministic.
