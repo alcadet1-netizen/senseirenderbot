@@ -36,11 +36,11 @@ def test_clamps_and_invalid_values():
 async def test_my_katana_is_read_only_and_displays_profile_model(has_katana):
     message = NS(from_user=NS(id=7, username='User', full_name='User'), answer=AsyncMock())
     container = NS(user_service=NS(get_profile=AsyncMock(return_value={
-        'has_katana': has_katana, 'katana_length': 245.5})))
+        'has_katana': has_katana, 'katana_length': 245.5}), get_katana_position=AsyncMock(return_value={'rank': 7, 'total': 128, 'length': 245.5})))
     with patch('src.bot.handlers.user_commands.send_current_katana', new_callable=AsyncMock) as send:
         await cmd_mykatana(message, container)
     if has_katana:
-        send.assert_awaited_once_with(message, 245.5)
+        send.assert_awaited_once_with(message, 245.5, position={'rank': 7, 'total': 128, 'length': 245.5}, owner_name='User', animate=True)
         message.answer.assert_not_awaited()
     else:
         send.assert_not_awaited()
@@ -90,14 +90,15 @@ def test_model_transition_starts_old_and_finishes_new(before, after):
 async def test_current_model_sends_local_asset_without_render_queue():
     from src.bot.presenters.katana_presenter import send_current_katana
     from aiogram.types import FSInputFile
-    message = NS(answer_photo=AsyncMock(), answer=AsyncMock())
+    message = NS(answer_animation=AsyncMock(), answer_photo=AsyncMock(), answer=AsyncMock())
     with patch('src.bot.presenters.katana_presenter.render_receipt', new_callable=AsyncMock) as render:
         await send_current_katana(message, 245.5)
     render.assert_not_awaited()
-    file = message.answer_photo.call_args.args[0]
+    file = message.answer_animation.call_args.args[0]
     assert isinstance(file, FSInputFile)
-    assert file.path == model_path(12)
-    caption = message.answer_photo.call_args.kwargs['caption']
+    from src.widgets.katana_models import model_animation_path
+    assert file.path == model_animation_path(12)
+    caption = message.answer_animation.call_args.kwargs['caption']
     assert '14.50 см' in caption and '240 ≤ длина < 260' in caption
     message.answer.assert_not_awaited()
 
@@ -109,3 +110,53 @@ def test_weapon_layers_have_transparent_surroundings():
         assert handle.getpixel((0,0))[3] == 0
         assert blade.getpixel((0,0))[3] == 0
         assert blade.getchannel('A').getextrema() == (0,255)
+
+
+@pytest.mark.parametrize('index', range(15))
+def test_chat_preview_has_safe_ratio_and_entire_model(index):
+    from src.widgets.katana_models import model_preview_path
+    with Image.open(model_preview_path(index)) as preview, Image.open(model_path(index)) as source:
+        assert preview.size == (960, 640)
+        assert preview.crop((60,244,900,396)).convert('RGB').tobytes() == source.convert('RGB').tobytes()
+        assert preview.width / preview.height == 1.5
+        assert model_preview_path(index).stat().st_size < 5*1024*1024
+
+
+@pytest.mark.parametrize('index', range(15))
+def test_showcase_gif_keeps_entire_card_and_labels(index):
+    from src.widgets.katana_models import model_animation_path
+    path = model_animation_path(index)
+    assert path.stat().st_size < 5*1024*1024
+    with Image.open(path) as gif:
+        assert gif.size == (960,640) and gif.n_frames == 24
+        first = gif.convert('RGB')
+        gif.seek(12)
+        other = gif.convert('RGB')
+        assert first.crop((0,0,960,180)).tobytes() == other.crop((0,0,960,180)).tobytes()
+        assert first.crop((0,480,960,640)).tobytes() == other.crop((0,480,960,640)).tobytes()
+        assert first.tobytes() != other.tobytes()
+        assert gif.info['duration'] == 100
+
+
+@pytest.mark.asyncio
+async def test_showcase_definitive_rejection_falls_back_to_one_static_card():
+    from aiogram.exceptions import TelegramBadRequest
+    from src.bot.presenters.katana_presenter import send_current_katana
+    message = NS(answer_animation=AsyncMock(side_effect=TelegramBadRequest(method='sendAnimation',message='rejected')),
+                 answer_photo=AsyncMock(),answer=AsyncMock())
+    await send_current_katana(message, 25)
+    message.answer_animation.assert_awaited_once()
+    message.answer_photo.assert_awaited_once()
+    message.answer.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_showcase_ambiguous_network_failure_is_not_retried():
+    from aiogram.exceptions import TelegramNetworkError
+    from src.bot.presenters.katana_presenter import send_current_katana
+    message = NS(answer_animation=AsyncMock(side_effect=TelegramNetworkError(method='sendAnimation',message='timeout')),
+                 answer_photo=AsyncMock(),answer=AsyncMock())
+    with pytest.raises(TelegramNetworkError):
+        await send_current_katana(message, 25)
+    message.answer_photo.assert_not_awaited()
+    message.answer.assert_not_awaited()

@@ -384,10 +384,42 @@ class UserService:
             logger.error(f"Error in get_top_by_streak: {e}")
             return []
 
+    async def get_katana_position(self, user_id: int) -> Optional[dict]:
+        """Live ordinal position, using the same ordering as /topkatana.
+
+        Return no rank on DB errors; never confuse an unavailable count with #1.
+        Reads only, no economy writes or in-memory leaderboard download.
+        """
+        try:
+            user = await self.users.find_one(
+                {'id': user_id, 'has_katana': True}, {'id': 1, 'katana_length': 1}, max_time_ms=1500)
+            if not user:
+                return None
+            # Compare Mongo's own field ordering, including legacy missing/null
+            # lengths, exactly as used by the sorted leaderboard.
+            rows = await self.users.aggregate([
+                {'$match': {'has_katana': True}},
+                {'$group': {'_id': None, 'total': {'$sum': 1}, 'ahead': {'$sum': {
+                    '$cond': [{'$or': [
+                        {'$gt': [{'$ifNull': ['$katana_length', None]}, user.get('katana_length')]},
+                        {'$and': [
+                            {'$eq': [{'$ifNull': ['$katana_length', None]}, user.get('katana_length')]},
+                            {'$lt': ['$id', user_id]},
+                        ]},
+                    ]}, 1, 0]}}}},
+            ], maxTimeMS=1500).to_list(length=1)
+            if not rows:
+                return None
+            return {'rank': rows[0]['ahead'] + 1, 'total': rows[0]['total'],
+                    'length': user.get('katana_length') or 0.0}
+        except Exception:
+            logger.warning('Katana position unavailable', exc_info=True)
+            return None
+
     async def get_top_by_katana(self, limit: int = 10, offset: int = 0) -> dict:
         """Топ по длине катаны."""
         try:
-            cursor = self.users.find({"has_katana": True}).sort("katana_length", -1).skip(offset).limit(limit)
+            cursor = self.users.find({"has_katana": True}).sort([("katana_length", -1), ("id", 1)]).skip(offset).limit(limit)
             items = []
             total = await self.users.count_documents({"has_katana": True})
             async for user in cursor:
