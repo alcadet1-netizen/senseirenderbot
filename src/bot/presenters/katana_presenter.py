@@ -5,7 +5,7 @@ import logging
 import time
 
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import BufferedInputFile, Message
+from aiogram.types import BufferedInputFile, FSInputFile, Message
 
 from src.widgets.katana import KatanaUpgrade, to_upgrade_gif, to_upgrade_png
 from src.widgets.limits import RENDER_SLOTS
@@ -56,3 +56,15 @@ async def send_katana_upgrade(
     except (TelegramBadRequest, OSError, ValueError, TimeoutError):
         logger.warning("Katana image unavailable; falling back to text", exc_info=True)
         await message.answer(text_receipt, parse_mode=None)
+
+
+async def send_current_katana(message: Message, length: float):
+    from src.widgets.katana_models import model_caption, model_index, model_path
+    caption = model_caption(length)
+    try:
+        await message.answer_photo(
+            FSInputFile(model_path(model_index(length))),
+            caption=caption, parse_mode=None,
+        )
+    except TelegramBadRequest:
+        await message.answer(caption, parse_mode=None)

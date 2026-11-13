@@ -369,3 +369,31 @@ async def test_profile_upgrade_uses_same_animation_without_repeating_economy():
     service.upgrade_katana.assert_awaited_once_with(7)
     send.assert_awaited_once()
     assert send.call_args.kwargs['animate'] is True
+
+
+@pytest.mark.asyncio
+async def test_cancelled_request_keeps_render_slot_until_thread_finishes():
+    import asyncio
+    import threading
+    from src.bot.presenters.katana_presenter import render_receipt
+    started = threading.Event()
+    finish = threading.Event()
+    def render(_):
+        started.set()
+        finish.wait(timeout=5)
+        return b'done'
+    semaphore = asyncio.Semaphore(1)
+    with patch('src.bot.presenters.katana_presenter.RENDER_SLOTS', semaphore):
+        task = asyncio.create_task(render_receipt(render, None))
+        try:
+            await asyncio.to_thread(started.wait, 2)
+            assert started.is_set()
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert semaphore.locked()
+        finally:
+            finish.set()
+            # Completion callback, not cancellation, must release this slot.
+            await asyncio.wait_for(semaphore.acquire(), timeout=3)
+            semaphore.release()

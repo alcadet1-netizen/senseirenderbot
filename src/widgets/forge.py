@@ -6,10 +6,10 @@ wrapped tsuka and a single cutting edge. It is intentionally not a broadsword.
 
 import math
 from functools import lru_cache
-from pathlib import Path
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageColor
 
 from src.core.visuals import Visuals
+from src.widgets.katana_models import MODEL_NAMES, model_index, model_path
 from src.widgets.rendering import PALETTES, font
 
 WIDTH, HEIGHT = 760, 320
@@ -18,38 +18,58 @@ STRIKES = (0.22, 0.46)
 FRAME_COUNT = 40
 
 
-@lru_cache(maxsize=5)
+@lru_cache(maxsize=15)
 def katana_art(school):
-    """User-supplied artwork, cropped without panel borders; no network IO."""
-    with Image.open(Path(__file__).parent / "assets" / "katana-reference.webp") as source:
-        # The reference contains five horizontal panels of equal height.
-        top = round(source.height * school / 5)
-        bottom = round(source.height * (school + 1) / 5)
-        return source.convert("RGB").crop((20, top + 43, source.width - 20, bottom - 42))
+    """Normalized, bundled model panel; cached read-only source."""
+    with Image.open(model_path(school)) as source:
+        return source.convert("RGB")
 
 
-@lru_cache(maxsize=5)
+@lru_cache(maxsize=15)
+def katana_layers(school):
+    """Geometric art-direction masks, not automatic background segmentation.
+
+    Isolate the central weapon strip; outer landscape stays out of moving layers.
+    Small painted details inside the silhouette are intentionally retained.
+    """
+    art = katana_art(school).convert("RGBA")
+    mask = Image.new("L", art.size)
+    md = ImageDraw.Draw(mask)
+    # Individual blade profiles measured in normalized panel coordinates.
+    # A separate rounded guard mask avoids the old angular cutout at the hilt.
+    profiles = (
+        (63,101,58), (69,105,54), (75,107,57), (73,107,57), (72,109,59),
+        (66,101,55), (68,107,55), (72,109,57), (69,105,56), (72,109,59),
+        (71,110,46), (70,114,41), (72,112,49), (77,117,51), (69,111,47),
+    )
+    top, bottom, tip = profiles[school]
+    md.rounded_rectangle((7, 45, 302, 102), radius=13, fill=255)
+    md.ellipse((277, 15, 370, 138), fill=255)
+    md.polygon([(335, top), (560, top+2), (725, top-4), (839, tip),
+                (817, tip+21), (745, bottom-13), (560, bottom), (335, bottom)], fill=255)
+    art.putalpha(mask.filter(ImageFilter.GaussianBlur(2.0)))
+    return art.crop((0, 0, 340, art.height)), art.crop((340, 0, art.width, art.height))
+
+
+@lru_cache(maxsize=15)
 def katana_handle(school):
-    art = katana_art(school)
-    return art.crop((0, 0, 340, art.height)).resize(
-        (145*SCALE, 95*SCALE), Image.Resampling.LANCZOS)
+    return katana_layers(school)[0].resize((145*SCALE, 95*SCALE), Image.Resampling.LANCZOS)
+
+
+def model_mix(before, after, phase):
+    old, new = model_index(before), model_index(after)
+    t = min(1.0, max(0.0, (phase - 0.52) / 0.24))
+    t = t*t*(3-2*t)
+    return old, new, t
 
 
 def paint_katana(image, school, length):
-    art = katana_art(school)
-    # Keep the ornate guard/handle rigid; only the steel changes length.
-    split = 340
+    # Transparent weapon layers: the workshop itself never stretches.
     handle = katana_handle(school)
-    blade = art.crop((split, 0, art.width, art.height)).resize((round((length+12)*SCALE), 95*SCALE), Image.Resampling.LANCZOS)
-    sprite = Image.new("RGB", (handle.width+blade.width, 95*SCALE))
-    sprite.paste(handle, (0, 0)); sprite.paste(blade, (handle.width, 0))
-    # Feather the photographic backdrop into the forge, not over the labels.
-    mask = Image.new("L", sprite.size, 255)
-    md = ImageDraw.Draw(mask)
-    for inset in range(14*SCALE):
-        alpha = round(255 * inset / (14*SCALE))
-        md.rectangle((inset, inset, sprite.width-1-inset, sprite.height-1-inset), outline=alpha)
-    image.paste(sprite, (40*SCALE, 96*SCALE), mask)
+    blade = katana_layers(school)[1].resize(
+        (round((length+12)*SCALE), 95*SCALE), Image.Resampling.LANCZOS)
+    image.paste(handle, (40*SCALE, 96*SCALE), handle)
+    image.paste(blade, (185*SCALE, 96*SCALE), blade)
     return image
 
 
@@ -64,7 +84,7 @@ def blade_outline(length):
 def blade_length(receipt, phase):
     # Forging first, reveal second. Actual delta remains printed throughout.
     t = max(0, min(1, (phase - 0.30) / 0.48))
-    t = 1 - (1 - t) ** 3
+    t = t * t * t * (t * (t * 6 - 15) + 10)  # zero velocity/acceleration at both ends
     if receipt.delta > 0:
         return 360 + 130 * t
     if receipt.delta < 0:
@@ -76,11 +96,11 @@ def render_forge(receipt, phase=1.0):
     phase = max(0.0, min(1.0, phase))
     c = PALETTES["dark"]
     # Cosmetic schools are deterministic, never another economic roll.
-    school = min(4, max(0, int(receipt.after // 20)))
-    silk, aura = (
-        ("#233e74", "#accfff"), ("#873824", "#ff9b43"),
-        ("#b7c8cf", "#bcefff"), ("#593780", "#d6b3ff"),
-        ("#305843", "#c4e092"),
+    school = model_index(receipt.after)
+    aura = (
+        "#e2c58f", "#bcefff", "#ff9b43", "#83cfff", "#cd9bff",
+        "#ff9b43", "#bcefff", "#b6a0ff", "#c7b9ff", "#a6dd78",
+        "#ff9b43", "#bcefff", "#ff6c94", "#c08cff", "#ffe1a0",
     )[school]
     accent = aura if receipt.success else "#ffc078"
     image = Image.new("RGB", (WIDTH * SCALE, HEIGHT * SCALE), c["bg"])
@@ -148,7 +168,13 @@ def render_forge(receipt, phase=1.0):
         image = Image.alpha_composite(image.convert("RGBA"), clipped).convert("RGB")
         draw = ImageDraw.Draw(image)
     # Reference artwork replaces the old schematic line blade entirely.
-    image = paint_katana(image, school, length)
+    old_school, new_school, mix = model_mix(receipt.before, receipt.after, phase)
+    if old_school != new_school and mix < 1:
+        old_image = paint_katana(image.copy(), old_school, length)
+        new_image = paint_katana(image.copy(), new_school, length)
+        image = Image.blend(old_image, new_image, mix)
+    else:
+        image = paint_katana(image, new_school, length)
     draw = ImageDraw.Draw(image)
 
     # Two actual hammer swings. Particles are ballistic and deterministic.
@@ -198,10 +224,13 @@ def render_forge(receipt, phase=1.0):
 
     # Final polish travels only along the blade, clipped to its silhouette.
     if 0.70 < phase < 0.98:
+        # Follow the actual bright steel/ornaments, not the obsolete schematic
+        # outline. Restrict the mask to the blade half of the art viewport.
         mask = Image.new("L", image.size)
-        ImageDraw.Draw(mask).polygon(
-            [(int(x * SCALE), int(y * SCALE)) for x, y in outline], fill=255
-        )
+        steel = image.convert("L").crop((185*SCALE, 96*SCALE,
+                                        round((197+length)*SCALE), 191*SCALE))
+        steel = steel.point(lambda v: min(255, max(0, (v-75)*2)))
+        mask.paste(steel, (185*SCALE, 96*SCALE))
         streak = Image.new("RGB", image.size, "#ffffff")
         band = Image.new("L", image.size)
         x = 185 + length * (phase - 0.70) / 0.28
@@ -215,6 +244,28 @@ def render_forge(receipt, phase=1.0):
             fill=210,
         )
         image.paste(streak, (0, 0), ImageChops.multiply(mask, band))
+        draw = ImageDraw.Draw(image)
+
+    # A restrained final energy reveal, fixed to the blade and fading to a
+    # clean held frame. No camera shake, global flashing or random rerolls.
+    if 0.76 < phase < 0.98:
+        t = (phase - 0.76) / 0.22
+        intensity = math.sin(math.pi * t)
+        fx = Image.new("RGBA", image.size)
+        fd = ImageDraw.Draw(fx)
+        rgb = ImageColor.getrgb(aura if receipt.success else "#ed9265")
+        for j in range(12):
+            u = (j + 0.5) / 12
+            x = (190 + length * u) * SCALE
+            y = (145 - 15*u*u + math.sin(j*2.4)*19* t) * SCALE
+            r = (1 + 2*intensity) * SCALE
+            alpha = round(200 * intensity)
+            fd.line((x-r, y, x+r, y), fill=(*rgb, alpha), width=SCALE)
+            fd.line((x, y-r, x, y+r), fill=(*rgb, alpha), width=SCALE)
+        fx = Image.alpha_composite(fx.filter(ImageFilter.GaussianBlur(2*SCALE)), fx)
+        viewport = Image.new("RGBA", image.size)
+        viewport.paste(fx.crop((0, 96*SCALE, WIDTH*SCALE, 191*SCALE)), (0, 96*SCALE))
+        image = Image.alpha_composite(image.convert("RGBA"), viewport).convert("RGB")
         draw = ImageDraw.Draw(image)
 
     # All numeric labels stay outside the forge region, invariant across frames.
@@ -232,7 +283,7 @@ def render_forge(receipt, phase=1.0):
             size -= 1
         text(x + 12, 226, value, size, accent if i == 1 else c["text"])
     blade, rank = Visuals.get_katana_art(receipt.after)
-    summary = f"{blade} · {rank}  |  Попытка: {receipt.cost:,.0f} монет"
+    summary = f"{MODEL_NAMES[school]} · {school+1}/15  |  Попытка: {receipt.cost:,.0f} монет"
     size = 13
     while size > 10 and draw.textlength(summary, font=font(size * SCALE)) > 704 * SCALE:
         size -= 1
