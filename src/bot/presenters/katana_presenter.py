@@ -59,11 +59,11 @@ async def send_katana_upgrade(
 
 
 async def send_current_katana(message: Message, length: float):
-    from src.widgets.katana_models import model_caption, model_index, model_path
+    from src.widgets.katana_models import model_caption, model_index, model_preview_path
     caption = model_caption(length)
     try:
         await message.answer_photo(
-            FSInputFile(model_path(model_index(length))),
+            FSInputFile(model_preview_path(model_index(length))),
             caption=caption, parse_mode=None,
         )
     except TelegramBadRequest:

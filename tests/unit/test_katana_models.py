@@ -96,7 +96,8 @@ async def test_current_model_sends_local_asset_without_render_queue():
     render.assert_not_awaited()
     file = message.answer_photo.call_args.args[0]
     assert isinstance(file, FSInputFile)
-    assert file.path == model_path(12)
+    from src.widgets.katana_models import model_preview_path
+    assert file.path == model_preview_path(12)
     caption = message.answer_photo.call_args.kwargs['caption']
     assert '14.50 см' in caption and '240 ≤ длина < 260' in caption
     message.answer.assert_not_awaited()
@@ -109,3 +110,13 @@ def test_weapon_layers_have_transparent_surroundings():
         assert handle.getpixel((0,0))[3] == 0
         assert blade.getpixel((0,0))[3] == 0
         assert blade.getchannel('A').getextrema() == (0,255)
+
+
+@pytest.mark.parametrize('index', range(15))
+def test_chat_preview_has_safe_ratio_and_entire_model(index):
+    from src.widgets.katana_models import model_preview_path
+    with Image.open(model_preview_path(index)) as preview, Image.open(model_path(index)) as source:
+        assert preview.size == (960, 640)
+        assert preview.crop((60,244,900,396)).convert('RGB').tobytes() == source.convert('RGB').tobytes()
+        assert preview.width / preview.height == 1.5
+        assert model_preview_path(index).stat().st_size < 5*1024*1024

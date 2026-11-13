@@ -22,6 +22,11 @@ def model_path(index: int) -> Path:
     return Path(__file__).parent / 'assets' / 'katanas' / f'{index:02d}.webp'
 
 
+def model_preview_path(index: int) -> Path:
+    # Keep validation identical to the underlying model asset.
+    return model_path(index).parent / 'previews' / f'{index:02d}.png'
+
+
 def model_caption(length: float) -> str:
     index = model_index(length)
     interval = f'{index*20} ≤ длина < {(index+1)*20} см' if index < 14 else 'от 280 см'
