@@ -50,3 +50,14 @@ KATANA_DONATE_PHRASES = (
 
 def get_katana_donate_phrase() -> str:
     return random.choice(KATANA_DONATE_PHRASES)
+
+
+
+def katana_insufficient_text(required: float, available: float) -> str:
+    """One receipt for command and profile paths; no payment side effects."""
+    return (
+        f"❌ <b>Не хватает монет!</b>\n"
+        f"Нужно: {required:,.0f}  💰\n"
+        f"У тебя: {available:,.0f}  💰\n\n"
+        f"{get_katana_donate_phrase()}"
+    )

@@ -73,6 +73,8 @@ def get_profile_keyboard(user_id: int, has_katana: bool = True) -> InlineKeyboar
         ],
     ]
     
+    keyboard.append([InlineKeyboardButton(text="⭐ Донат", callback_data=MenuCb(action="donate_menu", user_id=user_id).pack())])
+
     # Separate namespace: widgets never reuse financial/profile callbacks.
     keyboard.append([InlineKeyboardButton(text="🧩 Карточки", callback_data=f"sw:{user_id}:open")])
 

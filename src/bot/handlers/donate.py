@@ -25,12 +25,16 @@ def valid_payment(payload, user_id, currency, amount):
 
 @router.message(Command('donate'))
 async def cmd_donate(message, container=None):
+    await show_donate_menu(message, container, message.from_user)
+
+
+async def show_donate_menu(message, container, user):
     if container is not None:
         try:
             service = StarCoinService(container.mongo_client)
-            pending = await service.pending(message.from_user.id)
+            pending = await service.pending(user.id)
             if pending:
-                await coin_received(message, container, payment=pending)
+                await coin_received(message, container, payment=pending, user_id=user.id)
                 return
         except Exception:
             logger.error('Stars coin recovery unavailable')
@@ -128,10 +132,11 @@ async def coin_checkout(query, container):
         await query.answer(ok=False, error_message='Оплата временно недоступна.')
 
 
-async def coin_received(message, container, *, payment=None):
+async def coin_received(message, container, *, payment=None, user_id=None):
     service = StarCoinService(container.mongo_client)
     try:
-        receipt = await service.receive(message.from_user.id, payment or message.successful_payment)
+        receipt = await service.receive(user_id if user_id is not None else message.from_user.id,
+                                        payment or message.successful_payment)
         if receipt['state'] == 'fulfilled':
             await message.answer(f"✅ Платёж учтён: {receipt['stars']} ⭐ → {receipt['coins']:,} SenseiCoin из SenseiBank.\n"
                                  'Повторная обработка квитанции не начисляет монеты снова.', parse_mode=None)

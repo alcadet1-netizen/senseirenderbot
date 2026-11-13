@@ -18,7 +18,7 @@ from src.core.container import Container
 from src.core.visuals import Visuals
 from src.bot.presenters.hedgehog_presenter import launch_hedgehog
 from src.bot.presenters.katana_presenter import send_katana_upgrade
-from src.texts.donate_prompts import get_katana_donate_phrase
+from src.texts.donate_prompts import katana_insufficient_text
 from src.core.exceptions import (
     DailyAlreadyClaimedError,
     InsufficientFundsError,
@@ -260,10 +260,7 @@ async def cmd_upkatana(message: Message, container: Container):
     except InsufficientFundsError as e:
         await message.answer(
             f"{mention}\n\n"
-            f"❌ <b>Не хватает монет!</b>\n"
-            f"Нужно: {e.required:,.0f}  💰\n"
-            f"У тебя: {e.available:,.0f}  💰\n\n"
-            f"{get_katana_donate_phrase()}",
+            f"{katana_insufficient_text(e.required, e.available)}",
             parse_mode="HTML"
         )
 
