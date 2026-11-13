@@ -119,6 +119,8 @@ class BossService:
         # For locking, we'll use a simple asyncio.Lock assuming single instance.
         # If multiple instances are needed, we should implement a distributed lock via MongoDB.
         self._lock = asyncio.Lock()
+        self._card_lock = asyncio.Lock()
+        self._last_card_edit = 0.0
 
         # Defaults
         self.DEFAULT_DROP_CHANCE = 0.05
@@ -158,7 +160,7 @@ class BossService:
         """
         await self.boss_state.update_one(
             {"_id": "boss_state"},
-            {"$set": state},
+            {"$set": {key:value for key,value in state.items() if key != 'gram_reserved'}},
             upsert=True
         )
 
@@ -297,9 +299,11 @@ class BossService:
         try:
             await self.boss_state.update_one(
                 {'_id':'boss_state', '$or':[
-                    {'is_dead':True}, {'is_expired':True}, {'hp':{'$lte':0}},
-                    {'deadline':{'$ne':None,'$lte':time.time()}},
-                ]}, {'$set':state}, upsert=True)
+                    {'is_dead':True, 'settlement_kind':{'$exists':False}},
+                    {'is_expired':True, 'settlement_kind':{'$exists':False}},
+                    {'settlement':{'$type':'object'}},
+                ]}, {'$set':state, '$unset':{'settlement':'', 'settlement_kind':'',
+                    'card_synced':'', 'card_missing':'', 'chat_id':'', 'message_id':'', 'has_photo':'', 'stopped_by_admin':'', 'ended_at':''}}, upsert=True)
         except DuplicateKeyError:
             raise ValueError('Бой уже идёт. Дождитесь завершения или /killboss.')
         return state
@@ -321,6 +325,8 @@ class BossService:
         if state:
             state["hp"] = 0
             state["is_dead"] = True
+            state["stopped_by_admin"] = True
+            state["ended_at"] = time.time()
             state["updated_at"] = datetime.now(timezone.utc)
             await self._save_boss_state_doc(state)
 
@@ -344,6 +350,7 @@ class BossService:
             # Check expiration
             if state.get("deadline") and time.time() > state["deadline"]:
                 state["is_expired"] = True
+                state["settlement_kind"] = "loss"
                 state["updated_at"] = datetime.now(timezone.utc)
                 await self._save_boss_state_doc(state)
                 return BossAttackResult(state, "expired", 0)
@@ -525,6 +532,8 @@ class BossService:
             if state["hp"] <= 0:
                 state["hp"] = 0
                 state["is_dead"] = True
+                state["settlement_kind"] = "win"
+                state["ended_at"] = time.time()
                 result_type = "killed"
 
             state["updated_at"] = datetime.now(timezone.utc)

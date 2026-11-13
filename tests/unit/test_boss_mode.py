@@ -135,8 +135,19 @@ async def test_old_ult_button_only_explains_text_command():
 @pytest.mark.asyncio
 async def test_text_ult_still_attacks_with_ult_flag():
     from src.bot.handlers.boss_commands import cmd_ult
-    message=NS(delete=AsyncMock())
-    container=NS(boss_service=NS(get_state=AsyncMock(return_value={'hp':100})))
+    message=NS(delete=AsyncMock(),chat=NS(id=-100))
+    container=NS(boss_service=NS(get_state=AsyncMock(return_value={'hp':100,'chat_id':-100})))
     with patch('src.bot.handlers.boss_commands.process_boss_attack',new_callable=AsyncMock) as attack:
         await cmd_ult(message,container)
     attack.assert_awaited_once_with(message,container,is_ult=True)
+
+
+@pytest.mark.asyncio
+async def test_text_ult_in_other_chat_is_not_deleted_or_processed():
+    from src.bot.handlers.boss_commands import cmd_ult
+    message=NS(delete=AsyncMock(),chat=NS(id=-200))
+    container=NS(boss_service=NS(get_state=AsyncMock(return_value={'hp':100,'chat_id':-100})))
+    with patch('src.bot.handlers.boss_commands.process_boss_attack',new_callable=AsyncMock) as attack:
+        await cmd_ult(message,container)
+    message.delete.assert_not_awaited()
+    attack.assert_not_awaited()

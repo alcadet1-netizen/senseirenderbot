@@ -2,6 +2,7 @@
 🛠️ Админ-команды для настройки боссов.
 """
 
+import math
 from aiogram import Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
@@ -16,19 +17,22 @@ router = Router(name="boss_admin")
 async def cmd_boss_settings(message: Message, container: Container):
     """Показать текущие настройки наград босса."""
     settings = await container.boss_service.get_reward_settings()
-    
+    battle = await container.boss_service.get_state() or {}
+    reserved = float(battle.get('gram_reserved', 0))
+
     lines = [
         "⚙️ <b>Настройки наград Босса (xRocket):</b>",
         f"🎲 Шанс выпадения: {settings['drop_chance'] * 100:.1f}%",
         f"💰 Награда: {settings['reward_min']} - {settings['reward_max']} GRAM",
         f"🏦 Лимит пула: {settings['pool_limit']} GRAM",
-        f"📊 Использовано: {settings['pool_used']:.4f} GRAM",
+        f"📊 Зарезервировано в текущем/последнем бою: {reserved:.4f} GRAM",
+        "Резерв включает переводы, требующие проверки.",
         "",
         "<b>Команды для изменения:</b>",
-        "/boss_chance <0.0-1.0> - шанс выпадения",
-        "/boss_reward <min> <max> - диапазон награды",
-        "/boss_pool <limit> - лимит пула",
-        "/boss_reset_pool - сбросить использованный пул"
+        "/boss_chance 0.05 — шанс выпадения",
+        "/boss_reward 0.006 0.02 — диапазон награды",
+        "/boss_pool 1 — лимит пула",
+        "Резерв боя автоматически не сбрасывается."
     ]
     
     await message.answer("\n".join(lines), parse_mode="HTML")
@@ -61,6 +65,8 @@ async def cmd_boss_reward(message: Message, command: CommandObject, container: C
         min_val = float(args[0])
         max_val = float(args[1])
         
+        if not all(math.isfinite(v) and v > 0 for v in (min_val, max_val)):
+            raise ValueError("Награды должны быть конечными положительными числами")
         if min_val > max_val:
             min_val, max_val = max_val, min_val
             
@@ -80,11 +86,11 @@ async def cmd_boss_pool(message: Message, command: CommandObject, container: Con
             raise ValueError("Укажите лимит (например, 10.0)")
             
         limit = float(command.args)
-        if limit < 0:
+        if not math.isfinite(limit) or limit < 0:
             raise ValueError("Лимит не может быть отрицательным")
             
         await container.boss_service.update_setting("pool_limit", limit)
-        await message.answer(f"✅ Лимит пула установлен: {limit} TON")
+        await message.answer(f"✅ Лимит пула установлен: {limit} GRAM")
         
     except ValueError as e:
         await message.answer(f"⚠️ Ошибка: {str(e)}")
@@ -92,5 +98,5 @@ async def cmd_boss_pool(message: Message, command: CommandObject, container: Con
 @router.message(Command("boss_reset_pool"), AdminFilter())
 async def cmd_boss_reset_pool(message: Message, container: Container):
     """Сбросить счетчик использованного пула."""
-    await container.boss_service.reset_pool()
-    await message.answer("✅ Счетчик использованного пула сброшен.")
+    await message.answer("Резерв GRAM привязан к бою и не сбрасывается вручную. "
+                         "Новый бой получает новый пул. Неопределённые переводы сначала нужно сверить с xRocket.")
