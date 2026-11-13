@@ -55,3 +55,34 @@ async def test_profile_upgrade_shortage_shows_joke_and_donate_without_retry():
     assert '/donate' in text and 'Нужно: 100' in text and 'У тебя: 5' in text
     markup = query.message.edit_text.call_args.kwargs['reply_markup']
     assert any(b.text == '⭐ Донат' for row in markup.inline_keyboard for b in row)
+
+
+@pytest.mark.asyncio
+async def test_expired_callback_ack_does_not_block_donate_menu():
+    from aiogram.exceptions import TelegramBadRequest
+    query = NS(from_user=NS(id=7), message=NS(),
+               answer=AsyncMock(side_effect=TelegramBadRequest(method='answerCallbackQuery', message='query is too old')))
+    container = NS()
+    with patch('src.bot.handlers.callbacks.show_donate_menu', new_callable=AsyncMock) as show:
+        await cb_donate_menu(query, MenuCb(action='donate_menu', user_id=7), container)
+    show.assert_awaited_once_with(query.message, container, query.from_user)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('detail', ['Bad Request: message is not modified', 'Bad Request: message to edit not found'])
+async def test_repeated_shortage_receipt_handles_only_not_modified(detail):
+    from aiogram.exceptions import TelegramBadRequest
+    error = TelegramBadRequest(method='editMessageText', message=detail)
+    query = NS(from_user=NS(id=7), answer=AsyncMock(),
+               message=NS(edit_text=AsyncMock(side_effect=error)))
+    service = NS(upgrade_katana=AsyncMock(side_effect=InsufficientFundsError(100, 5)))
+    async def invoke():
+        await cb_do_upgrade_katana(query, MenuCb(action='confirm_upgrade_katana', user_id=7),
+                                   NS(economy_service=service))
+    if 'not modified' in detail:
+        await invoke()
+    else:
+        with pytest.raises(TelegramBadRequest):
+            await invoke()
+    service.upgrade_katana.assert_awaited_once_with(7)
+    query.message.edit_text.assert_awaited_once()

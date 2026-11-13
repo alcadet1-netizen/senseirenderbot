@@ -40,7 +40,11 @@ router = Router(name="callbacks")
 async def cb_donate_menu(query: CallbackQuery, callback_data: MenuCb, container: Container):
     if not query.message or not await check_owner(query, callback_data.user_id):
         return
-    await query.answer()
+    try:
+        await query.answer()
+    except TelegramBadRequest:
+        # An expired callback acknowledgement must not block the menu.
+        pass
     await show_donate_menu(query.message, container, query.from_user)
 
 
@@ -253,10 +257,16 @@ async def cb_do_upgrade_katana(query: CallbackQuery, callback_data: MenuCb, cont
             await query.answer()
         except TelegramBadRequest:
             pass
-        await query.message.edit_text(
-            katana_insufficient_text(e.required, e.available), parse_mode="HTML",
-            reply_markup=get_profile_keyboard(query.from_user.id),
-        )
+        try:
+            await query.message.edit_text(
+                katana_insufficient_text(e.required, e.available), parse_mode="HTML",
+                reply_markup=get_profile_keyboard(query.from_user.id),
+            )
+        except TelegramBadRequest as exc:
+            # A repeated click can select the same joke and balance again.
+            # The existing receipt already has the intended text and buttons.
+            if "message is not modified" not in exc.message.lower():
+                raise
         
     except CooldownError as e:
         try:
