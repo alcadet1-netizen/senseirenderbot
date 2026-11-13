@@ -306,3 +306,20 @@ async def test_each_katana_donate_variant_is_used_in_single_response(index):
     assert text.endswith(phrase)
     assert "Нужно: 100" in text and "У тебя: 5" in text
     service.upgrade_katana.assert_awaited_once_with(7)
+
+
+@pytest.mark.parametrize('length', [5, 25, 45, 65, 85])
+def test_enchanted_styles_are_deterministic_and_keep_receipt_readable(length):
+    receipt = KatanaUpgrade('Name', length, length + 0.3, 100, True)
+    final = render_upgrade(receipt)
+    assert final.tobytes() == render_upgrade(receipt).tobytes()
+    for phase in (0.23, 0.47, 0.66, 0.85):
+        frame = render_upgrade(receipt, phase)
+        assert frame.crop((0, 201, 760, 320)).tobytes() == final.crop((0, 201, 760, 320)).tobytes()
+        assert frame.crop((0, 0, 760, 90)).tobytes() == final.crop((0, 0, 760, 90)).tobytes()
+
+
+def test_five_blade_styles_are_visually_distinct():
+    images = [render_upgrade(KatanaUpgrade('Name', n, n + 0.3, 100, True))
+              .crop((40, 115, 700, 180)).tobytes() for n in (5, 25, 45, 65, 85)]
+    assert len(set(images)) == 5

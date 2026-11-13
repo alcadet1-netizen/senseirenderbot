@@ -13,7 +13,7 @@ from src.widgets.rendering import PALETTES, font
 WIDTH, HEIGHT = 760, 320
 SCALE = 2
 STRIKES = (0.22, 0.46)
-FRAME_COUNT = 28
+FRAME_COUNT = 40
 
 
 def blade_outline(length):
@@ -38,7 +38,14 @@ def blade_length(receipt, phase):
 def render_forge(receipt, phase=1.0):
     phase = max(0.0, min(1.0, phase))
     c = PALETTES["dark"]
-    accent = "#83d3ff" if receipt.success else "#ffc078"
+    # Cosmetic schools are deterministic, never another economic roll.
+    school = min(4, max(0, int(receipt.after // 20)))
+    silk, aura = (
+        ("#233e74", "#accfff"), ("#873824", "#ff9b43"),
+        ("#b7c8cf", "#bcefff"), ("#593780", "#d6b3ff"),
+        ("#305843", "#c4e092"),
+    )[school]
+    accent = aura if receipt.success else "#ffc078"
     image = Image.new("RGB", (WIDTH * SCALE, HEIGHT * SCALE), c["bg"])
     draw = ImageDraw.Draw(image)
 
@@ -104,7 +111,7 @@ def render_forge(receipt, phase=1.0):
         image = Image.alpha_composite(image.convert("RGBA"), clipped).convert("RGB")
         draw = ImageDraw.Draw(image)
     # Tsuka, kashira, alternating silk wrap and menuki.
-    poly([(49, 154), (165, 146), (166, 160), (50, 169)], "#322d32")
+    poly([(49, 154), (165, 146), (166, 160), (50, 169)], silk)
     for x in range(57, 160, 13):
         yy = 154 - (x - 49) * 0.068
         poly([(x, yy), (x + 9, yy + 6), (x + 1, yy + 13), (x - 7, yy + 7)], "#a68c77")
@@ -129,6 +136,55 @@ def render_forge(receipt, phase=1.0):
     line(hamon, "#fff2d6" if heat else "#f3fbff")
     tip_x = 185 + length
     line([(tip_x - 21, 130), (tip_x - 12, 141)], "#9bafbe")
+
+    # Enchanted inlay follows the curved blade. Reveal it after quenching;
+    # all light is masked to the steel and confined to the art viewport.
+    reveal = min(1.0, max(0.0, (phase - 0.56) / 0.28))
+    if reveal:
+        mask = Image.new("L", image.size)
+        ImageDraw.Draw(mask).polygon(
+            [(round(x * SCALE), round(y * SCALE)) for x, y in outline], fill=255)
+        magic = Image.new("RGBA", image.size)
+        md = ImageDraw.Draw(magic)
+        from PIL import ImageColor
+        rgb = ImageColor.getrgb(aura)
+        points = []
+        for j in range(65):
+            u = j / 64
+            x = 194 + (length - 24) * u
+            y = 151 - 20 * u * u
+            if school in (1, 3):  # molten seams / lightning
+                y += math.sin(j * 2.3) * 4 + math.sin(j * 0.8) * 2
+            else:
+                y += math.sin(j * 0.34) * 3
+            points.append((round(x * SCALE), round(y * SCALE)))
+        md.line(points, fill=(*rgb, round(100 * reveal)), width=2 * SCALE)
+        for j in range(3, 62, 7):
+            x, y = points[j]
+            direction = -1 if j % 2 else 1
+            md.line([(x, y), (x + 6 * SCALE, y + direction * 6 * SCALE),
+                     (x + 13 * SCALE, y + direction * 7 * SCALE)],
+                    fill=(*rgb, round(90 * reveal)), width=SCALE)
+            if school == 0:  # constellation pinpoints
+                md.ellipse((x-SCALE, y-SCALE, x+SCALE, y+SCALE), fill=(255, 249, 216, 255))
+        bloom = magic.filter(ImageFilter.GaussianBlur(3 * SCALE))
+        magic = Image.alpha_composite(bloom, magic)
+        magic.putalpha(ImageChops.multiply(magic.getchannel("A"), mask))
+        image = Image.alpha_composite(image.convert("RGBA"), magic).convert("RGB")
+        draw = ImageDraw.Draw(image)
+
+    # Expanding impact rings distinguish growth (blue) from failed tempering
+    # (amber). Geometry stays inside the forge region, never over the receipt.
+    for strike in STRIKES:
+        age = phase - strike
+        if 0 <= age < 0.13:
+            t = age / 0.13
+            radius = 8 + 74 * t
+            color = tuple(round(v * (1 - 0.65 * t)) for v in
+                          ((142, 220, 255) if receipt.success else (255, 151, 79)))
+            draw.ellipse(((397-radius)*SCALE, (151-radius*0.32)*SCALE,
+                          (397+radius)*SCALE, (151+radius*0.32)*SCALE),
+                         outline=color, width=SCALE)
 
     # Two actual hammer swings. Particles are ballistic and deterministic.
     for strike in STRIKES:
