@@ -6,8 +6,7 @@ wrapped tsuka and a single cutting edge. It is intentionally not a broadsword.
 
 import math
 from functools import lru_cache
-from pathlib import Path
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageColor
 
 from src.core.visuals import Visuals
 from src.widgets.katana_models import MODEL_NAMES, model_index, model_path
@@ -62,7 +61,7 @@ def blade_outline(length):
 def blade_length(receipt, phase):
     # Forging first, reveal second. Actual delta remains printed throughout.
     t = max(0, min(1, (phase - 0.30) / 0.48))
-    t = 1 - (1 - t) ** 3
+    t = t * t * t * (t * (t * 6 - 15) + 10)  # zero velocity/acceleration at both ends
     if receipt.delta > 0:
         return 360 + 130 * t
     if receipt.delta < 0:
@@ -75,11 +74,11 @@ def render_forge(receipt, phase=1.0):
     c = PALETTES["dark"]
     # Cosmetic schools are deterministic, never another economic roll.
     school = model_index(receipt.after)
-    silk, aura = (
-        ("#233e74", "#accfff"), ("#873824", "#ff9b43"),
-        ("#b7c8cf", "#bcefff"), ("#593780", "#d6b3ff"),
-        ("#305843", "#c4e092"),
-    )[school % 5]
+    aura = (
+        "#e2c58f", "#bcefff", "#ff9b43", "#83cfff", "#cd9bff",
+        "#ff9b43", "#bcefff", "#b6a0ff", "#c7b9ff", "#a6dd78",
+        "#ff9b43", "#bcefff", "#ff6c94", "#c08cff", "#ffe1a0",
+    )[school]
     accent = aura if receipt.success else "#ffc078"
     image = Image.new("RGB", (WIDTH * SCALE, HEIGHT * SCALE), c["bg"])
     draw = ImageDraw.Draw(image)
@@ -196,10 +195,13 @@ def render_forge(receipt, phase=1.0):
 
     # Final polish travels only along the blade, clipped to its silhouette.
     if 0.70 < phase < 0.98:
+        # Follow the actual bright steel/ornaments, not the obsolete schematic
+        # outline. Restrict the mask to the blade half of the art viewport.
         mask = Image.new("L", image.size)
-        ImageDraw.Draw(mask).polygon(
-            [(int(x * SCALE), int(y * SCALE)) for x, y in outline], fill=255
-        )
+        steel = image.convert("L").crop((185*SCALE, 96*SCALE,
+                                        round((197+length)*SCALE), 191*SCALE))
+        steel = steel.point(lambda v: min(255, max(0, (v-75)*2)))
+        mask.paste(steel, (185*SCALE, 96*SCALE))
         streak = Image.new("RGB", image.size, "#ffffff")
         band = Image.new("L", image.size)
         x = 185 + length * (phase - 0.70) / 0.28
@@ -213,6 +215,28 @@ def render_forge(receipt, phase=1.0):
             fill=210,
         )
         image.paste(streak, (0, 0), ImageChops.multiply(mask, band))
+        draw = ImageDraw.Draw(image)
+
+    # A restrained final energy reveal, fixed to the blade and fading to a
+    # clean held frame. No camera shake, global flashing or random rerolls.
+    if 0.76 < phase < 0.98:
+        t = (phase - 0.76) / 0.22
+        intensity = math.sin(math.pi * t)
+        fx = Image.new("RGBA", image.size)
+        fd = ImageDraw.Draw(fx)
+        rgb = ImageColor.getrgb(aura if receipt.success else "#ed9265")
+        for j in range(12):
+            u = (j + 0.5) / 12
+            x = (190 + length * u) * SCALE
+            y = (145 - 15*u*u + math.sin(j*2.4)*19* t) * SCALE
+            r = (1 + 2*intensity) * SCALE
+            alpha = round(200 * intensity)
+            fd.line((x-r, y, x+r, y), fill=(*rgb, alpha), width=SCALE)
+            fd.line((x, y-r, x, y+r), fill=(*rgb, alpha), width=SCALE)
+        fx = Image.alpha_composite(fx.filter(ImageFilter.GaussianBlur(2*SCALE)), fx)
+        viewport = Image.new("RGBA", image.size)
+        viewport.paste(fx.crop((0, 96*SCALE, WIDTH*SCALE, 191*SCALE)), (0, 96*SCALE))
+        image = Image.alpha_composite(image.convert("RGBA"), viewport).convert("RGB")
         draw = ImageDraw.Draw(image)
 
     # All numeric labels stay outside the forge region, invariant across frames.
