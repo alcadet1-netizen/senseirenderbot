@@ -28,11 +28,18 @@ def katana_art(school):
         return source.convert("RGB").crop((20, top + 43, source.width - 20, bottom - 42))
 
 
+@lru_cache(maxsize=5)
+def katana_handle(school):
+    art = katana_art(school)
+    return art.crop((0, 0, 340, art.height)).resize(
+        (145*SCALE, 95*SCALE), Image.Resampling.LANCZOS)
+
+
 def paint_katana(image, school, length):
     art = katana_art(school)
     # Keep the ornate guard/handle rigid; only the steel changes length.
     split = 340
-    handle = art.crop((0, 0, split, art.height)).resize((145*SCALE, 95*SCALE), Image.Resampling.LANCZOS)
+    handle = katana_handle(school)
     blade = art.crop((split, 0, art.width, art.height)).resize((round((length+12)*SCALE), 95*SCALE), Image.Resampling.LANCZOS)
     sprite = Image.new("RGB", (handle.width+blade.width, 95*SCALE))
     sprite.paste(handle, (0, 0)); sprite.paste(blade, (handle.width, 0))

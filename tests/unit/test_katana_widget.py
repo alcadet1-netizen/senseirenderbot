@@ -335,3 +335,37 @@ def test_reference_art_is_bundled_and_used_without_mutating_cached_source(school
     assert frame.size == (760, 320)
     assert katana_art(school).tobytes() == original
     assert art.width > 500 and art.height > 100
+
+
+@pytest.mark.asyncio
+async def test_busy_render_queue_returns_text_receipt_without_starting_more_threads():
+    import asyncio
+    msg = message()
+    with (
+        patch('src.bot.presenters.katana_presenter.RENDER_SLOTS', asyncio.Semaphore(0)),
+        patch('src.bot.presenters.katana_presenter.to_upgrade_gif') as gif,
+        patch('src.bot.presenters.katana_presenter.to_upgrade_png') as png,
+    ):
+        await send_katana_upgrade(msg, 7, 'Name', result(), animate=True)
+    gif.assert_not_called()
+    png.assert_not_called()
+    msg.answer.assert_awaited_once()
+    assert '20.40 → 20.76' in msg.answer.call_args.args[0]
+    msg.answer_animation.assert_not_awaited()
+    msg.answer_photo.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_profile_upgrade_uses_same_animation_without_repeating_economy():
+    from src.bot.handlers.callbacks import cb_do_upgrade_katana
+    from src.bot.keyboards.inline import MenuCb
+    msg = message()
+    query = SimpleNamespace(from_user=msg.from_user, message=msg, answer=AsyncMock())
+    service = SimpleNamespace(upgrade_katana=AsyncMock(return_value=result()))
+    container = SimpleNamespace(economy_service=service,
+        settings=SimpleNamespace(widgets_enabled=True, widget_animations_enabled=True))
+    with patch('src.bot.handlers.callbacks.send_katana_upgrade', new_callable=AsyncMock) as send:
+        await cb_do_upgrade_katana(query, MenuCb(action='confirm_upgrade_katana', user_id=7), container)
+    service.upgrade_katana.assert_awaited_once_with(7)
+    send.assert_awaited_once()
+    assert send.call_args.kwargs['animate'] is True

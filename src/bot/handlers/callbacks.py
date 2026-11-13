@@ -10,6 +10,7 @@ from aiogram.exceptions import TelegramBadRequest
 from src.core.container import Container
 from src.core.visuals import Visuals
 from src.bot.presenters.hedgehog_presenter import launch_hedgehog
+from src.bot.presenters.katana_presenter import send_katana_upgrade
 from src.core.exceptions import (
     DailyAlreadyClaimedError, 
     InsufficientFundsError, 
@@ -228,7 +229,18 @@ async def cb_do_upgrade_katana(query: CallbackQuery, callback_data: MenuCb, cont
         
     try:
         result = await container.economy_service.upgrade_katana(query.from_user.id)
-        
+        if container.settings.widgets_enabled:
+            try:
+                await query.answer()
+            except TelegramBadRequest:
+                pass
+            await send_katana_upgrade(
+                query.message, query.from_user.id,
+                query.from_user.username or query.from_user.full_name,
+                result, animate=container.settings.widget_animations_enabled,
+            )
+            return
+
         is_upgraded = result["is_upgraded"]
         growth = result["growth"]
         new_length = result["new_length"]
