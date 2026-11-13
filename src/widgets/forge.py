@@ -35,9 +35,18 @@ def katana_layers(school):
     art = katana_art(school).convert("RGBA")
     mask = Image.new("L", art.size)
     md = ImageDraw.Draw(mask)
-    md.polygon([(8, 47), (285, 44), (306, 12), (352, 17), (369, 58),
-                (828, 44), (807, 78), (350, 105), (342, 138),
-                (298, 136), (284, 104), (8, 98)], fill=255)
+    # Individual blade profiles measured in normalized panel coordinates.
+    # A separate rounded guard mask avoids the old angular cutout at the hilt.
+    profiles = (
+        (63,101,58), (69,105,54), (75,107,57), (73,107,57), (72,109,59),
+        (66,101,55), (68,107,55), (72,109,57), (69,105,56), (72,109,59),
+        (71,110,46), (70,114,41), (72,112,49), (77,117,51), (69,111,47),
+    )
+    top, bottom, tip = profiles[school]
+    md.rounded_rectangle((7, 45, 302, 102), radius=13, fill=255)
+    md.ellipse((277, 15, 370, 138), fill=255)
+    md.polygon([(335, top), (560, top+2), (725, top-4), (839, tip),
+                (817, tip+21), (745, bottom-13), (560, bottom), (335, bottom)], fill=255)
     art.putalpha(mask.filter(ImageFilter.GaussianBlur(2.0)))
     return art.crop((0, 0, 340, art.height)), art.crop((340, 0, art.width, art.height))
 
