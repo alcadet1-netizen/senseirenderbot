@@ -17,7 +17,7 @@ from src.core.config import settings
 from src.core.container import Container
 from src.core.visuals import Visuals
 from src.bot.presenters.hedgehog_presenter import launch_hedgehog
-from src.bot.presenters.katana_presenter import send_katana_upgrade
+from src.bot.presenters.katana_presenter import send_katana_upgrade, send_current_katana
 from src.texts.donate_prompts import katana_insufficient_text
 from src.core.exceptions import (
     DailyAlreadyClaimedError,
@@ -273,9 +273,9 @@ async def cmd_upkatana(message: Message, container: Container):
 @router.message(F.text.lower().in_({"моя катана"}))
 async def cmd_mykatana(message: Message, container: Container) -> None:
     """Команда /mykatana - информация о катане."""
-    logger.info(f"👉 [CMD] cmd_mykatana triggered by {message.from_user.id}")
     if not message.from_user:
         return
+    logger.info(f"👉 [CMD] cmd_mykatana triggered by {message.from_user.id}")
 
     mention = get_mention(message.from_user)
 
@@ -287,9 +287,7 @@ async def cmd_mykatana(message: Message, container: Container) -> None:
 
         length = profile.get("katana_length", 0.0)
 
-        # Визуализация катаны
-        text = Visuals.katana_info(length)
-        await message.answer(f"{mention}\n\n{text}", parse_mode="HTML")
+        await send_current_katana(message, length)
         logger.info(f"✅ Mykatana info sent to {message.from_user.id}")
     except Exception as e:
         logger.error(f"❌ Error in cmd_mykatana: {e}", exc_info=True)

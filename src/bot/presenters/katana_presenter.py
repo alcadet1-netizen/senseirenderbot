@@ -56,3 +56,20 @@ async def send_katana_upgrade(
     except (TelegramBadRequest, OSError, ValueError, TimeoutError):
         logger.warning("Katana image unavailable; falling back to text", exc_info=True)
         await message.answer(text_receipt, parse_mode=None)
+
+
+async def send_current_katana(message: Message, length: float):
+    from src.widgets.katana_models import model_caption, render_model_png
+    caption = model_caption(length)
+    try:
+        payload = await render_receipt(render_model_png, length)
+    except (OSError, ValueError, TimeoutError):
+        await message.answer(caption, parse_mode=None)
+        return
+    try:
+        await message.answer_photo(
+            BufferedInputFile(payload, filename='sensei-my-katana.png'),
+            caption=caption, parse_mode=None,
+        )
+    except TelegramBadRequest:
+        await message.answer(caption, parse_mode=None)

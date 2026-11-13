@@ -10,6 +10,7 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 from src.core.visuals import Visuals
+from src.widgets.katana_models import MODEL_NAMES, model_index, model_path
 from src.widgets.rendering import PALETTES, font
 
 WIDTH, HEIGHT = 760, 320
@@ -18,17 +19,14 @@ STRIKES = (0.22, 0.46)
 FRAME_COUNT = 40
 
 
-@lru_cache(maxsize=5)
+@lru_cache(maxsize=15)
 def katana_art(school):
-    """User-supplied artwork, cropped without panel borders; no network IO."""
-    with Image.open(Path(__file__).parent / "assets" / "katana-reference.webp") as source:
-        # The reference contains five horizontal panels of equal height.
-        top = round(source.height * school / 5)
-        bottom = round(source.height * (school + 1) / 5)
-        return source.convert("RGB").crop((20, top + 43, source.width - 20, bottom - 42))
+    """Normalized, bundled model panel; cached read-only source."""
+    with Image.open(model_path(school)) as source:
+        return source.convert("RGB")
 
 
-@lru_cache(maxsize=5)
+@lru_cache(maxsize=15)
 def katana_handle(school):
     art = katana_art(school)
     return art.crop((0, 0, 340, art.height)).resize(
@@ -76,12 +74,12 @@ def render_forge(receipt, phase=1.0):
     phase = max(0.0, min(1.0, phase))
     c = PALETTES["dark"]
     # Cosmetic schools are deterministic, never another economic roll.
-    school = min(4, max(0, int(receipt.after // 20)))
+    school = model_index(receipt.after)
     silk, aura = (
         ("#233e74", "#accfff"), ("#873824", "#ff9b43"),
         ("#b7c8cf", "#bcefff"), ("#593780", "#d6b3ff"),
         ("#305843", "#c4e092"),
-    )[school]
+    )[school % 5]
     accent = aura if receipt.success else "#ffc078"
     image = Image.new("RGB", (WIDTH * SCALE, HEIGHT * SCALE), c["bg"])
     draw = ImageDraw.Draw(image)
@@ -232,7 +230,7 @@ def render_forge(receipt, phase=1.0):
             size -= 1
         text(x + 12, 226, value, size, accent if i == 1 else c["text"])
     blade, rank = Visuals.get_katana_art(receipt.after)
-    summary = f"{blade} · {rank}  |  Попытка: {receipt.cost:,.0f} монет"
+    summary = f"{MODEL_NAMES[school]} · {school+1}/15  |  Попытка: {receipt.cost:,.0f} монет"
     size = 13
     while size > 10 and draw.textlength(summary, font=font(size * SCALE)) > 704 * SCALE:
         size -= 1
