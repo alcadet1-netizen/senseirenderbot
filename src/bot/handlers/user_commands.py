@@ -3,6 +3,7 @@
 """
 
 import os
+import asyncio
 import random
 import re
 import logging
@@ -287,7 +288,13 @@ async def cmd_mykatana(message: Message, container: Container) -> None:
 
         length = profile.get("katana_length", 0.0)
 
-        await send_current_katana(message, length)
+        try:
+            position = await asyncio.wait_for(
+                container.user_service.get_katana_position(message.from_user.id), timeout=2)
+        except Exception:
+            logger.warning("Katana leaderboard lookup unavailable")
+            position = None
+        await send_current_katana(message, length, position=position)
         logger.info(f"✅ Mykatana info sent to {message.from_user.id}")
     except Exception as e:
         logger.error(f"❌ Error in cmd_mykatana: {e}", exc_info=True)

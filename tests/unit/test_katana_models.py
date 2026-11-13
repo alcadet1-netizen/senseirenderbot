@@ -36,11 +36,11 @@ def test_clamps_and_invalid_values():
 async def test_my_katana_is_read_only_and_displays_profile_model(has_katana):
     message = NS(from_user=NS(id=7, username='User', full_name='User'), answer=AsyncMock())
     container = NS(user_service=NS(get_profile=AsyncMock(return_value={
-        'has_katana': has_katana, 'katana_length': 245.5})))
+        'has_katana': has_katana, 'katana_length': 245.5}), get_katana_position=AsyncMock(return_value={'rank': 7, 'total': 128})))
     with patch('src.bot.handlers.user_commands.send_current_katana', new_callable=AsyncMock) as send:
         await cmd_mykatana(message, container)
     if has_katana:
-        send.assert_awaited_once_with(message, 245.5)
+        send.assert_awaited_once_with(message, 245.5, position={'rank': 7, 'total': 128})
         message.answer.assert_not_awaited()
     else:
         send.assert_not_awaited()

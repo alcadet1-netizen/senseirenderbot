@@ -58,9 +58,13 @@ async def send_katana_upgrade(
         await message.answer(text_receipt, parse_mode=None)
 
 
-async def send_current_katana(message: Message, length: float, *, animate: bool = True):
+async def send_current_katana(message: Message, length: float, *, animate: bool = True, position=None):
     from src.widgets.katana_models import model_caption, model_index, model_preview_path, model_animation_path
     caption = model_caption(length)
+    if position is not None:
+        caption += f"\n🏆 /topkatana: №{position['rank']} из {position['total']} владельцев катан"
+    else:
+        caption += "\n🏆 Место в /topkatana сейчас недоступно"
     index = model_index(length)
     if animate:
         try:
