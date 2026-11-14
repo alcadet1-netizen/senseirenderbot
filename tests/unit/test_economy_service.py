@@ -190,7 +190,7 @@ async def test_upgrade_katana_success(economy_service, mock_mongo_client):
 
     # Setup mocks - return values directly (not coroutines) for find operations
     def make_find_one_return_value(collection_name):
-        def side_effect(query):
+        def side_effect(query, **kwargs):
             if collection_name == "users":
                 return stored_user.copy() if stored_user else None
             elif collection_name == "bank":
@@ -230,7 +230,10 @@ async def test_upgrade_katana_success(economy_service, mock_mongo_client):
     mock_mongo_client.database.transactions.insert_one = AsyncMock()
 
     # Mock random.random() to return a value that guarantees success (less than KATANA_WIN_CHANCE)
-    with patch('random.random', return_value=0.5):  # 0.5 < 0.85 (KATANA_WIN_CHANCE)
+    async def transact(mongo, callback):
+        return await callback(None)
+
+    with patch('src.services.referral_economy.transaction', side_effect=transact), patch('random.random', return_value=0.5):  # 0.5 < 0.85 (KATANA_WIN_CHANCE)
         # Execute
         result = await economy_service.upgrade_katana(126)
 
@@ -240,13 +243,15 @@ async def test_upgrade_katana_success(economy_service, mock_mongo_client):
         assert result["growth"] > 0
 
         # Verify database calls for success case
+        update_calls = mock_mongo_client.database.users.update_one.call_args_list
+        assert update_calls[0].args[1]["$inc"]["coins"] == -150
         mock_mongo_client.database.users.update_one.assert_any_call(
-            {"id": 126}, {"$inc": {"coins": -150.0}}
+            {"id": 126, "coins": {"$gte": 150.0}}, update_calls[0].args[1], session=None
         )
         mock_mongo_client.database.bank.update_one.assert_called()  # Deposit to bank
         # Should have two update calls: one for coins, one for katana_length and timestamp
         update_calls = mock_mongo_client.database.users.update_one.call_args_list
-        assert len(update_calls) >= 2
+        assert len(update_calls) == 1
 
         # Verify transaction was recorded
         mock_mongo_client.database.transactions.insert_one.assert_called()

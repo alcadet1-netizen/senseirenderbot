@@ -3,6 +3,7 @@ import hashlib
 import math
 from datetime import datetime, timezone
 from pymongo.errors import DuplicateKeyError
+from src.services.xrocket_service import XRocketTransferRejected
 
 
 async def award_boss_gram(container, state, user_id, amount, event_key):
@@ -31,7 +32,12 @@ async def award_boss_gram(container, state, user_id, amount, event_key):
         return 'pool_exhausted'
     await receipts.update_one({'_id':key},{'$set':{'status':'sending'}})
     try:
-        confirmed = await container.xrocket_service.transfer(user_id,'GRAM',amount,transfer_id=key)
+        confirmed = await container.xrocket_service.transfer(user_id,'GRAM',amount,transfer_id=key,raise_rejection=True)
+    except XRocketTransferRejected as exc:
+        await receipts.update_one({'_id':key},{'$set':{'status':'rejected',
+            'provider_status':exc.status,'provider_detail':exc.detail}})
+        # Keep reservation for explicit reconciliation; never blindly refund/retry.
+        return 'rejected'
     except Exception:
         confirmed = False
     status = 'confirmed' if confirmed else 'needs_review'

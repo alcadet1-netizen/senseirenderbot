@@ -100,3 +100,18 @@ async def cmd_boss_reset_pool(message: Message, container: Container):
     """Сбросить счетчик использованного пула."""
     await message.answer("Резерв GRAM привязан к бою и не сбрасывается вручную. "
                          "Новый бой получает новый пул. Неопределённые переводы сначала нужно сверить с xRocket.")
+
+
+@router.message(Command("boss_xrocket_status"), AdminFilter())
+async def cmd_boss_xrocket_status(message: Message, container: Container):
+    """Private read-only check, never a transfer or a disclosure of app balances."""
+    if message.chat.type != 'private':
+        await message.answer('Проверьте доступ в личке бота: /boss_xrocket_status', parse_mode=None)
+        return
+    result = await container.xrocket_service.access_status()
+    code = f"HTTP {result['status']}" if result['status'] is not None else 'без HTTP-ответа'
+    await message.answer(
+        f"xRocket · {code}\n{result['detail']}\n\n"
+        "Это проверка /app/info без перевода денег. Успех не гарантирует право на переводы. "
+        "При 401/403 проверьте актуальность API-ключа приложения, права переводов и ограничения доступа "
+        "в настройках xRocket. Ключи в чат не отправляйте.", parse_mode=None)

@@ -117,12 +117,21 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
     if not message.from_user:
         return
 
-    await container.user_service.get_or_create(
+    registration = await container.user_service.get_or_create(
         user_id=message.from_user.id,
         username=message.from_user.username,
         first_name=message.from_user.first_name or "",
         last_name=message.from_user.last_name,
     )
+
+    if registration.get("created") and not (command.args or '').startswith('ref_'):
+        await container.user_service.users.update_one({'id': message.from_user.id},
+            {'$set': {'referral_binding_closed': True}})
+
+    if command.args == 'referrals_menu':
+        from src.bot.handlers.referral import cmd_ref
+        await cmd_ref(message, container)
+        return
 
     if command.args and command.args.startswith("pet_"):
         from src.bot.presenters.daily_hedgehog import open_pet
@@ -135,7 +144,7 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
 
     # Обработка реферальной ссылки
     args = command.args
-    if args and args.startswith("ref_"):
+    if args and args.startswith("ref_") and registration.get("created"):
         # Используем ReferralService
         res, msg = await container.referral_service.process_referral(message.from_user.id, args)
         if res:

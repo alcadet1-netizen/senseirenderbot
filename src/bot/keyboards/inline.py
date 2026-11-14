@@ -151,34 +151,16 @@ def get_start_keyboard(user_id: int) -> InlineKeyboardMarkup:
     )
 
 def get_referral_keyboard(link: str, user_id: int) -> InlineKeyboardMarkup:
-    """Клавиатура реферальной системы."""
-    builder = InlineKeyboardBuilder()
-    
-    builder.row(
-        InlineKeyboardButton(text="📊 Статистика", callback_data=RefCb(action="stats", user_id=user_id).pack()),
-        InlineKeyboardButton(text="🏆 Топ", callback_data=RefCb(action="top", user_id=user_id).pack())
-    )
-    builder.row(
-        InlineKeyboardButton(text="💎 Награды", callback_data=RefCb(action="rewards", user_id=user_id).pack()),
-        InlineKeyboardButton(text="🏅 Ранги", callback_data=RefCb(action="ranks", user_id=user_id).pack())
-    )
-    builder.row(
-        InlineKeyboardButton(text="📋 Рефералы", callback_data=RefCb(action="list", user_id=user_id).pack()),
-        InlineKeyboardButton(text="🏰 Империя", callback_data=RefCb(action="empire", user_id=user_id).pack())
-    )
-    builder.row(
-        InlineKeyboardButton(text="🔗 Поделиться", callback_data=RefCb(action="share", user_id=user_id).pack()),
-        InlineKeyboardButton(text="❓ Помощь", callback_data=RefCb(action="help", user_id=user_id).pack())
-    )
-    
-    encoded_url = urllib.parse.quote(link)
-    share_url = f"https://t.me/share/url?url={encoded_url}&text=В Sensei Bot'e тебя ждёт сюрприз. Залетай и забери свои 200 монет — пока все не разобрали!"
-    
-    builder.row(
-        InlineKeyboardButton(text="📨 Отправить другу", url=share_url)
-    )
-    
-    return builder.as_markup()
+    from aiogram.types import CopyTextButton
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔗 Скопировать ссылку", copy_text=CopyTextButton(text=link))],
+        [InlineKeyboardButton(text="📣 Создать объявление", callback_data=RefCb(action="advert", user_id=user_id).pack())],
+        [InlineKeyboardButton(text="📤 Выбрать чат", switch_inline_query="senseireferal")],
+        [InlineKeyboardButton(text="🌳 Мои ученики", callback_data=RefCb(action="list", user_id=user_id).pack()),
+         InlineKeyboardButton(text="📜 Условия", callback_data=RefCb(action="rewards", user_id=user_id).pack())],
+        [InlineKeyboardButton(text="💰 История дохода", callback_data=RefCb(action="income", user_id=user_id).pack())],
+        [InlineKeyboardButton(text="🔄 Обновить", callback_data=RefCb(action="menu", user_id=user_id).pack())]
+    ])
 
 def get_referral_back_keyboard(user_id: int) -> InlineKeyboardMarkup:
     """Клавиатура назад в реферальное меню."""

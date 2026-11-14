@@ -208,23 +208,28 @@ async def test_service_returns_original_length_on_clamped_failure():
 
     user = dict(id=7, coins=1000, has_katana=True, katana_length=0.05)
     users = SimpleNamespace(find_one=AsyncMock(), update_one=AsyncMock())
-    users.find_one.side_effect = lambda _: user.copy()
+    users.find_one.side_effect = lambda _, **kwargs: user.copy()
 
-    def update(query, changes):
+    def update(query, changes, **kwargs):
         user.update(changes.get("$set", {}))
         for key, value in changes.get("$inc", {}).items():
             user[key] += value
+        return SimpleNamespace(matched_count=1)
 
     users.update_one.side_effect = update
     db = SimpleNamespace(
         users=users,
-        bank=MagicMock(),
+        bank=SimpleNamespace(update_one=AsyncMock()),
         tickets=MagicMock(),
         transactions=SimpleNamespace(insert_one=AsyncMock()),
     )
     service = EconomyService(SimpleNamespace(database=db))
     service._deposit_to_bank = AsyncMock()
+    async def transact(mongo, callback):
+        return await callback(None)
+
     with (
+        patch("src.services.referral_economy.transaction", side_effect=transact),
         patch("src.services.economy_service.random.random", return_value=1),
         patch("src.services.economy_service.random.uniform", return_value=0.2),
     ):

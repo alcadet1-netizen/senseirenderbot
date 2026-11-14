@@ -35,11 +35,17 @@ class ReferralRank(Enum):
 class ReferralStats:
     user_id: int
     level_1_count: int = 0
+    level_3_count: int = 0
+    level_3_active: int = 0
     level_2_count: int = 0
     level_1_active: int = 0
     level_2_active: int = 0
     total_coins_earned: float = 0.0
     total_xp_earned: int = 0
+    bonus_eligible: bool = False
+    bonus_paid: bool = False
+    activity_days: int = 0
+    paid_upgrade: bool = False
     
     @property
     def rank(self) -> ReferralRank:

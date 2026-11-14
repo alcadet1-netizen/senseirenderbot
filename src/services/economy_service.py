@@ -157,6 +157,11 @@ class EconomyService:
         lock_key = f"message_reward:{user_id}"
         lock = self._get_lock(lock_key)
         async with lock:
+            if apply_rewards and not is_bot:
+                day = datetime.now(timezone.utc).date().isoformat()
+                await self.users.update_one({'id': user_id, 'referral_version': 2,
+                    'referral_activity_days': {'$ne': day}, 'referral_bonus_paid': {'$ne': True}},
+                    {'$push': {'referral_activity_days': {'$each': [day], '$slice': -3}}})
             # Get or create user
             user = await self.users.find_one({"id": user_id})
             if user is None:
@@ -397,7 +402,8 @@ class EconomyService:
             old_length = user.get("katana_length", 0.0)
             # Check cooldown
             now = datetime.now(timezone.utc)
-            last_katana_up = user.get("last_katana_up")
+            snapshot_last_upgrade = user.get("last_katana_up")
+            last_katana_up = snapshot_last_upgrade
             if last_katana_up:
                 # Ensure it's timezone aware
                 if last_katana_up.tzinfo is None:
@@ -410,49 +416,38 @@ class EconomyService:
             # Check balance
             if user.get("coins", 0.0) < cost:
                 raise InsufficientFundsError(cost, user.get("coins", 0.0))
-            # Deduct coins from user
-            await self.users.update_one(
-                {"id": user_id},
-                {"$inc": {"coins": -cost}}
-            )
-            # Deposit to bank
-            await self._deposit_to_bank(cost)
-            # Create transaction for the attempt
-            tx_doc = {
-                "user_id": user_id,
-                "tx_type": "purchase",
-                "coins_change": -cost,
-                "description": "Katana upgrade attempt",
-                "created_at": datetime.now(timezone.utc),
-            }
-            await self.transactions.insert_one(tx_doc)
-            # Attempt upgrade
-            roll = random.random()
-            is_success = roll < KATANA_WIN_CHANCE
-            growth = 0.0
-            if is_success:
-                growth = round(random.uniform(0.03, 0.60), 2)
-                new_length = user.get("katana_length", 0.0) + growth
-                await self.users.update_one(
-                    {"id": user_id},
-                    {"$set": {"katana_length": new_length, "last_katana_up": now}}
-                )
-            else:
-                growth = round(random.uniform(0.01, 0.20), 2)
-                new_length = max(0.0, user.get("katana_length", 0.0) - growth)
-                await self.users.update_one(
-                    {"id": user_id},
-                    {"$set": {"katana_length": new_length, "last_katana_up": now}}
-                )
-            # Get updated user
-            user = await self.users.find_one({"id": user_id})
-            return {
-                "is_upgraded": is_success,
-                "old_length": old_length,
-                "growth": growth,
-                "new_length": user.get("katana_length", 0.0),
-                "cost": cost
-            }
+            # Random outcome is fixed across transaction retries.
+            from src.services.referral_economy import distribute, activate, transaction
+            import uuid
+            event = 'katana:' + uuid.uuid4().hex
+            is_success = random.random() < KATANA_WIN_CHANCE
+            growth = round(random.uniform(0.03, 0.60) if is_success else random.uniform(0.01, 0.20), 2)
+            new_length = old_length + growth if is_success else max(0.0, old_length - growth)
+
+            async def purchase(tx):
+                current = await self.users.find_one({'id': user_id}, session=tx)
+                if not current or current.get('is_banned'):
+                    raise UserNotFoundError(user_id)
+                if not current.get('has_katana'):
+                    raise NoKatanaError()
+                if current.get('last_katana_up') != snapshot_last_upgrade or current.get('katana_length', 0.0) != old_length:
+                    raise CooldownError(KATANA_UPGRADE_COOLDOWN_HOURS * 3600)
+                changes = {'katana_length': new_length, 'last_katana_up': now}
+                if current.get('referral_version') == 2:
+                    # Upgrading is genuine gameplay too, including on otherwise silent days.
+                    days = sorted(set(current.get('referral_activity_days') or []) | {now.date().isoformat()})[-3:]
+                    changes.update(referral_activity_days=days, referral_paid_upgrade=True)
+                    current.update(referral_activity_days=days, referral_paid_upgrade=True)
+                debit = await self.users.update_one({'id': user_id, 'coins': {'$gte': cost}},
+                    {'$inc': {'coins': -cost}, '$set': changes}, session=tx)
+                if debit.matched_count != 1:
+                    raise InsufficientFundsError(cost, current.get('coins', 0))
+                await self.transactions.insert_one(dict(_id=event, user_id=user_id, tx_type='purchase',
+                    coins_change=-cost, description='Katana upgrade attempt', created_at=now), session=tx)
+                await distribute(self.db, current, cost, event, tx)
+                await activate(self.db, current, event, tx)
+                return dict(is_upgraded=is_success, old_length=old_length, growth=growth, new_length=new_length, cost=cost)
+            return await transaction(self.mongo_client, purchase)
 
     # We'll stub out the other methods to avoid errors, but they should be implemented properly.
     async def admin_add_xp(
