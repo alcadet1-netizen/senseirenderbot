@@ -28,7 +28,7 @@ async def _send_welcome_message(user, container: Container, event):
         pass
 
     # Создаём пользователя
-    await container.user_service.get_or_create(
+    registration = await container.user_service.get_or_create(
         user_id=user.id,
         username=user.username,
         first_name=user.first_name or "",
@@ -47,6 +47,9 @@ async def _send_welcome_message(user, container: Container, event):
     except Exception as e:
         logging.error(f"❌ Failed to send welcome message: {e}")
 
+    # Existing profiles and rejoins never receive a second starter kit.
+    if not registration.get('created'):
+        return
     # Отправляем сообщение о стартовых бонусах
     try:
         bonus_text = Visuals.welcome_bonus_message(name=username)

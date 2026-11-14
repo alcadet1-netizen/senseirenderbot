@@ -31,13 +31,22 @@ def model_animation_path(index: int) -> Path:
     return model_preview_path(index).with_suffix('.gif')
 
 
+def katana_name(length: float) -> str:
+    """Keep the original gameplay names/thresholds independent of cosmetic art."""
+    from src.core.visuals import Visuals
+    value = float(length)
+    if not math.isfinite(value):
+        raise ValueError('Katana length must be finite')
+    return Visuals.get_katana_art(value)[0]
+
+
 def model_caption(length: float) -> str:
     index = model_index(length)
     interval = f'{index*20} ≤ длина < {(index+1)*20} см' if index < 14 else 'от 280 см'
-    progress = (f'До модели «{MODEL_NAMES[index+1]}»: {(index+1)*20-length:.2f} см'
-                if index < 14 else 'Высшая модель коллекции')
-    return (f'⚔️ {MODEL_NAMES[index]} · {length:.2f} см\n'
-            f'Модель {index+1}/15 · {interval}\n{progress}')
+    progress = (f'До следующего облика: {(index+1)*20-length:.2f} см'
+                if index < 14 else 'Высший облик коллекции')
+    return (f'⚔️ {katana_name(length)} · {length:.2f} см\n'
+            f'Облик {index+1}/15 · {interval}\n{progress}')
 
 
 def render_model_png(length: float) -> bytes:

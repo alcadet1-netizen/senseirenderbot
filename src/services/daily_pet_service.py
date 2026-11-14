@@ -48,12 +48,14 @@ class DailyPetService:
                 if previous.get('delivered'):
                     raise DailyAlreadyClaimedError('завтра после 00:00 UTC')
                 return result, previous
+            from src.services.hedgehog_gallery import select_image
+            image_name, images_seen = select_image(user)
             session = dict(day=day, token=secrets.token_urlsafe(24), state='pending',
                            deadline=None, duration=15, delivered=False, taps=0, extra_coins=0, queries=[],
-                           base_coins=result['total_coins'])
+                           base_coins=result['total_coins'], image_name=image_name)
             committed = await self.users.find_one_and_update(
                 {'id': user_id, 'hedgehog_day': day, 'daily_pet': previous},
-                {'$set': {'daily_pet': session}}, return_document=ReturnDocument.AFTER)
+                {'$set': {'daily_pet': session, 'hedgehog_images_seen': images_seen}}, return_document=ReturnDocument.AFTER)
             if not committed:
                 raise GameError('Награда сохранена. Повторите команду, чтобы получить уведомление.')
             return result, session

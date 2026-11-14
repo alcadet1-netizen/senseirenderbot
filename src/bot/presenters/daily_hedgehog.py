@@ -14,11 +14,16 @@ from src.services.hedgehog_service import GameError
 from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure
 
 
-def picture(container, token):
+def picture(container, token, image_name=None):
     files = sorted(p for p in (container.settings.BASE_DIR / 'src/infra/storage/ega').glob('*')
                    if p.is_file() and p.suffix.lower() in {'.jpg', '.jpeg', '.png'})
     if not files:
         raise GameError('Картинки ежа временно недоступны. Попробуйте позже.')
+    if image_name is not None:
+        selected = next((p for p in files if p.name == image_name), None)
+        if selected is None:
+            raise GameError('Сохранённая картинка ежа недоступна. Обратитесь в /paysupport; не платите повторно.')
+        return FSInputFile(selected)
     return FSInputFile(files[int(hashlib.sha256(token.encode()).hexdigest()[:8], 16) % len(files)])
 
 
@@ -78,6 +83,9 @@ async def send_reward_notice(message, user, container, result, session, *, notic
     reward_caption = (f'🦔 {user.first_name or "Друг"}, награда ваша!\n'
                       f"+{result['total_xp']} XP · +{result['total_coins']} монет\n"
                       f"🔥 Серия: {result['streak']} дн.")
+    if session.get('paid_order'):
+        from src.texts.payment_thanks import payment_thanks
+        reward_caption += '\n' + payment_thanks(session['token'])
     caption = (reward_caption + '\n\nВ личке: 15 сек. на переход и ласку.\n'
                'Принятый тап → +10% монет.')
     markup = InlineKeyboardMarkup(inline_keyboard=[[
@@ -88,7 +96,7 @@ async def send_reward_notice(message, user, container, result, session, *, notic
     if time.time() >= active['deadline']:
         caption = reward_caption + '\n\nВремя ласки вышло. До завтра ♡'
         markup = None
-    photo = picture(container, str(user.id))
+    photo = picture(container, str(user.id), session.get("image_name"))
     # Both free and Stars delivery pass here. Claim in Mongo, not a process lock:
     # another update/process may already be sending this session's notice.
     if not await container.daily_pet_service.reserve_notice(session['token'], user.id):
