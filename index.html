@@ -7,13 +7,14 @@
       content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
     <meta name="theme-color" content="#0A0E27" />
-    <title>Ёж-Сенсей — Стенка на Стенку</title>
+    <title>Сенсей — Стенка на Стенку</title>
     <!-- SDK загружаем только в размещённой версии; file:// остаётся автономным. -->
     <script>
-      if (location.protocol === 'https:' || location.protocol === 'http:') {
-        const sdk = document.createElement('script');
-        sdk.src = 'https://telegram.org/js/telegram-web-app.js';
-        sdk.onload = () => window.dispatchEvent(new Event('telegram-sdk-ready'));
+      if (location.protocol === "https:" || location.protocol === "http:") {
+        const sdk = document.createElement("script");
+        sdk.src = "https://telegram.org/js/telegram-web-app.js";
+        sdk.onload = () =>
+          window.dispatchEvent(new Event("telegram-sdk-ready"));
         document.head.appendChild(sdk);
       }
     </script>
@@ -968,8 +969,10 @@
     <div class="app">
       <header class="brandbar">
         <div class="brand">
-          <div class="crest">針</div>
-          <div><strong>ЁЖ • СЕНСЕЙ</strong><small>NEON DOJO GAMES</small></div>
+          <div class="crest">侍</div>
+          <div>
+            <strong>СЕНСЕЙ • ДОДЗЁ</strong><small>NEON DOJO GAMES</small>
+          </div>
         </div>
         <div class="build">
           <i class="dot"></i><span>ПРОТОТИП v3.1</span
@@ -980,7 +983,7 @@
         <div>
           <p class="eyebrow">一緒に戦おう · СИЛА В ЕДИНСТВЕ</p>
           <h1>Стенка <span>на</span> Стенку</h1>
-          <p>Собери своё додзё. Останови клан тюленей.</p>
+          <p>Собери своё додзё. Останови клан Тени.</p>
         </div>
         <div class="tools">
           <button class="tool cosmetic" id="skinBtn">
@@ -1023,12 +1026,12 @@
             ></canvas>
             <div class="stage-top">
               <div class="faction">
-                <small>針 · КЛАН ИГОЛОК</small
+                <small>陽 · КЛАН РАССВЕТА</small
                 ><b id="ourTitle">Соломенная хижина</b>
                 <div class="health"><i id="ourHealth"></i></div>
               </div>
               <div class="faction right">
-                <small>海 · КЛАН ПРИЛИВА</small
+                <small>影 · КЛАН ТЕНИ</small
                 ><b id="enemyTitle">Глиняная крепость</b>
                 <div class="health"><i id="enemyHealth"></i></div>
               </div>
@@ -1078,8 +1081,8 @@
           <section class="panel">
             <div class="panel-title">悟 · МАЛЕНЬКАЯ МУДРОСТЬ</div>
             <p class="quote">
-              «Одна иголка — колючка.<br />Сотня иголок —<br /><em
-                >уже аргумент.</em
+              «Один самурай — клинок.<br />Сотня клинков —<br /><em
+                >победа клана.</em
               >»
             </p>
             <div class="rule"></div>
@@ -1183,7 +1186,7 @@
         aiUpgrade: [0, 45, 95, 165, 250],
         cards: [
           {
-            name: "Ёж-новичок",
+            name: "Ронин",
             role: "КАТАНА",
             cd: 3,
             cost: 6,
@@ -1196,7 +1199,7 @@
             kind: 0,
           },
           {
-            name: "Ёж-Сенсей",
+            name: "Сенсей",
             role: "АУРА +2",
             cd: 12,
             cost: 21,
@@ -1209,7 +1212,7 @@
             kind: 1,
           },
           {
-            name: "Ёж-лучник",
+            name: "Юми-лучник",
             role: "ДАЛЬНИЙ БОЙ",
             cd: 6,
             cost: 14,
@@ -1222,7 +1225,7 @@
             kind: 2,
           },
           {
-            name: "Ёж-самурай",
+            name: "Самурай",
             role: "ТЯЖЁЛЫЙ",
             cd: 8,
             cost: 22,
@@ -1235,7 +1238,7 @@
             kind: 3,
           },
           {
-            name: "Ёж-монах",
+            name: "Монах",
             role: "ЛЕЧЕНИЕ",
             cd: 10,
             cost: 24,
@@ -1248,8 +1251,8 @@
             kind: 4,
           },
           {
-            name: "NFT-подарок",
-            role: "ФЕСТИВАЛЬ",
+            name: "Ниндзя",
+            role: "ЗАСАДА",
             cd: 20,
             cost: 15,
             level: 1,
@@ -1261,8 +1264,8 @@
             kind: 5,
           },
           {
-            name: "Камео Дурова",
-            role: "ГОСТЬ ДОДЗЁ",
+            name: "Сёгун",
+            role: "ПОЛКОВОДЕЦ",
             cd: 25,
             cost: 38,
             level: 5,
@@ -1273,12 +1276,41 @@
             rate: 1,
             kind: 6,
           },
+          {
+            name: "Куноичи",
+            role: "ВОЗДУХ · КУНАИ",
+            cd: 16,
+            cost: 30,
+            level: 3,
+            hp: 72,
+            dmg: 13,
+            range: 140,
+            speed: 29,
+            rate: 1.65,
+            kind: 7,
+            flying: true,
+          },
+        ],
+        // Башня — необязательное вложение энергии, не бесплатный источник урона.
+        towers: [
+          { cost: 75, level: 2, damage: 10, rate: 2.4, range: 185 },
+          { cost: 200, level: 3, damage: 15, rate: 2.1, range: 205 },
+          { cost: 500, level: 5, damage: 20, rate: 1.8, range: 225 },
         ],
         enemies: [
           { hp: 82, dmg: 12, range: 29, speed: 23, rate: 1.1, kind: 0 },
           { hp: 240, dmg: 24, range: 35, speed: 17, rate: 1.3, kind: 3 },
-          { hp: 90, dmg: 16, range: 155, speed: 22, rate: 1.7, kind: 2 },
+          { hp: 90, dmg: 16, range: 178, speed: 22, rate: 1.7, kind: 2 },
           { hp: 540, dmg: 38, range: 45, speed: 15, rate: 1.5, kind: 6 },
+          {
+            hp: 68,
+            dmg: 12,
+            range: 135,
+            speed: 26,
+            rate: 1.8,
+            kind: 7,
+            flying: true,
+          },
         ],
       };
       const $ = (id) => document.getElementById(id),
@@ -1300,8 +1332,9 @@
                 coins: clamp(Math.floor(Number(x.coins) || 0), 0, 999999),
                 wins: clamp(Math.floor(Number(x.wins) || 0), 0, 9999),
                 skin: clamp(Math.floor(Number(x.skin) || 0), 0, 2),
+                tower: clamp(Math.floor(Number(x.tower) || 0), 0, 3),
                 reserve: Array.isArray(x.reserve)
-                  ? x.reserve.slice(0, 7).map(Boolean)
+                  ? x.reserve.slice(0, CONFIG.cards.length).map(Boolean)
                   : [],
               };
           } catch (e) {
@@ -1317,6 +1350,7 @@
               coins: g.coins,
               wins: g.wins,
               skin: g.skin,
+              tower: g.tower,
               reserve: g.reserve,
             });
             // Синхронный localStorage не трогаем, если мета-прогресс не изменился.
@@ -1441,6 +1475,106 @@
             if (s.y < 0) s.y = 0.65;
           }
         }
+        landscape(w, h) {
+          const key = `${Math.round(w)}:${Math.round(h)}`;
+          if (this.sceneryKey === key) return this.scenery;
+          this.sceneryKey = key;
+          const a = document.createElement("canvas"),
+            dpr = Math.min(devicePixelRatio || 1, 1.5);
+          a.width = Math.round(w * dpr);
+          a.height = Math.round(h * dpr);
+          const c = a.getContext("2d");
+          c.scale(dpr, dpr);
+          const ground = h * 0.79,
+            r = new StickmanRenderer(c);
+          // Кипарисы, дальние ворота и пагода — настоящий средний план.
+          for (let layer = 0; layer < 2; layer++) {
+            c.fillStyle = layer ? "#17243a" : "#26314c";
+            for (let i = 0; i < 32; i++) {
+              let x = (((i * 113 + layer * 57) % 997) / 997) * w,
+                y = ground - 18 - layer * 3,
+                sz = 12 + ((i * 17) % 29);
+              c.fillRect(x - 1, y - sz, 2, sz);
+              for (let j = 0; j < 4; j++) {
+                c.beginPath();
+                c.moveTo(x, y - sz - j * 4);
+                c.lineTo(x - sz * 0.32 - j * 2, y - j * 5);
+                c.lineTo(x + sz * 0.32 + j * 2, y - j * 5);
+                c.fill();
+              }
+            }
+          }
+          c.save();
+          c.translate(w * 0.63, ground - 20);
+          c.globalAlpha = 0.4;
+          c.scale(0.6, 0.6);
+          r.vectorBuilding(5, true, 0);
+          c.restore();
+          for (let side of [-1, 1]) {
+            const x = w * (side === 1 ? 0.2 : 0.8),
+              y = ground - 18;
+            c.strokeStyle = "#5d4150";
+            c.lineWidth = 3;
+            r.line(x - 15, y, x - 15, y - 40);
+            r.line(x + 15, y, x + 15, y - 40);
+            c.lineWidth = 4;
+            c.beginPath();
+            c.moveTo(x - 22, y - 42);
+            c.quadraticCurveTo(x, y - 37, x + 22, y - 42);
+            c.stroke();
+            c.lineWidth = 2;
+            r.line(x - 20, y - 34, x + 20, y - 34);
+          }
+          // Каменная тропа с сухой травой и отражениями у краёв, без объектов на кадр.
+          for (let i = 0; i < 90; i++) {
+            let x = (((i * 131) % 1009) / 1009) * w,
+              y = ground + 6 + (((i * 31) % 61) / 61) * (h - ground - 8),
+              z = (y - ground) / (h - ground);
+            c.globalAlpha = 0.14 + z * 0.12;
+            r.polygon(
+              [
+                x - 5 - z * 12,
+                y,
+                x - 2 - z * 6,
+                y - 2 - z * 2,
+                x + 8 + z * 7,
+                y - 1,
+                x + 10 + z * 8,
+                y + 3,
+                x - z * 4,
+                y + 4,
+              ],
+              i % 3 ? "#53647a" : "#b0a69b",
+              "#0c182b",
+              0.7,
+            );
+          }
+          c.globalAlpha = 1;
+          for (let side of [0, 1])
+            for (let i = 0; i < 20; i++) {
+              const x = side ? w - i * 4 : i * 4,
+                y = ground + 4 + ((i * 11) % 25);
+              c.strokeStyle = i % 2 ? "#59726980" : "#7c807366";
+              c.lineWidth = 0.7;
+              r.line(x, y, x + Math.sin(i) * 5, y - 4 - (i % 7));
+              r.line(x, y, x - 4, y - 3 - (i % 4));
+            }
+          // Мягкая виньетка — освещение, не замена моделей.
+          const shade = c.createRadialGradient(
+            w * 0.5,
+            h * 0.45,
+            h * 0.15,
+            w * 0.5,
+            h * 0.45,
+            w * 0.7,
+          );
+          shade.addColorStop(0, "#080e2000");
+          shade.addColorStop(1, "#050a1d99");
+          c.fillStyle = shade;
+          c.fillRect(0, 0, w, h);
+          this.scenery = a;
+          return a;
+        }
         draw(c, w, h, q, skin) {
           const t = this.time,
             ground = h * 0.79,
@@ -1465,8 +1599,51 @@
           c.moveTo(-w * 0.43, ground * 0.2);
           c.lineTo(0, -ground * 0.46);
           c.lineTo(w * 0.42, ground * 0.2);
-          c.fillStyle = "#252342";
+          const mountain = c.createLinearGradient(
+            0,
+            -ground * 0.46,
+            0,
+            ground * 0.2,
+          );
+          mountain.addColorStop(0, "#535477");
+          mountain.addColorStop(0.35, "#303852");
+          mountain.addColorStop(1, "#1d213b");
+          c.fillStyle = mountain;
           c.fill();
+          c.save();
+          c.globalAlpha = 0.4;
+          c.fillStyle = "#131c35";
+          c.beginPath();
+          c.moveTo(0, -ground * 0.46);
+          c.lineTo(w * 0.08, -ground * 0.08);
+          c.lineTo(w * 0.42, ground * 0.2);
+          c.lineTo(w * 0.16, ground * 0.1);
+          c.closePath();
+          c.fill();
+          c.fillStyle = "#656480";
+          c.globalAlpha = 0.16;
+          c.beginPath();
+          c.moveTo(0, -ground * 0.46);
+          c.lineTo(-w * 0.09, -ground * 0.04);
+          c.lineTo(-w * 0.32, ground * 0.2);
+          c.lineTo(-w * 0.43, ground * 0.2);
+          c.closePath();
+          c.fill();
+          c.strokeStyle = "#8c8da5";
+          c.lineWidth = 0.8;
+          c.globalAlpha = 0.2;
+          for (let i = 0; i < 12; i++) {
+            let side = i % 2 ? 1 : -1;
+            c.beginPath();
+            c.moveTo(side * w * 0.008 * (i % 4), -ground * 0.42);
+            c.lineTo(
+              side * w * (0.025 + i * 0.012),
+              -ground * (0.26 - i * 0.009),
+            );
+            c.lineTo(side * w * (0.05 + i * 0.022), ground * 0.16);
+            c.stroke();
+          }
+          c.restore();
           c.strokeStyle = "#8d61a455";
           c.lineWidth = 1.3;
           c.stroke();
@@ -1478,7 +1655,7 @@
           c.lineTo(0, -ground * 0.3);
           c.lineTo(-w * 0.035, -ground * 0.36);
           c.closePath();
-          c.fillStyle = "#b9b1d842";
+          c.fillStyle = "#c5d4e28a";
           c.fill();
           c.restore();
           // 3. Светлячки (отключаем при низком FPS).
@@ -1526,6 +1703,21 @@
           c.arc(mx, my, rad, 0, 7);
           c.fill();
           c.shadowBlur = 0;
+          c.globalAlpha = 0.1;
+          c.fillStyle = "#94677b";
+          for (let i = 0; i < 7; i++) {
+            c.beginPath();
+            c.ellipse(
+              mx + Math.cos(i * 2.4) * rad * 0.55,
+              my + Math.sin(i * 2.4) * rad * 0.6,
+              rad * (0.09 + (i % 3) * 0.045),
+              rad * 0.11,
+              i,
+              0,
+              Math.PI * 2,
+            );
+            c.fill();
+          }
           c.globalAlpha = 1;
           // Дальние холмы и японские крыши в основании горы.
           c.fillStyle = "#121a32";
@@ -1564,14 +1756,35 @@
               c.moveTo(13, -65);
               c.quadraticCurveTo(60, -120, 100, -110);
               c.stroke();
-              c.fillStyle = "#ff76be";
-              for (let i = 0; i < 28; i++) {
-                let x = 30 + ((i * 37) % 140),
-                  y = -110 - ((i * 23) % 75);
-                c.globalAlpha = 0.09 + (i % 3) * 0.04;
+              for (let i = 0; i < 22; i++) {
+                const x = 20 + ((i * 37) % 120),
+                  y = -110 - ((i * 23) % 65);
+                c.strokeStyle = "#68435788";
+                c.lineWidth = 0.8;
                 c.beginPath();
-                c.ellipse(x, y, 18, 8, Math.sin(i), 0, 7);
-                c.fill();
+                c.moveTo(16, -95);
+                c.quadraticCurveTo(x * 0.7, y + 12, x, y);
+                c.stroke();
+                for (let flower = 0; flower < 6; flower++) {
+                  const xx = x + Math.cos(flower * 2.4 + i) * 10,
+                    yy = y + Math.sin(flower * 2.4 + i) * 7;
+                  c.fillStyle = flower % 2 ? "#b9689480" : "#e0a3b957";
+                  for (let petal = 0; petal < 4; petal++) {
+                    c.beginPath();
+                    c.ellipse(
+                      xx + Math.cos(petal * 1.57) * 2,
+                      yy + Math.sin(petal * 1.57) * 2,
+                      2.3,
+                      1.4,
+                      petal * 1.57,
+                      0,
+                      Math.PI * 2,
+                    );
+                    c.fill();
+                  }
+                  c.fillStyle = "#f8d1a399";
+                  c.fillRect(xx - 0.5, yy - 0.5, 1, 1);
+                }
               }
               c.restore();
             }
@@ -1675,6 +1888,7 @@
             c.lineTo(w, ground + 18 + i * 27);
             c.stroke();
           }
+          c.drawImage(this.landscape(w, h), 0, 0, w, h);
           // 9. Передние лепестки — постоянный пул из 36 объектов.
           if (q > 0) {
             let count = q === 1 ? 18 : 36;
@@ -1698,300 +1912,1072 @@
           c.restore();
         }
       }
-      // StickmanRenderer — общая геометрия для иконок и живых бойцов.
+      // StickmanRenderer — историческое имя модуля; теперь полноценные векторные
+      // игровые спрайты. 14 поз × 8 профессий × 2 клана, с прозрачностью, не фон.
       class StickmanRenderer {
         constructor(ctx) {
           this.c = ctx;
           this.atlas = null;
-        }
-        // Векторные позы рисуем один раз в локальный атлас, а не 96 раз с glow
-        // на каждом кадре. Атлас генерируется из кода, внешних картинок нет.
-        buildAtlas() {
-          const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-          if (this.atlas && this.atlasDpr === dpr) return;
-          this.atlasDpr = dpr;
-          const tile = 96;
-          const atlas = document.createElement("canvas");
-          atlas.width = tile * 5 * dpr;
-          atlas.height = tile * 11 * dpr;
-          const ctx = atlas.getContext("2d");
-          const brush = new StickmanRenderer(ctx);
-          const unit = {
-            side: 0,
-            kind: 0,
-            x: 48,
-            y: 82,
-            seed: 0,
-            age: 1,
-            moving: false,
-            flash: 0,
-          };
-          const enemyKinds = [0, 2, 3, 6];
-          for (let row = 0; row < 11; row++) {
-            unit.side = row < 7 ? 0 : 1;
-            unit.kind = row < 7 ? row : enemyKinds[row - 7];
-            for (let frame = 0; frame < 5; frame++) {
-              ctx.setTransform(
-                dpr,
-                0,
-                0,
-                dpr,
-                frame * tile * dpr,
-                row * tile * dpr,
-              );
-              unit.moving = frame > 0 && frame < 4;
-              unit.flash = frame === 4 ? 0.1 : 0;
-              brush.vectorUnit(
-                unit,
-                unit.moving ? ((frame - 2) * Math.PI) / 30 : 0,
-                1,
-                2,
-              );
-            }
-          }
-          this.atlas = atlas;
+          this.buildings = new Map();
         }
         line(x1, y1, x2, y2) {
-          let c = this.c;
+          const c = this.c;
           c.beginPath();
           c.moveTo(x1, y1);
           c.lineTo(x2, y2);
           c.stroke();
         }
+        polygon(points, fill, stroke = "#0a1021", width = 1) {
+          const c = this.c;
+          c.beginPath();
+          c.moveTo(points[0], points[1]);
+          for (let i = 2; i < points.length; i += 2)
+            c.lineTo(points[i], points[i + 1]);
+          c.closePath();
+          c.fillStyle = fill;
+          c.fill();
+          if (stroke) {
+            c.strokeStyle = stroke;
+            c.lineWidth = width;
+            c.stroke();
+          }
+        }
+        ellipse(x, y, rx, ry, fill) {
+          const c = this.c;
+          c.beginPath();
+          c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+          c.fillStyle = fill;
+          c.fill();
+        }
+        buildAtlas() {
+          const dpr = Math.min(devicePixelRatio || 1, 1.5);
+          if (this.atlas && this.atlasDpr === dpr) return;
+          this.atlasDpr = dpr;
+          this.tile = 112;
+          const a = document.createElement("canvas");
+          a.width = 112 * 14 * dpr;
+          a.height = 112 * 16 * dpr;
+          const c = a.getContext("2d"),
+            r = new StickmanRenderer(c);
+          for (let side = 0; side < 2; side++)
+            for (let kind = 0; kind < 8; kind++)
+              for (let frame = 0; frame < 14; frame++) {
+                c.setTransform(
+                  dpr,
+                  0,
+                  0,
+                  dpr,
+                  frame * 112 * dpr,
+                  (side * 8 + kind) * 112 * dpr,
+                );
+                r.vectorUnit(
+                  {
+                    side,
+                    kind,
+                    x: 56,
+                    y: 90,
+                    age: 1,
+                    seed: 0,
+                    moving: frame >= 4 && frame < 10,
+                    flash: frame >= 10 ? 0.16 : 0,
+                  },
+                  0,
+                  1,
+                  2,
+                  frame,
+                );
+              }
+          this.atlas = a;
+        }
         unit(u, t, scale = 1, quality = 2) {
           if (!this.atlas) return this.vectorUnit(u, t, scale, quality);
           const frame =
             u.flash > 0
-              ? 4
+              ? 10 + Math.min(3, Math.floor((1 - u.flash / 0.16) * 4))
               : u.moving
-                ? 1 + Math.floor((t * 7.5 + u.seed) % 3)
-                : 0;
-          const row =
-            u.side === 0
-              ? u.kind
-              : u.kind === 0
-                ? 7
-                : u.kind === 2
-                  ? 8
-                  : u.kind === 3
-                    ? 9
-                    : 10;
-          const spawn = clamp(u.age / 0.35, 0, 1),
-            c = this.c,
-            size = 96 * this.atlasDpr;
+                ? 4 + Math.floor((t * 10 + u.seed) % 6)
+                : Math.floor((t * 4 + u.seed) % 4);
+          const c = this.c,
+            size = 112 * this.atlasDpr,
+            spawn = clamp(u.age / 0.35, 0, 1);
+          c.save();
           c.globalAlpha = spawn;
+          c.imageSmoothingEnabled = true;
           c.drawImage(
             this.atlas,
             frame * size,
-            row * size,
+            (u.side * 8 + u.kind) * size,
             size,
             size,
-            u.x - 48 * scale,
-            u.y - 82 * scale + (1 - spawn) * 12,
-            96 * scale,
-            96 * scale,
+            u.x - 56 * scale,
+            u.y - 90 * scale + (1 - spawn) * 12,
+            112 * scale,
+            112 * scale,
           );
-          c.globalAlpha = 1;
+          c.restore();
         }
-        vectorUnit(u, t, scale = 1, quality = 2) {
-          let c = this.c,
+        vectorUnit(u, t, scale = 1, quality = 2, frame = 0) {
+          const c = this.c,
+            k = u.kind,
             friend = u.side === 0,
-            d = friend ? 1 : -1,
-            phase = t * 15 + u.seed,
-            walk = u.moving
-              ? Math.sin(phase) * 8
-              : Math.sin(t * 3 + u.seed) * 1.4,
-            attack = u.flash > 0 ? 12 : 0;
+            heavy = k === 3 || k === 6,
+            ninja = k === 5 || k === 7;
+          const ink = "#080e18",
+            black = "#181f27",
+            rim = "#3c4852";
+          const gold = friend ? "#ffc34a" : "#a9caff",
+            light = friend ? "#fff2b5" : "#e2f7ff";
+          const red = friend ? "#cf3434" : "#6550c9",
+            shade = friend ? "#791f2d" : "#302c6c";
+          const violet = friend ? "#8745bd" : "#7755d5",
+            green = friend ? "#70b94c" : "#49b5aa";
+          const walk =
+            frame >= 4 && frame < 10
+              ? Math.sin(((frame - 4) * Math.PI) / 3)
+              : 0;
+          const strike =
+            frame >= 10 ? Math.sin(((frame - 9) / 5) * Math.PI) : 0;
+          const phase =
+            frame >= 4 && frame < 10
+              ? ((frame - 4) / 6) * Math.PI * 2
+              : frame < 4
+                ? (frame / 4) * Math.PI * 2
+                : ((frame - 10) / 4) * Math.PI * 2;
+          const flutter = Math.sin(phase) * 3,
+            idle = frame < 4 ? Math.sin(phase) * 0.6 : 0;
+          const poly = (p, f, s = ink, w = 1.35) => this.polygon(p, f, s, w),
+            ell = (...a) => this.ellipse(...a);
+          // Чёрный контур + объёмный внутренний штрих дают читаемые конечности,
+          // а не тонкую схему скелета. Суставы меняют позу в каждом кадре бега.
+          const limb = (points, width = 6, fill = black) => {
+            c.beginPath();
+            c.moveTo(points[0], points[1]);
+            for (let i = 2; i < points.length; i += 2)
+              c.lineTo(points[i], points[i + 1]);
+            c.strokeStyle = ink;
+            c.lineWidth = width + 2.4;
+            c.stroke();
+            c.strokeStyle = fill;
+            c.lineWidth = width;
+            c.stroke();
+            c.strokeStyle = rim;
+            c.lineWidth = 0.7;
+            c.stroke();
+          };
+          const sword = (x, y, angle, length = 34) => {
+            c.save();
+            c.translate(x, y);
+            c.rotate(angle);
+            poly(
+              [-1, -3, 1, -length, 4, -length - 7, 3, -14, 1, 0],
+              "#d7e6e8",
+              ink,
+              1.15,
+            );
+            c.strokeStyle = "#ffffff";
+            c.lineWidth = 0.8;
+            this.line(1, -7, 4, -length - 7);
+            c.strokeStyle = gold;
+            c.lineWidth = 3;
+            this.line(-5, -2, 5, -2);
+            c.strokeStyle = ink;
+            c.lineWidth = 4.5;
+            this.line(0, 0, 0, 8);
+            c.strokeStyle = red;
+            c.lineWidth = 2;
+            this.line(0, 1, 0, 7);
+            c.strokeStyle = gold;
+            c.lineWidth = 0.8;
+            for (let i = 1; i < 7; i += 2) this.line(-1.5, i, 1.5, i + 1);
+            c.restore();
+          };
+          const star = (x, y, r, angle, color) => {
+            c.save();
+            c.translate(x, y);
+            c.rotate(angle);
+            poly(
+              [
+                0,
+                -r,
+                r * 0.27,
+                -r * 0.25,
+                r,
+                0,
+                r * 0.27,
+                r * 0.25,
+                0,
+                r,
+                -r * 0.27,
+                r * 0.25,
+                -r,
+                0,
+                -r * 0.27,
+                -r * 0.25,
+              ],
+              color,
+              ink,
+              0.9,
+            );
+            ell(0, 0, 1.15, 1.15, light);
+            c.restore();
+          };
           c.save();
           c.translate(u.x, u.y);
-          c.scale(scale * d, scale);
-          let spawn = clamp(u.age / 0.35, 0, 1);
-          c.globalAlpha = spawn;
-          c.translate(0, (1 - spawn) * 12);
+          c.scale(scale * (friend ? 1 : -1), scale);
           c.lineCap = "round";
           c.lineJoin = "round";
-          c.lineWidth = friend ? 4.3 : 4.8;
-          let g = c.createLinearGradient(-12, -48, 15, 2);
-          g.addColorStop(0, friend ? "#FFB800" : "#00E5FF");
-          g.addColorStop(1, friend ? "#FF3B3B" : "#7B2FF7");
-          c.strokeStyle = g;
-          c.fillStyle = friend ? "#e4863322" : "#724adc35";
-          c.shadowColor = friend ? "#ff8c30" : "#7b2ff7";
-          c.shadowBlur = quality > 0 ? 7 : 0;
-          if (friend) {
-            if (u.kind === 1 || u.kind === 4) {
-              c.save();
-              c.globalAlpha = 0.1 + 0.04 * Math.sin(t * 4);
-              c.fillStyle = "#00FFA3";
-              c.beginPath();
-              c.ellipse(0, -4, 31, 8, 0, 0, 7);
-              c.fill();
-              c.restore();
-            }
+          c.translate(0, idle - Math.abs(walk) * 1.2);
+          if (ninja) c.rotate(0.08 + walk * 0.025);
+          // Воздух — куноичи в прыжке, длинный хвост/шарф и орбита сюрикенов.
+          // Крыльев нет: силуэт соответствует приложенному референсу.
+          if (k === 7) {
+            c.save();
+            c.globalAlpha = 0.24;
+            c.strokeStyle = violet;
+            c.lineWidth = 2;
             c.beginPath();
-            c.arc(0, -40, 8, 0, 7);
+            c.ellipse(0, -29, 36, 24, -0.25, -1, 3.8);
+            c.stroke();
+            c.restore();
+            for (let i = 0; i < 3; i++) {
+              const a = phase * 0.3 + (i * Math.PI * 2) / 3;
+              star(
+                Math.cos(a) * 32,
+                -30 + Math.sin(a) * 22,
+                4.2,
+                phase + i,
+                violet,
+              );
+            }
+            c.fillStyle = black;
+            c.strokeStyle = ink;
+            c.lineWidth = 1.6;
+            c.beginPath();
+            c.moveTo(-6, -54);
+            c.bezierCurveTo(-16, -73, -30, -58 + flutter, -42, -65 + flutter);
+            c.bezierCurveTo(-34, -49 + flutter, -25, -61, -17, -54);
+            c.quadraticCurveTo(-13, -48, -7, -48);
+            c.closePath();
             c.fill();
             c.stroke();
-            this.line(0, -31, 0, -14);
-            this.line(0, -14, -9 - walk * 0.55, 0);
-            this.line(0, -14, 8 + walk * 0.55, 0);
-            this.line(0, -28, -10, -19 + walk * 0.3);
-            this.line(0, -27, 12 + attack, -20 - attack * 0.3);
-            // Иголки и повязка обязательны даже у маленькой иконки.
-            c.lineWidth = 2.8;
-            for (let i = 0; i < 5; i++)
-              this.line(-3, -32 + i * 4, -13 - (i % 2) * 4, -36 + i * 4);
-            c.strokeStyle = "#FF3B3B";
-            c.lineWidth = 3;
-            this.line(-7, -43, 7, -43);
-            this.line(-7, -43, -15, -39);
-            this.line(-7, -43, -17, -45);
-            c.strokeStyle = g;
-            c.lineWidth = 2.8;
-            if (u.kind === 2) {
-              c.beginPath();
-              c.arc(16, -27, 15, -1.2, 1.2);
-              c.stroke();
-              this.line(21, -41, 21, -13);
-              this.line(9, -27, 30, -27);
-            } else if (u.kind === 1 || u.kind === 4) {
-              this.line(16, -3, 16, -55);
-              c.beginPath();
-              c.arc(16, -55, 5, 0, 7);
-              c.stroke();
-            } else if (u.kind === 5) {
-              c.fillStyle = "#FFB80033";
-              c.fillRect(8, -27, 16, 14);
-              c.strokeRect(8, -27, 16, 14);
-              this.line(16, -29, 16, -10);
-            } else {
-              this.line(
-                13 + attack,
-                -20 - attack * 0.3,
-                28 + attack,
-                -48 + attack * 0.5,
+            c.strokeStyle = violet;
+            c.lineWidth = 1.8;
+            c.beginPath();
+            c.moveTo(-8, -53);
+            c.bezierCurveTo(-20, -65, -27, -55 + flutter, -38, -62 + flutter);
+            c.stroke();
+            c.fillStyle = violet;
+            c.strokeStyle = ink;
+            c.lineWidth = 1;
+            c.beginPath();
+            c.moveTo(-5, -29);
+            c.bezierCurveTo(-16, -28, -22, -33 + flutter, -35, -29 + flutter);
+            c.quadraticCurveTo(-24, -23 + flutter, -17, -23);
+            c.lineTo(-5, -25);
+            c.closePath();
+            c.fill();
+            c.stroke();
+          }
+          // Два длинных конца повязки. Они меняют изгиб, но не создают объекты в игре.
+          if (k === 5 || k === 0) {
+            const scarf = red;
+            c.fillStyle = scarf;
+            c.strokeStyle = ink;
+            c.lineWidth = 1.4;
+            c.beginPath();
+            c.moveTo(-7, -51);
+            c.bezierCurveTo(-20, -51, -22, -62 + flutter, -36, -58 + flutter);
+            c.lineTo(-33, -52 + flutter);
+            c.bezierCurveTo(-23, -56, -22, -45, -8, -47);
+            c.closePath();
+            c.fill();
+            c.stroke();
+            c.beginPath();
+            c.moveTo(-9, -49);
+            c.bezierCurveTo(-22, -46, -24, -46 + flutter, -38, -50 + flutter);
+            c.lineTo(-34, -43 + flutter);
+            c.bezierCurveTo(-22, -39, -18, -43, -7, -46);
+            c.closePath();
+            c.fill();
+            c.stroke();
+            c.strokeStyle = gold;
+            c.lineWidth = 0.6;
+            this.line(-10, -49, -22, -48);
+          }
+          if (k === 6)
+            poly(
+              [-9, -39, -22, -34, -21 + flutter, -4, -8, -11, 9, -4, 10, -33],
+              shade,
+              gold,
+              1.2,
+            );
+          if (k === 1) {
+            poly(
+              [
+                -8, -38, -21, -39, -29, -30, -40, -32, -33, -26, -23, -27, -12,
+                -32,
+              ],
+              "#dfdfcf",
+              ink,
+              1.2,
+            );
+            poly(
+              [-10, -36, -21, -31, -28 + flutter, -14, -17, -20, -9, -28],
+              "#f1edda",
+              ink,
+              1.2,
+            );
+          }
+          // Разные базовые стойки: ниндзя низко, самурай широко, куноичи в прыжке.
+          let backX = -13 - walk * 8,
+            frontX = 14 + walk * 8,
+            backY = -1,
+            frontY = -1;
+          if (k === 7) {
+            backX = -19 - walk * 4;
+            frontX = 13 + walk * 3;
+            backY = -4;
+            frontY = -13;
+          }
+          const hipY = ninja ? -24 : -22;
+          limb([-4, hipY, -11 - walk * 3, -13, backX, backY], heavy ? 8 : 6);
+          limb([4, hipY, 12 + walk * 3, -12, frontX, frontY], heavy ? 8 : 6);
+          poly(
+            [
+              backX - 3,
+              backY - 4,
+              backX + 3,
+              backY - 3,
+              backX + 7,
+              backY,
+              backX - 5,
+              backY,
+            ],
+            black,
+            ink,
+            1.3,
+          );
+          poly(
+            [
+              frontX - 3,
+              frontY - 4,
+              frontX + 3,
+              frontY - 3,
+              frontX + 8,
+              frontY,
+              frontX - 4,
+              frontY,
+            ],
+            black,
+            ink,
+            1.3,
+          );
+          if (heavy) {
+            for (let side of [-1, 1]) {
+              const x = side < 0 ? backX : frontX;
+              poly(
+                [x - 4, -15, x + 3, -15, x + 4, -5, x - 3, -4],
+                red,
+                gold,
+                0.9,
               );
-              this.line(9 + attack, -23, 19 + attack, -18);
+              c.strokeStyle = gold;
+              c.lineWidth = 0.7;
+              this.line(x - 3, -11, x + 3, -11);
+              this.line(x - 3, -7, x + 3, -7);
             }
-            if (u.kind === 3) {
-              c.lineWidth = 4;
-              this.line(-9, -29, -15, -19);
-              this.line(-15, -19, -11, -9);
+          }
+          // Торс: чёрная фигура под одеждой, никакой кожи, носа и бороды.
+          const torso = c.createLinearGradient(-9, -40, 10, -18);
+          torso.addColorStop(0, "#34404a");
+          torso.addColorStop(0.5, black);
+          torso.addColorStop(1, "#0b111a");
+          poly(
+            [-6, -40, 6, -40, 10, -23, 5, -18, -7, -20, -10, -29],
+            torso,
+            ink,
+            1.8,
+          );
+          if (heavy) {
+            const armor = c.createLinearGradient(-10, -40, 10, -20);
+            armor.addColorStop(0, red);
+            armor.addColorStop(0.5, shade);
+            armor.addColorStop(1, red);
+            poly(
+              [-9, -40, 8, -41, 12, -26, 6, -21, -10, -23, -13, -33],
+              armor,
+              gold,
+              1.1,
+            );
+            for (let y = -36; y < -23; y += 4) {
+              c.strokeStyle = gold;
+              c.lineWidth = 0.8;
+              this.line(-9, y, 8, y - 1);
+              for (let x = -6; x <= 6; x += 4) ell(x, y + 1, 0.7, 0.8, light);
             }
-            if (u.kind === 6) {
-              c.fillStyle = "#FFB800";
-              c.font = "bold 10px sans-serif";
-              c.fillText("D", -3, -18);
-            }
+            for (let side of [-1, 1])
+              for (let i = 0; i < 3; i++)
+                poly(
+                  [
+                    side * 7,
+                    -24 + i * 4,
+                    side * 15,
+                    -24 + i * 4,
+                    side * 17,
+                    -20 + i * 4,
+                    side * 7,
+                    -20 + i * 4,
+                  ],
+                  red,
+                  gold,
+                  0.8,
+                );
+            for (let i = 0; i < 3; i++)
+              poly(
+                [
+                  -12,
+                  -41 + i * 3,
+                  -20,
+                  -39 + i * 3,
+                  -20,
+                  -35 + i * 3,
+                  -11,
+                  -37 + i * 3,
+                ],
+                red,
+                gold,
+                0.8,
+              );
+          } else if (k === 1) {
+            // Белое кимоно сенсея с широкими рукавами и чёрным поясом.
+            poly(
+              [
+                -8, -40, 1, -37, 8, -40, 14, -27, 7, -23, 12, -7, 0, -9, -9, -5,
+                -13, -12, -9, -25, -18, -28,
+              ],
+              "#f3eddb",
+              ink,
+              1.65,
+            );
+            poly(
+              [-7, -39, 1, -27, 7, -40, 4, -27, -2, -21],
+              "#d2cfbe",
+              ink,
+              0.75,
+            );
+            c.strokeStyle = "#a1a28f";
+            c.lineWidth = 0.9;
+            this.line(-7, -25, -9, -11);
+            this.line(4, -23, 6, -12);
+          } else if (k === 4) {
+            // Монах в шафрановой ткани, чёрные руки и чёткий открытый силуэт.
+            poly(
+              [-8, -38, 0, -41, 8, -35, 5, -22, -7, -20],
+              friend ? "#f4a728" : "#a3a4ef",
+              ink,
+              1.5,
+            );
+            poly(
+              [2, -38, 7, -34, -5, -21, -9, -23],
+              friend ? "#ffd16a" : "#d0d4ff",
+              ink,
+              0.8,
+            );
+            poly(
+              [
+                -6,
+                -21,
+                5,
+                -22,
+                15,
+                -13,
+                frontX + 4,
+                frontY - 3,
+                frontX - 4,
+                frontY - 4,
+                3,
+                -12,
+                -4,
+                -10,
+                -11,
+                -4,
+                backX - 3,
+                backY - 2,
+                backX + 4,
+                backY - 6,
+              ],
+              friend ? "#d68a21" : "#6b68b7",
+              ink,
+              1.3,
+            );
+            c.strokeStyle = gold;
+            c.lineWidth = 0.9;
+            this.line(2, -19, 11, -12);
+            for (let i = 0; i < 7; i++)
+              ell(
+                -7 + i * 1.5,
+                -37 + Math.sin((i / 6) * Math.PI) * 7,
+                1.25,
+                1.4,
+                "#763a24",
+              );
           } else {
-            // Тюлень: округлый торс, усы-линии и плавники-ноги.
+            poly(
+              [-7, -40, -3, -41, 8, -25, 5, -22],
+              k === 2 ? green : k === 7 ? violet : red,
+              ink,
+              0.9,
+            );
+            if (k === 2) {
+              poly(
+                [-11, -37, -17, -41, -23, -17, -17, -14],
+                "#725937",
+                ink,
+                1.2,
+              );
+              for (let i = 0; i < 3; i++) {
+                c.strokeStyle = "#bca568";
+                c.lineWidth = 1;
+                this.line(-18 + i * 3, -37, -14 + i * 3, -48);
+                poly(
+                  [-15 + i * 3, -48, -17 + i * 3, -51, -18 + i * 3, -46],
+                  green,
+                  ink,
+                  0.5,
+                );
+              }
+            }
+          }
+          // Пояс и узел — одинаковый командный маркер даже на белых/зелёных ролях.
+          poly(
+            [-9, -24, 9, -25, 10, -21, -8, -20],
+            heavy ? gold : ink,
+            ink,
+            0.85,
+          );
+          poly(
+            [-1, -24, 3, -23, 2, -19, -2, -20],
+            heavy ? shade : gold,
+            ink,
+            0.75,
+          );
+          if (!heavy) {
+            poly(
+              [-1, -20, -5, -7, -1, -9, 2, -19],
+              k === 7 ? violet : ink,
+              ink,
+              0.7,
+            );
+            poly([2, -20, 8, -12, 9, -16, 4, -22], gold, ink, 0.6);
+          }
+          // Крупная маска-голова с мягким объёмом и чёрной обводкой, как в референсе.
+          const headX = ninja ? 2 : 0,
+            headY = -50;
+          const head = c.createRadialGradient(
+            headX - 4,
+            headY - 6,
+            1,
+            headX + 1,
+            headY,
+            13,
+          );
+          head.addColorStop(0, "#35403e");
+          head.addColorStop(0.35, "#202629");
+          head.addColorStop(1, "#0c1118");
+          ell(headX, headY, 10.9, 11.7, head);
+          c.strokeStyle = ink;
+          c.lineWidth = 1.8;
+          c.beginPath();
+          c.ellipse(headX, headY, 10.9, 11.7, 0, 0, Math.PI * 2);
+          c.stroke();
+          c.strokeStyle = "#65705b66";
+          c.lineWidth = 0.7;
+          c.beginPath();
+          c.ellipse(headX - 1, headY - 1, 9.6, 10.4, 0, 3.6, 4.8);
+          c.stroke();
+          if (heavy) {
+            poly(
+              [-12, -53, -11, -61, -6, -66, 3, -67, 11, -61, 13, -52],
+              red,
+              ink,
+              1.7,
+            );
+            c.strokeStyle = gold;
+            c.lineWidth = 0.9;
+            this.line(-8, -61, -7, -54);
+            this.line(0, -65, 1, -55);
+            this.line(7, -62, 9, -54);
+            poly([-11, -56, -16, -44, -10, -42, -6, -53], red, gold, 0.9);
+            poly([9, -56, 14, -45, 9, -42, 6, -53], red, gold, 0.9);
+            // Широкий золотой полумесяц кабуто — главный силуэт тяжёлого бойца.
+            c.fillStyle = gold;
+            c.strokeStyle = ink;
+            c.lineWidth = 1.25;
+            c.beginPath();
+            c.moveTo(-14, -70);
+            c.lineTo(-20, -72);
+            c.lineTo(-16, -75);
+            c.quadraticCurveTo(-10, -59, 0, -59);
+            c.quadraticCurveTo(11, -59, 16, -75);
+            c.lineTo(21, -71);
+            c.lineTo(16, -69);
+            c.quadraticCurveTo(10, -52, 0, -54);
+            c.quadraticCurveTo(-11, -53, -14, -70);
+            c.closePath();
+            c.fill();
+            c.stroke();
+            ell(0, -56, 2.8, 2.8, light);
+            if (k === 6) {
+              poly(
+                [-8, -45, 8, -46, 7, -38, 0, -35, -7, -38],
+                shade,
+                gold,
+                0.85,
+              );
+              c.strokeStyle = gold;
+              c.lineWidth = 0.6;
+              this.line(-4, -40, 4, -40);
+            }
+          } else if (k !== 1 && k !== 4) {
+            const band = k === 2 ? green : k === 7 ? violet : red;
+            poly(
+              [-9, -55, 3, -53, 12, -55, 11, -50, 2, -49, -9, -51],
+              band,
+              ink,
+              1.2,
+            );
+            // Командная золотая/голубая накладка не даёт спутать зелёного лучника.
+            poly([-6, -54, -2, -53, -3, -50, -6, -51], gold, null);
+          }
+          // Светящиеся угловатые глаза. Сенсей прячет лицо под широким каса.
+          if (k !== 1) {
+            c.save();
+            c.shadowColor = gold;
+            c.shadowBlur = quality ? 4 : 0;
+            poly(
+              [headX + 1, -48, headX + 5, -46, headX + 4, -43, headX + 1, -44],
+              light,
+              null,
+            );
+            poly(
+              [headX + 8, -49, headX + 10, -50, headX + 9, -46, headX + 7, -45],
+              gold,
+              null,
+            );
+            c.restore();
+          }
+          if (k === 1) {
+            const straw = c.createLinearGradient(0, -69, 0, -50);
+            straw.addColorStop(0, "#f4d47d");
+            straw.addColorStop(0.65, "#cda34d");
+            straw.addColorStop(1, "#8f672e");
+            poly(
+              [-20, -54, 0, -70, 22, -54, 15, -50, -15, -50],
+              straw,
+              ink,
+              1.7,
+            );
+            c.strokeStyle = "#83612f";
+            c.lineWidth = 0.65;
+            for (let i = -3; i <= 3; i++) this.line(0, -68, i * 6, -53);
+            c.strokeStyle = "#e6c56a";
+            this.line(-13, -58, 14, -58);
+            this.line(-17, -54, 18, -54);
+            c.strokeStyle = ink;
+            c.lineWidth = 2;
+            this.line(-16, -51, 16, -51);
+          }
+          // Раздельные руки и оружие — собственные боевые позы каждой профессии.
+          if (k === 1) {
+            limb([-9, -35, -15, -28, -4, -27], 5);
+            ell(-3, -27, 3, 3, black);
+            poly(
+              [8, -39, 15, -38, 23, -31, 19, -24, 8, -28],
+              "#f4edda",
+              ink,
+              1.5,
+            );
+            limb([19, -30, 29, -32 - strike * 4], 5);
+            ell(29, -32 - strike * 4, 3, 3, black);
+            c.strokeStyle = ink;
+            c.lineWidth = 5;
+            this.line(25, 1, 33, -65);
+            c.strokeStyle = "#976928";
+            c.lineWidth = 3;
+            this.line(25, 1, 33, -65);
+            c.strokeStyle = "#e5b35c";
+            c.lineWidth = 0.8;
+            this.line(26, 0, 34, -64);
+          } else if (k === 4) {
+            limb([-8, -35, -14, -27, -4, -29], 5.5);
+            ell(-4, -29, 3, 3, black);
+            const hand = 23 + strike * 4;
+            limb([7, -35, 15, -32, hand, -39], 5.5);
+            poly(
+              [
+                hand - 3,
+                -36,
+                hand - 3,
+                -45,
+                hand - 1,
+                -47,
+                hand,
+                -41,
+                hand + 1,
+                -48,
+                hand + 3,
+                -47,
+                hand + 3,
+                -40,
+                hand + 5,
+                -45,
+                hand + 6,
+                -43,
+                hand + 5,
+                -35,
+                hand + 1,
+                -32,
+              ],
+              black,
+              ink,
+              1.1,
+            );
+            if (quality) {
+              c.save();
+              c.globalAlpha = 0.25 + strike * 0.35;
+              c.strokeStyle = gold;
+              c.lineWidth = 1.5;
+              c.beginPath();
+              c.ellipse(0, -31, 29, 31, -0.4, -1.5, 4.1);
+              c.stroke();
+              c.restore();
+            }
+          } else if (k === 2) {
+            limb([-7, -34, -11, -28, 0, -31 - strike * 3], 5);
+            limb([7, -34, 17, -34, 26, -34], 5);
+            const draw = 5 + strike * 5;
+            limb([0, -31 - strike * 3, 12 - draw, -34], 4.5);
+            c.strokeStyle = ink;
+            c.lineWidth = 4.5;
+            c.beginPath();
+            c.moveTo(23, -57);
+            c.quadraticCurveTo(44, -34, 23, -10);
+            c.stroke();
+            c.strokeStyle = green;
+            c.lineWidth = 2.6;
+            c.beginPath();
+            c.moveTo(23, -57);
+            c.quadraticCurveTo(44, -34, 23, -10);
+            c.stroke();
+            c.strokeStyle = light;
+            c.lineWidth = 0.7;
+            c.beginPath();
+            c.moveTo(23, -57);
+            c.lineTo(12 - draw, -34);
+            c.lineTo(23, -10);
+            c.stroke();
+            c.strokeStyle = gold;
+            c.lineWidth = 1;
+            this.line(8 - draw, -34, 39, -34);
+            poly([43, -34, 36, -37, 37, -31], light, ink, 0.65);
+          } else if (k === 7) {
+            limb([-7, -35, -17, -30, -29, -35], 4.5);
+            limb([7, -35, 18, -29, 28 + strike * 3, -30], 4.5);
+            ell(29 + strike * 3, -30, 2.7, 2.7, black);
+            star(34, -31, 4.5, -phase, violet);
+            poly([-4, -39, 6, -39, 8, -26, -5, -24], violet, ink, 1.2);
+            c.strokeStyle = gold;
+            c.lineWidth = 1;
+            this.line(-3, -35, 5, -28);
+          } else if (k === 5) {
+            limb([-7, -35, -13, -27, -22, -29], 5.5);
+            limb([7, -35, 16, -29, 19 + strike * 6, -25], 5.5);
+            sword(-22, -29, -1.2 - strike * 0.3, 24);
+            sword(19 + strike * 6, -25, 0.75 - strike * 1.6, 28);
+            ell(-22, -29, 3, 3, black);
+            ell(19 + strike * 6, -25, 3, 3, black);
+          } else {
+            limb([-8, -35, -14, -27, -3, -29], heavy ? 7 : 5.5);
+            limb([8, -35, 16, -29, 20 + strike * 4, -30], heavy ? 7 : 5.5);
+            if (heavy) {
+              poly(
+                [10, -34, 17, -33, 22, -29, 18, -24, 11, -28],
+                red,
+                gold,
+                0.9,
+              );
+            }
+            sword(20 + strike * 4, -30, 0.3 - strike * 1.55, k === 6 ? 39 : 33);
+            ell(20 + strike * 4, -30, 3.3, 3.3, black);
+          }
+          if (strike > 0 && k !== 1 && k !== 4 && k !== 2) {
+            c.save();
+            c.globalAlpha = strike * 0.65;
+            c.strokeStyle = k === 7 ? violet : light;
+            c.lineWidth = 1.8;
+            c.shadowColor = gold;
+            c.shadowBlur = quality ? 4 : 0;
+            c.beginPath();
+            c.ellipse(9, -35, 34, 27, -0.55, -1.6, 0.8);
+            c.stroke();
+            c.globalAlpha *= 0.2;
+            c.lineWidth = 5;
+            c.stroke();
+            c.restore();
+          }
+          c.restore();
+        }
+        building(x, y, level, enemy, t, build, tower = 0, quality = 2) {
+          const c = this.c,
+            dpr = Math.min(devicePixelRatio || 1, 2),
+            key = `${level}:${enemy}:${tower}:${dpr}`;
+          let image = this.buildings.get(key);
+          if (!image) {
+            image = document.createElement("canvas");
+            image.width = 160 * dpr;
+            image.height = 192 * dpr;
+            const ctx = image.getContext("2d");
+            ctx.scale(dpr, dpr);
+            ctx.translate(80, 174);
+            new StickmanRenderer(ctx).vectorBuilding(level, enemy, tower);
+            this.buildings.set(key, image);
+          }
+          c.drawImage(image, x - 80, y - 174, 160, 192);
+          const color = enemy ? "#7dc9ff" : "#ffd380";
+          // Живые фонари, знамена, магический контур строительства поверх спрайта.
+          c.save();
+          c.translate(x, y);
+          c.strokeStyle = color;
+          c.lineWidth = 1;
+          c.fillStyle = enemy ? "#4c468f" : "#993d30";
+          const flag = -72 - (level > 2 ? 25 : 0);
+          c.beginPath();
+          c.moveTo(24, flag + 25);
+          c.lineTo(24, flag - 12);
+          c.stroke();
+          this.polygon(
+            [
+              24,
+              flag - 12,
+              44,
+              flag - 8 + Math.sin(t * 2) * 3,
+              40,
+              flag + 6 + Math.sin(t * 2 + 1) * 2,
+              24,
+              flag + 3,
+            ],
+            c.fillStyle,
+            color,
+            0.6,
+          );
+          c.fillStyle = color;
+          c.font = "bold 10px serif";
+          c.textAlign = "center";
+          c.fillText(enemy ? "影" : "侍", 32, flag);
+          if (quality > 0) {
+            c.globalCompositeOperation = "screen";
+            const glow = c.createRadialGradient(0, -22, 0, 0, -22, 55);
+            glow.addColorStop(0, enemy ? "#548aff25" : "#ffab4030");
+            glow.addColorStop(1, "#00000000");
+            c.fillStyle = glow;
+            c.globalAlpha = 0.8 + Math.sin(t * 2) * 0.2;
+            c.fillRect(-55, -77, 110, 110);
+          }
+          if (build > 0) {
+            c.globalAlpha = build * 0.7;
+            c.strokeStyle = "#9bffe2";
+            c.lineWidth = 1.5;
             c.beginPath();
             c.ellipse(
               0,
-              -22,
-              13,
-              u.kind === 3 || u.kind === 6 ? 20 : 16,
+              -25,
+              55 + (1 - build) * 25,
+              68 + (1 - build) * 25,
               0,
               0,
-              7,
+              Math.PI * 2,
             );
-            c.fill();
             c.stroke();
-            c.beginPath();
-            c.arc(1, -40, 9, 0, 7);
-            c.fill();
-            c.stroke();
-            this.line(-8, -9, -13 - walk * 0.6, 0);
-            this.line(7, -9, 14 + walk * 0.6, 0);
-            this.line(10, -25, 21 + attack, -18);
-            c.lineWidth = 1.6;
-            this.line(3, -38, 18, -42);
-            this.line(3, -36, 20, -35);
-            this.line(3, -34, 17, -29);
-            if (u.kind === 6) {
-              c.lineWidth = 3;
-              this.line(-7, -47, -12, -57);
-              this.line(7, -47, 12, -57);
+          }
+          c.restore();
+        }
+        vectorBuilding(level, enemy, tower) {
+          const c = this.c,
+            accent = enemy ? "#80c8fa" : "#efb866",
+            wood = enemy ? "#383653" : "#704332",
+            dark = enemy ? "#151e35" : "#342630",
+            roof = enemy ? "#334264" : "#503d42",
+            light = enemy ? "#697da4" : "#96705b";
+          const poly = (p, f, s, w) => this.polygon(p, f, s, w),
+            tiers = 1 + Math.floor((level - 1) / 2),
+            base = level === 1 ? 29 : 35;
+          // Каменный цоколь, перспектива, кладка с индивидуальными швами.
+          poly(
+            [-base - 5, 0, -base + 1, -20, base - 1, -20, base + 5, 0],
+            enemy ? "#46556b" : "#6b6664",
+            "#111c30",
+            1.5,
+          );
+          c.strokeStyle = "#151e3299";
+          c.lineWidth = 0.8;
+          for (let y = -16; y <= -2; y += 5) {
+            this.line(-base - 3, y, base + 3, y);
+            for (let x = -base; x < base; x += 12)
+              this.line(
+                x + ((y + 16) % 10 ? 6 : 0),
+                y,
+                x + ((y + 16) % 10 ? 6 : 0),
+                y + 5,
+              );
+          }
+          const wall = c.createLinearGradient(-base, -60, base, 0);
+          wall.addColorStop(0, enemy ? "#71839a" : "#c6aa83");
+          wall.addColorStop(0.55, enemy ? "#3c4c68" : "#8f7358");
+          wall.addColorStop(1, dark);
+          c.fillStyle = wall;
+          c.fillRect(-base, -54, base * 2, 36);
+          c.strokeStyle = wood;
+          c.lineWidth = 4;
+          c.strokeRect(-base, -54, base * 2, 36);
+          for (let x = -base + 8; x < base; x += 12) {
+            c.lineWidth = 1;
+            this.line(x, -52, x, -21);
+          }
+          for (let tier = 0; tier < tiers; tier++) {
+            const yy = -51 - tier * 29,
+              ww = base + 9 - tier * 7;
+            if (tier) {
+              c.fillStyle = wall;
+              c.fillRect(-ww + 9, yy - 2, (ww - 9) * 2, 26);
+              c.strokeStyle = wood;
+              c.lineWidth = 2;
+              c.strokeRect(-ww + 9, yy - 2, (ww - 9) * 2, 26);
             }
-            c.lineWidth = 2.6;
-            this.line(22 + attack, -18, 27 + attack, -44);
-            if (u.kind === 2) {
+            // Крыши со сложным силуэтом, черепицей, коньком и золотыми торцами.
+            const shade = c.createLinearGradient(0, yy - 24, 0, yy + 7);
+            shade.addColorStop(0, light);
+            shade.addColorStop(0.3, roof);
+            shade.addColorStop(1, "#121c30");
+            poly(
+              [
+                -ww - 6,
+                yy + 6,
+                -ww + 4,
+                yy - 3,
+                -10,
+                yy - 22,
+                0,
+                yy - 26,
+                10,
+                yy - 22,
+                ww - 4,
+                yy - 3,
+                ww + 6,
+                yy + 6,
+                0,
+                yy + 1,
+              ],
+              shade,
+              accent,
+              1.2,
+            );
+            c.strokeStyle = light;
+            c.lineWidth = 0.65;
+            for (let x = -ww + 5; x < ww; x += 6)
+              this.line(x * 0.24, yy - 19, x, yy + 1);
+            for (let j = 0; j < 3; j++) {
               c.beginPath();
-              c.arc(27 + attack, -46, 5, 0, 7);
+              c.moveTo(-ww + 10 + j * 9, yy - j * 5);
+              c.quadraticCurveTo(
+                0,
+                yy - 7 - j * 5,
+                ww - 10 - j * 9,
+                yy - j * 5,
+              );
+              c.stroke();
+            }
+            c.strokeStyle = accent;
+            c.lineWidth = 1.4;
+            this.line(-ww - 7, yy + 5, 0, yy);
+            this.line(0, yy, ww + 7, yy + 5);
+            c.fillStyle = accent;
+            c.fillRect(-7, yy - 27, 14, 2);
+            if (tier) {
+              for (let x = -12; x <= 12; x += 12) {
+                c.fillStyle = "#111d32";
+                c.fillRect(x - 3, yy + 8, 6, 10);
+                c.fillStyle = accent;
+                c.fillRect(x - 2, yy + 9, 4, 7);
+                c.strokeStyle = wood;
+                c.lineWidth = 1;
+                this.line(x, yy + 9, x, yy + 17);
+              }
+            }
+          }
+          // Портал, решётки сёдзи, ступени и подвесные фонари.
+          c.fillStyle = "#0a1424";
+          c.fillRect(-10, -40, 20, 23);
+          c.strokeStyle = wood;
+          c.lineWidth = 2;
+          c.strokeRect(-10, -40, 20, 23);
+          c.strokeStyle = accent;
+          c.lineWidth = 0.7;
+          this.line(0, -39, 0, -18);
+          this.line(-9, -31, 9, -31);
+          c.fillStyle = dark;
+          c.fillRect(-16, -17, 32, 4);
+          c.fillStyle = light;
+          c.fillRect(-19, -13, 38, 3);
+          c.fillStyle = "#777b80";
+          c.fillRect(-22, -9, 44, 3);
+          for (let side of [-1, 1]) {
+            const x = side * (base - 9);
+            c.fillStyle = accent;
+            c.fillRect(x - 4, -43, 8, 15);
+            c.strokeStyle = wood;
+            c.lineWidth = 1;
+            for (let j = 0; j < 4; j++)
+              this.line(x - 4, -42 + j * 4, x + 4, -42 + j * 4);
+            this.line(x, -43, x, -28);
+            this.ellipse(side * (base + 1), -32, 3.7, 6.1, accent);
+            c.fillStyle = wood;
+            c.fillRect(side * (base + 1) - 3, -39, 6, 2);
+            c.fillRect(side * (base + 1) - 2, -26, 4, 2);
+          }
+          if (!enemy) {
+            c.strokeStyle = wood;
+            c.lineWidth = 4;
+            this.line(-44, 0, -44, -58);
+            this.line(44, 0, 44, -58);
+            this.line(-51, -58, 51, -58);
+            c.strokeStyle = accent;
+            c.lineWidth = 1;
+            this.line(-51, -60, 51, -60);
+            this.line(-47, -50, 47, -50);
+          }
+          // Отстрельная площадка: улучшение видно прямо на здании.
+          if (tower) {
+            const yy = -78 - (tiers - 1) * 29;
+            c.fillStyle = wood;
+            c.fillRect(-20, yy, 40, 8);
+            c.strokeStyle = accent;
+            c.lineWidth = 1;
+            c.strokeRect(-20, yy, 40, 8);
+            for (let x = -17; x <= 17; x += 8) this.line(x, yy - 7, x, yy + 8);
+            this.line(-22, yy - 7, 22, yy - 7);
+            for (let i = 0; i < tower; i++) {
+              const x = (i - (tower - 1) / 2) * 12;
+              c.strokeStyle = dark;
+              c.lineWidth = 3;
+              this.line(x, yy - 9, x, yy - 18);
+              this.ellipse(x, yy - 22, 3, 3, dark);
+              c.strokeStyle = accent;
+              c.lineWidth = 1.5;
+              c.beginPath();
+              c.arc(x + (enemy ? -3 : 3), yy - 14, 7, -1.3, 1.3);
               c.stroke();
             }
           }
-          c.shadowBlur = 0;
-          c.fillStyle = friend ? "#ffdd8d" : "#00e5ff";
-          c.beginPath();
-          c.arc(3, -41, 1.4, 0, 7);
-          c.fill();
-          c.restore();
-        }
-        building(x, y, level, enemy, t, build) {
-          let c = this.c,
-            dir = enemy ? -1 : 1,
-            tiers = 1 + Math.floor((level - 1) / 2);
-          c.save();
-          c.translate(x, y);
-          c.scale(dir, 1);
-          let grad = c.createLinearGradient(-32, -110, 35, 0);
-          grad.addColorStop(0, enemy ? "#00E5FF" : "#FFB800");
-          grad.addColorStop(1, enemy ? "#7B2FF7" : "#FF3B3B");
-          c.lineWidth = 3;
-          c.lineJoin = "round";
-          c.lineCap = "round";
-          c.strokeStyle = grad;
-          c.fillStyle = enemy ? "#171a3e" : "#35213a";
-          c.shadowColor = enemy ? "#7B2FF7" : "#FF3B3B";
-          c.shadowBlur = 10 + build * 20;
-          let base = level === 1 ? 29 : 35;
-          c.fillRect(-base, -46, base * 2, 46);
-          c.strokeRect(-base, -46, base * 2, 46);
-          for (let i = 0; i < tiers; i++) {
-            let yy = -45 - i * 30,
-              ww = base + 9 - i * 5;
-            c.beginPath();
-            c.moveTo(-ww - 7, yy + 4);
-            c.quadraticCurveTo(-ww + 5, yy - 4, -12, yy - 20);
-            c.lineTo(0, yy - 25);
-            c.lineTo(12, yy - 20);
-            c.quadraticCurveTo(ww - 5, yy - 4, ww + 7, yy + 4);
-            c.quadraticCurveTo(0, yy - 4, -ww - 7, yy + 4);
-            c.fill();
-            c.stroke();
-            if (i < tiers - 1)
-              c.strokeRect(-ww + 13, yy - 30, (ww - 13) * 2, 12);
-          }
-          c.fillStyle = "#0A0E27";
-          c.fillRect(-8, -25, 16, 25);
-          c.strokeRect(-8, -25, 16, 25);
-          c.fillStyle = enemy ? "#00E5FF" : "#FFB800";
-          for (let i = -1; i <= 1; i += 2) {
-            c.fillRect(i * 20 - 4, -34, 8, 10);
-          }
-          if (enemy) {
-            this.line(-30, -65, -45, -90);
-            this.line(30, -65, 45, -90);
-          } else {
-            this.line(-base - 7, 0, -base - 7, -57);
-            this.line(base + 7, 0, base + 7, -57);
-            this.line(-base - 14, -57, base + 14, -57);
-            this.line(-base - 9, -49, base + 9, -49);
-          }
-          c.shadowBlur = 0;
-          c.font = "10px sans-serif";
-          c.fillStyle = enemy ? "#00E5FF" : "#FFB800";
-          c.textAlign = "center";
-          c.fillText(enemy ? "海" : "針", 0, -34 - (tiers - 1) * 30);
-          if (build > 0) {
-            c.globalAlpha = build * 0.6;
-            c.strokeStyle = "#00FFA3";
-            c.beginPath();
-            c.arc(0, -25, 60 + (1 - build) * 55, 0, 7);
-            c.stroke();
-          }
-          c.restore();
         }
       }
       // UnitSystem — 96 заранее выделенных бойцов, 80 снарядов, очередь фронта без сортировки/создания массивов.
@@ -2002,6 +2988,7 @@
             active: false,
             side: 0,
             kind: 0,
+            flying: false,
             x: 0,
             y: 0,
             hp: 0,
@@ -2022,6 +3009,7 @@
             y: 0,
             target: null,
             targetSeed: 0,
+            style: 0,
             damage: 0,
             side: 0,
             life: 0,
@@ -2043,6 +3031,7 @@
             if (
               unit.active &&
               unit.side === side &&
+              unit.flying === Boolean(data.flying) &&
               Math.abs(unit.x - entrance) < 14
             )
               return false;
@@ -2052,8 +3041,9 @@
             u.active = true;
             u.side = side;
             u.kind = data.kind;
+            u.flying = Boolean(data.flying);
             u.x = side ? this.g.w - 69 : 69;
-            u.y = this.g.ground;
+            u.y = this.g.ground - (u.flying ? this.g.flightHeight : 0);
             u.hp = u.maxHp =
               data.hp * (side ? 1 + (this.g.enemyLevel - 1) * 0.065 : 1);
             u.dmg = data.dmg;
@@ -2098,6 +3088,7 @@
             p.targetSeed = target.seed;
             p.damage = damage;
             p.side = u.side;
+            p.style = u.kind === 7 ? 1 : u.kind === 4 ? 2 : 0;
             p.life = 2;
             return;
           }
@@ -2110,7 +3101,11 @@
             u.age += dt;
             u.flash = Math.max(0, u.flash - dt);
             u.cool -= dt;
-            u.y = g.ground;
+            u.y =
+              g.ground -
+              (u.flying
+                ? g.flightHeight + Math.sin(u.age * 3 + u.seed) * 3
+                : 0);
             let dir = u.side ? -1 : 1,
               target = null,
               best = Infinity,
@@ -2120,6 +3115,8 @@
               if (!v.active || v === u) continue;
               let dist = (v.x - u.x) * dir;
               if (v.side !== u.side) {
+                // Меч не достаёт воздух. Лучники, маги и башни — контрмера.
+                if (v.flying && !u.flying && u.range <= 75) continue;
                 if (dist >= -5 && dist < best) {
                   best = dist;
                   target = v;
@@ -2127,7 +3124,13 @@
               } else {
                 // Ближний бой обходит стрелков: иначе лучник впереди навечно
                 // запирал всю стенку, останавливаясь на своей дальней дистанции.
-                if (dist > 0 && dist < 18 && v.range <= u.range) blocked = true;
+                if (
+                  v.flying === u.flying &&
+                  dist > 0 &&
+                  dist < 18 &&
+                  v.range <= u.range
+                )
+                  blocked = true;
                 if (v.kind === 1 && Math.abs(v.x - u.x) < 100 && u.side === 0)
                   aura = 2 + (g.level >= 4 ? 2 : 0);
               }
@@ -2135,6 +3138,7 @@
             if (u.side === 1 && g.enemyLevel >= 4) aura += 3;
             let baseDist = u.side ? u.x - 50 : g.w - 50 - u.x,
               baseInRange = baseDist <= u.range;
+            if (baseInRange && (!target || baseDist < best)) target = null;
             if ((target && best <= u.range) || (!target && baseInRange)) {
               u.moving = false;
               if (u.cool <= 0) {
@@ -2190,6 +3194,37 @@
             }
           }
         }
+        updateTowers(dt) {
+          const g = this.g;
+          for (let side = 0; side < 2; side++) {
+            const level = side ? Math.max(0, g.enemyLevel - 2) : g.tower;
+            if (!level) continue;
+            g.towerTimers[side] -= dt;
+            if (g.towerTimers[side] > 0) continue;
+            const data = CONFIG.towers[level - 1],
+              x = side ? g.w - 52 : 52;
+            // На узком экране гарнизон не простреливает всю арену от ворот.
+            const range = Math.min(
+              data.range,
+              Math.max(65, (g.w - 104) * 0.38),
+            );
+            let target = null,
+              best = range;
+            for (const u of this.units)
+              if (u.active && u.side !== side) {
+                const distance = Math.abs(u.x - x);
+                if (distance < best) {
+                  target = u;
+                  best = distance;
+                }
+              }
+            if (target) {
+              this.fire({ x, y: g.ground - 48, side }, target, data.damage);
+              g.towerTimers[side] = data.rate;
+              g.towerFlash[side] = 0.2;
+            }
+          }
+        }
         draw(c, t, q) {
           const r = this.g.renderer;
           for (const u of this.units) {
@@ -2197,29 +3232,96 @@
             let scale =
               (u.kind === 3 ? 1.12 : u.kind === 6 ? 1.23 : 1) *
               this.g.unitScale;
+            c.save();
+            c.fillStyle = u.flying ? "#060c1c45" : "#060a19aa";
+            c.beginPath();
+            c.ellipse(
+              u.x,
+              this.g.ground + 1,
+              (u.flying ? 14 : 16) * scale,
+              3 * scale,
+              0,
+              0,
+              Math.PI * 2,
+            );
+            c.fill();
+            if (q > 0 && (u.kind === 1 || u.kind === 4)) {
+              c.strokeStyle =
+                u.kind === 4 ? "#8fffd78a" : u.side ? "#7f9aff60" : "#ffcf7660";
+              c.lineWidth = 1;
+              c.beginPath();
+              c.ellipse(u.x, u.y - 1, 24 * scale, 5 * scale, 0, 0, Math.PI * 2);
+              c.stroke();
+            }
+            c.restore();
             r.unit(u, t, scale, q);
             let width = 25 * scale;
             c.lineWidth = 2;
             c.strokeStyle = "#ffffff18";
             r.line(
               u.x - width / 2,
-              u.y - 60 * scale,
+              u.y -
+                (u.kind === 3 || u.kind === 6 ? 80 : u.kind === 1 ? 76 : 66) *
+                  scale,
               u.x + width / 2,
-              u.y - 60 * scale,
+              u.y -
+                (u.kind === 3 || u.kind === 6 ? 80 : u.kind === 1 ? 76 : 66) *
+                  scale,
             );
             c.strokeStyle = u.side ? "#00E5FF" : "#FFB800";
             r.line(
               u.x - width / 2,
-              u.y - 60 * scale,
+              u.y -
+                (u.kind === 3 || u.kind === 6 ? 80 : u.kind === 1 ? 76 : 66) *
+                  scale,
               u.x - width / 2 + width * Math.max(0, u.hp / u.maxHp),
-              u.y - 60 * scale,
+              u.y -
+                (u.kind === 3 || u.kind === 6 ? 80 : u.kind === 1 ? 76 : 66) *
+                  scale,
             );
           }
           c.lineWidth = 2;
           for (const p of this.shots)
             if (p.active) {
               c.strokeStyle = p.side ? "#00E5FF" : "#FFB800";
-              r.line(p.x, p.y, p.x + (p.side ? 9 : -9), p.y + 2);
+              const angle = Math.atan2(p.target.y - 25 - p.y, p.target.x - p.x);
+              c.save();
+              c.translate(p.x, p.y);
+              c.rotate(angle);
+              c.strokeStyle = p.side ? "#afbdff" : "#ffdf99";
+              c.lineWidth = 1.5;
+              if (p.style === 1) {
+                c.rotate(p.life * 15);
+                c.beginPath();
+                for (let i = 0; i < 8; i++) {
+                  const a = (i * Math.PI) / 4,
+                    rr = i % 2 ? 1.6 : 5;
+                  if (i === 0) c.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+                  else c.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+                }
+                c.closePath();
+                c.fillStyle = p.side ? "#b598ff" : "#c69bf6";
+                c.fill();
+                c.lineWidth = 0.8;
+                c.stroke();
+                r.ellipse(0, 0, 1, 1, p.side ? "#9deaff" : "#ffdb73");
+              } else if (p.style === 2) {
+                c.globalAlpha = 0.25;
+                r.ellipse(-3, 0, 8, 4, "#80ffc4");
+                c.globalAlpha = 1;
+                r.ellipse(0, 0, 3, 3, "#b7ffe1");
+              } else {
+                r.line(-12, 0, 2, 0);
+                r.polygon(
+                  [3, 0, -2, -2, -1, 2],
+                  p.side ? "#a6e7ff" : "#ffedba",
+                  null,
+                );
+                c.globalAlpha = 0.3;
+                c.lineWidth = 3;
+                r.line(-17, 0, -6, 0);
+              }
+              c.restore();
             }
         }
       }
@@ -2262,7 +3364,7 @@
               g.superAttack();
             }
             let n = Number(e.key);
-            if (n >= 1 && n <= 7) g.summon(n - 1);
+            if (n >= 1 && n <= CONFIG.cards.length) g.summon(n - 1);
           });
         }
         text(id, value) {
@@ -2297,13 +3399,52 @@
           );
           let startX = 0,
             startY = 0,
-            reserved = false;
+            reserved = false,
+            pointer = null,
+            scrollStart = 0,
+            scrolling = false;
+          const deck = $("cards");
+          const resetPointer = () => {
+            pointer = null;
+            deck.style.scrollSnapType = "";
+          };
           b.onpointerdown = (e) => {
+            if (pointer !== null || (e.button !== undefined && e.button !== 0))
+              return;
+            pointer = e.pointerId;
             startX = e.clientX;
             startY = e.clientY;
+            scrollStart = deck.scrollLeft;
             reserved = false;
+            scrolling = false;
+            b.setPointerCapture(e.pointerId);
+          };
+          b.onpointermove = (e) => {
+            if (pointer !== e.pointerId) return;
+            const dx = startX - e.clientX,
+              dy = startY - e.clientY;
+            const landscape = matchMedia(
+              "(orientation: landscape) and (max-height: 560px)",
+            ).matches;
+            if (
+              !landscape &&
+              Math.abs(dx) > Math.max(70, b.clientWidth * 0.9) &&
+              Math.abs(dy) < 45
+            )
+              scrolling = true;
+            if (scrolling) {
+              deck.style.scrollSnapType = "none";
+              deck.scrollLeft = scrollStart + dx;
+              e.preventDefault();
+            }
           };
           b.onpointerup = (e) => {
+            if (pointer !== e.pointerId) return;
+            resetPointer();
+            if (scrolling) {
+              reserved = true;
+              return;
+            }
             if (startX - e.clientX > 35 && Math.abs(startY - e.clientY) < 45) {
               reserved = true;
               this.g.reserve[i] = !this.g.reserve[i];
@@ -2315,6 +3456,11 @@
               );
             }
           };
+          b.onpointercancel = () => {
+            reserved = true;
+            resetPointer();
+          };
+          b.onlostpointercapture = resetPointer;
           b.onclick = () => {
             if (reserved) {
               reserved = false;
@@ -2351,7 +3497,7 @@
         help() {
           this.open(
             "道 · Как играть",
-            `<p>Тапни по заряженной карточке — боец сам вступит в бой. Карточки тратят энергию, её запас постоянно восстанавливается.</p><p>Апгрейды додзё покупаются за ⚡, ускоряют заряд и открывают новые роли. Монеты ускоряют заряд на 5 секунд и меняют фонари.</p><p>↑ Свайп вверх / пробел / кнопка — волна ци (20 ⚡). Долгий тап по замку — разведка. Свайп влево по карточке — резерв, тап вернёт её.</p><p>NFT-подарок — бесплатный игровой ивент: открывается после 30 секунд боя. Никаких кошельков и реальных NFT в прототипе.</p><p>Новая битва сбрасывает поле, но сохраняет уровень додзё и монеты. В открытом меню — тактическая пауза, фон остаётся живым. В скрытой вкладке — пауза.</p>`,
+            `<p>Тапни по заряженной карточке — боец сам вступит в бой. Карточки тратят энергию, её запас постоянно восстанавливается.</p><p>Апгрейды додзё покупаются за ⚡, ускоряют заряд и открывают новые роли. Монеты ускоряют заряд на 5 секунд и меняют фонари.</p><p>↑ Свайп вверх / пробел / кнопка — волна ци (20 ⚡). Долгий тап по замку — разведка. Короткий свайп влево по карточке — резерв, тап вернёт её. Длинный горизонтальный свайп листает колоду; клавиши 1–8 призывают бойцов.</p><p>Ниндзя открывается после 30 секунд боя. Куноичи — летающий метатель сюрикенов с ур. 3: наземные мечники его не достают, лучники и башни — достают.</p><p>Новая битва сбрасывает поле, но сохраняет уровень додзё и монеты. В открытом меню — тактическая пауза, фон остаётся живым. В скрытой вкладке — пауза.</p>`,
             "В бой",
             () => this.modal.close(),
           );
@@ -2365,22 +3511,31 @@
             body += `<div class="tier ${i + 1 === g.level ? "active" : ""}"><span>${i + 1}. ${l.name}</span><span>${i === 0 ? "старт" : l.cost + " ⚡"} · +${Math.round((l.speed - 1) * 100)}%</span></div>`;
           }
           body +=
-            "<p>Ур. 3 — самурай · ур. 4 — монах, аура +2<br>Ур. 5 — Дуров · ур. 6 — чаще волна ци</p>";
+            "<p>Ур. 3 — самурай, Куноичи · ур. 4 — монах, аура +2<br>Ур. 5 — сёгун · ур. 6 — чаще волна ци</p>";
+          const turret = CONFIG.towers[g.tower];
+          body += `<div class="rule"></div><p><b>Стрелковый гарнизон · ${g.tower}/3</b><br>Автоматически защищает ворота от пехоты и воздуха. ${turret ? `Следующий: ${turret.damage} урона / ${turret.rate}с · требуется додзё ${turret.level}.` : "Гарнизон полностью улучшен."}</p>`;
+          if (turret)
+            body += `<button class="tool" id="towerAction" ${g.level < turret.level || g.energy < turret.cost ? "disabled" : ""}>${g.tower ? "Улучшить гарнизон" : "Построить гарнизон"} · ${turret.cost} ⚡</button>`;
           this.open(
             "⛩ Путь додзё",
             body,
-            next ? `Улучшить · ${next.cost} ⚡` : "Высший уровень",
+            next ? `Улучшить · ${next.cost} ⚡` : "Закрыть",
             () => {
-              if (g.upgrade()) this.modal.close();
+              if (!next || g.upgrade()) this.modal.close();
             },
           );
+          const towerButton = $("towerAction");
+          if (towerButton)
+            towerButton.onclick = () => {
+              if (g.upgradeTower()) this.upgradeMenu();
+            };
         }
         scout() {
           let g = this.g,
             next = CONFIG.aiUpgrade[g.enemyLevel];
           this.open(
-            "海 · Разведка замка",
-            `<p><b>${CONFIG.castle[g.enemyLevel - 1]} · ур. ${g.enemyLevel}</b></p><p>Здоровье: ${Math.ceil(g.enemyHp)} / ${g.enemyMax}<br>Энергия ИИ: ${Math.floor(g.aiEnergy)}${next ? " / " + next : ""}<br>${next ? "Копит на следующий ярус." : "Все ярусы построены. Готовит тяжёлый отряд."}</p><p>Ур. 3 — тяжёлые тюлени<br>Ур. 4 — усиление атак<br>Ур. 5 — Они-босс</p>`,
+            "影 · Разведка замка",
+            `<p><b>${CONFIG.castle[g.enemyLevel - 1]} · ур. ${g.enemyLevel}</b></p><p>Здоровье: ${Math.ceil(g.enemyHp)} / ${g.enemyMax}<br>Энергия ИИ: ${Math.floor(g.aiEnergy)}${next ? " / " + next : ""}<br>${next ? "Копит на следующий ярус." : "Все ярусы построены. Готовит тяжёлый отряд."}</p><p>Ур. 3 — самураи, Куноичи и стрелковый гарнизон<br>Ур. 4 — усиление атак, гарнизон II<br>Ур. 5 — Они-босс, гарнизон III</p>`,
             "Ясно",
             () => this.modal.close(),
           );
@@ -2400,7 +3555,7 @@
           let g = this.g;
           this.open(
             win ? "勝 · Победа додзё!" : "敗 · Додзё пало",
-            `<p>${win ? "Тюлени отступили. Иголки празднуют!" : "Даже Сенсею иногда нужен второй заход."}</p><p>Бой: ${Math.floor(g.elapsed)} сек. · Побеждено тюленей: ${g.kills}<br>${win ? "Награда: +80 монет." : "Награда за побеждённых врагов сохранена."}</p><p>Прокачка додзё сохранена. Собери другой отряд и попробуй ещё.</p>`,
+            `<p>${win ? "Клан Тени отступил. Рассвет за нашим додзё!" : "Даже Сенсею иногда нужен второй заход."}</p><p>Бой: ${Math.floor(g.elapsed)} сек. · Побеждено врагов: ${g.kills}<br>${win ? "Награда: +80 монет." : "Награда за побеждённых врагов сохранена."}</p><p>Прокачка додзё сохранена. Собери другой отряд и попробуй ещё.</p>`,
             "Ещё одна битва",
             () => {
               this.modal.close();
@@ -2514,8 +3669,13 @@
           this.text("waves", g.waveCount);
           this.text("wins", g.wins);
           $("upgradeCost").textContent =
-            g.level < 6 ? CONFIG.levels[g.level].cost + " ⚡" : "MAX";
-          $("upgradeBtn").disabled = g.level === 6 || g.state !== "playing";
+            g.level < 6
+              ? CONFIG.levels[g.level].cost + " ⚡"
+              : g.tower < 3
+                ? "ГАРНИЗОН"
+                : "MAX";
+          $("upgradeBtn").disabled =
+            (g.level === 6 && g.tower === 3) || g.state !== "playing";
           $("boostBtn").disabled = g.coins < 20 || g.state !== "playing";
           $("superBtn").textContent =
             g.superCd > 0
@@ -2570,16 +3730,18 @@
           this.canvas = $("arena");
           this.c = this.canvas.getContext("2d", { alpha: false });
           this.save = new SaveSystem();
+          this.random = Math.random; // RNG боя отделён от визуальных частиц для воспроизводимого баланса.
           let data = this.save.load();
           this.level = data?.level || 1;
           this.coins = data?.coins ?? 120;
           this.wins = data?.wins || 0;
           this.skin = data?.skin || 0;
+          this.tower = data?.tower || 0;
           this.reserve = Array.from(
-            { length: 7 },
+            { length: CONFIG.cards.length },
             (_, i) => data?.reserve?.[i] || false,
           );
-          this.charges = new Float32Array(7);
+          this.charges = new Float32Array(CONFIG.cards.length);
           this.fx = new ParticlePool(CONFIG.particlePool);
           this.bg = new ParallaxBackground();
           this.renderer = new StickmanRenderer(this.c);
@@ -2630,6 +3792,7 @@
           this.h = Math.max(200, r.height);
           this.ground = this.h * 0.79;
           this.unitScale = this.w < 440 ? 0.67 : this.w < 700 ? 0.85 : 1;
+          this.flightHeight = 64 * this.unitScale;
           if (this.w <= 310 || this.motionQuery.matches)
             this.quality = Math.min(this.quality, 1);
           this.updateResolution();
@@ -2704,19 +3867,22 @@
           this.wave = 0;
           this.waveCount = 0;
           this.superCd = 0;
+          this.towerTimers = [1, 1];
+          this.towerFlash = [0, 0];
           this.buildGlow = 0;
           this.enemyGlow = 0;
           this.kills = 0;
           this.state = "playing";
-          for (let i = 0; i < 7; i++)
+          for (let i = 0; i < CONFIG.cards.length; i++)
             this.charges[i] = i < 2 ? CONFIG.cards[i].cd : 0;
-          this.ui.toast("針 · Фестиваль начинается. Призывай отряд!");
+          this.ui.toast("陽 · Битва кланов начинается. Призывай отряд!");
           this.ui.refresh();
         }
         vibrate() {
           try {
             const tg = window.Telegram?.WebApp;
-            if (tg?.initData && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            if (tg?.initData && tg.HapticFeedback)
+              tg.HapticFeedback.impactOccurred("light");
             else navigator.vibrate?.(15);
           } catch (e) {}
         }
@@ -2731,7 +3897,7 @@
           if (this.level < data.level)
             return this.ui.toast("Этот боец откроется на уровне " + data.level);
           if (i === 5 && this.elapsed < 30)
-            return this.ui.toast("Фестиваль подарков начнётся на 30-й секунде");
+            return this.ui.toast("Ниндзя вступит в бой на 30-й секунде");
           if (this.charges[i] < data.cd)
             return this.ui.toast("Карточка ещё заряжается");
           if (this.energy < data.cost)
@@ -2765,10 +3931,32 @@
           this.ui.refresh();
           return true;
         }
+        upgradeTower() {
+          const next = CONFIG.towers[this.tower];
+          if (this.state !== "playing" || !next) return false;
+          if (this.level < next.level) {
+            this.ui.toast("Стрелковая площадка требует додзё " + next.level);
+            return false;
+          }
+          if (this.energy < next.cost) {
+            this.ui.toast("Нужно " + next.cost + " энергии на гарнизон");
+            return false;
+          }
+          this.energy -= next.cost;
+          this.tower++;
+          this.buildGlow = 1;
+          this.fx.emit(52, this.ground - 65, 24, "#ffcd76");
+          this.towerTimers[0] = 0.5;
+          this.persist();
+          this.vibrate();
+          this.ui.refresh();
+          this.ui.toast("Стрелковый гарнизон · ур. " + this.tower);
+          return true;
+        }
         boost() {
           if (this.state !== "playing" || this.coins < 20) return;
           this.coins -= 20;
-          for (let i = 0; i < 7; i++)
+          for (let i = 0; i < CONFIG.cards.length; i++)
             this.charges[i] = Math.min(CONFIG.cards[i].cd, this.charges[i] + 5);
           this.persist();
           this.ui.toast("Заряд всех карточек ускорен на 5 секунд");
@@ -2802,7 +3990,7 @@
           this.superCd = Math.max(0, this.superCd - dt);
           let level = CONFIG.levels[this.level - 1];
           this.energy = Math.min(level.cap, this.energy + dt * level.regen);
-          for (let i = 0; i < 7; i++)
+          for (let i = 0; i < CONFIG.cards.length; i++)
             if (!this.reserve[i])
               this.charges[i] = Math.min(
                 CONFIG.cards[i].cd,
@@ -2820,17 +4008,21 @@
             this.enemyHp += 200;
             this.enemyGlow = 1;
             this.fx.emit(this.w - 58, this.ground - 60, 20, "#00E5FF");
-            this.ui.toast(
-              "Клан прилива достроил замок · ур. " + this.enemyLevel,
-            );
+            this.ui.toast("Клан Тени достроил замок · ур. " + this.enemyLevel);
           }
           this.enemySpawn -= dt;
           if (this.enemySpawn <= 0) {
-            let type = 0;
-            if (this.enemyLevel >= 5 && Math.random() < 0.17) type = 3;
-            else if (this.enemyLevel >= 3 && Math.random() < 0.3) type = 1;
-            else if (this.enemyLevel >= 2 && Math.random() < 0.28) type = 2;
-            let price = type === 3 ? 22 : type === 1 ? 9 : 5;
+            let type = 0,
+              airThreat = 0;
+            for (const u of this.units.units)
+              if (u.active && u.side === 0 && u.flying) airThreat++;
+            if (this.enemyLevel >= 2 && airThreat >= 2 && this.random() < 0.65)
+              type = 2;
+            else if (this.enemyLevel >= 3 && this.random() < 0.18) type = 4;
+            else if (this.enemyLevel >= 5 && this.random() < 0.17) type = 3;
+            else if (this.enemyLevel >= 3 && this.random() < 0.3) type = 1;
+            else if (this.enemyLevel >= 2 && this.random() < 0.28) type = 2;
+            let price = type === 3 ? 22 : type === 4 ? 13 : type === 1 ? 9 : 5;
             if (
               this.aiEnergy >= price &&
               this.units.spawn(1, CONFIG.enemies[type])
@@ -2842,6 +4034,9 @@
             );
           }
           this.units.update(dt);
+          this.units.updateTowers(dt);
+          this.towerFlash[0] = Math.max(0, this.towerFlash[0] - dt);
+          this.towerFlash[1] = Math.max(0, this.towerFlash[1] - dt);
           if (this.ourHp <= 0 || this.enemyHp <= 0) {
             let win = this.enemyHp <= 0;
             this.state = win ? "won" : "lost";
@@ -2872,6 +4067,8 @@
             false,
             t,
             this.buildGlow,
+            this.tower,
+            q,
           );
           this.renderer.building(
             w - 52,
@@ -2880,6 +4077,8 @@
             true,
             t,
             this.enemyGlow,
+            Math.max(0, this.enemyLevel - 2),
+            q,
           );
           let progress =
             this.enemyLevel < 5
@@ -2954,21 +4153,29 @@
         try {
           tg.ready();
           tg.expand();
-          tg.setHeaderColor?.('#0A0E27');
-          tg.setBackgroundColor?.('#0A0E27');
+          tg.setHeaderColor?.("#0A0E27");
+          tg.setBackgroundColor?.("#0A0E27");
           const viewport = () => {
-            if(tg.viewportStableHeight) document.documentElement.style.setProperty('--vh',tg.viewportStableHeight+'px');
+            if (tg.viewportStableHeight)
+              document.documentElement.style.setProperty(
+                "--vh",
+                tg.viewportStableHeight + "px",
+              );
           };
           viewport();
-          tg.onEvent?.('viewportChanged',viewport);
+          tg.onEvent?.("viewportChanged", viewport);
           tg.BackButton?.show();
           tg.BackButton?.onClick(() => {
-            if(game.ui.modal.open) game.ui.modal.close();
+            if (game.ui.modal.open) game.ui.modal.close();
             else tg.close();
           });
-        } catch (_) { /* Старый клиент: обычная HTML-игра остаётся доступна. */ }
+        } catch (_) {
+          /* Старый клиент: обычная HTML-игра остаётся доступна. */
+        }
       }
-      window.addEventListener('telegram-sdk-ready',setupTelegram,{once:true});
+      window.addEventListener("telegram-sdk-ready", setupTelegram, {
+        once: true,
+      });
       const game = new GameLoop();
       setupTelegram();
       // Узкий диагностический интерфейс — позволяет тестировать бой без внешних зависимостей.
@@ -2977,6 +4184,9 @@
         CONFIG,
         SaveSystem,
         ParticlePool,
+        GameLoop,
+        UnitSystem,
+        StickmanRenderer,
         version: "3.1",
       };
     </script>

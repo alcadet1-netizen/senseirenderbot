@@ -37,7 +37,7 @@ async def cmd_dojo(message, container):
             'DOJO_APP_URL или RENDER_EXTERNAL_URL и выполнить деплой.', parse_mode=None)
         return
     await message.answer(
-        '🥷 Ёж-Сенсей: Стенка на Стенку\n'
+        '🥷 Сенсей: Стенка на Стенку\n'
         'Тестовая игра. Прогресс сохраняется на этом устройстве. '
         'Игровые монеты не связаны с балансом бота.',
         parse_mode=None,
