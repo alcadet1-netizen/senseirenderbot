@@ -28,6 +28,7 @@ from src.bot.middlewares import (
 )
 from src.bot.middlewares.digest import DigestMiddleware
 from src.bot.middlewares.cleanup import CommandCleanupMiddleware
+from src.web.dojo_app import setup_dojo
 from src.web.hedgehog_app import setup_hedgehog
 from src.web.daily_pet_app import setup_daily_pet
 from src.core.config import settings
@@ -167,6 +168,7 @@ async def main() -> None:
 
     # Start web server for health checks
     app = web.Application(client_max_size=16 * 1024)
+    setup_dojo(app)
     setup_hedgehog(app, container)
     setup_daily_pet(app, container)
     app.router.add_get('/', lambda request: web.Response(text="OK"))

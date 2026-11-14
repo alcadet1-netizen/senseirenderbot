@@ -8,6 +8,15 @@
     />
     <meta name="theme-color" content="#0A0E27" />
     <title>Ёж-Сенсей — Стенка на Стенку</title>
+    <!-- SDK загружаем только в размещённой версии; file:// остаётся автономным. -->
+    <script>
+      if (location.protocol === 'https:' || location.protocol === 'http:') {
+        const sdk = document.createElement('script');
+        sdk.src = 'https://telegram.org/js/telegram-web-app.js';
+        sdk.onload = () => window.dispatchEvent(new Event('telegram-sdk-ready'));
+        document.head.appendChild(sdk);
+      }
+    </script>
     <style>
       :root {
         color-scheme: dark;
@@ -2706,7 +2715,9 @@
         }
         vibrate() {
           try {
-            navigator.vibrate?.(15);
+            const tg = window.Telegram?.WebApp;
+            if (tg?.initData && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            else navigator.vibrate?.(15);
           } catch (e) {}
         }
         summon(i) {
@@ -2935,7 +2946,31 @@
           }
         }
       }
+      // Telegram — только оболочка и haptic. initData не отправляем и не доверяем
+      // данным клиента для балансов: у этого прототипа нет серверных наград.
+      function setupTelegram() {
+        const tg = window.Telegram?.WebApp;
+        if (!tg || !tg.initData) return;
+        try {
+          tg.ready();
+          tg.expand();
+          tg.setHeaderColor?.('#0A0E27');
+          tg.setBackgroundColor?.('#0A0E27');
+          const viewport = () => {
+            if(tg.viewportStableHeight) document.documentElement.style.setProperty('--vh',tg.viewportStableHeight+'px');
+          };
+          viewport();
+          tg.onEvent?.('viewportChanged',viewport);
+          tg.BackButton?.show();
+          tg.BackButton?.onClick(() => {
+            if(game.ui.modal.open) game.ui.modal.close();
+            else tg.close();
+          });
+        } catch (_) { /* Старый клиент: обычная HTML-игра остаётся доступна. */ }
+      }
+      window.addEventListener('telegram-sdk-ready',setupTelegram,{once:true});
       const game = new GameLoop();
+      setupTelegram();
       // Узкий диагностический интерфейс — позволяет тестировать бой без внешних зависимостей.
       window.neonDojo = {
         game,
