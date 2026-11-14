@@ -283,11 +283,11 @@ try {
     await page.mouse.up();
     assert(
       await page.evaluate(
-        () => document.querySelector("#cards").scrollLeft > 0,
+        () => document.querySelector("#cards").scrollWidth <= document.querySelector("#cards").clientWidth + 1,
       ),
     );
     assert(await page.evaluate(() => neonDojo.game.reserve.every((v) => !v)));
-    checks.push("длинный свайп листает колоду, не отправляя бойца в резерв");
+    checks.push("вся колода видима без прокрутки; длинный свайп не убирает бойца в резерв");
     assert.deepEqual(errors, []);
     console.log(JSON.stringify({ passed: checks.length, checks }, null, 2));
   } finally {

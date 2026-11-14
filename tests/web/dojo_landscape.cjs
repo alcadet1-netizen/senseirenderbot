@@ -32,6 +32,8 @@ try {
     await page.goto(
       pathToFileURL(path.resolve(__dirname, "../../index.html")).href,
     );
+    // Startup menu now precedes the existing battlefield.
+    await page.getByRole("button", {name:"∞ Свободная битва", exact:true}).click();
     for (const [width, height] of [
       [568, 320],
       [667, 375],
