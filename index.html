@@ -930,7 +930,7 @@
         }
       }
       /* Весь боевой интерфейс в одном окне, без скрытой вертикальной колоды. */
-      @media (orientation: landscape) {
+      @media screen {
         html,
         body {
           height: 100%;
@@ -1188,14 +1188,254 @@
           animation: none;
         }
       }
+
+      #modeMenu[hidden] {display:none}
+      #modeMenu {position:fixed;inset:0;z-index:70;background:radial-gradient(ellipse at 30% 10%,#594127f5,#080d20fa 65%);display:flex;align-items:center;justify-content:center;padding: max(12px,var(--safe-top,0px)) 16px;overflow:auto;color:#ffdfab}
+      .modeBox {width:min(660px,100%);max-height:90dvh;overflow:auto;padding:22px;border:1px solid #c99a4b88;border-radius:16px;background:#10172be6;box-shadow:0 15px 80px #000a}
+      .modeBox h1 {font-size:clamp(18px,3vw,30px);letter-spacing:2px;margin:0 0 12px}
+      .modeBox p {color:#b7bfd8;line-height:1.5;font-size:14px;white-space:pre-line}
+      .modeBox button {display:block;width:100%;padding:13px;margin:8px 0;border:1px solid #cfa95777;border-radius:9px;background:linear-gradient(120deg,#543a20,#24213c);color:#ffe2ab;cursor:pointer;font:600 14px sans-serif}
+      .modeBox button:disabled {opacity:.4;cursor:not-allowed}
+      #modeMenuBtn {position:fixed;bottom:max(5px,env(safe-area-inset-bottom));right:8px;z-index:65;font:11px sans-serif;padding:5px 10px;color:#ffe3ac;background:#151b31;border:1px solid #8f7246;border-radius:6px}
+
+      /* Доступные меню и боевые элементы внутри safe area, без наложения на колоду. */
+      #modeMenu {
+        box-sizing: border-box;
+        padding: max(10px, var(--safe-top, env(safe-area-inset-top)))
+          max(10px, var(--safe-right, env(safe-area-inset-right)))
+          max(10px, var(--safe-bottom, env(safe-area-inset-bottom)))
+          max(10px, var(--safe-left, env(safe-area-inset-left)));
+        height: min(var(--vh, 100dvh), 100dvh);
+      }
+      .modeBox {
+        box-sizing: border-box;
+        max-height: 100%;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+        min-height: 0;
+      }
+      .modeBox h1 {
+        overflow-wrap: anywhere;
+      }
+      .modeBox button:focus-visible,
+      .session-tools button:focus-visible,
+      .card:focus-visible {
+        outline: 2px solid #80f6ff;
+        outline-offset: 2px;
+      }
+      #modeMenuBtn {
+        position: static;
+        z-index: auto;
+        white-space: nowrap;
+      }
+      .session-tools {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+      }
+      .act-tabs {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 6px;
+        margin: 8px 0;
+      }
+      .modeBox .act-tabs button {
+        padding: 8px 4px;
+        margin: 0;
+        min-height: 34px;
+      }
+      .act-tabs button[aria-pressed="true"] {
+        border-color: #ffd080;
+        background: #805520;
+        color: #fff;
+      }
+      .campaign-menu .modeBox {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        column-gap: 8px;
+        padding: 14px;
+      }
+      .campaign-menu h1 {
+        font-size: 18px;
+        letter-spacing: 1px;
+        margin: 0 0 6px;
+      }
+      .campaign-menu p {
+        font-size: 12px;
+        line-height: 1.4;
+        margin: 4px 0 8px;
+      }
+      .campaign-menu h1,
+      .campaign-menu p,
+      .campaign-menu .act-tabs {
+        grid-column: 1/-1;
+      }
+      .campaign-menu .modeBox > button {
+        margin: 3px 0;
+        padding: 8px 5px;
+        font-size: 12px;
+        min-height: 34px;
+      }
+      .card.unaffordable .sub {
+        color: #eaa2a0;
+      }
+      .card .sub {
+        right: 3px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.15;
+      }
+      .card .name {
+        line-height: 1.15;
+      }
+      .stage-center small.mission-label {
+        display: block;
+        font-size: 7px;
+        letter-spacing: 0.5px;
+        margin-bottom: 2px;
+      }
+      .health {
+        position: relative;
+      }
+      .health:focus-visible {
+        outline: 2px solid #80f6ff;
+      }
+      .app {
+        height: min(var(--vh, 100dvh), 100dvh);
+      }
+      .faction {
+        min-width: 0;
+        max-width: 42%;
+      }
+      .faction b {
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      @media (max-height: 450px) {
+        .modeBox {
+          padding: 14px 18px;
+        }
+        .modeBox h1 {
+          font-size: 20px;
+          margin-bottom: 6px;
+          letter-spacing: 1px;
+        }
+        .modeBox p {
+          font-size: 12px;
+          line-height: 1.4;
+          margin: 6px 0 10px;
+        }
+        .modeBox > button {
+          padding: 10px;
+          margin: 6px 0;
+          min-height: 36px;
+        }
+        .campaign-menu .modeBox > button {
+          padding: 7px;
+          min-height: 32px;
+        }
+      }
+      @media (orientation: portrait) and (max-width: 1024px) {
+        .session-tools {
+          display: flex;
+        }
+        .resourcebar {
+          flex-wrap: wrap;
+          flex-basis: auto;
+          min-height: 62px;
+          justify-content: space-between;
+        }
+        .resources {
+          flex: 1 0 100%;
+          justify-content: space-between;
+        }
+        .resources .resource {
+          flex: 1;
+        }
+        .session-tools {
+          width: 100%;
+          justify-content: flex-end;
+        }
+        .session-tools button {
+          padding: 5px 10px;
+          min-height: 28px;
+        }
+        .rotate-tip {
+          display: flex;
+          align-items: center;
+          margin: 0;
+          padding: 4px 7px;
+          font-size: 9px;
+          flex: 0 0 auto;
+          gap: 5px;
+        }
+        .rotate-tip button {
+          padding: 4px;
+          font-size: 9px;
+          white-space: nowrap;
+        }
+        .cards {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          grid-template-rows: 1fr 1fr;
+          height: clamp(132px, 26dvh, 190px);
+        }
+        .card canvas {
+          width: 42px;
+          height: 45px;
+        }
+        .card .name,
+        .card .sub {
+          font-size: 9px;
+        }
+        .deck-actions {
+          grid-template-columns: 1fr 1fr;
+        }
+        .deck-actions .boost {
+          grid-column: 1/-1;
+        }
+        .deck-actions button {
+          min-height: 30px;
+        }
+        .hint {
+          display: none;
+        }
+        .stage-bottom {
+          justify-content: flex-end;
+        }
+        .faction b {
+          font-size: 8px;
+        }
+      }
+      @media (orientation: portrait) and (max-height: 610px) {
+        .rotate-tip {
+          display: none;
+        }
+        .cards {
+          height: 120px;
+        }
+        .deck-title {
+          display: none;
+        }
+        .resource label {
+          display: none;
+        }
+        .resourcebar {
+          min-height: 52px;
+        }
+      }
+      .team-preview {display:block;width:100%;max-height:130px;object-fit:contain;margin:4px auto}
+      @media (max-height:400px) {.team-preview {max-height:88px}.modeBox>button {padding:7px;margin:4px 0;min-height:30px}.modeBox p {margin:4px 0 6px}}
     </style>
   </head>
   <body>
     <div class="app">
       <div class="rotate-tip" role="note">
         <span
-          >↻ Поверни телефон горизонтально — все бойцы и защита в одном
-          окне.</span
+          >↻ Горизонтально — шире поле боя.</span
         ><button class="tool" id="rotateFullscreenBtn">⛶ На весь экран</button>
       </div>
       <header class="brandbar">
@@ -1288,7 +1528,7 @@
           </div>
           <div class="deck">
             <div class="deck-title">
-              🎴 ТВОЙ ОТРЯД <span>Тап — призыв · ← в резерв</span>
+              🎴 ТВОЙ ОТРЯД <span>Тап — призыв · удержи — детали</span>
             </div>
             <div class="cards" id="cards"></div>
             <div class="deck-actions">
@@ -1369,194 +1609,262 @@
       <div id="modalBody"></div>
       <button id="modalAction">Продолжить</button>
     </dialog>
-    <script>
-      "use strict";
-      // CONFIG — единственный источник баланса. Монеты здесь исключительно локальные.
-      const CONFIG = {
-        colors: {
-          bg: "#0A0E27",
-          red: "#FF3B3B",
-          gold: "#FFB800",
-          purple: "#7B2FF7",
-          cyan: "#00E5FF",
-          qi: "#00FFA3",
-          death: "#FF006E",
+    <script id="battleRules" type="application/json">
+      {
+        "colors": {
+          "bg": "#0A0E27",
+          "red": "#FF3B3B",
+          "gold": "#FFB800",
+          "purple": "#7B2FF7",
+          "cyan": "#00E5FF",
+          "qi": "#00FFA3",
+          "death": "#FF006E"
         },
-        // Открытая для обеих сторон эскалация урона, без таймера автопобеды.
-        tempo: { after: 240, ramp: 240 },
-        unitLimit: 48,
-        unitPool: 96,
-        particlePool: 320,
-        projectilePool: 80,
-        levels: [
+        "tempo": {
+          "after": 240,
+          "ramp": 240
+        },
+        "unitLimit": 48,
+        "unitPool": 96,
+        "particlePool": 320,
+        "projectilePool": 80,
+        "levels": [
           {
-            name: "Соломенная хижина",
-            cost: 0,
-            speed: 1,
-            cap: 100,
-            regen: 1.5,
+            "name": "Соломенная хижина",
+            "cost": 0,
+            "speed": 1,
+            "cap": 100,
+            "regen": 1.5
           },
           {
-            name: "Деревянное додзё",
-            cost: 50,
-            speed: 1.15,
-            cap: 220,
-            regen: 3,
-          },
-          { name: "Каменное додзё", cost: 150, speed: 1.3, cap: 550, regen: 6 },
-          { name: "Додзё Сенсея", cost: 400, speed: 1.5, cap: 1250, regen: 12 },
-          {
-            name: "Золотое додзё",
-            cost: 1000,
-            speed: 1.8,
-            cap: 3000,
-            regen: 22,
+            "name": "Деревянное додзё",
+            "cost": 50,
+            "speed": 1.15,
+            "cap": 220,
+            "regen": 3
           },
           {
-            name: "Небесное додзё",
-            cost: 2500,
-            speed: 2.2,
-            cap: 3500,
-            regen: 30,
+            "name": "Каменное додзё",
+            "cost": 150,
+            "speed": 1.3,
+            "cap": 550,
+            "regen": 6
           },
+          {
+            "name": "Додзё Сенсея",
+            "cost": 400,
+            "speed": 1.5,
+            "cap": 1250,
+            "regen": 12
+          },
+          {
+            "name": "Золотое додзё",
+            "cost": 1000,
+            "speed": 1.8,
+            "cap": 3000,
+            "regen": 22
+          },
+          {
+            "name": "Небесное додзё",
+            "cost": 2500,
+            "speed": 2.2,
+            "cap": 3500,
+            "regen": 30
+          }
         ],
-        castle: [
+        "castle": [
           "Глиняная крепость",
           "Деревянный замок",
           "Каменный замок",
           "Замок Сёгуна",
-          "Чёрный замок",
+          "Чёрный замок"
         ],
-        aiUpgrade: [0, 45, 95, 165, 250],
-        cards: [
-          {
-            name: "Ронин",
-            role: "КАТАНА",
-            cd: 3,
-            cost: 6,
-            level: 1,
-            hp: 85,
-            dmg: 15,
-            range: 29,
-            speed: 26,
-            rate: 1,
-            kind: 0,
-          },
-          {
-            name: "Сенсей",
-            role: "АУРА +2",
-            cd: 12,
-            cost: 21,
-            level: 1,
-            hp: 140,
-            dmg: 17,
-            range: 32,
-            speed: 22,
-            rate: 1.1,
-            kind: 1,
-          },
-          {
-            name: "Юми-лучник",
-            role: "ДАЛЬНИЙ БОЙ",
-            cd: 6,
-            cost: 14,
-            level: 2,
-            hp: 58,
-            dmg: 17,
-            range: 165,
-            speed: 26,
-            rate: 1.45,
-            kind: 2,
-          },
-          {
-            name: "Самурай",
-            role: "ТЯЖЁЛЫЙ",
-            cd: 8,
-            cost: 22,
-            level: 3,
-            hp: 220,
-            dmg: 25,
-            range: 33,
-            speed: 19,
-            rate: 1.2,
-            kind: 3,
-          },
-          {
-            name: "Монах",
-            role: "ЛЕЧЕНИЕ",
-            cd: 10,
-            cost: 24,
-            level: 4,
-            hp: 95,
-            dmg: 9,
-            range: 120,
-            speed: 23,
-            rate: 1.6,
-            kind: 4,
-          },
-          {
-            name: "Ниндзя",
-            role: "ЗАСАДА",
-            cd: 20,
-            cost: 15,
-            level: 1,
-            hp: 170,
-            dmg: 32,
-            range: 55,
-            speed: 25,
-            rate: 1.2,
-            kind: 5,
-          },
-          {
-            name: "Сёгун",
-            role: "ПОЛКОВОДЕЦ",
-            cd: 25,
-            cost: 38,
-            level: 5,
-            hp: 320,
-            dmg: 40,
-            range: 115,
-            speed: 25,
-            rate: 1,
-            kind: 6,
-          },
-          {
-            name: "Куноичи",
-            role: "ВОЗДУХ · КУНАИ",
-            cd: 16,
-            cost: 30,
-            level: 3,
-            hp: 72,
-            dmg: 13,
-            range: 140,
-            speed: 29,
-            rate: 1.65,
-            kind: 7,
-            flying: true,
-          },
+        "aiUpgrade": [
+          0,
+          45,
+          95,
+          165,
+          250
         ],
-        // Башня — необязательное вложение энергии, не бесплатный источник урона.
-        towers: [
-          { cost: 75, level: 2, damage: 10, rate: 2.4, range: 185 },
-          { cost: 200, level: 3, damage: 15, rate: 2.1, range: 205 },
-          { cost: 500, level: 5, damage: 20, rate: 1.8, range: 225 },
-        ],
-        enemies: [
-          { hp: 82, dmg: 12, range: 29, speed: 23, rate: 1.1, kind: 0 },
-          { hp: 240, dmg: 24, range: 35, speed: 17, rate: 1.3, kind: 3 },
-          { hp: 90, dmg: 16, range: 178, speed: 22, rate: 1.7, kind: 2 },
-          { hp: 540, dmg: 38, range: 45, speed: 15, rate: 1.5, kind: 6 },
+        "cards": [
           {
-            hp: 68,
-            dmg: 12,
-            range: 135,
-            speed: 26,
-            rate: 1.8,
-            kind: 7,
-            flying: true,
+            "name": "Ронин",
+            "role": "КАТАНА",
+            "cd": 3,
+            "cost": 6,
+            "level": 1,
+            "hp": 85,
+            "dmg": 15,
+            "range": 29,
+            "speed": 26,
+            "rate": 1,
+            "kind": 0
           },
+          {
+            "name": "Сенсей",
+            "role": "АУРА +2",
+            "cd": 12,
+            "cost": 21,
+            "level": 1,
+            "hp": 140,
+            "dmg": 17,
+            "range": 32,
+            "speed": 22,
+            "rate": 1.1,
+            "kind": 1
+          },
+          {
+            "name": "Юми-лучник",
+            "role": "ДАЛЬНИЙ БОЙ",
+            "cd": 6,
+            "cost": 14,
+            "level": 2,
+            "hp": 58,
+            "dmg": 17,
+            "range": 165,
+            "speed": 26,
+            "rate": 1.45,
+            "kind": 2
+          },
+          {
+            "name": "Самурай",
+            "role": "ТЯЖЁЛЫЙ",
+            "cd": 8,
+            "cost": 22,
+            "level": 3,
+            "hp": 220,
+            "dmg": 25,
+            "range": 33,
+            "speed": 19,
+            "rate": 1.2,
+            "kind": 3
+          },
+          {
+            "name": "Монах",
+            "role": "ЛЕЧЕНИЕ",
+            "cd": 10,
+            "cost": 24,
+            "level": 4,
+            "hp": 95,
+            "dmg": 9,
+            "range": 120,
+            "speed": 23,
+            "rate": 1.6,
+            "kind": 4
+          },
+          {
+            "name": "Ниндзя",
+            "role": "ЗАСАДА",
+            "cd": 20,
+            "cost": 15,
+            "level": 1,
+            "hp": 170,
+            "dmg": 32,
+            "range": 55,
+            "speed": 25,
+            "rate": 1.2,
+            "kind": 5
+          },
+          {
+            "name": "Сёгун",
+            "role": "ПОЛКОВОДЕЦ",
+            "cd": 25,
+            "cost": 38,
+            "level": 5,
+            "hp": 320,
+            "dmg": 40,
+            "range": 115,
+            "speed": 25,
+            "rate": 1,
+            "kind": 6
+          },
+          {
+            "name": "Куноичи",
+            "role": "ВОЗДУХ · КУНАИ",
+            "cd": 16,
+            "cost": 30,
+            "level": 3,
+            "hp": 72,
+            "dmg": 13,
+            "range": 140,
+            "speed": 29,
+            "rate": 1.65,
+            "kind": 7,
+            "flying": true
+          }
         ],
-      };
+        "towers": [
+          {
+            "cost": 75,
+            "level": 2,
+            "damage": 10,
+            "rate": 2.4,
+            "range": 185
+          },
+          {
+            "cost": 200,
+            "level": 3,
+            "damage": 15,
+            "rate": 2.1,
+            "range": 205
+          },
+          {
+            "cost": 500,
+            "level": 5,
+            "damage": 20,
+            "rate": 1.8,
+            "range": 225
+          }
+        ],
+        "enemies": [
+          {
+            "hp": 82,
+            "dmg": 12,
+            "range": 29,
+            "speed": 23,
+            "rate": 1.1,
+            "kind": 0
+          },
+          {
+            "hp": 240,
+            "dmg": 24,
+            "range": 35,
+            "speed": 17,
+            "rate": 1.3,
+            "kind": 3
+          },
+          {
+            "hp": 90,
+            "dmg": 16,
+            "range": 178,
+            "speed": 22,
+            "rate": 1.7,
+            "kind": 2
+          },
+          {
+            "hp": 540,
+            "dmg": 38,
+            "range": 45,
+            "speed": 15,
+            "rate": 1.5,
+            "kind": 6
+          },
+          {
+            "hp": 68,
+            "dmg": 12,
+            "range": 135,
+            "speed": 26,
+            "rate": 1.8,
+            "kind": 7,
+            "flying": true
+          }
+        ]
+      }
+    </script>
+    <script>
+      "use strict";
+      // CONFIG — единственный источник баланса. Монеты здесь исключительно локальные.
+      const CONFIG = JSON.parse(document.getElementById('battleRules').textContent);
       const $ = (id) => document.getElementById(id),
         clamp = (v, a, b) => Math.max(a, Math.min(b, v));
       const rand = (a, b) => a + Math.random() * (b - a);
@@ -2246,11 +2554,12 @@
             spawn = clamp(u.age / 0.35, 0, 1);
           c.save();
           c.globalAlpha = spawn;
+          if ((u.team ?? u.side) !== u.side) {c.translate(u.x*2,0);c.scale(-1,1);}
           c.imageSmoothingEnabled = true;
           c.drawImage(
             this.atlas,
             frame * size,
-            (u.side * 8 + u.kind) * size,
+            ((u.team ?? u.side) * 8 + u.kind) * size,
             size,
             size,
             u.x - 56 * scale,
@@ -2260,7 +2569,275 @@
           );
           c.restore();
         }
+        // Клан Тени: отдельные силуэты по референсу, 14 кадров, без растра.
+        shadowUnit(u, t, scale = 1, quality = 2, frame = 0) {
+          const c = this.c,
+            k = u.kind,
+            heavy = k === 3 || k === 6,
+            mage = k === 1 || k === 4,
+            air = k === 7;
+          const phase =
+            frame < 4
+              ? (frame * Math.PI) / 2
+              : frame < 10
+                ? ((frame - 4) * Math.PI) / 3
+                : ((frame - 10) * Math.PI) / 2;
+          const run = frame >= 4 && frame < 10 ? Math.sin(phase) : 0,
+            attack = frame >= 10 ? Math.sin(((frame - 9) * Math.PI) / 5) : 0;
+          const P = (a, f, s = "#080a15", w = 1.5) => this.polygon(a, f, s, w),
+            E = (...a) => this.ellipse(...a);
+          const stroke = (a, color, w) => {
+            c.strokeStyle = "#080a15";
+            c.lineWidth = w + 3;
+            c.beginPath();
+            c.moveTo(a[0], a[1]);
+            for (let i = 2; i < a.length; i += 2) c.lineTo(a[i], a[i + 1]);
+            c.stroke();
+            c.strokeStyle = color;
+            c.lineWidth = w;
+            c.stroke();
+          };
+          const glow = mage
+            ? "#80f05c"
+            : air
+              ? "#ffaf40"
+              : k === 0 || k === 5
+                ? "#61c7ff"
+                : k === 6
+                  ? "#ce73ff"
+                  : "#e787ff";
+          c.save();
+          c.translate(u.x, u.y);
+          c.scale(scale * (u.side ? -1 : 1) * 0.86, scale * 0.86);
+          c.lineCap = "round";
+          c.lineJoin = "round";
+          c.translate(0, Math.sin(phase) * (air ? 2 : 0.6) - Math.abs(run));
+          if (air) {
+            for (const sign of [-1, 1]) {
+              c.save();
+              c.scale(sign, 1);
+              c.rotate(Math.sin(phase) * 0.08);
+              P(
+                [
+                  0, -45, 12, -66, 40, -80, 32, -62, 46, -44, 29, -47, 31, -29, 15,
+                  -40, 7, -30,
+                ],
+                "#352040",
+                "#92629d",
+              );
+              stroke([4, -43, 12, -64, 39, -79], "#a67aad", 1.2);
+              c.restore();
+            }
+            c.strokeStyle = "#ff923d";
+            c.lineWidth = 2;
+            c.globalAlpha = 0.7;
+            c.beginPath();
+            c.ellipse(0, -25, 43, 32, -0.3, phase, phase + 2.7);
+            c.stroke();
+            c.globalAlpha = 1;
+          }
+          if (mage || k === 0 || k === 5)
+            P(
+              [
+                -5, -59, -20, -53, -33, -30, -24, -32, -31, -12, -18, -19, -23, -4,
+                -5, -16, 9, -7, 15, -29, 20, -40, 7, -57,
+              ],
+              "#20232f",
+              "#414353",
+            );
+          stroke(
+            [-7, -26, -13 - run * 5, -12, -16 - run * 9, 0],
+            heavy ? "#64516f" : "#292c38",
+            heavy ? 10 : 6,
+          );
+          stroke(
+            [7, -26, 13 + run * 5, -13, 17 + run * 9, 0],
+            heavy ? "#755d83" : "#343443",
+            heavy ? 10 : 6,
+          );
+          if (mage)
+            P(
+              [
+                -11, -39, -17, -8, -9, -12, -12, -1, 1, -9, 12, -2, 10, -15, 17, -9,
+                10, -39,
+              ],
+              "#30323d",
+              "#555160",
+            );
+          P(
+            [-11, -55, 11, -55, heavy ? 18 : 12, -29, 0, -22, heavy ? -18 : -11, -30],
+            heavy ? "#554265" : "#303440",
+            "#94829e",
+          );
+          if (heavy) {
+            for (let j = 0; j < 3; j++)
+              P(
+                [
+                  -15,
+                  -47 + j * 8,
+                  15,
+                  -47 + j * 8,
+                  13,
+                  -41 + j * 8,
+                  -13,
+                  -41 + j * 8,
+                ],
+                "#776084",
+                "#b39bb8",
+                0.8,
+              );
+            for (const sign of [-1, 1]) {
+              c.save();
+              c.scale(sign, 1);
+              P([9, -56, 23, -58, 29, -42, 13, -40], "#675074", "#baa5bd");
+              P([19, -56, 23, -65, 26, -53], "#ddd0cd");
+              c.restore();
+            }
+          }
+          const ax = 18 + attack * 7,
+            ay = -40 - attack * 8;
+          stroke(
+            [-10, -50, -20, -38, -14, -28],
+            heavy ? "#776383" : "#373d48",
+            heavy ? 9 : 5,
+          );
+          stroke(
+            [10, -50, 20, -46, ax, ay],
+            heavy ? "#80678e" : "#454452",
+            heavy ? 9 : 5,
+          );
+          // Шарообразная чёрная маска и угловатые светящиеся глаза.
+          if (k === 0 || k === 5 || mage)
+            P(
+              [-15, -58, -14, -75, -4, -84, 8, -82, 17, -65, 12, -53],
+              "#292f40",
+              "#5b5873",
+            );
+          E(0, -65, heavy ? 13 : 12, 13, "#10131c");
+          P([-9, -69, -2, -65, -4, -62, -8, -64], glow, null);
+          P([3, -65, 10, -69, 8, -63, 4, -62], glow, null);
+          if (k === 3) {
+            P(
+              [
+                -15, -68, -13, -78, -4, -84, 4, -84, 13, -78, 15, -68, 7, -72, 0, -76,
+                -7, -72,
+              ],
+              "#69527d",
+              "#b59abf",
+            );
+            P([-12, -77, -21, -88, -19, -73, -13, -66], "#c3b2ba");
+            P([12, -77, 21, -88, 19, -73, 13, -66], "#c3b2ba");
+          }
+          if (k === 5) {
+            P(
+              [-10, -55, -30, -65, -43, -57, -26, -59, -38, -44, -17, -50],
+              "#33556e",
+              "#7396ad",
+            );
+          }
+          if (k === 4) {
+            P([-4, -45, 0, -52, 4, -45, 0, -38], "#8bed75", "#cadba6");
+          }
+          if (mage) {
+            stroke([ax, ay, 27, -82, 21, -7], "#75634b", 3);
+            if (quality > 0) {
+              c.globalAlpha = 0.24;
+              E(27, -81, 12 + attack * 2, 15, "#79f757");
+              c.globalAlpha = 1;
+            }
+            E(27, -81, 7, 8, "#cbd5bc");
+            E(24, -82, 2, 2, "#171e21");
+            E(30, -82, 2, 2, "#171e21");
+            P([24, -76, 30, -76, 29, -72, 25, -72], "#d8ddc8");
+            stroke([21, -90, 23, -96, 26, -91, 31, -99, 33, -90], "#80ed50", 1.6);
+          } else if (k === 2) {
+            c.save();
+            c.translate(ax - 8, ay);
+            c.rotate(-0.12 - attack * 0.15);
+            P([-24, -3, 21, -3, 26, 2, -23, 4], "#795d46", "#c3a585");
+            stroke([8, -17, 20, -9, 23, 0, 20, 9, 8, 17], "#a4a1a1", 2.7);
+            stroke([8, -17, 2, 0, 8, 17], "#d6d2ba", 0.8);
+            stroke([-24, -5, -24, 6], "#9e9eaa", 4);
+            stroke([-3, -7, 4, -7], "#9c9eac", 4);
+            c.restore();
+          } else if (k === 6) {
+            // Берсерк — ударные шипованные рукавицы, не вторая булава демона.
+            for (const [x, y] of [
+              [ax, ay],
+              [-14, -28],
+            ]) {
+              if (quality > 0) {
+                c.globalAlpha = 0.25;
+                E(x, y, 14 + attack * 2, 14, "#a53eff");
+                c.globalAlpha = 1;
+              }
+              P(
+                [
+                  x - 9,
+                  y - 8,
+                  x + 6,
+                  y - 10,
+                  x + 12,
+                  y - 1,
+                  x + 7,
+                  y + 9,
+                  x - 7,
+                  y + 8,
+                ],
+                "#75518d",
+                "#d2a2eb",
+              );
+              for (let i = 0; i < 3; i++)
+                P(
+                  [x - 8 + i * 7, y - 7, x - 5 + i * 7, y - 16, x - 1 + i * 7, y - 8],
+                  "#d8bedf",
+                );
+              stroke([x - 5, y, x + 6, y], "#cba4e1", 1);
+            }
+            P(
+              [-10, -76, -13, -85, -5, -80, 0, -91, 5, -81, 12, -87, 10, -75],
+              "#a941df",
+              "#d482ff",
+            );
+          } else if (heavy) {
+            stroke([ax, ay, ax + 3, -71], "#a48aa5", 4);
+            P(
+              [ax - 5, -73, ax - 7, -88, ax + 5, -90, ax + 11, -76, ax + 6, -67],
+              "#665077",
+              "#cab0d5",
+            );
+            for (let i = 0; i < 3; i++)
+              P(
+                [ax + 8, -86 + i * 7, ax + 16, -82 + i * 7, ax + 9, -79 + i * 7],
+                "#d6c7d2",
+              );
+            if (k === 6 && quality > 0) {
+              c.strokeStyle = "#b84eff";
+              c.lineWidth = 2;
+              c.beginPath();
+              c.arc(ax, -74, 14, phase, phase + 3.5);
+              c.stroke();
+            }
+          } else if (!air) {
+            for (const [x, y, rot] of [
+              [ax, ay, -0.3 - attack * 0.8],
+              [-14, -28, -1.7 + attack * 0.6],
+            ]) {
+              c.save();
+              c.translate(x, y);
+              c.rotate(rot);
+              P([-2, 2, -2, -23, 4, -35, 2, -19, 5, -12, 2, 1], "#b5d9ef", "#548cad");
+              stroke([-5, 3, 5, 3], "#798398", 2);
+              c.restore();
+            }
+          } else {
+            stroke([ax, ay, ax + 8, ay + 5], "#41324f", 4);
+            P([ax + 5, ay + 5, ax + 9, ay + 12, ax + 10, ay + 5], "#d7a177");
+          }
+          c.restore();
+        }
         vectorUnit(u, t, scale = 1, quality = 2, frame = 0) {
+          if ((u.team ?? u.side) === 1) return this.shadowUnit(u,t,scale,quality,frame);
           const c = this.c,
             k = u.kind,
             friend = u.side === 0,
@@ -3299,6 +3876,7 @@
             if (u.active) continue;
             u.active = true;
             u.side = side;
+            u.team = side ? 1-(this.g.faction || 0) : (this.g.faction || 0);
             u.kind = data.kind;
             u.flying = Boolean(data.flying);
             u.x = entrance;
@@ -3576,7 +4154,13 @@
               c.rotate(angle);
               c.strokeStyle = p.side ? "#afbdff" : "#ffdf99";
               c.lineWidth = 1.5;
-              if (p.style === 1) {
+              const team=p.side ? (this.g.mode==="pvp" ? this.g.enemyFaction : 1-(this.g.faction||0)) : (this.g.faction||0);
+              if(p.style===1 && team===1) {
+                // Гаргулья: огненный сгусток с тем же серверным попаданием.
+                c.globalAlpha=.3;r.ellipse(-4,0,10,5,"#ef693c");c.globalAlpha=1;
+                r.polygon([-12,-3,-5,-5,3,-2,5,0,1,4,-7,3],"#ff9e3d",null);
+                r.ellipse(0,0,3,2,"#fff1ae");
+              } else if (p.style === 1) {
                 c.rotate(p.life * 15);
                 c.beginPath();
                 for (let i = 0; i < 8; i++) {
@@ -3665,6 +4249,67 @@
             $(id).textContent = value;
           }
         }
+        cardName(i) {
+          return this.g.faction
+            ? [
+                "Тень",
+                "Колдун",
+                "Арбалетчик",
+                "Демон",
+                "Колдун · шаман",
+                "Тень · убийца",
+                "Берсерк",
+                "Гаргулья",
+              ][i]
+            : CONFIG.cards[i].name;
+        }
+        cardStatus(i) {
+          const g = this.g,
+            c = CONFIG.cards[i],
+            l = CONFIG.levels[g.level - 1];
+          const charge = Math.max(0, (c.cd - g.charges[i]) / l.speed),
+            energy = Math.max(0, c.cost - g.energy);
+          const wait = Math.ceil(
+            Math.max(charge, energy / l.regen, i === 5 ? 30 - g.elapsed : 0),
+          );
+          let reason = "Готов";
+          if (g.level < c.level) reason = "Додзё " + c.level;
+          else if (i === 5 && g.elapsed < 30)
+            reason = "Доступен через " + Math.ceil(30 - g.elapsed) + "с";
+          else if (g.reserve[i]) reason = "Тап — вернуть";
+          else if (
+            g.mode === "pvp" &&
+            window.neonDojo?.modes?.pending?.has("summon:" + i)
+          )
+            reason = "Ждём сервер";
+          else if (g.state !== "playing" || g.mode === "menu") reason = "Пауза";
+          else if (g.units.count[0] >= CONFIG.unitLimit) reason = "Армия 48 / 48";
+          else if (g.charges[i] < c.cd)
+            reason = "Заряд " + Math.max(1, Math.ceil(charge)) + "с";
+          else if (g.energy < c.cost) reason = "Нужно +" + Math.ceil(energy) + " ⚡";
+          return { ready: reason === "Готов", reason, wait };
+        }
+        inspectCard(i) {
+          const g = this.g,
+            c = CONFIG.cards[i],
+            status = this.cardStatus(i);
+          const tactics = [
+            "Ближний бой. Не атакует воздух: против летающих нужны лучники или гарнизон.",
+            "Поддержка: усиливает урон соседних союзников на 2; на додзё 4 — на 4. Не атакует воздух.",
+            "Дальний бой. Поражает и наземные, и воздушные цели, но уязвим вблизи.",
+            "Тяжёлый передний ряд. Много здоровья, низкая скорость; нужна поддержка против воздуха.",
+            "Поддержка: при атаке лечит союзников поблизости на 12 HP, не выше максимального здоровья.",
+            "Сильный боец ближнего боя, доступен с 30-й секунды. Воздух не атакует.",
+            "Сильный дорогой боец с дальней атакой. Поражает наземные и воздушные цели.",
+            "Летающий боец: мечники не достают. Опасайся лучников и гарнизона.",
+          ];
+          this.open(
+            this.cardName(i),
+            `<p><b>${c.role}</b> · додзё ${c.level}<br>Цена: ${c.cost} ⚡ · заряд: ${c.cd}с (ускоряется додзё)<br>HP: ${c.hp} · урон: ${c.dmg} · атака раз в ${c.rate}с<br>Дальность: ${c.range} · скорость: ${c.speed}</p><p>${tactics[i]}</p><p>${status.reason}${!status.ready && status.wait > 0 && g.level >= c.level && !g.reserve[i] ? " · ресурсы/заряд при ходе боя через ≈" + status.wait + "с" : ""}</p><p>${g.mode === "pvp" ? "PvP продолжается, пока открыта эта справка. Характеристики одинаковы для обоих кланов." : "Одиночный бой на паузе, пока открыта справка."}</p>`,
+            "Закрыть",
+            () => this.modal.close(),
+          );
+        }
         makeCard(i) {
           let data = CONFIG.cards[i],
             b = document.createElement("button");
@@ -3697,6 +4342,7 @@
           const deck = $("cards");
           const resetPointer = () => {
             pointer = null;
+            this.cardHold=null;
             deck.style.scrollSnapType = "";
           };
           b.onpointerdown = (e) => {
@@ -3709,14 +4355,16 @@
             reserved = false;
             scrolling = false;
             b.setPointerCapture(e.pointerId);
+            this.cardHold={time:performance.now(),open:()=>{reserved=true;this.inspectCard(i);}};
           };
           b.onpointermove = (e) => {
             if (pointer !== e.pointerId) return;
             const dx = startX - e.clientX,
               dy = startY - e.clientY;
+            if(Math.hypot(dx,dy)>10)this.cardHold=null;
             const landscape = matchMedia("(orientation: landscape)").matches;
             if (
-              !landscape &&
+              !landscape && deck.scrollWidth > deck.clientWidth + 1 &&
               Math.abs(dx) > Math.max(70, b.clientWidth * 0.9) &&
               Math.abs(dy) < 45
             )
@@ -3730,12 +4378,14 @@
           b.onpointerup = (e) => {
             if (pointer !== e.pointerId) return;
             resetPointer();
+            if(reserved)return;
             if (scrolling) {
               reserved = true;
               return;
             }
-            if (startX - e.clientX > 35 && Math.abs(startY - e.clientY) < 45) {
+            if (startX - e.clientX > Math.min(35,b.clientWidth*.45) && Math.abs(startY - e.clientY) < 45 && startX-e.clientX < b.clientWidth*1.2) {
               reserved = true;
+              if(this.g.mode==="pvp") {this.toast("Резерв доступен только в одиночной игре");return;}
               this.g.reserve[i] = !this.g.reserve[i];
               this.g.persist();
               this.toast(
@@ -3750,6 +4400,8 @@
             resetPointer();
           };
           b.onlostpointercapture = resetPointer;
+          b.oncontextmenu=e=>{e.preventDefault();reserved=true;this.inspectCard(i);};
+          b.addEventListener("keydown",e=>{if(e.key==="F2" || (e.shiftKey && e.key==="Enter")){e.preventDefault();this.inspectCard(i);}});
           b.onclick = () => {
             if (reserved) {
               reserved = false;
@@ -3784,9 +4436,10 @@
           if (!this.modal.open) this.modal.showModal();
         }
         help() {
+          const pvp = this.g.mode === "pvp";
           this.open(
             "道 · Как играть",
-            `<p>Для телефона рекомендуем горизонтальный полный экран: все 8 карт и управление видны без прокрутки. Кнопка ⛶ повторяет запрос полного экрана, если клиент его поддерживает.</p><p>Тапни по заряженной карточке — боец сам вступит в бой. Карточки тратят энергию, её запас постоянно восстанавливается.</p><p>Апгрейды додзё покупаются за ⚡, ускоряют заряд и открывают новые роли. Монеты ускоряют заряд на 5 секунд и меняют фонари. Кнопка «🏹 Защита» открывает 3 уровня лучников на замке: I доступен с додзё II.</p><p>Осада ворот не блокирует призыв: новобранцы строятся в тылу и первые 0,75 с получают половину урона. Ограничения — энергия, заряд карты и лимит 48 бойцов. Не заполняй всю армию одной ролью: нужны пехота, стрелки и поддержка. После 4 минут урон бойцов, ци и гарнизонов обеих сторон плавно растёт до ×2 к 8-й минуте (⚔ рядом с часами). Лечение не усиливается; автоматической победы по таймеру нет.</p><p>↑ Свайп вверх / пробел / кнопка — волна ци (20 ⚡). Долгий тап по замку — разведка. Короткий свайп влево по карточке — резерв, тап вернёт её. Длинный горизонтальный свайп листает колоду; клавиши 1–8 призывают бойцов.</p><p>Ниндзя открывается после 30 секунд боя. Куноичи — летающий метатель сюрикенов с ур. 3: наземные мечники его не достают, лучники и башни — достают.</p><p>Новая битва сбрасывает поле, но сохраняет уровень додзё и монеты. В открытом меню — тактическая пауза, фон остаётся живым. В скрытой вкладке — пауза.</p>`,
+            `<p><b>${pvp ? "PvP: меню не останавливает бой. При потере связи сервер ставит матч на паузу на срок до 45 секунд. Лимит боя — 20 минут, затем ничья." : "Одиночная игра: меню и справка ставят бой на паузу; продолжить можно без сброса армии."}</b></p><p>Цель — разрушить замок противника. Тап по готовой карточке или клавиши 1–8 — призыв. Удержи карточку 0,5 секунды, нажми F2 на ней или правую кнопку мыши — характеристики и контрроли. Зелёная готовность означает, что сейчас хватает энергии, заряда и места в армии.</p><p>Додзё увеличивает запас и восстановление энергии, ускоряет заряд и открывает роли. Гарнизон автоматически бьёт по земле и воздуху; требует додзё 2 / 3 / 5. Все покупки за ⚡ проверяют реальные ресурсы. ${pvp ? "В PvP оба игрока начинают одинаково. Ускорение за монеты недоступно, баланс бота не используется." : "Ускорение стоит 20 игровых монет и добавляет 5 секунд заряда всем карточкам. Короткий свайп влево по карточке — резерв: её заряд заморожен до возврата тапом."}</p><p>Мечники не достают летающих. Лучники и гарнизон защищают от воздуха; поддержка усиливает и лечит ближний строй. Волна ци: 20 ⚡, кнопка / пробел / свайп вверх. Специальный убийца доступен с 30-й секунды.</p><p>Лимит: 48 бойцов на сторону. Призыв под осадой разрешён; первые 0,75с новый боец получает половину урона. После 4 минут урон обеих сторон плавно растёт до ×2 к 8-й минуте; лечение не усиливается. ${pvp ? "Сдача — через меню. Резерв карточек в PvP отключён." : "Замена начатого боя требует подтверждения; открытые этапы, игровые монеты и прокачка сохраняются."}</p>`,
             "В бой",
             () => this.modal.close(),
           );
@@ -3870,7 +4523,7 @@
           let g = this.g;
           this.open(
             win ? "勝 · Победа додзё!" : "敗 · Додзё пало",
-            `<p>${win ? "Клан Тени отступил. Рассвет за нашим додзё!" : "Даже Сенсею иногда нужен второй заход."}</p><p>Бой: ${Math.floor(g.elapsed)} сек. · Побеждено врагов: ${g.kills}<br>${win ? "Награда: +80 монет." : "Награда за побеждённых врагов сохранена."}</p><p>Прокачка додзё сохранена. Собери другой отряд и попробуй ещё.</p>`,
+            `<p>${win ? "Соперник отступил. Победа нашего додзё!" : "Даже Сенсею иногда нужен второй заход."}</p><p>Бой: ${Math.floor(g.elapsed)} сек. · Побеждено врагов: ${g.kills}<br>${win ? "Награда: +80 монет." : "Награда за побеждённых врагов сохранена."}</p><p>Прокачка додзё сохранена. Собери другой отряд и попробуй ещё.</p>`,
             "Ещё одна битва",
             () => {
               this.modal.close();
@@ -3938,6 +4591,9 @@
         }
         update(dt) {
           let g = this.g;
+          if(this.cardHold && performance.now()-this.cardHold.time>=500) {
+            const hold=this.cardHold;this.cardHold=null;hold.open();
+          }
           if (this.toastLife > 0) {
             this.toastLife -= dt;
             if (this.toastLife <= 0) $("toast").classList.remove("show");
@@ -3970,7 +4626,7 @@
           this.text("regen", `+${l.regen}/с`);
           this.text("dojoHud", "Уровень " + g.level);
           this.text("ourTitle", l.name);
-          this.text("enemyTitle", CONFIG.castle[g.enemyLevel - 1]);
+          this.text("enemyTitle", (CONFIG.castle[g.enemyLevel - 1] || "Небесная крепость"));
           $("ourHealth").style.width = (100 * g.ourHp) / g.ourMax + "%";
           $("enemyHealth").style.width = (100 * g.enemyHp) / g.enemyMax + "%";
           $("clock").textContent =
@@ -4095,6 +4751,7 @@
             this.fpsTime = 0;
             this.frameCount = 0;
             if (this.gesture) this.gesture.live = false;
+            if(this.ui)this.ui.cardHold=null;
             if (this.hidden) this.persist();
           });
           window.addEventListener("pagehide", () => this.persist());
@@ -4345,7 +5002,7 @@
             this.enemyHp += 200;
             this.enemyGlow = 1;
             this.fx.emit(this.w - 58, this.ground - 60, 20, "#00E5FF");
-            this.ui.toast("Клан Тени достроил замок · ур. " + this.enemyLevel);
+            this.ui.toast((this.faction ? "Клан Рассвета" : "Клан Тени")+" достроил замок · ур. " + this.enemyLevel);
           }
           this.enemySpawn -= dt;
           if (this.enemySpawn <= 0) {
@@ -4405,7 +5062,7 @@
             0,
             0,
             this.level,
-            false,
+            Boolean(this.faction),
             t,
             this.buildGlow,
             this.tower,
@@ -4419,10 +5076,10 @@
             0,
             0,
             this.enemyLevel,
-            true,
+            Boolean(this.mode==="pvp" ? this.enemyFaction : 1-(this.faction||0)),
             t,
             this.enemyGlow,
-            Math.max(0, this.enemyLevel - 2),
+            this.mode === "pvp" ? this.enemyTower : Math.max(0, this.enemyLevel - 2),
             q,
           );
           c.restore();
@@ -4491,8 +5148,8 @@
           }
         }
       }
-      // Telegram — только оболочка и haptic. initData не отправляем и не доверяем
-      // данным клиента для балансов: у этого прототипа нет серверных наград.
+      // Telegram — оболочка и haptic; initData отправляется только своему PvP-серверу.
+      // Непроверенные данные клиента не дают наград или прав на баланс бота.
       function requestGameFullscreen(userGesture = false) {
         const tg = window.Telegram?.WebApp;
         if (tg?.initData && typeof tg.requestFullscreen === "function") {
@@ -4592,6 +5249,869 @@
         StickmanRenderer,
         version: "3.1",
       };
+      // Режимы игры: кампания локальна, PvP получает только серверные снимки.
+      class DojoModes {
+        constructor(g) {
+          this.g = g;
+          try {
+            g.faction = localStorage.getItem("dojo-faction-v1") === "1" ? 1 : 0;
+          } catch {
+            g.faction = 0;
+          }
+          this.preferredFaction = g.faction;
+          this.seq = 0;
+          this.pending = new Map();
+          this.side = 0;
+          this.room = null;
+          this.stopped = true;
+          this.status = "";
+          this.retry = null;
+          this.unlocked = 1;
+          this.stage = 0;
+          try {
+            this.unlocked = clamp(
+              Math.floor(Number(localStorage.getItem("dojo-campaign-v1"))) || 1,
+              1,
+              31,
+            );
+          } catch {}
+          this.panel = document.createElement("section");
+          this.panel.id = "modeMenu";
+          this.panel.setAttribute("aria-label", "Меню игры");
+          document.body.append(this.panel);
+          this.nav = document.createElement("button");
+          this.nav.id = "modeMenuBtn";
+          this.nav.textContent = "☰ Меню";
+          this.nav.onclick = () => this.main();
+          document.querySelector(".session-tools").prepend(this.nav);
+          // Скрытый боевой интерфейс не должен получать фокус под меню.
+          new MutationObserver(() => {
+            document.querySelector(".app").inert = !this.panel.hidden;
+            this.nav.hidden = !this.panel.hidden;
+            const needsCharge = CONFIG.cards.some(
+              (c, i) => g.charges[i] < c.cd - 0.000001,
+            );
+            if (!needsCharge) $("boostBtn").disabled = true;
+            $("boostBtn").title = needsCharge
+              ? "За 20 игровых монет: +5с заряда всем карточкам"
+              : "Все карточки уже заряжены";
+          }).observe(this.panel, { attributes: true, attributeFilter: ["hidden"] });
+          window.addEventListener("keydown", (e) => {
+            if (e.key !== "Escape" || this.g.ui.modal.open) return;
+            if (
+              !this.panel.hidden &&
+              this.g.mode === "menu" &&
+              this.hasBattle &&
+              this.g.state === "playing"
+            ) {
+              this.g.mode = "solo";
+              this.panel.hidden = true;
+              this.g.last = 0;
+            } else if (this.panel.hidden) this.main();
+          });
+          this.install();
+          this.main();
+          const token = new URLSearchParams(location.search).get("room");
+          if (/^[A-Za-z0-9_-]{22}$/.test(token || "")) this.join(token);
+        }
+        screen(title, text, buttons) {
+          this.g.ui.modal.close();
+          this.g.ui.cardHold = null;
+          this.panel.replaceChildren();
+          this.panel.hidden = false;
+          document.querySelector(".app").inert = true;
+          this.nav.hidden = true;
+          this.panel.classList.remove("campaign-menu");
+          const box = document.createElement("div");
+          box.className = "modeBox";
+          const h = document.createElement("h1");
+          h.textContent = title;
+          box.append(h);
+          const p = document.createElement("p");
+          p.textContent = text;
+          box.append(p);
+          for (const [label, action, disabled] of buttons) {
+            const b = document.createElement("button");
+            b.textContent = label;
+            b.disabled = !!disabled;
+            b.onclick = action;
+            box.append(b);
+          }
+          this.panel.append(box);
+          const first = box.querySelector("button:not(:disabled)");
+          if (first) first.focus({ preventScroll: true });
+        }
+        main() {
+          if (this.g.mode === "pvp" && !this.stopped) {
+            this.prompt = true;
+            this.screen(
+              "Покинуть бой?",
+              "Выход засчитается как сдача. Временно потерянная связь даёт 45 секунд на возврат.",
+              [
+                [
+                  "Вернуться в бой",
+                  () => {
+                    this.prompt = false;
+                    this.displayStatus = null;
+                    this.panel.hidden = true;
+                  },
+                ],
+                [
+                  "Сдаться и выйти",
+                  () => {
+                    this.stop(true);
+                    this.restore();
+                    this.main();
+                  },
+                ],
+              ],
+            );
+            return;
+          }
+          this.g.mode = "menu";
+          this.displayStatus = null;
+          this.screen(
+            "СЕНСЕЙ · СТЕНКА НА СТЕНКУ",
+            "Выбери клан и режим. Кампания — офлайн. PvP — через Telegram, без ставок.",
+            [
+              ...(this.hasBattle && this.g.state === "playing"
+                ? [
+                    [
+                      "▶ Продолжить бой" +
+                        (this.stage ? ` · этап ${this.stage}` : ""),
+                      () => {
+                        this.g.mode = "solo";
+                        this.panel.hidden = true;
+                        this.g.last = 0;
+                      },
+                    ],
+                  ]
+                : []),
+              ["⚔ Одиночная игра · 30 уровней", () => this.campaign()],
+              [
+                "☯ Клан: " + (this.preferredFaction ? "Тень" : "Рассвет"),
+                () => this.chooseTeam(() => this.main()),
+              ],
+              ["✉ Пригласить соперника", () => this.create()],
+              [
+                "∞ Свободная битва",
+                () =>
+                  this.confirmReplacement(() => {
+                    this.stage = 0;
+                    this.g.mode = "solo";
+                    this.panel.hidden = true;
+                    this.g.newBattle();
+                  }),
+              ],
+            ],
+          );
+        }
+        confirmReplacement(action, force = false) {
+          const g = this.g;
+          if (
+            !force &&
+            (!this.hasBattle ||
+              g.state !== "playing" ||
+              (g.elapsed < 3 && g.units.count[0] + g.units.count[1] === 0))
+          )
+            return action();
+          g.ui.open(
+            "Заменить текущий бой?",
+            "<p>Армия, здоровье замков и время текущего боя сбросятся. Прокачка додзё, игровые монеты и открытые этапы сохранятся.</p>",
+            "Начать новый бой",
+            () => {
+              g.ui.modal.close();
+              action();
+            },
+          );
+        }
+        chooseTeam(next) {
+          this.screen(
+            "Выбери свой клан",
+            "Рассвет или Тень: одинаковые цены, энергия и характеристики. Можно выбрать один и тот же клан в PvP.",
+            [
+              [
+                "☀ Играть за Рассвет",
+                () => {
+                  this.setTeam(0);
+                  next();
+                },
+              ],
+              [
+                "☾ Играть за Тень",
+                () => {
+                  this.setTeam(1);
+                  next();
+                },
+              ],
+              ["← Главное меню", () => this.main()],
+            ],
+          );
+          const canvas = document.createElement("canvas");
+          canvas.width = 672;
+          canvas.height = 112;
+          canvas.className = "team-preview";
+          canvas.setAttribute(
+            "aria-label",
+            "Клан Тени: убийца, демон, колдун, арбалетчик, берсерк, гаргулья.",
+          );
+          const r = new StickmanRenderer(canvas.getContext("2d"));
+          for (let i = 0; i < 6; i++)
+            r.vectorUnit(
+              {
+                side: 0,
+                team: 1,
+                kind: [0, 3, 1, 2, 6, 7][i],
+                x: 56 + i * 112,
+                y: 100,
+                age: 1,
+                moving: false,
+                flash: 0,
+                seed: 0,
+              },
+              0,
+              1,
+              2,
+              0,
+            );
+          this.panel.querySelector("p").after(canvas);
+        }
+        setTeam(team) {
+          this.preferredFaction = team === 1 ? 1 : 0;
+          if (!this.hasBattle || this.g.state !== "playing")
+            this.g.faction = this.preferredFaction;
+          try {
+            localStorage.setItem("dojo-faction-v1", String(this.preferredFaction));
+          } catch {}
+          this.g.ui.refresh();
+        }
+        campaign(act = Math.min(5, Math.floor((this.unlocked - 1) / 5))) {
+          this.g.mode = "menu";
+          act = clamp(Math.floor(act), 0, 5);
+          const names = ["Ворота", "Сосновый путь", "Туман", "Мост", "Цитадель"];
+          const tips = [
+            "Начни с ронинов. Сенсей усиливает ближайших союзников.",
+            "Улучши додзё: больше энергии и доступ к лучникам.",
+            "Куноичи обходит мечников. Лучники и гарнизон бьют по воздуху.",
+            "Волна ци помогает против плотного строя. Береги 20 энергии.",
+            "Монах лечит союзников; тяжёлым бойцам нужна поддержка.",
+            "Сочетай роли и улучшения. Длительный бой усиливает урон обеих сторон.",
+          ];
+          const buttons = Array.from({ length: 5 }, (_, i) => {
+            const n = act * 5 + i + 1;
+            return [
+              `${n < this.unlocked ? "✓" : n === this.unlocked ? "⚔" : "🔒"} ${n}. ${names[i]}`,
+              () => this.confirmReplacement(() => this.startStage(n)),
+              n > this.unlocked,
+            ];
+          });
+          this.screen(
+            `Путь Сенсея · акт ${act + 1} / 6`,
+            `Пройдено ${this.unlocked - 1} / 30 · ${tips[act]}`,
+            [...buttons, ["← Главное меню", () => this.main()]],
+          );
+          this.panel.classList.add("campaign-menu");
+          const tabs = document.createElement("div");
+          tabs.className = "act-tabs";
+          tabs.setAttribute("aria-label", "Акты кампании");
+          for (let i = 0; i < 6; i++) {
+            const tab = document.createElement("button");
+            tab.textContent = `${i + 1}`;
+            tab.setAttribute("aria-label", `Акт ${i + 1}`);
+            tab.setAttribute("aria-pressed", String(i === act));
+            tab.onclick = () => this.campaign(i);
+            tabs.append(tab);
+          }
+          this.panel.querySelector("p").after(tabs);
+        }
+        startStage(n) {
+          if (!Number.isInteger(n) || n < 1 || n > 30 || n > this.unlocked) return;
+          this.stage = n;
+          this.g.mode = "solo";
+          this.panel.hidden = true;
+          this.g.newBattle();
+          this.g.enemyMax = this.g.enemyHp = Math.round(850 + n * 85);
+          this.g.enemySpawn = Math.max(2, 7 - n * 0.12);
+          this.g.ui.toast(`Кампания · уровень ${n} / 30`);
+        }
+        install() {
+          const g = this.g,
+            original = {};
+          for (const key of [
+            "persist",
+            "update",
+            "newBattle",
+            "summon",
+            "upgrade",
+            "upgradeTower",
+            "boost",
+            "superAttack",
+          ])
+            original[key] = g[key].bind(g);
+          g.persist = () => {
+            if (g.mode !== "pvp") original.persist();
+          };
+          g.newBattle = () => {
+            if (g.mode === "pvp") return;
+            this.panel.hidden = true;
+            if (g.mode === "menu") g.mode = "solo";
+            g.faction = this.preferredFaction;
+            original.newBattle();
+            for (const u of g.units.units) delete u.netX;
+            this.hasBattle = true;
+          };
+          g.update = (dt) => {
+            if (g.mode === "menu") {
+              g.bg.update(dt);
+              g.fx.update(dt);
+              g.ui.update(dt);
+              return;
+            }
+            if (g.mode === "pvp") {
+              // Только визуальная интерполяция; HP, столкновения и экономика — серверные.
+              const blend = 1 - Math.exp(-dt / 0.065);
+              for (const u of g.units.units)
+                if (u.active && Number.isFinite(u.netX)) {
+                  const target = ((this.side ? 960 - u.netX : u.netX) / 960) * g.w;
+                  u.x += (target - u.x) * blend;
+                  u.y = g.ground - (u.flying ? g.flightHeight : 0);
+                }
+              g.bg.update(dt);
+              g.fx.update(dt);
+              g.ui.update(dt);
+              return;
+            }
+            // Множитель кампании не меняет механику свободной битвы.
+            const spawn = g.enemySpawn;
+            original.update(dt);
+            if (this.stage && g.state === "playing" && !g.ui.modal.open) {
+              g.aiEnergy +=
+                Math.max(0, (2.9 + g.elapsed * 0.007) * dt) *
+                (-0.4 + (this.stage - 1) * 0.045);
+              if (g.enemySpawn > spawn)
+                g.enemySpawn *= Math.max(0.55, 1.15 - this.stage * 0.02);
+            }
+          };
+          for (const [method, action] of [
+            ["summon", "summon"],
+            ["upgrade", "upgrade"],
+            ["upgradeTower", "tower"],
+            ["superAttack", "qi"],
+          ])
+            g[method] = (index) =>
+              g.mode === "pvp"
+                ? this.command(action, index)
+                : g.mode === "menu"
+                  ? false
+                  : original[method](index);
+          g.boost = () => {
+            if (g.mode === "pvp") return g.ui.toast("В PvP нет усилений за монеты");
+            if (!CONFIG.cards.some((c, i) => g.charges[i] < c.cd - 0.000001))
+              return g.ui.toast("Все карточки уже заряжены — монеты не потрачены");
+            return original.boost();
+          };
+          const result = g.ui.result.bind(g.ui);
+          g.ui.result = (win) => {
+            if (!this.stage) return result(win);
+            if (win) {
+              this.unlocked = Math.max(this.unlocked, Math.min(31, this.stage + 1));
+              try {
+                localStorage.setItem("dojo-campaign-v1", String(this.unlocked));
+              } catch {}
+            }
+            g.ui.open(
+              win ? "勝 · Этап пройден!" : "敗 · Попробуй ещё",
+              `<p>Кампания · уровень ${this.stage} / 30</p><p>${win ? "Следующий этап открыт. +80 игровых монет." : "Измени состав отряда или прокачай додзё."}</p>`,
+              !win
+                ? "Повторить этап"
+                : this.stage < 30
+                  ? "Следующий уровень"
+                  : "К уровням",
+              () => {
+                g.ui.modal.close();
+                if (!win) this.startStage(this.stage);
+                else if (this.stage < 30) this.startStage(this.stage + 1);
+                else this.campaign();
+              },
+            );
+            const stages = document.createElement("button");
+            stages.textContent = "Выбор этапа";
+            stages.onclick = () => {
+              g.ui.modal.close();
+              this.campaign();
+            };
+            $("modalBody").append(stages);
+          };
+          const refresh = g.ui.refresh.bind(g.ui);
+          g.ui.refresh = () => {
+            refresh();
+            this.nav.hidden = !this.panel.hidden;
+            const names = [
+              "Тень",
+              "Колдун",
+              "Арбалетчик",
+              "Демон",
+              "Колдун · шаман",
+              "Тень · убийца",
+              "Берсерк",
+              "Гаргулья",
+            ];
+            document.querySelector(".faction small").textContent = g.faction
+              ? "☾ · КЛАН ТЕНИ"
+              : "陽 · КЛАН РАССВЕТА";
+            document.querySelector(".faction.right small").textContent = (
+              g.mode === "pvp" ? g.enemyFaction : 1 - (g.faction || 0)
+            )
+              ? "☾ · КЛАН ТЕНИ"
+              : "陽 · КЛАН РАССВЕТА";
+            for (let i = 0; i < g.ui.cards.length; i++) {
+              const el = g.ui.cards[i].el,
+                name = g.faction ? names[i] : CONFIG.cards[i].name;
+              el.querySelector(".name").textContent = name;
+              el.setAttribute(
+                "aria-label",
+                name + ". " + g.ui.cards[i].sub.textContent,
+              );
+              if (el.dataset.team !== String(g.faction || 0)) {
+                el.dataset.team = String(g.faction || 0);
+                const canvas = el.querySelector("canvas"),
+                  c = canvas.getContext("2d");
+                c.clearRect(0, 0, canvas.width, canvas.height);
+                new StickmanRenderer(c).vectorUnit(
+                  {
+                    side: 0,
+                    team: g.faction || 0,
+                    kind: i,
+                    x: 70,
+                    y: 140,
+                    age: 1,
+                    moving: false,
+                    flash: 0,
+                    seed: 0,
+                  },
+                  0,
+                  1.65,
+                  2,
+                  0,
+                );
+              }
+            }
+            const stageLabel = document.querySelector(".stage-center small");
+            stageLabel.textContent =
+              g.mode === "pvp"
+                ? "БОЙ С ДРУГОМ"
+                : this.stage
+                  ? `ЭТАП ${this.stage} / 30`
+                  : "ВРЕМЯ БИТВЫ";
+            stageLabel.classList.toggle(
+              "mission-label",
+              g.mode === "pvp" || Boolean(this.stage),
+            );
+            for (const [id, hp, max] of [
+              ["ourHealth", g.ourHp, g.ourMax],
+              ["enemyHealth", g.enemyHp, g.enemyMax],
+            ]) {
+              const bar = $(id).parentElement;
+              bar.setAttribute("role", "progressbar");
+              bar.setAttribute(
+                "aria-label",
+                id === "ourHealth"
+                  ? "Здоровье твоего замка"
+                  : "Здоровье замка соперника",
+              );
+              bar.setAttribute("aria-valuemin", "0");
+              bar.setAttribute("aria-valuemax", String(max));
+              bar.setAttribute("aria-valuenow", String(Math.max(0, Math.ceil(hp))));
+              bar.title = `${Math.max(0, Math.ceil(hp))} / ${max} HP`;
+            }
+            for (let i = 0; i < g.ui.cards.length; i++) {
+              const c = CONFIG.cards[i],
+                node = g.ui.cards[i].el;
+              node.classList.toggle("unaffordable", g.energy < c.cost);
+              const status = g.ui.cardStatus(i),
+                sub = g.ui.cards[i].sub;
+              node.classList.toggle("ready", status.ready);
+              sub.textContent = status.ready ? `Готов · ${c.cost} ⚡` : status.reason;
+              node.setAttribute(
+                "aria-label",
+                g.ui.cardName(i) + ". " + sub.textContent,
+              );
+              node.setAttribute(
+                "aria-description",
+                "Удержи 0,5 секунды или нажми F2 для характеристик",
+              );
+              if (status.reason === "Ждём сервер")
+                g.ui.cards[i].badge.textContent = "…";
+
+              node.title = `${g.faction ? names[i] : c.name} · ${c.role} · ${c.cost} энергии · ${Math.ceil(c.cd)} с заряд`;
+            }
+            if (g.mode !== "pvp" && this.stage)
+              g.ui.text("battleTag", `⚔ ЭТАП ${this.stage} / 30`);
+            $("arena").setAttribute(
+              "aria-label",
+              `Арена. ${g.mode === "pvp" ? "Бой с другом" : this.stage ? "Кампания, этап " + this.stage + " из 30" : "Свободная битва"}. Твой замок: ${Math.ceil(g.ourHp)} HP, противник: ${Math.ceil(g.enemyHp)} HP.`,
+            );
+            if (g.mode === "pvp") {
+              g.ui.text("battleTag", "● PvP · " + this.status);
+              g.ui.text("coins", "—");
+              g.ui.text("enemyTitle", this.opponent || "Соперник");
+              if (this.pending.has("qi:")) {
+                $("superBtn").disabled = true;
+                $("superBtn").textContent = "ϟ ЦИ · ЖДЁМ СЕРВЕР";
+              }
+              if (this.pending.has("upgrade:")) $("upgradeBtn").disabled = true;
+              if (this.pending.has("tower:")) $("towerBtn").disabled = true;
+              $("boostBtn").disabled = true;
+              $("skinBtn").disabled = true;
+            } else $("skinBtn").disabled = false;
+          };
+          const scout = g.ui.scout.bind(g.ui);
+          g.ui.scout = () =>
+            g.mode === "pvp"
+              ? g.ui.toast(
+                  "PvP · здоровье соперника " +
+                    Math.ceil(g.enemyHp) +
+                    " / " +
+                    g.enemyMax,
+                )
+              : scout();
+          const restart = g.ui.confirmRestart.bind(g.ui);
+          g.ui.confirmRestart = () =>
+            g.mode === "pvp"
+              ? this.main()
+              : this.stage
+                ? this.confirmReplacement(() => this.startStage(this.stage), true)
+                : restart();
+          const skin = $("skinBtn").onclick;
+          $("skinBtn").onclick = () => {
+            if (g.mode !== "pvp") skin();
+          };
+        }
+        telegram() {
+          const tg = window.Telegram?.WebApp;
+          if (!tg?.initData || location.protocol === "file:")
+            throw Error(
+              "Для боя с другом открой /dojo в личном чате бота в Telegram. Одиночная кампания доступна здесь без интернета.",
+            );
+          return tg;
+        }
+        async create() {
+          let tg;
+          try {
+            tg = this.telegram();
+          } catch (e) {
+            return this.error(e.message);
+          }
+          this.screen(
+            "Создаём комнату…",
+            "Приглашение будет действовать 10 минут.",
+            [],
+          );
+          try {
+            const res = await fetch("/miniapp/dojo/rooms", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ initData: tg.initData }),
+              signal: AbortSignal.timeout(12000),
+            });
+            const data = await res.json();
+            if (!res.ok) throw Error(data.error || "Не удалось создать комнату.");
+            this.invite = data;
+            this.join(data.room, true);
+          } catch (e) {
+            this.error(e.message);
+          }
+        }
+        share() {
+          const tg = window.Telegram?.WebApp,
+            data = this.invite;
+          if (!data) return;
+          if (data.prepared_id && tg?.shareMessage) {
+            try {
+              tg.shareMessage(data.prepared_id, (ok) => {
+                if (!ok)
+                  this.g.ui.toast("Приглашение не отправлено. Можно повторить.");
+              });
+              return;
+            } catch {}
+          }
+          const url =
+            "https://t.me/share/url?url=" +
+            encodeURIComponent(data.invite_url) +
+            "&text=" +
+            encodeURIComponent("⚔ Вызываю на бой в «Стенка на Стенку»!");
+          if (tg?.openTelegramLink) tg.openTelegramLink(url);
+          else window.open(url, "_blank", "noopener");
+        }
+        remember() {
+          const g = this.g;
+          if (this.solo) return;
+          g.persist();
+          this.solo = {};
+          for (const k of [
+            "level",
+            "tower",
+            "coins",
+            "wins",
+            "skin",
+            "reserve",
+            "faction",
+          ])
+            this.solo[k] = Array.isArray(g[k]) ? [...g[k]] : g[k];
+          g.reserve = Array(8).fill(false);
+          this.stage = 0;
+        }
+        restore() {
+          this.g.mode = "menu";
+          try {
+            const u = new URL(location.href);
+            u.searchParams.delete("room");
+            history.replaceState(null, "", u);
+          } catch {}
+          if (this.solo) {
+            Object.assign(this.g, this.solo);
+            this.solo = null;
+          }
+        }
+        join(room, confirmed = false) {
+          if (!confirmed) return this.chooseTeam(() => this.join(room, true));
+          try {
+            this.telegram();
+          } catch (e) {
+            return this.error(e.message);
+          }
+          this.remember();
+          this.displayStatus = null;
+          this.prompt = false;
+          try {
+            const u = new URL(location.href);
+            u.searchParams.set("room", room);
+            history.replaceState(null, "", u);
+          } catch {}
+          this.room = room;
+          this.seq = 0;
+          this.stopped = false;
+          this.failures = 0;
+          this.g.ui.modal.close();
+          this.g.mode = "pvp";
+          this.g.state = "waiting";
+          this.connect();
+        }
+        connect() {
+          if (this.stopped) return;
+          this.displayStatus = null;
+          this.status = "соединение";
+          this.g.ui.refresh();
+          const ws = new WebSocket(
+            `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/miniapp/dojo/ws`,
+          );
+          this.ws = ws;
+          this.screen("⚔ Комната на двоих", "Соединяемся с сервером…", [
+            [
+              "Выйти",
+              () => {
+                this.stop(true);
+                this.restore();
+                this.main();
+              },
+            ],
+          ]);
+          ws.onopen = () =>
+            ws.send(
+              JSON.stringify({
+                type: "hello",
+                faction: this.preferredFaction || 0,
+                room: this.room,
+                initData: window.Telegram.WebApp.initData,
+              }),
+            );
+          ws.onmessage = (e) => {
+            if (ws !== this.ws) return;
+            const data = JSON.parse(e.data);
+            if (data.type === "welcome") {
+              this.side = data.side;
+              this.pending.clear();
+              this.seq = Math.max(this.seq, data.seq);
+              this.failures = 0;
+            }
+            if (data.type === "error") this.g.ui.toast(data.error);
+            if (data.type === "fatal") {
+              this.stop(false);
+              this.restore();
+              this.error(data.error);
+            }
+            if (data.type === "state") this.apply(data);
+          };
+          ws.onclose = (e) => {
+            if (ws !== this.ws || this.stopped) return;
+            this.g.state = "waiting";
+            this.status = "нет связи";
+            if (e.code === 4001 || ++this.failures > 15) {
+              this.stop(false);
+              this.restore();
+              this.error(
+                e.code === 4001
+                  ? "Игра открыта в другой вкладке."
+                  : "Связь не восстановлена. Открой новое приглашение.",
+              );
+              return;
+            }
+            this.retry = setTimeout(() => this.connect(), 1500);
+          };
+        }
+        command(action, card) {
+          if (this.ws?.readyState !== WebSocket.OPEN || this.stopped) return false;
+          if (action !== "leave" && this.g.state !== "playing") return false;
+          const key = action + ":" + (card ?? "");
+          if (this.pending.has(key)) return false;
+          const seq = ++this.seq;
+          this.ws.send(JSON.stringify({ action, card, seq }));
+          if (action !== "leave") this.pending.set(key, seq);
+          this.g.ui.refresh();
+          return true;
+        }
+        stop(leave) {
+          if (leave) this.command("leave");
+          this.stopped = true;
+          this.pending.clear();
+          this.prompt = false;
+          clearTimeout(this.retry);
+          this.ws?.close();
+          this.g.ui.modal.close();
+        }
+        apply(s) {
+          const g = this.g,
+            side = this.side,
+            p = s.players[side],
+            enemy = s.players[1 - side];
+          this.status = s.status;
+          this.opponent = s.names[1 - side];
+          const acknowledged = s.seq?.[side];
+          if (Number.isSafeInteger(acknowledged))
+            for (const [key, seq] of this.pending)
+              if (seq <= acknowledged) this.pending.delete(key);
+          Object.assign(g, {
+            elapsed: s.elapsed,
+            energy: p.energy,
+            level: p.level,
+            tower: p.tower,
+            enemyLevel: enemy.level,
+            ourHp: p.hp,
+            ourMax: p.maxHp,
+            enemyHp: enemy.hp,
+            enemyMax: enemy.maxHp,
+            superCd: p.superCd,
+            wave: p.wave,
+            waveCount: p.waveCount,
+            state: s.status === "playing" ? "playing" : "waiting",
+            enemyTower: enemy.tower,
+            faction: s.factions?.[side] ?? 0,
+            enemyFaction: s.factions?.[1 - side] ?? 1,
+          });
+          g.charges.set(p.charges);
+          // Сохраняем визуальную позицию только для того же экземпляра юнита.
+          const previous = g.units.units.map((u) =>
+            u.active ? { seed: u.seed, x: u.x } : null,
+          );
+          g.units.clear();
+          const xmap = (x) => ((side ? 960 - x : x) / 960) * g.w;
+          for (const u of s.units) {
+            const v = g.units.units[u.slot];
+            Object.assign(v, u, {
+              active: true,
+              team: s.factions?.[u.side] ?? u.side,
+              side: u.side === side ? 0 : 1,
+              x:
+                previous[u.slot]?.seed === u.seed && !g.motionQuery.matches
+                  ? previous[u.slot].x
+                  : xmap(u.x),
+              netX: u.x,
+              y: g.ground - (u.flying ? g.flightHeight : 0),
+            });
+            g.units.count[v.side]++;
+          }
+          s.shots.forEach((p, i) => {
+            const target = g.units.units[p.target];
+            if (target?.active)
+              Object.assign(g.units.shots[i], p, {
+                active: true,
+                x: xmap(p.x),
+                y: g.ground + p.y * g.unitScale,
+                side: p.side === side ? 0 : 1,
+                target,
+              });
+          });
+          g.ui.refresh();
+          if (this.prompt && s.status !== "ended") return;
+          const displayKey =
+            s.status +
+            (["paused", "countdown"].includes(s.status)
+              ? Math.ceil(s.status === "paused" ? s.reconnectSeconds : s.countdown)
+              : "");
+          if (this.displayStatus === displayKey) return;
+          this.displayStatus = displayKey;
+          if (s.status === "waiting") {
+            this.screen(
+              "✉ Пригласи соперника",
+              "Ожидаем второго игрока. Приглашение — на 10 минут. Отправь его другу или в групповой чат. Сам с собой играть нельзя.",
+              [
+                ...(this.invite ? [["✉ Отправить в чат", () => this.share()]] : []),
+                [
+                  "Отменить комнату",
+                  () => {
+                    this.stop(true);
+                    this.restore();
+                    this.main();
+                  },
+                ],
+              ],
+            );
+          } else if (s.status === "paused" || s.status === "countdown") {
+            this.screen(
+              s.status === "paused" ? "Связь потеряна" : "Соперник подключён!",
+              s.status === "paused"
+                ? `Бой приостановлен. На возврат: ${s.reconnectSeconds} с.`
+                : `Начало через ${Math.ceil(s.countdown)}…`,
+              [["Покинуть бой", () => this.main()]],
+            );
+          } else if (s.status === "playing") this.panel.hidden = true;
+          else if (s.status === "ended") {
+            const title =
+              s.winner === null
+                ? "Ничья"
+                : s.winner === side
+                  ? "勝 · Победа!"
+                  : "敗 · Поражение";
+            this.stop(false);
+            const reasons = {
+              castle: "Замок разрушен.",
+              disconnect: "Игрок не вернулся за 45 секунд.",
+              leave: "Игрок покинул комнату.",
+              expired: "Приглашение истекло.",
+              time_limit: "Достигнут лимит 20 минут.",
+            };
+            this.screen(
+              title,
+              (reasons[s.reason] || "Бой завершён.") +
+                " PvP не меняет монеты и прогресс кампании.",
+              [
+                [
+                  "В главное меню",
+                  () => {
+                    this.restore();
+                    this.main();
+                  },
+                ],
+              ],
+            );
+          }
+        }
+        error(text) {
+          this.screen("Бой с другом", text, [["← Главное меню", () => this.main()]]);
+        }
+      }
+      const modes = new DojoModes(game);
+      window.neonDojo.modes = modes;
     </script>
   </body>
 </html>

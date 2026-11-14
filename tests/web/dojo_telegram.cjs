@@ -52,6 +52,7 @@ try {
     );
     await page.goto(`http://127.0.0.1:${server.address().port}/miniapp/dojo`);
     await page.waitForFunction(() => window.calls?.includes("ready"));
+    await page.getByRole("button", {name:"∞ Свободная битва", exact:true}).click();
     assert(
       await page.evaluate(
         () => calls.includes("expand") && calls.includes("back"),
