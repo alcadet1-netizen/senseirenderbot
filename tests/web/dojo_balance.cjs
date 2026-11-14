@@ -95,18 +95,25 @@ try {
                 const saving =
                   policy !== "rush" &&
                   g.level < 6 &&
-                  g.energy > C.levels[g.level].cost * 0.6 &&
-                  nearby === 0;
+                  (g.units.count[0] >= 3 ||
+                    g.energy > C.levels[g.level].cost * 0.6);
                 const priority =
                   policy === "rush"
                     ? [1, 0]
                     : policy === "air"
                       ? [7, 2, 1]
-                      : [1, 3, 2, 7, 4, 6, 5, 0];
+                      : [3, 6, 4, 1, 2, 7, 5, 0];
                 if (!saving)
                   for (const j of priority) {
                     const c = C.cards[j];
                     if (
+                      // Осознанный состав: не забиваем 48 мест новичками и аурами.
+                      (policy === "air" ||
+                        policy === "rush" ||
+                        g.units.units.filter(
+                          (u) => u.active && u.side === 0 && u.kind === j,
+                        ).length < [4, 2, 6, 12, 3, 3, 6, 4][j]) &&
+                      (j !== 0 || g.level < 3 || policy === "rush") &&
                       g.level >= c.level &&
                       g.charges[j] >= c.cd &&
                       g.energy >= c.cost &&
