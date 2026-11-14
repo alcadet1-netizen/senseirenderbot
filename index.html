@@ -881,81 +881,306 @@
           display: none;
         }
       }
-      @media (orientation: landscape) and (max-height: 560px) {
+      .session-tools {
+        display: flex;
+        gap: 5px;
+        align-items: center;
+      }
+      .session-tools button {
+        padding: 8px;
+        font-size: 10px;
+      }
+      .tower-button {
+        border: 1px solid #79b9f588;
+        background: #497bc51a;
+        color: #b8ddff;
+        border-radius: 9px;
+        padding: 8px;
+        font-size: 10px;
+        flex: 1;
+      }
+      .deck-actions {
+        flex-wrap: wrap;
+      }
+      .rotate-tip {
+        display: none;
+      }
+      @media (orientation: portrait) and (max-width: 700px) {
+        .rotate-tip {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          margin-bottom: 10px;
+          padding: 8px 10px;
+          background: #ffb80010;
+          border: 1px solid #ffb80044;
+          border-radius: 9px;
+          font-size: 11px;
+          color: #ffe0a0;
+        }
+        .rotate-tip button {
+          flex-shrink: 0;
+        }
+        .session-tools {
+          display: none;
+        }
+        .battle-tag {
+          display: none;
+        }
+      }
+      /* Весь боевой интерфейс в одном окне, без скрытой вертикальной колоды. */
+      @media (orientation: landscape) {
+        html,
+        body {
+          height: 100%;
+          overflow: hidden;
+        }
+        body {
+          padding: 0;
+        }
         .app {
-          padding: 8px 12px;
+          box-sizing: border-box;
+          max-width: none;
+          height: var(--vh);
+          padding: max(4px, var(--safe-top, env(safe-area-inset-top)))
+            max(6px, var(--safe-right, env(safe-area-inset-right)))
+            max(4px, var(--safe-bottom, env(safe-area-inset-bottom)))
+            max(6px, var(--safe-left, env(safe-area-inset-left)));
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
         }
         .brandbar,
         .hero,
         .footnotes,
         .side,
-        .statusline {
+        .statusline,
+        .rotate-tip {
           display: none;
         }
         .resourcebar {
-          margin-bottom: 6px;
+          flex: 0 0 34px;
+          margin: 0;
+          gap: 5px;
+        }
+        .resources {
+          gap: 5px;
+          min-width: 0;
         }
         .resource {
-          padding: 5px 12px;
+          min-width: 0;
+          padding: 3px 8px;
+          gap: 5px;
+          border-radius: 7px;
         }
-        .play {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) 140px;
+        .resource .symbol {
+          font-size: 15px;
         }
-        .stage {
-          height: calc(var(--vh) - 75px);
-          min-height: 220px;
+        .resource label {
+          font-size: 7px;
+          letter-spacing: 0.5px;
+          margin: 0;
         }
-        .deck {
-          border-top: 0;
-          border-left: 1px solid #ffffff18;
-          padding: 8px;
+        .resource strong {
+          font-size: 12px;
         }
-        .cards {
-          display: flex;
-          flex-direction: column;
-          height: calc(var(--vh) - 193px);
-          overflow: auto;
+        .resource em {
+          font-size: 8px;
         }
-        .card {
-          flex: 0 0 85px;
-          min-height: 85px;
-          width: 100%;
-        }
-        .card canvas {
-          left: 25%;
-          width: 50px;
-          height: 60px;
-        }
-        .card .ring {
-          left: 25%;
-          width: 40px;
-          height: 40px;
-        }
-        .card .name {
-          left: 50%;
-          bottom: 46px;
-          font-size: 9px;
-        }
-        .card .sub {
-          left: 50%;
-          bottom: 24px;
-        }
-        .deck-actions {
-          flex-direction: column;
-        }
-        .upgrade {
-          padding: 8px;
-          font-size: 9px;
-        }
-        .boost {
-          padding: 6px;
-        }
-        .deck-title span {
+        .battle-tag {
           display: none;
+        }
+        .session-tools button {
+          padding: 7px;
+          font-size: 10px;
         }
         .layout {
           display: block;
+          flex: 1;
+          min-height: 0;
+        }
+        .play {
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          border-radius: 10px;
+        }
+        .stage {
+          height: auto;
+          min-height: 0;
+          flex: 1;
+        }
+        .stage-top {
+          top: 6px;
+          left: 12px;
+          right: 12px;
+        }
+        .stage-center {
+          top: 7px;
+        }
+        .stage-center small {
+          display: none;
+        }
+        .faction small {
+          font-size: 7px;
+        }
+        .faction b {
+          font-size: 9px;
+        }
+        .stage-bottom {
+          bottom: 5px;
+          left: 10px;
+          right: 10px;
+        }
+        .hint {
+          font-size: 8px;
+          padding: 4px 7px;
+          max-width: none;
+        }
+        .super {
+          font-size: 9px;
+          padding: 6px 10px;
+        }
+        .deck {
+          flex: 0 0 auto;
+          padding: 5px 7px;
+          border-left: 0;
+          border-top: 1px solid #ffffff18;
+        }
+        .deck-title {
+          font-size: 8px;
+          margin-bottom: 2px;
+          line-height: 10px;
+        }
+        .deck-title span {
+          font-size: 8px;
+        }
+        .cards {
+          display: grid;
+          grid-template-columns: repeat(8, minmax(0, 1fr));
+          gap: 4px;
+          height: clamp(62px, 19vh, 88px);
+          overflow: visible;
+          padding: 0;
+          scroll-snap-type: none;
+        }
+        .card {
+          width: auto;
+          min-width: 0;
+          height: 100%;
+          min-height: 0;
+          border-radius: 7px;
+          touch-action: none;
+        }
+        .card canvas {
+          width: 40px;
+          height: 43px;
+          left: 50%;
+          top: 0;
+        }
+        .card .ring {
+          width: 32px;
+          height: 32px;
+          left: 50%;
+          top: 4px;
+        }
+        .card .name {
+          left: 4px;
+          right: 2px;
+          bottom: 16px;
+          font-size: 8px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .card .sub {
+          left: 4px;
+          bottom: 3px;
+          font-size: 8px;
+        }
+        .card .num {
+          top: 3px;
+          left: 3px;
+          font-size: 7px;
+        }
+        .card .badge {
+          top: 3px;
+          right: 3px;
+          font-size: 7px;
+        }
+        .deck-actions {
+          margin-top: 4px;
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 5px;
+        }
+        .upgrade,
+        .boost,
+        .tower-button {
+          min-width: 0;
+          padding: 6px 3px;
+          font-size: 9px;
+          line-height: 13px;
+          white-space: nowrap;
+        }
+        .upgrade .upgrade-label {
+          display: inline;
+        }
+        dialog {
+          max-height: calc(
+            var(--vh) - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 16px
+          );
+          top: var(--safe-top, 0px);
+          bottom: var(--safe-bottom, 0px);
+          margin: auto;
+          overflow: auto;
+          padding: 18px 22px;
+          width: min(600px, 85vw);
+        }
+        dialog h2 {
+          font-size: 19px;
+          margin: 0 25px 10px 0;
+        }
+        dialog p {
+          font-size: 11px;
+          line-height: 1.5;
+          margin: 8px 0;
+        }
+        .tier {
+          padding: 5px 0;
+        }
+        #toast {
+          padding: 7px 12px;
+          font-size: 10px;
+        }
+      }
+      @media (orientation: landscape) and (max-height: 360px) {
+        .resourcebar {
+          flex-basis: 28px;
+        }
+        .resource label {
+          font-size: 6px;
+        }
+        .resource strong {
+          font-size: 11px;
+        }
+        .session-tools button {
+          padding: 5px;
+        }
+        .deck-title {
+          display: none;
+        }
+        .cards {
+          height: 56px;
+        }
+        .card canvas {
+          width: 35px;
+          height: 37px;
+        }
+        .card .ring {
+          width: 28px;
+          height: 28px;
         }
       }
       @media (prefers-reduced-motion: reduce) {
@@ -967,6 +1192,12 @@
   </head>
   <body>
     <div class="app">
+      <div class="rotate-tip" role="note">
+        <span
+          >↻ Поверни телефон горизонтально — все бойцы и защита в одном
+          окне.</span
+        ><button class="tool" id="rotateFullscreenBtn">⛶ На весь экран</button>
+      </div>
       <header class="brandbar">
         <div class="brand">
           <div class="crest">侍</div>
@@ -1016,6 +1247,15 @@
           </div>
         </div>
         <span class="battle-tag" id="battleTag">● БИТВА КЛАНОВ</span>
+        <div class="session-tools">
+          <button class="tool" id="fullscreenBtn" aria-label="Полный экран">
+            ⛶ Экран</button
+          ><button class="tool" id="battleHelpBtn" aria-label="Правила">
+            ?</button
+          ><button class="tool" id="battleResetBtn" aria-label="Новая битва">
+            ↻
+          </button>
+        </div>
       </div>
       <main class="layout">
         <section class="play">
@@ -1055,6 +1295,8 @@
               <button class="upgrade" id="upgradeBtn">
                 ⛩ <span class="upgrade-label">УЛУЧШИТЬ ДОДЗЁ · </span
                 ><span id="upgradeCost">50 ⚡</span></button
+              ><button class="tower-button" id="towerBtn">
+                🏹 Защита · 0/3</button
               ><button class="boost" id="boostBtn">
                 ↗ Зарядить +5с · 20 🪙
               </button>
@@ -1140,6 +1382,8 @@
           qi: "#00FFA3",
           death: "#FF006E",
         },
+        // Открытая для обеих сторон эскалация урона, без таймера автопобеды.
+        tempo: { after: 240, ramp: 240 },
         unitLimit: 48,
         unitPool: 96,
         particlePool: 320,
@@ -2967,15 +3211,22 @@
             this.line(-22, yy - 7, 22, yy - 7);
             for (let i = 0; i < tower; i++) {
               const x = (i - (tower - 1) / 2) * 12;
-              c.strokeStyle = dark;
-              c.lineWidth = 3;
-              this.line(x, yy - 9, x, yy - 18);
-              this.ellipse(x, yy - 22, 3, 3, dark);
-              c.strokeStyle = accent;
-              c.lineWidth = 1.5;
-              c.beginPath();
-              c.arc(x + (enemy ? -3 : 3), yy - 14, 7, -1.3, 1.3);
-              c.stroke();
+              this.vectorUnit(
+                {
+                  side: enemy ? 1 : 0,
+                  kind: 2,
+                  x,
+                  y: yy - 8,
+                  age: 1,
+                  seed: 0,
+                  moving: false,
+                  flash: 0,
+                },
+                0,
+                0.27,
+                2,
+                0,
+              );
             }
           }
         }
@@ -3024,17 +3275,25 @@
         }
         spawn(side, data) {
           if (this.count[side] >= CONFIG.unitLimit) return false;
-          // Не складываем свежие отряды в одну точку: плотная очередь
-          // иначе превращала спавн замка в неуязвимую пачку наложенных бойцов.
-          const entrance = side ? this.g.w - 69 : 69;
-          for (const unit of this.units) {
-            if (
-              unit.active &&
-              unit.side === side &&
-              unit.flying === Boolean(data.flying) &&
-              Math.abs(unit.x - entrance) < 14
-            )
-              return false;
+          // Четыре тыловые точки сбора: осада ворот больше не запрещает призыв.
+          // Если все заняты, новичок встаёт в хвост; порядок seed держит строй.
+          const dir = side ? -1 : 1;
+          let entrance = side ? this.g.w - 69 : 69;
+          for (let slot = 0; slot < 4; slot++) {
+            const x = (side ? this.g.w - 69 : 69) - dir * slot * 18;
+            let occupied = false;
+            for (const unit of this.units)
+              if (
+                unit.active &&
+                unit.side === side &&
+                unit.flying === Boolean(data.flying) &&
+                Math.abs(unit.x - x) < 14
+              ) {
+                occupied = true;
+                break;
+              }
+            entrance = x;
+            if (!occupied) break;
           }
           for (const u of this.units) {
             if (u.active) continue;
@@ -3042,7 +3301,7 @@
             u.side = side;
             u.kind = data.kind;
             u.flying = Boolean(data.flying);
-            u.x = side ? this.g.w - 69 : 69;
+            u.x = entrance;
             u.y = this.g.ground - (u.flying ? this.g.flightHeight : 0);
             u.hp = u.maxHp =
               data.hp * (side ? 1 + (this.g.enemyLevel - 1) * 0.065 : 1);
@@ -3074,7 +3333,8 @@
         }
         hit(u, damage) {
           if (!u.active) return;
-          u.hp -= damage;
+          // Короткое построение у ворот смягчает мгновенный расстрел новобранцев.
+          u.hp -= damage * (u.age < 0.75 ? 0.5 : 1);
           this.g.fx.emit(u.x, u.y - 24, 3, u.side ? "#FFB800" : "#00E5FF");
           if (u.hp <= 0) this.kill(u);
         }
@@ -3110,6 +3370,7 @@
               target = null,
               best = Infinity,
               blocked = false,
+              stacked = false,
               aura = 0;
             for (const v of this.units) {
               if (!v.active || v === u) continue;
@@ -3122,11 +3383,17 @@
                   target = v;
                 }
               } else {
+                if (
+                  v.flying === u.flying &&
+                  Math.abs(dist) < 0.01 &&
+                  v.seed < u.seed
+                )
+                  stacked = true;
                 // Ближний бой обходит стрелков: иначе лучник впереди навечно
                 // запирал всю стенку, останавливаясь на своей дальней дистанции.
                 if (
                   v.flying === u.flying &&
-                  dist > 0 &&
+                  (dist > 0 || (Math.abs(dist) < 0.01 && v.seed < u.seed)) &&
                   dist < 18 &&
                   v.range <= u.range
                 )
@@ -3138,13 +3405,24 @@
             if (u.side === 1 && g.enemyLevel >= 4) aura += 3;
             let baseDist = u.side ? u.x - 50 : g.w - 50 - u.x,
               baseInRange = baseDist <= u.range;
-            if (baseInRange && (!target || baseDist < best)) target = null;
-            if ((target && best <= u.range) || (!target && baseInRange)) {
+            // Гарнизон, стоящий ЗА воротами, не делает замок бессмертным:
+            // штурмовой отряд в радиусе может атаковать стены, а не вечные подкрепления.
+            const targetInsideCastle =
+              target && (u.side ? target.x < 69 : target.x > g.w - 69);
+            if (
+              baseInRange &&
+              (!target || baseDist < best || targetInsideCastle)
+            )
+              target = null;
+            if (
+              ((target && best <= u.range) || (!target && baseInRange)) &&
+              !(stacked && u.range <= 75)
+            ) {
               u.moving = false;
               if (u.cool <= 0) {
                 u.cool = u.rate;
                 u.flash = 0.16;
-                let damage = u.dmg + aura;
+                let damage = (u.dmg + aura) * g.combatMultiplier();
                 if (u.kind === 4 && u.side === 0) {
                   for (const v of this.units)
                     if (v.active && v.side === 0 && Math.abs(v.x - u.x) < 110)
@@ -3219,7 +3497,15 @@
                 }
               }
             if (target) {
-              this.fire({ x, y: g.ground - 48, side }, target, data.damage);
+              const castleLevel = side ? g.enemyLevel : g.level;
+              const roof =
+                (95 + 29 * Math.floor((castleLevel - 1) / 2)) *
+                Math.min(1, g.h / 280);
+              this.fire(
+                { x, y: g.ground - roof + 28, side },
+                target,
+                data.damage * g.combatMultiplier(),
+              );
               g.towerTimers[side] = data.rate;
               g.towerFlash[side] = 0.2;
             }
@@ -3344,6 +3630,11 @@
             if (g.state !== "playing") e.preventDefault();
           });
           $("upgradeBtn").onclick = () => this.upgradeMenu();
+          $("towerBtn").onclick = () => this.towerMenu();
+          $("fullscreenBtn").onclick = () => requestGameFullscreen(true);
+          $("rotateFullscreenBtn").onclick = () => requestGameFullscreen(true);
+          $("battleHelpBtn").onclick = () => this.help();
+          $("battleResetBtn").onclick = () => this.confirmRestart();
           $("superBtn").onclick = () => g.superAttack();
           $("boostBtn").onclick = () => g.boost();
           $("resetBtn").onclick = () => this.confirmRestart();
@@ -3423,9 +3714,7 @@
             if (pointer !== e.pointerId) return;
             const dx = startX - e.clientX,
               dy = startY - e.clientY;
-            const landscape = matchMedia(
-              "(orientation: landscape) and (max-height: 560px)",
-            ).matches;
+            const landscape = matchMedia("(orientation: landscape)").matches;
             if (
               !landscape &&
               Math.abs(dx) > Math.max(70, b.clientWidth * 0.9) &&
@@ -3497,7 +3786,7 @@
         help() {
           this.open(
             "道 · Как играть",
-            `<p>Тапни по заряженной карточке — боец сам вступит в бой. Карточки тратят энергию, её запас постоянно восстанавливается.</p><p>Апгрейды додзё покупаются за ⚡, ускоряют заряд и открывают новые роли. Монеты ускоряют заряд на 5 секунд и меняют фонари.</p><p>↑ Свайп вверх / пробел / кнопка — волна ци (20 ⚡). Долгий тап по замку — разведка. Короткий свайп влево по карточке — резерв, тап вернёт её. Длинный горизонтальный свайп листает колоду; клавиши 1–8 призывают бойцов.</p><p>Ниндзя открывается после 30 секунд боя. Куноичи — летающий метатель сюрикенов с ур. 3: наземные мечники его не достают, лучники и башни — достают.</p><p>Новая битва сбрасывает поле, но сохраняет уровень додзё и монеты. В открытом меню — тактическая пауза, фон остаётся живым. В скрытой вкладке — пауза.</p>`,
+            `<p>Для телефона рекомендуем горизонтальный полный экран: все 8 карт и управление видны без прокрутки. Кнопка ⛶ повторяет запрос полного экрана, если клиент его поддерживает.</p><p>Тапни по заряженной карточке — боец сам вступит в бой. Карточки тратят энергию, её запас постоянно восстанавливается.</p><p>Апгрейды додзё покупаются за ⚡, ускоряют заряд и открывают новые роли. Монеты ускоряют заряд на 5 секунд и меняют фонари. Кнопка «🏹 Защита» открывает 3 уровня лучников на замке: I доступен с додзё II.</p><p>Осада ворот не блокирует призыв: новобранцы строятся в тылу и первые 0,75 с получают половину урона. Ограничения — энергия, заряд карты и лимит 48 бойцов. Не заполняй всю армию одной ролью: нужны пехота, стрелки и поддержка. После 4 минут урон бойцов, ци и гарнизонов обеих сторон плавно растёт до ×2 к 8-й минуте (⚔ рядом с часами). Лечение не усиливается; автоматической победы по таймеру нет.</p><p>↑ Свайп вверх / пробел / кнопка — волна ци (20 ⚡). Долгий тап по замку — разведка. Короткий свайп влево по карточке — резерв, тап вернёт её. Длинный горизонтальный свайп листает колоду; клавиши 1–8 призывают бойцов.</p><p>Ниндзя открывается после 30 секунд боя. Куноичи — летающий метатель сюрикенов с ур. 3: наземные мечники его не достают, лучники и башни — достают.</p><p>Новая битва сбрасывает поле, но сохраняет уровень додзё и монеты. В открытом меню — тактическая пауза, фон остаётся живым. В скрытой вкладке — пауза.</p>`,
             "В бой",
             () => this.modal.close(),
           );
@@ -3529,6 +3818,32 @@
             towerButton.onclick = () => {
               if (g.upgradeTower()) this.upgradeMenu();
             };
+        }
+        towerMenu() {
+          const g = this.g,
+            next = CONFIG.towers[g.tower];
+          const ready = next && g.level >= next.level && g.energy >= next.cost;
+          const tiers = CONFIG.towers
+            .map(
+              (d, i) =>
+                `<div class="tier ${g.tower === i + 1 ? "active" : ""}"><span>🏹 ${i + 1} ${i === 0 ? "лучник" : "лучника"} · ${d.damage} урона / ${d.rate}с</span><span>${d.cost} ⚡ · додзё ${d.level}</span></div>`,
+            )
+            .join("");
+          this.open(
+            "🏹 Стрелковая защита замка",
+            `<p>Гарнизон ${g.tower}/3. Лучники на крыше автоматически обстреливают пехоту и воздух у ворот. Улучшения сохраняются между боями.</p>${tiers}<p>${next ? `Следующее улучшение: ${next.cost} ⚡. Требуется додзё ${next.level}, сейчас ${g.level}. Энергия: ${Math.floor(g.energy)}.` : "Все три уровня построены."}</p>`,
+            next
+              ? ready
+                ? `${g.tower ? "Улучшить" : "Построить"} · ${next.cost} ⚡`
+                : g.level < next.level
+                  ? `Закрыть · нужно додзё ${next.level}`
+                  : `Закрыть · нужно ${next.cost} ⚡`
+              : "Закрыть",
+            () => {
+              if (!ready) this.modal.close();
+              else if (g.upgradeTower()) this.towerMenu();
+            },
+          );
         }
         scout() {
           let g = this.g,
@@ -3661,7 +3976,12 @@
           $("clock").textContent =
             String(Math.floor(g.elapsed / 60)).padStart(2, "0") +
             ":" +
-            String(Math.floor(g.elapsed % 60)).padStart(2, "0");
+            String(Math.floor(g.elapsed % 60)).padStart(2, "0") +
+            (g.combatMultiplier() > 1
+              ? ` · ⚔×${g.combatMultiplier().toFixed(1)}`
+              : "");
+          $("clock").title =
+            "После 4 минут урон обеих сторон плавно растёт до ×2 к 8-й минуте. Победа только разрушением замка.";
           this.text("sideLevel", String(g.level).padStart(2, "0"));
           this.text("sideTitle", l.name);
           this.text("speed", "×" + l.speed.toFixed(2));
@@ -3676,6 +3996,9 @@
                 : "MAX";
           $("upgradeBtn").disabled =
             (g.level === 6 && g.tower === 3) || g.state !== "playing";
+          $("towerBtn").textContent =
+            `🏹 Защита ${g.tower}/3 · ${CONFIG.towers[g.tower]?.cost ? CONFIG.towers[g.tower].cost + " ⚡" : "MAX"}`;
+          $("towerBtn").disabled = g.state !== "playing";
           $("boostBtn").disabled = g.coins < 20 || g.state !== "playing";
           $("superBtn").textContent =
             g.superCd > 0
@@ -3789,16 +4112,17 @@
           let oldW = this.w,
             r = $("stage").getBoundingClientRect();
           this.w = Math.max(240, r.width);
-          this.h = Math.max(200, r.height);
+          this.h = Math.max(1, r.height);
           this.ground = this.h * 0.79;
           this.unitScale = this.w < 440 ? 0.67 : this.w < 700 ? 0.85 : 1;
+          this.unitScale = Math.min(this.unitScale, this.h / 270);
           this.flightHeight = 64 * this.unitScale;
           if (this.w <= 310 || this.motionQuery.matches)
             this.quality = Math.min(this.quality, 1);
           this.updateResolution();
           if (this.units)
             for (const u of this.units.units)
-              if (u.active) u.x = clamp((u.x / oldW) * this.w, 66, this.w - 66);
+              if (u.active) u.x = clamp((u.x / oldW) * this.w, 15, this.w - 15);
           if (this.w <= 310) this.quality = Math.min(this.quality, 1);
         }
         updateResolution() {
@@ -3875,7 +4199,9 @@
           this.state = "playing";
           for (let i = 0; i < CONFIG.cards.length; i++)
             this.charges[i] = i < 2 ? CONFIG.cards[i].cd : 0;
-          this.ui.toast("陽 · Битва кланов начинается. Призывай отряд!");
+          this.ui.toast(
+            "陽 · Строй отряд. Кнопка «Защита» — лучники на замке.",
+          );
           this.ui.refresh();
         }
         vibrate() {
@@ -3903,7 +4229,9 @@
           if (this.energy < data.cost)
             return this.ui.toast("Не хватает энергии. Дай ци восстановиться.");
           if (!this.units.spawn(0, data))
-            return this.ui.toast("У входа тесно. Дай переднему бойцу пройти.");
+            return this.ui.toast(
+              "Лимит армии: 48 бойцов. Дождись свободного места.",
+            );
           this.energy -= data.cost;
           this.charges[i] = 0;
           this.vibrate();
@@ -3962,6 +4290,12 @@
           this.ui.toast("Заряд всех карточек ускорен на 5 секунд");
           this.ui.refresh();
         }
+        combatMultiplier() {
+          return (
+            1 +
+            clamp((this.elapsed - CONFIG.tempo.after) / CONFIG.tempo.ramp, 0, 1)
+          );
+        }
         superAttack() {
           if (this.state !== "playing" || this.superCd > 0 || this.energy < 20)
             return;
@@ -3972,7 +4306,10 @@
           this.waveCount++;
           for (const u of this.units.units)
             if (u.active && u.side === 1)
-              this.units.hit(u, 70 + this.level * 12);
+              this.units.hit(
+                u,
+                (70 + this.level * 12) * this.combatMultiplier(),
+              );
           this.fx.emit(65, this.ground - 30, 30, "#00FFA3");
           this.vibrate();
           this.ui.toast("気 · Волна ци!");
@@ -4060,9 +4397,13 @@
             t = this.bg.time,
             q = this.quality;
           this.bg.draw(c, w, h, q, this.skin);
+          const buildingScale = Math.min(1, this.h / 280);
+          c.save();
+          c.translate(52, this.ground);
+          c.scale(buildingScale, buildingScale);
           this.renderer.building(
-            52,
-            this.ground,
+            0,
+            0,
             this.level,
             false,
             t,
@@ -4070,9 +4411,13 @@
             this.tower,
             q,
           );
+          c.restore();
+          c.save();
+          c.translate(w - 52, this.ground);
+          c.scale(buildingScale, buildingScale);
           this.renderer.building(
-            w - 52,
-            this.ground,
+            0,
+            0,
             this.enemyLevel,
             true,
             t,
@@ -4080,14 +4425,15 @@
             Math.max(0, this.enemyLevel - 2),
             q,
           );
+          c.restore();
           let progress =
             this.enemyLevel < 5
               ? clamp(this.aiEnergy / CONFIG.aiUpgrade[this.enemyLevel], 0, 1)
               : 1;
           c.fillStyle = "#ffffff16";
-          c.fillRect(w - 86, this.ground - 150, 68, 3);
+          c.fillRect(w - 86, Math.max(44, this.ground - 150), 68, 3);
           c.fillStyle = "#00E5FF";
-          c.fillRect(w - 86, this.ground - 150, 68 * progress, 3);
+          c.fillRect(w - 86, Math.max(44, this.ground - 150), 68 * progress, 3);
           c.font = "8px monospace";
           c.textAlign = "center";
           c.fillStyle = "#98a4c9";
@@ -4096,7 +4442,7 @@
               ? "СТРОИТЕЛЬСТВО " + Math.floor(progress * 100) + "%"
               : "ЗАМОК УР. 5",
             w - 52,
-            this.ground - 157,
+            Math.max(40, this.ground - 157),
           );
           this.units.draw(c, t, q);
           this.fx.draw(c, q);
@@ -4147,12 +4493,46 @@
       }
       // Telegram — только оболочка и haptic. initData не отправляем и не доверяем
       // данным клиента для балансов: у этого прототипа нет серверных наград.
+      function requestGameFullscreen(userGesture = false) {
+        const tg = window.Telegram?.WebApp;
+        if (tg?.initData && typeof tg.requestFullscreen === "function") {
+          try {
+            if (tg.isFullscreen) return;
+            if (!tg.isVersionAtLeast || tg.isVersionAtLeast("8.0")) {
+              tg.requestFullscreen();
+              return;
+            }
+          } catch (_) {
+            /* Сохраняем expand на старых клиентах. */
+          }
+        }
+        if (
+          userGesture &&
+          !document.fullscreenElement &&
+          document.documentElement.requestFullscreen
+        ) {
+          try {
+            Promise.resolve(document.documentElement.requestFullscreen()).catch(
+              () =>
+                game.ui.toast(
+                  "Полный экран недоступен. Поверни телефон горизонтально.",
+                ),
+            );
+          } catch (_) {
+            game.ui.toast("Полный экран недоступен в этом клиенте.");
+          }
+        }
+      }
       function setupTelegram() {
         const tg = window.Telegram?.WebApp;
         if (!tg || !tg.initData) return;
         try {
           tg.ready();
           tg.expand();
+          requestGameFullscreen();
+          try {
+            tg.disableVerticalSwipes?.();
+          } catch (_) {}
           tg.setHeaderColor?.("#0A0E27");
           tg.setBackgroundColor?.("#0A0E27");
           const viewport = () => {
@@ -4162,7 +4542,30 @@
                 tg.viewportStableHeight + "px",
               );
           };
+          const insets = () => {
+            const safe = tg.contentSafeAreaInset || {},
+              device = tg.safeAreaInset || {};
+            for (const side of ["top", "right", "bottom", "left"])
+              document.documentElement.style.setProperty(
+                "--safe-" + side,
+                Math.max(0, Number(safe[side]) || 0) +
+                  Math.max(0, Number(device[side]) || 0) +
+                  "px",
+              );
+          };
           viewport();
+          insets();
+          tg.onEvent?.("safeAreaChanged", insets);
+          tg.onEvent?.("contentSafeAreaChanged", insets);
+          tg.onEvent?.("fullscreenChanged", () => {
+            viewport();
+            insets();
+          });
+          tg.onEvent?.("fullscreenFailed", () =>
+            game.ui.toast(
+              "Полный экран недоступен — игра работает в развёрнутом окне.",
+            ),
+          );
           tg.onEvent?.("viewportChanged", viewport);
           tg.BackButton?.show();
           tg.BackButton?.onClick(() => {
