@@ -1,0 +1,2949 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0A0E27" />
+    <title>Ёж-Сенсей — Стенка на Стенку</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0a0e27;
+        --glass: rgba(18, 23, 51, 0.74);
+        --gold: #ffb800;
+        --red: #ff3b3b;
+        --cyan: #00e5ff;
+        --green: #00ffa3;
+        --pink: #ff006e;
+        --muted: #929bbd;
+        --vh: 100dvh;
+        font-family: Inter, "Segoe UI", system-ui, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(ellipse at 15% 0%, #32234a 0, transparent 46%),
+          radial-gradient(ellipse at 95% 100%, #072f41 0, transparent 45%),
+          var(--bg);
+        color: #eef0ff;
+        min-width: 240px;
+        padding-top: env(safe-area-inset-top);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+      }
+      button {
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+      button:focus-visible {
+        outline: 2px solid var(--cyan);
+        outline-offset: 4px;
+      }
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+      button:hover:not(:disabled) {
+        filter: brightness(1.16);
+      }
+      .app {
+        max-width: 1460px;
+        margin: auto;
+        padding: 24px 30px 16px;
+        container-type: inline-size;
+      }
+      .brandbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 22px;
+      }
+      .brand {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .crest {
+        width: 42px;
+        height: 42px;
+        border: 1px solid #ffb80066;
+        color: var(--gold);
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        font-size: 26px;
+        background: #ffb8000b;
+        box-shadow: 0 0 24px #ffb80012;
+      }
+      .brand strong {
+        display: block;
+        letter-spacing: 2px;
+        font-size: 13px;
+      }
+      .brand small {
+        color: var(--muted);
+        font-size: 10px;
+        letter-spacing: 2px;
+      }
+      .build {
+        font: 10px monospace;
+        letter-spacing: 1px;
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        background: var(--green);
+        border-radius: 50%;
+        box-shadow: 0 0 10px var(--green);
+      }
+      .hero {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        margin-bottom: 22px;
+        gap: 16px;
+      }
+      .eyebrow {
+        color: var(--gold);
+        letter-spacing: 3px;
+        font-size: 10px;
+        font-weight: 700;
+        margin: 0 0 10px;
+      }
+      .hero h1 {
+        font-size: clamp(25px, 3.4vw, 43px);
+        line-height: 1.06;
+        letter-spacing: -1.8px;
+        margin: 0;
+      }
+      .hero h1 span {
+        font-weight: 350;
+        color: #aab3d5;
+      }
+      .hero p {
+        margin: 12px 0 0;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .tools {
+        display: flex;
+        gap: 8px;
+      }
+      .tool {
+        background: #ffffff05;
+        border: 1px solid #ffffff15;
+        border-radius: 10px;
+        padding: 10px 13px;
+        font-size: 11px;
+        color: #b8c2e0;
+      }
+      .resourcebar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .resources {
+        display: flex;
+        gap: 8px;
+        flex: 1;
+      }
+      .resource {
+        border: 1px solid #ffffff12;
+        background: var(--glass);
+        backdrop-filter: blur(18px);
+        border-radius: 12px;
+        padding: 11px 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 140px;
+      }
+      .resource .symbol {
+        font-size: 21px;
+      }
+      .resource label {
+        display: block;
+        font-size: 9px;
+        color: var(--muted);
+        letter-spacing: 1.5px;
+        margin-bottom: 3px;
+      }
+      .resource strong {
+        font-size: 16px;
+        font-variant-numeric: tabular-nums;
+      }
+      .resource em {
+        font-size: 10px;
+        font-style: normal;
+        color: var(--muted);
+      }
+      .battle-tag {
+        font-size: 10px;
+        letter-spacing: 2px;
+        color: var(--green);
+        background: #00ffa30a;
+        border: 1px solid #00ffa325;
+        border-radius: 8px;
+        padding: 10px;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 222px;
+        gap: 14px;
+      }
+      .play {
+        min-width: 0;
+        border-radius: 19px;
+        border: 1px solid #6975b42e;
+        overflow: hidden;
+        background: var(--bg);
+        box-shadow: 0 25px 80px #0005;
+      }
+      .stage {
+        position: relative;
+        height: clamp(360px, 48vh, 580px);
+        overflow: hidden;
+        touch-action: none;
+        background: #0a0e27;
+      }
+      #arena {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      .stage-top {
+        position: absolute;
+        top: 18px;
+        left: 20px;
+        right: 20px;
+        display: flex;
+        justify-content: space-between;
+        pointer-events: none;
+        align-items: start;
+      }
+      .faction {
+        width: 34%;
+        max-width: 230px;
+      }
+      .faction.right {
+        text-align: right;
+      }
+      .faction small {
+        font-size: 8px;
+        color: #a6afcb;
+        letter-spacing: 2px;
+      }
+      .faction b {
+        font-size: 11px;
+        display: block;
+        margin-top: 5px;
+      }
+      .health {
+        height: 3px;
+        background: #ffffff12;
+        margin-top: 8px;
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .health i {
+        display: block;
+        height: 100%;
+        background: linear-gradient(90deg, var(--red), var(--gold));
+        width: 100%;
+        transition: width 0.2s;
+      }
+      .right .health i {
+        background: linear-gradient(90deg, #7b2ff7, var(--cyan));
+        margin-left: auto;
+      }
+      .stage-center {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        font: 11px monospace;
+        color: #e3e5ff;
+        text-align: center;
+      }
+      .stage-center small {
+        display: block;
+        font-size: 8px;
+        letter-spacing: 2px;
+        color: #8c94ba;
+        margin-bottom: 6px;
+      }
+      .stage-bottom {
+        position: absolute;
+        bottom: 15px;
+        left: 18px;
+        right: 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        pointer-events: none;
+        gap: 8px;
+      }
+      .hint {
+        font-size: 10px;
+        color: #bcc6e2;
+        background: #0a0e2777;
+        border: 1px solid #9aaeff18;
+        border-radius: 20px;
+        padding: 7px 10px;
+        backdrop-filter: blur(5px);
+      }
+      .super {
+        pointer-events: auto;
+        background: #00ffa30b;
+        border: 1px solid #00ffa350;
+        color: var(--green);
+        border-radius: 9px;
+        padding: 9px 12px;
+        font-size: 10px;
+        font-weight: 700;
+        box-shadow: 0 0 24px #00ffa30c;
+      }
+      .deck {
+        padding: 16px 17px 13px;
+        background: linear-gradient(#151a37, #10152e);
+        border-top: 1px solid #4b54793d;
+      }
+      .deck-title {
+        display: flex;
+        justify-content: space-between;
+        font-size: 9px;
+        letter-spacing: 2px;
+        color: #a3acc9;
+        margin-bottom: 12px;
+      }
+      .deck-title span {
+        color: #707c9e;
+        letter-spacing: 0;
+        font-size: 10px;
+      }
+      .cards {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        scrollbar-width: thin;
+        scrollbar-color: #434d78 transparent;
+        padding: 3px 2px 9px;
+      }
+      .card {
+        position: relative;
+        flex: 0 0 calc((100% - 32px) / 5);
+        min-width: 94px;
+        height: 130px;
+        border: 1px solid #ffb8003a;
+        background: linear-gradient(145deg, #ffb8000c, #ff3b3b04);
+        border-radius: 11px;
+        overflow: hidden;
+        padding: 0;
+        scroll-snap-align: start;
+        text-align: left;
+        touch-action: pan-y;
+      }
+      .card.ready {
+        border-color: #ffb800a0;
+        animation: pulse 2.2s ease-in-out infinite;
+      }
+      .card.locked {
+        border-color: #ffffff18;
+        filter: saturate(0.25);
+      }
+      .card.reserved {
+        border-style: dashed;
+        opacity: 0.55;
+      }
+      .card canvas {
+        display: block;
+        position: absolute;
+        width: 70px;
+        height: 75px;
+        left: 50%;
+        top: 2px;
+        transform: translateX(-50%);
+      }
+      .card .ring {
+        position: absolute;
+        width: 53px;
+        height: 53px;
+        top: 13px;
+        left: 50%;
+        transform: translateX(-50%);
+        border-radius: 50%;
+        background: conic-gradient(
+          #ffb80055 var(--progress, 100%),
+          #ffffff08 0
+        );
+        mask: radial-gradient(transparent 62%, #000 65%);
+      }
+      .card .num {
+        position: absolute;
+        left: 8px;
+        top: 7px;
+        font: 8px monospace;
+        color: #8e98ba;
+      }
+      .card .name {
+        position: absolute;
+        bottom: 31px;
+        left: 8px;
+        right: 5px;
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .card .sub {
+        position: absolute;
+        bottom: 12px;
+        left: 8px;
+        font-size: 9px;
+        color: #9ca7c9;
+      }
+      .card .badge {
+        position: absolute;
+        right: 7px;
+        top: 7px;
+        font-size: 8px;
+        color: #ffb800;
+      }
+      .deck-actions {
+        margin-top: 5px;
+        display: flex;
+        gap: 8px;
+      }
+      .upgrade {
+        border: 1px solid #ffb80088;
+        background: linear-gradient(100deg, #ffb8001c, #ff3b3b15);
+        padding: 12px 15px;
+        border-radius: 9px;
+        color: #ffcf55;
+        font-size: 11px;
+        font-weight: 700;
+        flex: 1;
+      }
+      .boost {
+        border: 1px solid #64709f66;
+        background: #ffffff05;
+        border-radius: 9px;
+        padding: 10px 12px;
+        font-size: 10px;
+        color: #b9c4df;
+      }
+      .side {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .panel {
+        border: 1px solid #6c78a52a;
+        background: var(--glass);
+        border-radius: 14px;
+        padding: 18px;
+        backdrop-filter: blur(12px);
+      }
+      .panel-title {
+        font-size: 9px;
+        letter-spacing: 2px;
+        color: #8d99ba;
+        margin-bottom: 17px;
+      }
+      .level-name {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 8px 0;
+      }
+      .level-num {
+        font-size: 35px;
+        color: var(--gold);
+        font-weight: 300;
+        letter-spacing: -2px;
+      }
+      .level-num small {
+        font-size: 11px;
+        letter-spacing: 1px;
+        color: #a1abc8;
+      }
+      .stat {
+        display: flex;
+        justify-content: space-between;
+        font-size: 10px;
+        margin-top: 13px;
+        color: #9ea9ca;
+      }
+      .stat b {
+        color: #e2e7f8;
+        font-weight: 500;
+      }
+      .rule {
+        height: 1px;
+        background: #ffffff0c;
+        margin: 17px 0;
+      }
+      .quote {
+        font-size: 12px;
+        line-height: 1.8;
+        color: #bbc3de;
+        margin: 0;
+      }
+      .quote em {
+        color: #ffbe37;
+        font-style: normal;
+      }
+      .tip {
+        font-size: 10px;
+        line-height: 1.8;
+        color: #929fc1;
+      }
+      .log {
+        font: 10px/1.8 monospace;
+        color: #98a9bf;
+        min-height: 62px;
+      }
+      .statusline {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 12px 3px;
+        color: #667395;
+        font: 9px monospace;
+        gap: 10px;
+      }
+      .statusline span:first-child {
+        color: #00ffa391;
+      }
+      .footnotes {
+        padding-top: 12px;
+        margin-top: 5px;
+        border-top: 1px solid #ffffff0b;
+        display: flex;
+        gap: 40px;
+        color: #7d89ac;
+        font-size: 10px;
+        line-height: 1.8;
+      }
+      .footnotes b {
+        color: #adb8d5;
+        font-size: 10px;
+        font-weight: 500;
+      }
+      .footnotes p {
+        margin: 3px 0;
+      }
+      .footnotes > div {
+        flex: 1;
+      }
+      dialog {
+        color: #e7edff;
+        border: 1px solid #ffb80065;
+        border-radius: 20px;
+        background: #11172ef5;
+        box-shadow: 0 0 100px #ffb80017;
+        padding: 26px;
+        width: min(430px, calc(100% - 24px));
+        max-height: 85vh;
+        overflow: auto;
+        backdrop-filter: blur(24px);
+      }
+      dialog::backdrop {
+        background: #040718b9;
+        backdrop-filter: blur(7px);
+      }
+      dialog h2 {
+        margin: 0 0 14px;
+        font-size: 24px;
+        letter-spacing: -0.6px;
+      }
+      dialog p {
+        color: #a9b5d7;
+        font-size: 12px;
+        line-height: 1.8;
+      }
+      dialog button {
+        border: 1px solid #ffb80066;
+        background: #ffb80010;
+        border-radius: 8px;
+        padding: 11px 16px;
+        font-size: 12px;
+        margin-top: 12px;
+      }
+      dialog .close {
+        float: right;
+        margin: 0;
+        border: 0;
+        background: none;
+        padding: 0 3px;
+        font-size: 22px;
+        color: #8896bb;
+      }
+      .tier {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 11px 0;
+        border-bottom: 1px solid #ffffff0b;
+        font-size: 11px;
+        color: #9caaca;
+      }
+      .tier.active {
+        color: var(--gold);
+      }
+      #toast {
+        position: absolute;
+        top: 44%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        max-width: 80%;
+        text-align: center;
+        border: 1px solid #ffb80055;
+        background: #11162be6;
+        backdrop-filter: blur(12px);
+        border-radius: 10px;
+        padding: 12px 18px;
+        font-size: 12px;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s;
+        color: #ffcf69;
+      }
+      #toast.show {
+        opacity: 1;
+      }
+      @keyframes pulse {
+        50% {
+          box-shadow:
+            inset 0 0 15px #ffb80010,
+            0 0 12px #ffb80016;
+        }
+      }
+      @media (min-width: 768px) {
+        .card {
+          flex-basis: calc((100% - 48px) / 7);
+          min-width: 0;
+        }
+      }
+      @media (max-width: 1050px) {
+        .layout {
+          grid-template-columns: minmax(0, 1fr) 190px;
+        }
+        .app {
+          padding: 20px;
+        }
+        .panel {
+          padding: 15px;
+        }
+        .resource {
+          min-width: 125px;
+        }
+      }
+      @media (max-width: 767px) {
+        .app {
+          padding: 14px 12px max(12px, env(safe-area-inset-bottom));
+        }
+        .brandbar {
+          margin-bottom: 17px;
+        }
+        .brand strong {
+          font-size: 11px;
+        }
+        .brand small {
+          font-size: 8px;
+        }
+        .build .desktop {
+          display: none;
+        }
+        .crest {
+          width: 33px;
+          height: 33px;
+          font-size: 22px;
+        }
+        .hero {
+          margin-bottom: 17px;
+        }
+        .hero h1 {
+          font-size: 29px;
+          letter-spacing: -1.1px;
+        }
+        .hero p {
+          font-size: 10px;
+          max-width: 230px;
+          line-height: 1.5;
+        }
+        .tools .tool {
+          padding: 8px;
+          font-size: 10px;
+        }
+        .tools .cosmetic {
+          display: none;
+        }
+        .layout {
+          display: block;
+        }
+        .side {
+          display: none;
+        }
+        .resourcebar {
+          gap: 0;
+          margin-bottom: 11px;
+        }
+        .resources {
+          gap: 5px;
+        }
+        .resource {
+          padding: 9px 8px;
+          min-width: 0;
+          flex: 1;
+          gap: 6px;
+        }
+        .resource label {
+          font-size: 7px;
+          letter-spacing: 0.6px;
+        }
+        .resource strong {
+          font-size: 13px;
+        }
+        .resource .symbol {
+          font-size: 16px;
+        }
+        .resource em {
+          font-size: 8px;
+        }
+        .battle-tag {
+          display: none;
+        }
+        .stage {
+          height: clamp(290px, 45dvh, 480px);
+        }
+        .deck {
+          padding: 12px 10px 10px;
+        }
+        .card {
+          min-width: 0;
+          flex-basis: calc((100% - 24px) / 4);
+          height: 120px;
+        }
+        .card .name {
+          font-size: 9px;
+        }
+        .stage-top {
+          left: 12px;
+          right: 12px;
+          top: 13px;
+        }
+        .stage-center {
+          top: 16px;
+        }
+        .faction b {
+          font-size: 9px;
+        }
+        .faction small {
+          font-size: 7px;
+        }
+        .hint {
+          font-size: 8px;
+        }
+        .stage-bottom {
+          left: 10px;
+          right: 10px;
+          bottom: 12px;
+        }
+        .super {
+          font-size: 9px;
+          padding: 8px;
+        }
+        .upgrade {
+          font-size: 10px;
+          padding: 11px 7px;
+        }
+        .boost {
+          font-size: 9px;
+          padding: 9px;
+        }
+        .footnotes {
+          gap: 15px;
+          font-size: 9px;
+        }
+        .statusline {
+          font-size: 8px;
+        }
+        .eyebrow {
+          font-size: 8px;
+          letter-spacing: 2px;
+        }
+        .card canvas {
+          width: 60px;
+          height: 65px;
+        }
+        .card .ring {
+          width: 47px;
+          height: 47px;
+        }
+        .deck-title {
+          font-size: 8px;
+        }
+        .deck-title span {
+          font-size: 8px;
+        }
+      }
+      @container (max-width:430px) {
+        .card {
+          flex-basis: calc((100% - 32px) / 5);
+        }
+        .card .name {
+          font-size: 8px;
+          left: 5px;
+          bottom: 33px;
+        }
+        .card .sub {
+          font-size: 8px;
+          left: 5px;
+        }
+        .card .num {
+          left: 5px;
+        }
+        .card .badge {
+          font-size: 7px;
+          right: 4px;
+        }
+      }
+      @container (max-width:310px) {
+        .card {
+          flex-basis: calc((100% - 8px) / 2);
+        }
+        .card .name {
+          font-size: 10px;
+        }
+        .hero h1 {
+          font-size: 24px;
+        }
+        .hero p {
+          display: none;
+        }
+        .build {
+          display: none;
+        }
+        .resource {
+          padding: 7px 5px;
+        }
+        .resource .symbol {
+          font-size: 13px;
+        }
+        .resource strong {
+          font-size: 11px;
+        }
+        .resource em {
+          font-size: 7px;
+        }
+        .resource label {
+          font-size: 6px;
+        }
+        .upgrade .upgrade-label {
+          display: none;
+        }
+        .upgrade {
+          flex: 0 0 48px;
+        }
+        .footnotes {
+          display: block;
+        }
+        .footnotes > div {
+          margin-top: 10px;
+        }
+        .hint {
+          max-width: 130px;
+          line-height: 1.5;
+        }
+        .stage-center small {
+          display: none;
+        }
+      }
+      @media (orientation: landscape) and (max-height: 560px) {
+        .app {
+          padding: 8px 12px;
+        }
+        .brandbar,
+        .hero,
+        .footnotes,
+        .side,
+        .statusline {
+          display: none;
+        }
+        .resourcebar {
+          margin-bottom: 6px;
+        }
+        .resource {
+          padding: 5px 12px;
+        }
+        .play {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 140px;
+        }
+        .stage {
+          height: calc(var(--vh) - 75px);
+          min-height: 220px;
+        }
+        .deck {
+          border-top: 0;
+          border-left: 1px solid #ffffff18;
+          padding: 8px;
+        }
+        .cards {
+          display: flex;
+          flex-direction: column;
+          height: calc(var(--vh) - 193px);
+          overflow: auto;
+        }
+        .card {
+          flex: 0 0 85px;
+          min-height: 85px;
+          width: 100%;
+        }
+        .card canvas {
+          left: 25%;
+          width: 50px;
+          height: 60px;
+        }
+        .card .ring {
+          left: 25%;
+          width: 40px;
+          height: 40px;
+        }
+        .card .name {
+          left: 50%;
+          bottom: 46px;
+          font-size: 9px;
+        }
+        .card .sub {
+          left: 50%;
+          bottom: 24px;
+        }
+        .deck-actions {
+          flex-direction: column;
+        }
+        .upgrade {
+          padding: 8px;
+          font-size: 9px;
+        }
+        .boost {
+          padding: 6px;
+        }
+        .deck-title span {
+          display: none;
+        }
+        .layout {
+          display: block;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .card.ready {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="brandbar">
+        <div class="brand">
+          <div class="crest">針</div>
+          <div><strong>ЁЖ • СЕНСЕЙ</strong><small>NEON DOJO GAMES</small></div>
+        </div>
+        <div class="build">
+          <i class="dot"></i><span>ПРОТОТИП v3.1</span
+          ><span class="desktop"> / LOCAL PLAY</span>
+        </div>
+      </header>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">一緒に戦おう · СИЛА В ЕДИНСТВЕ</p>
+          <h1>Стенка <span>на</span> Стенку</h1>
+          <p>Собери своё додзё. Останови клан тюленей.</p>
+        </div>
+        <div class="tools">
+          <button class="tool cosmetic" id="skinBtn">
+            ✦ Цвет фонарей · 30 🪙</button
+          ><button class="tool" id="helpBtn" aria-label="Как играть">
+            ? Правила</button
+          ><button class="tool" id="resetBtn" aria-label="Новая битва">
+            ↻ Битва
+          </button>
+        </div>
+      </section>
+      <div class="resourcebar">
+        <div class="resources">
+          <div class="resource">
+            <span class="symbol" style="color: var(--gold)">◉</span>
+            <div><label>МОНЕТЫ</label><strong id="coins">120</strong></div>
+          </div>
+          <div class="resource">
+            <span class="symbol" style="color: var(--green)">ϟ</span>
+            <div>
+              <label>ЭНЕРГИЯ <em id="regen">+1,5/с</em></label
+              ><strong id="energy">87 / 100</strong>
+            </div>
+          </div>
+          <div class="resource">
+            <span class="symbol">⛩</span>
+            <div>
+              <label>ТВОЁ ДОДЗЁ</label><strong id="dojoHud">Уровень 1</strong>
+            </div>
+          </div>
+        </div>
+        <span class="battle-tag" id="battleTag">● БИТВА КЛАНОВ</span>
+      </div>
+      <main class="layout">
+        <section class="play">
+          <div class="stage" id="stage">
+            <canvas
+              id="arena"
+              aria-label="Арена. Карточки вызывают юнитов, свайп вверх запускает волну ци."
+            ></canvas>
+            <div class="stage-top">
+              <div class="faction">
+                <small>針 · КЛАН ИГОЛОК</small
+                ><b id="ourTitle">Соломенная хижина</b>
+                <div class="health"><i id="ourHealth"></i></div>
+              </div>
+              <div class="faction right">
+                <small>海 · КЛАН ПРИЛИВА</small
+                ><b id="enemyTitle">Глиняная крепость</b>
+                <div class="health"><i id="enemyHealth"></i></div>
+              </div>
+            </div>
+            <div class="stage-center">
+              <small>ВРЕМЯ БИТВЫ</small><span id="clock">00:00</span>
+            </div>
+            <div id="toast" role="status" aria-live="polite"></div>
+            <div class="stage-bottom">
+              <span class="hint"
+                >↑ Свайп — волна ци · Удержи замок — разведка</span
+              ><button class="super" id="superBtn">ϟ ВОЛНА ЦИ</button>
+            </div>
+          </div>
+          <div class="deck">
+            <div class="deck-title">
+              🎴 ТВОЙ ОТРЯД <span>Тап — призыв · ← в резерв</span>
+            </div>
+            <div class="cards" id="cards"></div>
+            <div class="deck-actions">
+              <button class="upgrade" id="upgradeBtn">
+                ⛩ <span class="upgrade-label">УЛУЧШИТЬ ДОДЗЁ · </span
+                ><span id="upgradeCost">50 ⚡</span></button
+              ><button class="boost" id="boostBtn">
+                ↗ Зарядить +5с · 20 🪙
+              </button>
+            </div>
+          </div>
+        </section>
+        <aside class="side">
+          <section class="panel">
+            <div class="panel-title">道 · ПУТЬ СЕНСЕЯ</div>
+            <div class="level-num">
+              <span id="sideLevel">01</span> <small>/ 06</small>
+            </div>
+            <div class="level-name" id="sideTitle">Соломенная хижина</div>
+            <div class="stat">
+              <span>Скорость карточек</span><b id="speed">×1.00</b>
+            </div>
+            <div class="stat">
+              <span>Бойцов на поле</span><b id="army">0 / 48</b>
+            </div>
+            <div class="stat"><span>Ударов ци</span><b id="waves">0</b></div>
+            <div class="rule"></div>
+            <div class="stat"><span>Побед в додзё</span><b id="wins">0</b></div>
+          </section>
+          <section class="panel">
+            <div class="panel-title">悟 · МАЛЕНЬКАЯ МУДРОСТЬ</div>
+            <p class="quote">
+              «Одна иголка — колючка.<br />Сотня иголок —<br /><em
+                >уже аргумент.</em
+              >»
+            </p>
+            <div class="rule"></div>
+            <div class="tip">
+              Не трать всю энергию сразу.<br />Улучшение додзё открывает новых
+              бойцов и ускоряет призыв.
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panel-title">戦 · ХОД БИТВЫ</div>
+            <div class="log" id="log">
+              Фонари зажжены.<br />Додзё ждёт твоего приказа.
+            </div>
+          </section>
+        </aside>
+      </main>
+      <div class="statusline">
+        <span id="saveStatus">● ПРОГРЕСС СОХРАНЯЕТСЯ ЛОКАЛЬНО</span
+        ><span id="fps">CANVAS 2D · 60 FPS · HIGH</span>
+      </div>
+      <footer class="footnotes">
+        <div>
+          <b>КАК ИГРАТЬ</b>
+          <p>
+            Нажимай заряженные карточки и собирай армию. Улучшай додзё за
+            энергию.<br />Свайп вверх или кнопка ци — супер-удар. Снеси замок
+            раньше, чем падёт твой дом.
+          </p>
+        </div>
+        <div>
+          <b>ЧТО ДАЛЬШЕ · ФАЗА 2</b>
+          <p>
+            Мультиплеер WebSocket · NFT · сезоны · ивент 50v50<br />Это
+            локальная игра: монеты прототипа не связаны с ботом и блокчейном.
+          </p>
+        </div>
+      </footer>
+    </div>
+    <dialog id="modal">
+      <button class="close" aria-label="Закрыть" id="closeModal">×</button>
+      <h2 id="modalTitle"></h2>
+      <div id="modalBody"></div>
+      <button id="modalAction">Продолжить</button>
+    </dialog>
+    <script>
+      "use strict";
+      // CONFIG — единственный источник баланса. Монеты здесь исключительно локальные.
+      const CONFIG = {
+        colors: {
+          bg: "#0A0E27",
+          red: "#FF3B3B",
+          gold: "#FFB800",
+          purple: "#7B2FF7",
+          cyan: "#00E5FF",
+          qi: "#00FFA3",
+          death: "#FF006E",
+        },
+        unitLimit: 48,
+        unitPool: 96,
+        particlePool: 320,
+        projectilePool: 80,
+        levels: [
+          {
+            name: "Соломенная хижина",
+            cost: 0,
+            speed: 1,
+            cap: 100,
+            regen: 1.5,
+          },
+          {
+            name: "Деревянное додзё",
+            cost: 50,
+            speed: 1.15,
+            cap: 220,
+            regen: 3,
+          },
+          { name: "Каменное додзё", cost: 150, speed: 1.3, cap: 550, regen: 6 },
+          { name: "Додзё Сенсея", cost: 400, speed: 1.5, cap: 1250, regen: 12 },
+          {
+            name: "Золотое додзё",
+            cost: 1000,
+            speed: 1.8,
+            cap: 3000,
+            regen: 22,
+          },
+          {
+            name: "Небесное додзё",
+            cost: 2500,
+            speed: 2.2,
+            cap: 3500,
+            regen: 30,
+          },
+        ],
+        castle: [
+          "Глиняная крепость",
+          "Деревянный замок",
+          "Каменный замок",
+          "Замок Сёгуна",
+          "Чёрный замок",
+        ],
+        aiUpgrade: [0, 45, 95, 165, 250],
+        cards: [
+          {
+            name: "Ёж-новичок",
+            role: "КАТАНА",
+            cd: 3,
+            cost: 6,
+            level: 1,
+            hp: 85,
+            dmg: 15,
+            range: 29,
+            speed: 26,
+            rate: 1,
+            kind: 0,
+          },
+          {
+            name: "Ёж-Сенсей",
+            role: "АУРА +2",
+            cd: 12,
+            cost: 21,
+            level: 1,
+            hp: 140,
+            dmg: 17,
+            range: 32,
+            speed: 22,
+            rate: 1.1,
+            kind: 1,
+          },
+          {
+            name: "Ёж-лучник",
+            role: "ДАЛЬНИЙ БОЙ",
+            cd: 6,
+            cost: 14,
+            level: 2,
+            hp: 58,
+            dmg: 17,
+            range: 165,
+            speed: 26,
+            rate: 1.45,
+            kind: 2,
+          },
+          {
+            name: "Ёж-самурай",
+            role: "ТЯЖЁЛЫЙ",
+            cd: 8,
+            cost: 22,
+            level: 3,
+            hp: 220,
+            dmg: 25,
+            range: 33,
+            speed: 19,
+            rate: 1.2,
+            kind: 3,
+          },
+          {
+            name: "Ёж-монах",
+            role: "ЛЕЧЕНИЕ",
+            cd: 10,
+            cost: 24,
+            level: 4,
+            hp: 95,
+            dmg: 9,
+            range: 120,
+            speed: 23,
+            rate: 1.6,
+            kind: 4,
+          },
+          {
+            name: "NFT-подарок",
+            role: "ФЕСТИВАЛЬ",
+            cd: 20,
+            cost: 15,
+            level: 1,
+            hp: 170,
+            dmg: 32,
+            range: 55,
+            speed: 25,
+            rate: 1.2,
+            kind: 5,
+          },
+          {
+            name: "Камео Дурова",
+            role: "ГОСТЬ ДОДЗЁ",
+            cd: 25,
+            cost: 38,
+            level: 5,
+            hp: 320,
+            dmg: 40,
+            range: 115,
+            speed: 25,
+            rate: 1,
+            kind: 6,
+          },
+        ],
+        enemies: [
+          { hp: 82, dmg: 12, range: 29, speed: 23, rate: 1.1, kind: 0 },
+          { hp: 240, dmg: 24, range: 35, speed: 17, rate: 1.3, kind: 3 },
+          { hp: 90, dmg: 16, range: 155, speed: 22, rate: 1.7, kind: 2 },
+          { hp: 540, dmg: 38, range: 45, speed: 15, rate: 1.5, kind: 6 },
+        ],
+      };
+      const $ = (id) => document.getElementById(id),
+        clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+      const rand = (a, b) => a + Math.random() * (b - a);
+      // SaveSystem — только мета-прогресс, а не «денежный» бэкенд. localStorage может быть закрыт браузером.
+      class SaveSystem {
+        constructor() {
+          this.ok = true;
+          this.key = "hedgehog-neon-v31";
+          this.lastSaved = null;
+        }
+        load() {
+          try {
+            const x = JSON.parse(localStorage.getItem(this.key) || "null");
+            if (x && x.version === 1)
+              return {
+                level: clamp(Math.floor(Number(x.level) || 1), 1, 6),
+                coins: clamp(Math.floor(Number(x.coins) || 0), 0, 999999),
+                wins: clamp(Math.floor(Number(x.wins) || 0), 0, 9999),
+                skin: clamp(Math.floor(Number(x.skin) || 0), 0, 2),
+                reserve: Array.isArray(x.reserve)
+                  ? x.reserve.slice(0, 7).map(Boolean)
+                  : [],
+              };
+          } catch (e) {
+            this.ok = false;
+          }
+          return null;
+        }
+        save(g) {
+          try {
+            const serialized = JSON.stringify({
+              version: 1,
+              level: g.level,
+              coins: g.coins,
+              wins: g.wins,
+              skin: g.skin,
+              reserve: g.reserve,
+            });
+            // Синхронный localStorage не трогаем, если мета-прогресс не изменился.
+            if (serialized !== this.lastSaved) {
+              localStorage.setItem(this.key, serialized);
+              this.lastSaved = serialized;
+            }
+            this.ok = true;
+            return true;
+          } catch (e) {
+            this.ok = false;
+            return false;
+          }
+        }
+      }
+      // ParticlePool — фиксированные объекты: лепестки, вспышки, разлетающиеся линии и стрелы не создаются в кадре.
+      class ParticlePool {
+        constructor(size) {
+          this.items = Array.from({ length: size }, () => ({
+            active: false,
+            x: 0,
+            y: 0,
+            vx: 0,
+            vy: 0,
+            life: 0,
+            max: 1,
+            color: "#FF006E",
+            size: 2,
+            angle: 0,
+            type: 0,
+          }));
+          this.cursor = 0;
+        }
+        emit(x, y, n, color, type = 0) {
+          for (let j = 0; j < n; j++) {
+            let p = this.items[this.cursor];
+            this.cursor = (this.cursor + 1) % this.items.length;
+            p.active = true;
+            p.x = x;
+            p.y = y;
+            p.vx = rand(-75, 75);
+            p.vy = rand(-110, 25);
+            p.life = p.max = rand(0.35, 0.9);
+            p.color = color;
+            p.size = rand(2, 7);
+            p.angle = rand(0, 6.28);
+            p.type = type;
+          }
+        }
+        update(dt) {
+          for (const p of this.items)
+            if (p.active) {
+              p.life -= dt;
+              if (p.life <= 0) {
+                p.active = false;
+                continue;
+              }
+              p.x += p.vx * dt;
+              p.y += p.vy * dt;
+              p.vy += 110 * dt;
+              p.angle += dt * 2;
+            }
+        }
+        draw(ctx, quality) {
+          let i = 0;
+          for (const p of this.items) {
+            if (!p.active) continue;
+            if (quality < 2 && i++ % 2) continue;
+            ctx.globalAlpha = p.life / p.max;
+            ctx.strokeStyle = p.color;
+            ctx.fillStyle = p.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            if (p.type === 1)
+              ctx.ellipse(p.x, p.y, p.size, p.size * 0.35, p.angle, 0, 7);
+            else {
+              ctx.moveTo(p.x, p.y);
+              ctx.lineTo(
+                p.x + Math.cos(p.angle) * p.size,
+                p.y + Math.sin(p.angle) * p.size,
+              );
+            }
+            p.type === 1 ? ctx.fill() : ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+        }
+      }
+      // ParallaxBackground — десять слоёв от дальнего к ближнему; фон живёт независимо от боя.
+      class ParallaxBackground {
+        constructor() {
+          this.petals = Array.from({ length: 36 }, () => ({
+            x: Math.random(),
+            y: Math.random(),
+            r: rand(1.5, 4),
+            a: rand(0, 6.28),
+            v: rand(0.018, 0.045),
+          }));
+          this.stars = Array.from({ length: 55 }, () => ({
+            x: Math.random(),
+            y: Math.random() * 0.65,
+            r: rand(0.5, 1.5),
+            phase: rand(0, 6.28),
+          }));
+          this.time = 0;
+          this.camera = 0;
+        }
+        update(dt) {
+          this.time += dt;
+          this.camera += (Math.sin(this.time * 0.1) * 0.7 - this.camera) * dt;
+          for (const p of this.petals) {
+            p.y += p.v * dt;
+            p.x += (0.018 + Math.sin(this.time + p.a) * 0.01) * dt;
+            p.a += dt * 0.6;
+            if (p.y > 1.03) {
+              p.y = -0.03;
+              p.x = Math.random();
+            }
+            if (p.x > 1.03) p.x = -0.03;
+          }
+          for (const s of this.stars) {
+            s.y -= dt * 0.002;
+            if (s.y < 0) s.y = 0.65;
+          }
+        }
+        draw(c, w, h, q, skin) {
+          const t = this.time,
+            ground = h * 0.79,
+            par = this.camera * (w > h ? 14 : 7);
+          c.save();
+          // 1. Небо, рассвет за 60 секунд.
+          let sky = c.createLinearGradient(0, 0, 0, h);
+          sky.addColorStop(0, "#0A0E27");
+          sky.addColorStop(
+            0.48,
+            `hsl(${255 + Math.sin((t * Math.PI) / 30) * 16} 44% ${17 + Math.sin((t * Math.PI) / 30) * 3}%)`,
+          );
+          sky.addColorStop(1, "#50233e");
+          c.fillStyle = sky;
+          c.fillRect(0, 0, w, h);
+          // 2. Фудзи, почти незаметное дыхание силуэта.
+          c.save();
+          c.translate(w * 0.53 + par, ground * 0.66);
+          let breath = 1 + Math.sin(t * 0.5) * 0.005;
+          c.scale(breath, breath);
+          c.beginPath();
+          c.moveTo(-w * 0.43, ground * 0.2);
+          c.lineTo(0, -ground * 0.46);
+          c.lineTo(w * 0.42, ground * 0.2);
+          c.fillStyle = "#252342";
+          c.fill();
+          c.strokeStyle = "#8d61a455";
+          c.lineWidth = 1.3;
+          c.stroke();
+          c.beginPath();
+          c.moveTo(-w * 0.085, -ground * 0.33);
+          c.lineTo(0, -ground * 0.46);
+          c.lineTo(w * 0.082, -ground * 0.33);
+          c.lineTo(w * 0.04, -ground * 0.35);
+          c.lineTo(0, -ground * 0.3);
+          c.lineTo(-w * 0.035, -ground * 0.36);
+          c.closePath();
+          c.fillStyle = "#b9b1d842";
+          c.fill();
+          c.restore();
+          // 3. Светлячки (отключаем при низком FPS).
+          if (q > 0) {
+            let i = 0;
+            c.fillStyle = "#ffb800";
+            for (const s of this.stars) {
+              if (q === 1 && i++ % 2) continue;
+              c.globalAlpha =
+                0.25 + 0.5 * Math.abs(Math.sin(t * 0.9 + s.phase));
+              c.beginPath();
+              c.arc(s.x * w + par, s.y * h, s.r, 0, 7);
+              c.fill();
+            }
+            c.globalAlpha = 1;
+          }
+          // 4. Облака, напоминающие ворота тории.
+          c.strokeStyle = "#bb90df19";
+          c.lineWidth = 7;
+          c.lineCap = "round";
+          for (let i = 0; i < 4; i++) {
+            let x = (((t / 30 + i * 0.29) % 1.3) - 0.15) * w,
+              y = h * (0.18 + i * 0.07);
+            c.beginPath();
+            c.moveTo(x - 40, y);
+            c.quadraticCurveTo(x, y - 13, x + 55, y);
+            c.moveTo(x - 20, y + 13);
+            c.lineTo(x + 35, y + 13);
+            c.stroke();
+          }
+          // 5. Луна с гало.
+          let mx = w * 0.75 + par,
+            my = h * 0.26,
+            rad = Math.max(20, w * 0.037),
+            halo = c.createRadialGradient(mx, my, 0, mx, my, rad * 3);
+          halo.addColorStop(0, "#ffb80033");
+          halo.addColorStop(1, "#ffb80000");
+          c.fillStyle = halo;
+          c.fillRect(mx - rad * 3, my - rad * 3, rad * 6, rad * 6);
+          c.fillStyle = "#ffc67b";
+          c.shadowColor = "#ffb800";
+          c.shadowBlur = q > 0 ? 15 : 0;
+          c.globalAlpha = 0.8 + 0.1 * Math.sin(t);
+          c.beginPath();
+          c.arc(mx, my, rad, 0, 7);
+          c.fill();
+          c.shadowBlur = 0;
+          c.globalAlpha = 1;
+          // Дальние холмы и японские крыши в основании горы.
+          c.fillStyle = "#121a32";
+          c.beginPath();
+          c.moveTo(0, ground);
+          for (let x = 0; x <= w + 20; x += 20)
+            c.lineTo(x, ground - 30 - Math.sin(x * 0.015) * 12);
+          c.lineTo(w, h);
+          c.lineTo(0, h);
+          c.fill();
+          c.strokeStyle = "#5a477f55";
+          c.lineWidth = 1;
+          for (let i = 0; i < 9; i++) {
+            let x = w * (0.16 + i * 0.085),
+              y = ground - 37 - Math.sin(i) * 9;
+            c.beginPath();
+            c.moveTo(x - 13, y);
+            c.lineTo(x, y - 8);
+            c.lineTo(x + 13, y);
+            c.stroke();
+          }
+          // 6. Дальняя сакура.
+          if (q > 0) {
+            for (let side = 0; side < 2; side++) {
+              c.save();
+              c.translate(side ? w : 0, ground - 30);
+              c.scale(side ? -1 : 1, 1);
+              c.rotate(Math.sin(t * 0.55) * 0.018);
+              c.strokeStyle = "#4f305a";
+              c.lineWidth = 7;
+              c.beginPath();
+              c.moveTo(0, 25);
+              c.quadraticCurveTo(20, -60, 8, -140);
+              c.moveTo(10, -100);
+              c.quadraticCurveTo(60, -180, 140, -160);
+              c.moveTo(13, -65);
+              c.quadraticCurveTo(60, -120, 100, -110);
+              c.stroke();
+              c.fillStyle = "#ff76be";
+              for (let i = 0; i < 28; i++) {
+                let x = 30 + ((i * 37) % 140),
+                  y = -110 - ((i * 23) % 75);
+                c.globalAlpha = 0.09 + (i % 3) * 0.04;
+                c.beginPath();
+                c.ellipse(x, y, 18, 8, Math.sin(i), 0, 7);
+                c.fill();
+              }
+              c.restore();
+            }
+            c.globalAlpha = 1;
+          }
+          // 7. Бамбук.
+          c.strokeStyle = "#00ffa31c";
+          for (let i = 0; i < 9; i++) {
+            let x = i % 2 ? w - 8 - i * 5 : 8 + i * 5,
+              top = ground - h * (0.24 + (i % 3) * 0.045);
+            c.lineWidth = 2;
+            c.beginPath();
+            c.moveTo(x, ground + 20);
+            c.quadraticCurveTo(
+              x + Math.sin(t + i) * 8,
+              top + 40,
+              x + Math.sin(t + i) * 6,
+              top,
+            );
+            c.stroke();
+            c.lineWidth = 3;
+            for (let j = 0; j < 4; j++) {
+              let y = top + j * 25;
+              c.beginPath();
+              c.moveTo(x, y);
+              c.lineTo(x + (i % 2 ? -13 : 13), y - 9);
+              c.stroke();
+            }
+          }
+          // 8. Фонари тётин на провисшем проводе.
+          c.strokeStyle = "#c7876333";
+          c.lineWidth = 1;
+          c.beginPath();
+          c.moveTo(0, h * 0.12);
+          c.quadraticCurveTo(w * 0.5, h * 0.36, w, h * 0.1);
+          c.stroke();
+          for (let i = 0; i < 8; i++) {
+            let x = (w * (i + 0.5)) / 8,
+              y = h * (0.12 + 0.115 * Math.sin(((i + 0.5) / 8) * Math.PI));
+            c.save();
+            c.translate(x, y);
+            c.rotate(Math.sin(t * 1.2 + i) * 0.09);
+            c.strokeStyle = "#ffb80066";
+            c.beginPath();
+            c.moveTo(0, 0);
+            c.lineTo(0, 14);
+            c.stroke();
+            let color =
+              skin === 1
+                ? "#00E5FF"
+                : skin === 2
+                  ? "#00FFA3"
+                  : i % 3
+                    ? "#FF3B3B"
+                    : "#FFB800";
+            c.shadowColor = color;
+            c.shadowBlur = q > 0 ? 16 + Math.sin(t + i) * 4 : 0;
+            c.fillStyle = color;
+            c.globalAlpha = 0.65;
+            c.beginPath();
+            c.ellipse(0, 24, 7, 11, 0, 0, 7);
+            c.fill();
+            c.globalAlpha = 1;
+            c.shadowBlur = 0;
+            c.strokeStyle = "#ffcd7e66";
+            c.lineWidth = 1;
+            c.beginPath();
+            c.moveTo(-5, 20);
+            c.lineTo(5, 20);
+            c.moveTo(-5, 26);
+            c.lineTo(5, 26);
+            c.stroke();
+            c.fillStyle = "#ffc779";
+            c.fillRect(-3, 12, 6, 2);
+            c.fillRect(-3, 35, 6, 2);
+            c.restore();
+          }
+          // Земля: праздничный неоновый мост.
+          let land = c.createLinearGradient(0, ground, 0, h);
+          land.addColorStop(0, "#17243c");
+          land.addColorStop(1, "#0A0E27");
+          c.fillStyle = land;
+          c.fillRect(0, ground, w, h - ground);
+          c.strokeStyle = "#ffb8004a";
+          c.lineWidth = 1;
+          c.beginPath();
+          c.moveTo(0, ground + 2);
+          c.lineTo(w, ground + 2);
+          c.stroke();
+          c.strokeStyle = "#49617e22";
+          for (let i = 0; i < 20; i++) {
+            c.beginPath();
+            c.moveTo((i * w) / 20, ground + 2);
+            c.lineTo((i * w) / 20 - 30, h);
+            c.stroke();
+          }
+          c.strokeStyle = "#61729414";
+          for (let i = 0; i < 4; i++) {
+            c.beginPath();
+            c.moveTo(0, ground + 18 + i * 27);
+            c.lineTo(w, ground + 18 + i * 27);
+            c.stroke();
+          }
+          // 9. Передние лепестки — постоянный пул из 36 объектов.
+          if (q > 0) {
+            let count = q === 1 ? 18 : 36;
+            c.fillStyle = "#ff97c5";
+            for (let i = 0; i < count; i++) {
+              let p = this.petals[i];
+              c.globalAlpha = 0.3 + (i % 4) * 0.1;
+              c.beginPath();
+              c.ellipse(p.x * w, p.y * h, p.r, p.r * 0.42, p.a, 0, 7);
+              c.fill();
+            }
+            c.globalAlpha = 1;
+          }
+          // 10. Стелющийся туман.
+          let fog = c.createLinearGradient(0, ground - 12, 0, ground + 55);
+          fog.addColorStop(0, "#00e5ff00");
+          fog.addColorStop(0.5, "#00e5ff0a");
+          fog.addColorStop(1, "#00e5ff00");
+          c.fillStyle = fog;
+          c.fillRect(0, ground - 12, w, 70);
+          c.restore();
+        }
+      }
+      // StickmanRenderer — общая геометрия для иконок и живых бойцов.
+      class StickmanRenderer {
+        constructor(ctx) {
+          this.c = ctx;
+          this.atlas = null;
+        }
+        // Векторные позы рисуем один раз в локальный атлас, а не 96 раз с glow
+        // на каждом кадре. Атлас генерируется из кода, внешних картинок нет.
+        buildAtlas() {
+          const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+          if (this.atlas && this.atlasDpr === dpr) return;
+          this.atlasDpr = dpr;
+          const tile = 96;
+          const atlas = document.createElement("canvas");
+          atlas.width = tile * 5 * dpr;
+          atlas.height = tile * 11 * dpr;
+          const ctx = atlas.getContext("2d");
+          const brush = new StickmanRenderer(ctx);
+          const unit = {
+            side: 0,
+            kind: 0,
+            x: 48,
+            y: 82,
+            seed: 0,
+            age: 1,
+            moving: false,
+            flash: 0,
+          };
+          const enemyKinds = [0, 2, 3, 6];
+          for (let row = 0; row < 11; row++) {
+            unit.side = row < 7 ? 0 : 1;
+            unit.kind = row < 7 ? row : enemyKinds[row - 7];
+            for (let frame = 0; frame < 5; frame++) {
+              ctx.setTransform(
+                dpr,
+                0,
+                0,
+                dpr,
+                frame * tile * dpr,
+                row * tile * dpr,
+              );
+              unit.moving = frame > 0 && frame < 4;
+              unit.flash = frame === 4 ? 0.1 : 0;
+              brush.vectorUnit(
+                unit,
+                unit.moving ? ((frame - 2) * Math.PI) / 30 : 0,
+                1,
+                2,
+              );
+            }
+          }
+          this.atlas = atlas;
+        }
+        line(x1, y1, x2, y2) {
+          let c = this.c;
+          c.beginPath();
+          c.moveTo(x1, y1);
+          c.lineTo(x2, y2);
+          c.stroke();
+        }
+        unit(u, t, scale = 1, quality = 2) {
+          if (!this.atlas) return this.vectorUnit(u, t, scale, quality);
+          const frame =
+            u.flash > 0
+              ? 4
+              : u.moving
+                ? 1 + Math.floor((t * 7.5 + u.seed) % 3)
+                : 0;
+          const row =
+            u.side === 0
+              ? u.kind
+              : u.kind === 0
+                ? 7
+                : u.kind === 2
+                  ? 8
+                  : u.kind === 3
+                    ? 9
+                    : 10;
+          const spawn = clamp(u.age / 0.35, 0, 1),
+            c = this.c,
+            size = 96 * this.atlasDpr;
+          c.globalAlpha = spawn;
+          c.drawImage(
+            this.atlas,
+            frame * size,
+            row * size,
+            size,
+            size,
+            u.x - 48 * scale,
+            u.y - 82 * scale + (1 - spawn) * 12,
+            96 * scale,
+            96 * scale,
+          );
+          c.globalAlpha = 1;
+        }
+        vectorUnit(u, t, scale = 1, quality = 2) {
+          let c = this.c,
+            friend = u.side === 0,
+            d = friend ? 1 : -1,
+            phase = t * 15 + u.seed,
+            walk = u.moving
+              ? Math.sin(phase) * 8
+              : Math.sin(t * 3 + u.seed) * 1.4,
+            attack = u.flash > 0 ? 12 : 0;
+          c.save();
+          c.translate(u.x, u.y);
+          c.scale(scale * d, scale);
+          let spawn = clamp(u.age / 0.35, 0, 1);
+          c.globalAlpha = spawn;
+          c.translate(0, (1 - spawn) * 12);
+          c.lineCap = "round";
+          c.lineJoin = "round";
+          c.lineWidth = friend ? 4.3 : 4.8;
+          let g = c.createLinearGradient(-12, -48, 15, 2);
+          g.addColorStop(0, friend ? "#FFB800" : "#00E5FF");
+          g.addColorStop(1, friend ? "#FF3B3B" : "#7B2FF7");
+          c.strokeStyle = g;
+          c.fillStyle = friend ? "#e4863322" : "#724adc35";
+          c.shadowColor = friend ? "#ff8c30" : "#7b2ff7";
+          c.shadowBlur = quality > 0 ? 7 : 0;
+          if (friend) {
+            if (u.kind === 1 || u.kind === 4) {
+              c.save();
+              c.globalAlpha = 0.1 + 0.04 * Math.sin(t * 4);
+              c.fillStyle = "#00FFA3";
+              c.beginPath();
+              c.ellipse(0, -4, 31, 8, 0, 0, 7);
+              c.fill();
+              c.restore();
+            }
+            c.beginPath();
+            c.arc(0, -40, 8, 0, 7);
+            c.fill();
+            c.stroke();
+            this.line(0, -31, 0, -14);
+            this.line(0, -14, -9 - walk * 0.55, 0);
+            this.line(0, -14, 8 + walk * 0.55, 0);
+            this.line(0, -28, -10, -19 + walk * 0.3);
+            this.line(0, -27, 12 + attack, -20 - attack * 0.3);
+            // Иголки и повязка обязательны даже у маленькой иконки.
+            c.lineWidth = 2.8;
+            for (let i = 0; i < 5; i++)
+              this.line(-3, -32 + i * 4, -13 - (i % 2) * 4, -36 + i * 4);
+            c.strokeStyle = "#FF3B3B";
+            c.lineWidth = 3;
+            this.line(-7, -43, 7, -43);
+            this.line(-7, -43, -15, -39);
+            this.line(-7, -43, -17, -45);
+            c.strokeStyle = g;
+            c.lineWidth = 2.8;
+            if (u.kind === 2) {
+              c.beginPath();
+              c.arc(16, -27, 15, -1.2, 1.2);
+              c.stroke();
+              this.line(21, -41, 21, -13);
+              this.line(9, -27, 30, -27);
+            } else if (u.kind === 1 || u.kind === 4) {
+              this.line(16, -3, 16, -55);
+              c.beginPath();
+              c.arc(16, -55, 5, 0, 7);
+              c.stroke();
+            } else if (u.kind === 5) {
+              c.fillStyle = "#FFB80033";
+              c.fillRect(8, -27, 16, 14);
+              c.strokeRect(8, -27, 16, 14);
+              this.line(16, -29, 16, -10);
+            } else {
+              this.line(
+                13 + attack,
+                -20 - attack * 0.3,
+                28 + attack,
+                -48 + attack * 0.5,
+              );
+              this.line(9 + attack, -23, 19 + attack, -18);
+            }
+            if (u.kind === 3) {
+              c.lineWidth = 4;
+              this.line(-9, -29, -15, -19);
+              this.line(-15, -19, -11, -9);
+            }
+            if (u.kind === 6) {
+              c.fillStyle = "#FFB800";
+              c.font = "bold 10px sans-serif";
+              c.fillText("D", -3, -18);
+            }
+          } else {
+            // Тюлень: округлый торс, усы-линии и плавники-ноги.
+            c.beginPath();
+            c.ellipse(
+              0,
+              -22,
+              13,
+              u.kind === 3 || u.kind === 6 ? 20 : 16,
+              0,
+              0,
+              7,
+            );
+            c.fill();
+            c.stroke();
+            c.beginPath();
+            c.arc(1, -40, 9, 0, 7);
+            c.fill();
+            c.stroke();
+            this.line(-8, -9, -13 - walk * 0.6, 0);
+            this.line(7, -9, 14 + walk * 0.6, 0);
+            this.line(10, -25, 21 + attack, -18);
+            c.lineWidth = 1.6;
+            this.line(3, -38, 18, -42);
+            this.line(3, -36, 20, -35);
+            this.line(3, -34, 17, -29);
+            if (u.kind === 6) {
+              c.lineWidth = 3;
+              this.line(-7, -47, -12, -57);
+              this.line(7, -47, 12, -57);
+            }
+            c.lineWidth = 2.6;
+            this.line(22 + attack, -18, 27 + attack, -44);
+            if (u.kind === 2) {
+              c.beginPath();
+              c.arc(27 + attack, -46, 5, 0, 7);
+              c.stroke();
+            }
+          }
+          c.shadowBlur = 0;
+          c.fillStyle = friend ? "#ffdd8d" : "#00e5ff";
+          c.beginPath();
+          c.arc(3, -41, 1.4, 0, 7);
+          c.fill();
+          c.restore();
+        }
+        building(x, y, level, enemy, t, build) {
+          let c = this.c,
+            dir = enemy ? -1 : 1,
+            tiers = 1 + Math.floor((level - 1) / 2);
+          c.save();
+          c.translate(x, y);
+          c.scale(dir, 1);
+          let grad = c.createLinearGradient(-32, -110, 35, 0);
+          grad.addColorStop(0, enemy ? "#00E5FF" : "#FFB800");
+          grad.addColorStop(1, enemy ? "#7B2FF7" : "#FF3B3B");
+          c.lineWidth = 3;
+          c.lineJoin = "round";
+          c.lineCap = "round";
+          c.strokeStyle = grad;
+          c.fillStyle = enemy ? "#171a3e" : "#35213a";
+          c.shadowColor = enemy ? "#7B2FF7" : "#FF3B3B";
+          c.shadowBlur = 10 + build * 20;
+          let base = level === 1 ? 29 : 35;
+          c.fillRect(-base, -46, base * 2, 46);
+          c.strokeRect(-base, -46, base * 2, 46);
+          for (let i = 0; i < tiers; i++) {
+            let yy = -45 - i * 30,
+              ww = base + 9 - i * 5;
+            c.beginPath();
+            c.moveTo(-ww - 7, yy + 4);
+            c.quadraticCurveTo(-ww + 5, yy - 4, -12, yy - 20);
+            c.lineTo(0, yy - 25);
+            c.lineTo(12, yy - 20);
+            c.quadraticCurveTo(ww - 5, yy - 4, ww + 7, yy + 4);
+            c.quadraticCurveTo(0, yy - 4, -ww - 7, yy + 4);
+            c.fill();
+            c.stroke();
+            if (i < tiers - 1)
+              c.strokeRect(-ww + 13, yy - 30, (ww - 13) * 2, 12);
+          }
+          c.fillStyle = "#0A0E27";
+          c.fillRect(-8, -25, 16, 25);
+          c.strokeRect(-8, -25, 16, 25);
+          c.fillStyle = enemy ? "#00E5FF" : "#FFB800";
+          for (let i = -1; i <= 1; i += 2) {
+            c.fillRect(i * 20 - 4, -34, 8, 10);
+          }
+          if (enemy) {
+            this.line(-30, -65, -45, -90);
+            this.line(30, -65, 45, -90);
+          } else {
+            this.line(-base - 7, 0, -base - 7, -57);
+            this.line(base + 7, 0, base + 7, -57);
+            this.line(-base - 14, -57, base + 14, -57);
+            this.line(-base - 9, -49, base + 9, -49);
+          }
+          c.shadowBlur = 0;
+          c.font = "10px sans-serif";
+          c.fillStyle = enemy ? "#00E5FF" : "#FFB800";
+          c.textAlign = "center";
+          c.fillText(enemy ? "海" : "針", 0, -34 - (tiers - 1) * 30);
+          if (build > 0) {
+            c.globalAlpha = build * 0.6;
+            c.strokeStyle = "#00FFA3";
+            c.beginPath();
+            c.arc(0, -25, 60 + (1 - build) * 55, 0, 7);
+            c.stroke();
+          }
+          c.restore();
+        }
+      }
+      // UnitSystem — 96 заранее выделенных бойцов, 80 снарядов, очередь фронта без сортировки/создания массивов.
+      class UnitSystem {
+        constructor(game) {
+          this.g = game;
+          this.units = Array.from({ length: CONFIG.unitPool }, () => ({
+            active: false,
+            side: 0,
+            kind: 0,
+            x: 0,
+            y: 0,
+            hp: 0,
+            maxHp: 1,
+            dmg: 0,
+            range: 0,
+            speed: 0,
+            rate: 1,
+            cool: 0,
+            age: 0,
+            flash: 0,
+            moving: false,
+            seed: 0,
+          }));
+          this.shots = Array.from({ length: CONFIG.projectilePool }, () => ({
+            active: false,
+            x: 0,
+            y: 0,
+            target: null,
+            targetSeed: 0,
+            damage: 0,
+            side: 0,
+            life: 0,
+          }));
+          this.seed = 0;
+          this.count = [0, 0];
+        }
+        clear() {
+          for (let u of this.units) u.active = false;
+          for (let p of this.shots) p.active = false;
+          this.count[0] = this.count[1] = 0;
+        }
+        spawn(side, data) {
+          if (this.count[side] >= CONFIG.unitLimit) return false;
+          // Не складываем свежие отряды в одну точку: плотная очередь
+          // иначе превращала спавн замка в неуязвимую пачку наложенных бойцов.
+          const entrance = side ? this.g.w - 69 : 69;
+          for (const unit of this.units) {
+            if (
+              unit.active &&
+              unit.side === side &&
+              Math.abs(unit.x - entrance) < 14
+            )
+              return false;
+          }
+          for (const u of this.units) {
+            if (u.active) continue;
+            u.active = true;
+            u.side = side;
+            u.kind = data.kind;
+            u.x = side ? this.g.w - 69 : 69;
+            u.y = this.g.ground;
+            u.hp = u.maxHp =
+              data.hp * (side ? 1 + (this.g.enemyLevel - 1) * 0.065 : 1);
+            u.dmg = data.dmg;
+            u.range = data.range;
+            u.speed = data.speed;
+            u.rate = data.rate;
+            u.cool = 0.2;
+            u.age = 0;
+            u.flash = 0;
+            u.moving = true;
+            u.seed = ++this.seed;
+            this.count[side]++;
+            this.g.fx.emit(u.x, u.y - 20, 10, CONFIG.colors.qi);
+            return true;
+          }
+          return false;
+        }
+        kill(u) {
+          if (!u.active) return;
+          u.active = false;
+          this.count[u.side]--;
+          this.g.fx.emit(u.x, u.y - 23, 10, CONFIG.colors.death);
+          if (u.side === 1) {
+            this.g.coins += 3;
+            this.g.kills++;
+            this.g.dirty = true;
+          }
+        }
+        hit(u, damage) {
+          if (!u.active) return;
+          u.hp -= damage;
+          this.g.fx.emit(u.x, u.y - 24, 3, u.side ? "#FFB800" : "#00E5FF");
+          if (u.hp <= 0) this.kill(u);
+        }
+        fire(u, target, damage) {
+          for (const p of this.shots) {
+            if (p.active) continue;
+            p.active = true;
+            p.x = u.x;
+            p.y = u.y - 28;
+            p.target = target;
+            p.targetSeed = target.seed;
+            p.damage = damage;
+            p.side = u.side;
+            p.life = 2;
+            return;
+          }
+          this.hit(target, damage);
+        }
+        update(dt) {
+          let g = this.g;
+          for (const u of this.units) {
+            if (!u.active) continue;
+            u.age += dt;
+            u.flash = Math.max(0, u.flash - dt);
+            u.cool -= dt;
+            u.y = g.ground;
+            let dir = u.side ? -1 : 1,
+              target = null,
+              best = Infinity,
+              blocked = false,
+              aura = 0;
+            for (const v of this.units) {
+              if (!v.active || v === u) continue;
+              let dist = (v.x - u.x) * dir;
+              if (v.side !== u.side) {
+                if (dist >= -5 && dist < best) {
+                  best = dist;
+                  target = v;
+                }
+              } else {
+                // Ближний бой обходит стрелков: иначе лучник впереди навечно
+                // запирал всю стенку, останавливаясь на своей дальней дистанции.
+                if (dist > 0 && dist < 18 && v.range <= u.range) blocked = true;
+                if (v.kind === 1 && Math.abs(v.x - u.x) < 100 && u.side === 0)
+                  aura = 2 + (g.level >= 4 ? 2 : 0);
+              }
+            }
+            if (u.side === 1 && g.enemyLevel >= 4) aura += 3;
+            let baseDist = u.side ? u.x - 50 : g.w - 50 - u.x,
+              baseInRange = baseDist <= u.range;
+            if ((target && best <= u.range) || (!target && baseInRange)) {
+              u.moving = false;
+              if (u.cool <= 0) {
+                u.cool = u.rate;
+                u.flash = 0.16;
+                let damage = u.dmg + aura;
+                if (u.kind === 4 && u.side === 0) {
+                  for (const v of this.units)
+                    if (v.active && v.side === 0 && Math.abs(v.x - u.x) < 110)
+                      v.hp = Math.min(v.maxHp, v.hp + 12);
+                  g.fx.emit(u.x, u.y - 25, 4, "#00FFA3");
+                }
+                if (target) {
+                  if (u.range > 75) this.fire(u, target, damage);
+                  else this.hit(target, damage);
+                } else {
+                  if (u.side) g.ourHp = Math.max(0, g.ourHp - damage);
+                  else g.enemyHp = Math.max(0, g.enemyHp - damage);
+                  g.fx.emit(
+                    u.side ? 50 : g.w - 50,
+                    g.ground - 35,
+                    5,
+                    CONFIG.colors.death,
+                  );
+                }
+              }
+            } else if (!blocked && u.age > 0.25) {
+              u.moving = true;
+              let step = u.speed * dt;
+              u.x +=
+                dir *
+                Math.max(0, Math.min(step, target ? best - 24 : baseDist - 22));
+            } else u.moving = false;
+          }
+          for (const p of this.shots) {
+            if (!p.active) continue;
+            p.life -= dt;
+            let v = p.target;
+            if (p.life <= 0 || !v.active || v.seed !== p.targetSeed) {
+              p.active = false;
+              continue;
+            }
+            let dx = v.x - p.x,
+              dy = v.y - 25 - p.y,
+              dist = Math.hypot(dx, dy),
+              step = 260 * dt;
+            if (dist < step + 3) {
+              this.hit(v, p.damage);
+              p.active = false;
+            } else {
+              p.x += (dx / dist) * step;
+              p.y += (dy / dist) * step;
+            }
+          }
+        }
+        draw(c, t, q) {
+          const r = this.g.renderer;
+          for (const u of this.units) {
+            if (!u.active) continue;
+            let scale =
+              (u.kind === 3 ? 1.12 : u.kind === 6 ? 1.23 : 1) *
+              this.g.unitScale;
+            r.unit(u, t, scale, q);
+            let width = 25 * scale;
+            c.lineWidth = 2;
+            c.strokeStyle = "#ffffff18";
+            r.line(
+              u.x - width / 2,
+              u.y - 60 * scale,
+              u.x + width / 2,
+              u.y - 60 * scale,
+            );
+            c.strokeStyle = u.side ? "#00E5FF" : "#FFB800";
+            r.line(
+              u.x - width / 2,
+              u.y - 60 * scale,
+              u.x - width / 2 + width * Math.max(0, u.hp / u.maxHp),
+              u.y - 60 * scale,
+            );
+          }
+          c.lineWidth = 2;
+          for (const p of this.shots)
+            if (p.active) {
+              c.strokeStyle = p.side ? "#00E5FF" : "#FFB800";
+              r.line(p.x, p.y, p.x + (p.side ? 9 : -9), p.y + 2);
+            }
+        }
+      }
+      // UIManager — DOM только на пользовательских событиях и на 10 Гц, не на каждый кадр.
+      class UIManager {
+        constructor(g) {
+          this.g = g;
+          this.cards = [];
+          this.textCache = Object.create(null);
+          this.toastLife = 0;
+          this.modal = $("modal");
+          this.action = null;
+          for (let i = 0; i < CONFIG.cards.length; i++) this.makeCard(i);
+          $("closeModal").onclick = () => this.modal.close();
+          $("modalAction").onclick = () => {
+            if (this.action) this.action();
+            else this.modal.close();
+          };
+          this.modal.addEventListener("cancel", (e) => {
+            if (g.state !== "playing") e.preventDefault();
+          });
+          $("upgradeBtn").onclick = () => this.upgradeMenu();
+          $("superBtn").onclick = () => g.superAttack();
+          $("boostBtn").onclick = () => g.boost();
+          $("resetBtn").onclick = () => this.confirmRestart();
+          $("helpBtn").onclick = () => this.help();
+          $("skinBtn").onclick = () => {
+            if (g.coins < 30)
+              return this.toast("Нужно 30 монет на новые фонари");
+            g.coins -= 30;
+            g.skin = (g.skin + 1) % 3;
+            g.persist();
+            this.toast("Новый свет. Та же сила духа.");
+          };
+          this.bindArena();
+          window.addEventListener("keydown", (e) => {
+            if (e.repeat || this.modal.open) return;
+            if (e.code === "Space") {
+              e.preventDefault();
+              g.superAttack();
+            }
+            let n = Number(e.key);
+            if (n >= 1 && n <= 7) g.summon(n - 1);
+          });
+        }
+        text(id, value) {
+          value = String(value);
+          if (this.textCache[id] !== value) {
+            this.textCache[id] = value;
+            $(id).textContent = value;
+          }
+        }
+        makeCard(i) {
+          let data = CONFIG.cards[i],
+            b = document.createElement("button");
+          b.className = "card";
+          b.setAttribute("aria-label", data.name);
+          b.innerHTML = `<span class="ring"></span><span class="num">0${i + 1}</span><canvas width="140" height="150"></canvas><span class="badge"></span><span class="name">${data.name}</span><span class="sub"></span>`;
+          let mini = b.querySelector("canvas").getContext("2d"),
+            r = new StickmanRenderer(mini);
+          r.unit(
+            {
+              side: 0,
+              kind: data.kind,
+              x: 70,
+              y: 128,
+              seed: i,
+              age: 1,
+              moving: false,
+              flash: 0,
+            },
+            0,
+            1.65,
+            2,
+          );
+          let startX = 0,
+            startY = 0,
+            reserved = false;
+          b.onpointerdown = (e) => {
+            startX = e.clientX;
+            startY = e.clientY;
+            reserved = false;
+          };
+          b.onpointerup = (e) => {
+            if (startX - e.clientX > 35 && Math.abs(startY - e.clientY) < 45) {
+              reserved = true;
+              this.g.reserve[i] = !this.g.reserve[i];
+              this.g.persist();
+              this.toast(
+                this.g.reserve[i]
+                  ? "Боец в резерве · тап вернёт его"
+                  : "Боец вернулся в отряд",
+              );
+            }
+          };
+          b.onclick = () => {
+            if (reserved) {
+              reserved = false;
+              return;
+            }
+            if (this.g.reserve[i]) {
+              this.g.reserve[i] = false;
+              this.g.persist();
+              this.toast("Боец вернулся в отряд");
+              return;
+            }
+            this.g.summon(i);
+          };
+          $("cards").appendChild(b);
+          this.cards.push({
+            el: b,
+            sub: b.querySelector(".sub"),
+            badge: b.querySelector(".badge"),
+          });
+        }
+        toast(text) {
+          $("toast").textContent = text;
+          $("toast").classList.add("show");
+          this.toastLife = 3;
+          $("log").textContent = text;
+        }
+        open(title, body, label, action) {
+          $("modalTitle").textContent = title;
+          $("modalBody").innerHTML = body;
+          $("modalAction").textContent = label;
+          this.action = action;
+          if (!this.modal.open) this.modal.showModal();
+        }
+        help() {
+          this.open(
+            "道 · Как играть",
+            `<p>Тапни по заряженной карточке — боец сам вступит в бой. Карточки тратят энергию, её запас постоянно восстанавливается.</p><p>Апгрейды додзё покупаются за ⚡, ускоряют заряд и открывают новые роли. Монеты ускоряют заряд на 5 секунд и меняют фонари.</p><p>↑ Свайп вверх / пробел / кнопка — волна ци (20 ⚡). Долгий тап по замку — разведка. Свайп влево по карточке — резерв, тап вернёт её.</p><p>NFT-подарок — бесплатный игровой ивент: открывается после 30 секунд боя. Никаких кошельков и реальных NFT в прототипе.</p><p>Новая битва сбрасывает поле, но сохраняет уровень додзё и монеты. В открытом меню — тактическая пауза, фон остаётся живым. В скрытой вкладке — пауза.</p>`,
+            "В бой",
+            () => this.modal.close(),
+          );
+        }
+        upgradeMenu() {
+          let g = this.g,
+            next = CONFIG.levels[g.level];
+          let body = "<p>Вложись в темп — или оставь энергию для армии.</p>";
+          for (let i = 0; i < 6; i++) {
+            let l = CONFIG.levels[i];
+            body += `<div class="tier ${i + 1 === g.level ? "active" : ""}"><span>${i + 1}. ${l.name}</span><span>${i === 0 ? "старт" : l.cost + " ⚡"} · +${Math.round((l.speed - 1) * 100)}%</span></div>`;
+          }
+          body +=
+            "<p>Ур. 3 — самурай · ур. 4 — монах, аура +2<br>Ур. 5 — Дуров · ур. 6 — чаще волна ци</p>";
+          this.open(
+            "⛩ Путь додзё",
+            body,
+            next ? `Улучшить · ${next.cost} ⚡` : "Высший уровень",
+            () => {
+              if (g.upgrade()) this.modal.close();
+            },
+          );
+        }
+        scout() {
+          let g = this.g,
+            next = CONFIG.aiUpgrade[g.enemyLevel];
+          this.open(
+            "海 · Разведка замка",
+            `<p><b>${CONFIG.castle[g.enemyLevel - 1]} · ур. ${g.enemyLevel}</b></p><p>Здоровье: ${Math.ceil(g.enemyHp)} / ${g.enemyMax}<br>Энергия ИИ: ${Math.floor(g.aiEnergy)}${next ? " / " + next : ""}<br>${next ? "Копит на следующий ярус." : "Все ярусы построены. Готовит тяжёлый отряд."}</p><p>Ур. 3 — тяжёлые тюлени<br>Ур. 4 — усиление атак<br>Ур. 5 — Они-босс</p>`,
+            "Ясно",
+            () => this.modal.close(),
+          );
+        }
+        confirmRestart() {
+          this.open(
+            "Новая битва?",
+            "<p>Текущая армия и здоровье крепостей сбросятся. Уровень додзё, монеты и победы останутся.</p>",
+            "Начать заново",
+            () => {
+              this.modal.close();
+              this.g.newBattle();
+            },
+          );
+        }
+        result(win) {
+          let g = this.g;
+          this.open(
+            win ? "勝 · Победа додзё!" : "敗 · Додзё пало",
+            `<p>${win ? "Тюлени отступили. Иголки празднуют!" : "Даже Сенсею иногда нужен второй заход."}</p><p>Бой: ${Math.floor(g.elapsed)} сек. · Побеждено тюленей: ${g.kills}<br>${win ? "Награда: +80 монет." : "Награда за побеждённых врагов сохранена."}</p><p>Прокачка додзё сохранена. Собери другой отряд и попробуй ещё.</p>`,
+            "Ещё одна битва",
+            () => {
+              this.modal.close();
+              g.newBattle();
+            },
+          );
+        }
+        bindArena() {
+          let stage = $("stage"),
+            gesture = {
+              x: 0,
+              y: 0,
+              time: 0,
+              live: false,
+              scouted: false,
+              pointer: 0,
+            };
+          this.g.gesture = gesture;
+          stage.addEventListener("pointerdown", (e) => {
+            if (e.target !== $("arena") || gesture.live || this.modal.open)
+              return;
+            gesture.x = e.clientX;
+            gesture.y = e.clientY;
+            gesture.time = performance.now();
+            gesture.moved = false;
+            gesture.live = true;
+            gesture.scouted = false;
+            gesture.pointer = e.pointerId;
+            stage.setPointerCapture(e.pointerId);
+          });
+          stage.addEventListener("pointermove", (e) => {
+            if (
+              gesture.live &&
+              e.pointerId === gesture.pointer &&
+              Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y) > 18
+            )
+              gesture.moved = true;
+          });
+          stage.addEventListener("pointerup", (e) => {
+            if (!gesture.live || e.pointerId !== gesture.pointer) return;
+            gesture.live = false;
+            if (gesture.scouted) return;
+            let dx = e.clientX - gesture.x,
+              dy = gesture.y - e.clientY;
+            if (dy > 45 && dy > Math.abs(dx) * 1.1) {
+              this.g.superAttack();
+              return;
+            }
+            let rect = stage.getBoundingClientRect(),
+              x = e.clientX - rect.left,
+              y = e.clientY - rect.top;
+            if (
+              Math.abs(dx) < 18 &&
+              Math.abs(dy) < 18 &&
+              x < 95 &&
+              y > this.g.ground - 140
+            )
+              this.upgradeMenu();
+          });
+          stage.addEventListener("pointercancel", () => (gesture.live = false));
+          stage.addEventListener(
+            "lostpointercapture",
+            () => (gesture.live = false),
+          );
+        }
+        update(dt) {
+          let g = this.g;
+          if (this.toastLife > 0) {
+            this.toastLife -= dt;
+            if (this.toastLife <= 0) $("toast").classList.remove("show");
+          }
+          let gesture = g.gesture;
+          if (gesture && gesture.live && !gesture.scouted) {
+            let rect = $("stage").getBoundingClientRect();
+            if (
+              !gesture.moved &&
+              performance.now() - gesture.time > 600 &&
+              gesture.x - rect.left > g.w - 100 &&
+              gesture.y - rect.top > g.ground - 150
+            ) {
+              gesture.scouted = true;
+              this.scout();
+            }
+          }
+        }
+        refresh() {
+          let g = this.g,
+            l = CONFIG.levels[g.level - 1];
+          this.text(
+            "battleTag",
+            this.modal.open && g.state === "playing"
+              ? "Ⅱ ТАКТИЧЕСКАЯ ПАУЗА"
+              : "● БИТВА КЛАНОВ",
+          );
+          this.text("coins", Math.floor(g.coins).toLocaleString("ru-RU"));
+          this.text("energy", `${Math.floor(g.energy)} / ${l.cap}`);
+          this.text("regen", `+${l.regen}/с`);
+          this.text("dojoHud", "Уровень " + g.level);
+          this.text("ourTitle", l.name);
+          this.text("enemyTitle", CONFIG.castle[g.enemyLevel - 1]);
+          $("ourHealth").style.width = (100 * g.ourHp) / g.ourMax + "%";
+          $("enemyHealth").style.width = (100 * g.enemyHp) / g.enemyMax + "%";
+          $("clock").textContent =
+            String(Math.floor(g.elapsed / 60)).padStart(2, "0") +
+            ":" +
+            String(Math.floor(g.elapsed % 60)).padStart(2, "0");
+          this.text("sideLevel", String(g.level).padStart(2, "0"));
+          this.text("sideTitle", l.name);
+          this.text("speed", "×" + l.speed.toFixed(2));
+          this.text("army", g.units.count[0] + " / 48");
+          this.text("waves", g.waveCount);
+          this.text("wins", g.wins);
+          $("upgradeCost").textContent =
+            g.level < 6 ? CONFIG.levels[g.level].cost + " ⚡" : "MAX";
+          $("upgradeBtn").disabled = g.level === 6 || g.state !== "playing";
+          $("boostBtn").disabled = g.coins < 20 || g.state !== "playing";
+          $("superBtn").textContent =
+            g.superCd > 0
+              ? "ϟ ЦИ · " + Math.ceil(g.superCd) + "с"
+              : "ϟ ВОЛНА ЦИ · 20 ⚡";
+          $("superBtn").disabled =
+            g.superCd > 0 || g.energy < 20 || g.state !== "playing";
+          for (let i = 0; i < this.cards.length; i++) {
+            let node = this.cards[i],
+              data = CONFIG.cards[i],
+              locked = g.level < data.level || (i === 5 && g.elapsed < 30),
+              ready = g.charges[i] >= data.cd;
+            node.el.classList.toggle("locked", locked);
+            node.el.classList.toggle(
+              "ready",
+              ready && !locked && !g.reserve[i],
+            );
+            node.el.classList.toggle("reserved", g.reserve[i]);
+            node.el.style.setProperty(
+              "--progress",
+              Math.min(100, (g.charges[i] / data.cd) * 100) + "%",
+            );
+            node.badge.textContent = locked
+              ? "🔒"
+              : g.reserve[i]
+                ? "РЕЗЕРВ"
+                : ready
+                  ? "✦"
+                  : "";
+            node.sub.textContent = locked
+              ? i === 5
+                ? "Ивент через " + Math.ceil(30 - g.elapsed) + "с"
+                : "Додзё " + data.level
+              : g.reserve[i]
+                ? "Тап — вернуть"
+                : `${ready ? "Готов" : Math.ceil((data.cd - g.charges[i]) / l.speed) + "с"} · ${data.cost} ⚡`;
+            node.el.setAttribute(
+              "aria-label",
+              data.name + ". " + node.sub.textContent,
+            );
+          }
+          $("fps").textContent =
+            `CANVAS 2D · ${Math.round(g.fps)} FPS · ${g.quality === 2 ? "HIGH" : g.quality === 1 ? "LITE" : "ECO"}`;
+          if (!g.save.ok)
+            $("saveStatus").textContent =
+              "○ ХРАНИЛИЩЕ НЕДОСТУПНО · СЕАНС БЕЗ СОХРАНЕНИЯ";
+        }
+      }
+      // GameLoop — один requestAnimationFrame, deltaTime, никакого setInterval/setTimeout.
+      class GameLoop {
+        constructor() {
+          this.canvas = $("arena");
+          this.c = this.canvas.getContext("2d", { alpha: false });
+          this.save = new SaveSystem();
+          let data = this.save.load();
+          this.level = data?.level || 1;
+          this.coins = data?.coins ?? 120;
+          this.wins = data?.wins || 0;
+          this.skin = data?.skin || 0;
+          this.reserve = Array.from(
+            { length: 7 },
+            (_, i) => data?.reserve?.[i] || false,
+          );
+          this.charges = new Float32Array(7);
+          this.fx = new ParticlePool(CONFIG.particlePool);
+          this.bg = new ParallaxBackground();
+          this.renderer = new StickmanRenderer(this.c);
+          this.units = new UnitSystem(this);
+          this.w = 900;
+          this.h = 450;
+          this.quality = 2;
+          this.accumulator = 0;
+          this.recoveryWindows = 0;
+          this.motionQuery = matchMedia("(prefers-reduced-motion: reduce)");
+          this.fps = 60;
+          this.fpsTime = 0;
+          this.frameCount = 0;
+          this.uiTime = 0;
+          this.saveTime = 0;
+          this.last = 0;
+          this.dirty = false;
+          this.hidden = document.hidden;
+          this.ui = new UIManager(this);
+          this.resize();
+          this.renderer.buildAtlas();
+          new ResizeObserver(() => this.resize()).observe($("stage"));
+          this.newBattle();
+          document.addEventListener("visibilitychange", () => {
+            this.hidden = document.hidden;
+            this.last = 0;
+            this.accumulator = 0;
+            this.fpsTime = 0;
+            this.frameCount = 0;
+            if (this.gesture) this.gesture.live = false;
+            if (this.hidden) this.persist();
+          });
+          window.addEventListener("pagehide", () => this.persist());
+          if (window.visualViewport)
+            visualViewport.addEventListener("resize", () =>
+              document.documentElement.style.setProperty(
+                "--vh",
+                visualViewport.height + "px",
+              ),
+            );
+          this.tick = this.tick.bind(this);
+          requestAnimationFrame(this.tick);
+        }
+        resize() {
+          let oldW = this.w,
+            r = $("stage").getBoundingClientRect();
+          this.w = Math.max(240, r.width);
+          this.h = Math.max(200, r.height);
+          this.ground = this.h * 0.79;
+          this.unitScale = this.w < 440 ? 0.67 : this.w < 700 ? 0.85 : 1;
+          if (this.w <= 310 || this.motionQuery.matches)
+            this.quality = Math.min(this.quality, 1);
+          this.updateResolution();
+          if (this.units)
+            for (const u of this.units.units)
+              if (u.active) u.x = clamp((u.x / oldW) * this.w, 66, this.w - 66);
+          if (this.w <= 310) this.quality = Math.min(this.quality, 1);
+        }
+        updateResolution() {
+          // ECO снижает не только количество частиц, но и число пикселей.
+          const dpr = Math.min(
+            window.devicePixelRatio || 1,
+            this.quality === 2 ? 2 : this.quality === 1 ? 1.25 : 1,
+          );
+          const width = Math.round(this.w * dpr),
+            height = Math.round(this.h * dpr);
+          if (this.canvas.width !== width || this.canvas.height !== height) {
+            this.canvas.width = width;
+            this.canvas.height = height;
+            this.c.setTransform(width / this.w, 0, 0, height / this.h, 0, 0);
+          }
+        }
+        adaptQuality(fps) {
+          let desired = fps < 30 ? 0 : fps < 45 ? 1 : 2;
+          if (this.w <= 310 || this.motionQuery.matches)
+            desired = Math.min(desired, 1);
+          // Ухудшаем немедленно, возвращаем качество лишь после 3 хороших окон:
+          // иначе устройство мигало между HIGH/ECO каждые две секунды.
+          if (desired < this.quality) {
+            this.quality = desired;
+            this.recoveryWindows = 0;
+          } else if (desired > this.quality && fps > 50) {
+            if (++this.recoveryWindows >= 3) {
+              this.quality++;
+              this.recoveryWindows = 0;
+            }
+          } else this.recoveryWindows = 0;
+          this.updateResolution();
+        }
+        advance(raw) {
+          // Маленькие подшаги не дают быстрым бойцам проходить друг сквозь друга.
+          // До 200 мс наверстываем; секундные зависания не превращаем в офлайн-бой.
+          this.accumulator += clamp(raw, 0, 0.2);
+          let steps = 0;
+          while (this.accumulator + 1e-9 >= 1 / 60 && steps < 12) {
+            this.update(1 / 60);
+            this.accumulator -= 1 / 60;
+            steps++;
+          }
+          return steps;
+        }
+        persist() {
+          this.save.save(this);
+          this.dirty = false;
+        }
+        newBattle() {
+          this.units.clear();
+          this.accumulator = 0;
+          for (const p of this.fx.items) p.active = false;
+          this.elapsed = 0;
+          this.energy = Math.min(
+            CONFIG.levels[this.level - 1].cap,
+            87 + (this.level - 1) * 30,
+          );
+          this.enemyLevel = 1;
+          this.aiEnergy = 0;
+          this.enemySpawn = 4;
+          this.ourMax = 1000 + (this.level - 1) * 200;
+          this.ourHp = this.ourMax;
+          this.enemyMax = 1900;
+          this.enemyHp = this.enemyMax;
+          this.wave = 0;
+          this.waveCount = 0;
+          this.superCd = 0;
+          this.buildGlow = 0;
+          this.enemyGlow = 0;
+          this.kills = 0;
+          this.state = "playing";
+          for (let i = 0; i < 7; i++)
+            this.charges[i] = i < 2 ? CONFIG.cards[i].cd : 0;
+          this.ui.toast("針 · Фестиваль начинается. Призывай отряд!");
+          this.ui.refresh();
+        }
+        vibrate() {
+          try {
+            navigator.vibrate?.(15);
+          } catch (e) {}
+        }
+        summon(i) {
+          if (this.state !== "playing") return;
+          let data = CONFIG.cards[i];
+          if (!data) return;
+          if (this.reserve[i])
+            return this.ui.toast(
+              "Боец в резерве — верни его тапом по карточке",
+            );
+          if (this.level < data.level)
+            return this.ui.toast("Этот боец откроется на уровне " + data.level);
+          if (i === 5 && this.elapsed < 30)
+            return this.ui.toast("Фестиваль подарков начнётся на 30-й секунде");
+          if (this.charges[i] < data.cd)
+            return this.ui.toast("Карточка ещё заряжается");
+          if (this.energy < data.cost)
+            return this.ui.toast("Не хватает энергии. Дай ци восстановиться.");
+          if (!this.units.spawn(0, data))
+            return this.ui.toast("У входа тесно. Дай переднему бойцу пройти.");
+          this.energy -= data.cost;
+          this.charges[i] = 0;
+          this.vibrate();
+          this.ui.refresh();
+        }
+        upgrade() {
+          if (this.state !== "playing" || this.level >= 6) return false;
+          let next = CONFIG.levels[this.level];
+          if (this.energy < next.cost) {
+            this.ui.toast(
+              `Нужно ${next.cost} энергии · сейчас ${Math.floor(this.energy)}`,
+            );
+            return false;
+          }
+          this.energy -= next.cost;
+          this.level++;
+          this.ourMax += 200;
+          this.ourHp = Math.min(this.ourMax, this.ourHp + 200);
+          this.buildGlow = 1;
+          this.fx.emit(58, this.ground - 45, 45, "#FFB800", 1);
+          this.fx.emit(58, this.ground - 45, 20, "#00FFA3");
+          this.vibrate();
+          this.persist();
+          this.ui.toast("Новый ярус: " + next.name);
+          this.ui.refresh();
+          return true;
+        }
+        boost() {
+          if (this.state !== "playing" || this.coins < 20) return;
+          this.coins -= 20;
+          for (let i = 0; i < 7; i++)
+            this.charges[i] = Math.min(CONFIG.cards[i].cd, this.charges[i] + 5);
+          this.persist();
+          this.ui.toast("Заряд всех карточек ускорен на 5 секунд");
+          this.ui.refresh();
+        }
+        superAttack() {
+          if (this.state !== "playing" || this.superCd > 0 || this.energy < 20)
+            return;
+          this.energy -= 20;
+          this.superCd =
+            this.level === 6 ? 16 : Math.max(22, 36 - this.level * 2);
+          this.wave = 1;
+          this.waveCount++;
+          for (const u of this.units.units)
+            if (u.active && u.side === 1)
+              this.units.hit(u, 70 + this.level * 12);
+          this.fx.emit(65, this.ground - 30, 30, "#00FFA3");
+          this.vibrate();
+          this.ui.toast("気 · Волна ци!");
+          this.ui.refresh();
+        }
+        update(dt) {
+          this.bg.update(dt);
+          this.fx.update(dt);
+          this.ui.update(dt);
+          this.buildGlow = Math.max(0, this.buildGlow - dt * 0.6);
+          this.enemyGlow = Math.max(0, this.enemyGlow - dt * 0.6);
+          this.wave = Math.max(0, this.wave - dt * 1.3);
+          if (this.state !== "playing" || this.ui.modal.open) return;
+          this.elapsed += dt;
+          this.superCd = Math.max(0, this.superCd - dt);
+          let level = CONFIG.levels[this.level - 1];
+          this.energy = Math.min(level.cap, this.energy + dt * level.regen);
+          for (let i = 0; i < 7; i++)
+            if (!this.reserve[i])
+              this.charges[i] = Math.min(
+                CONFIG.cards[i].cd,
+                this.charges[i] + dt * level.speed,
+              );
+          // ИИ имеет свой поток энергии, тратится на стройку и войско.
+          this.aiEnergy += dt * (2.9 + this.elapsed * 0.007);
+          if (
+            this.enemyLevel < 5 &&
+            this.aiEnergy >= CONFIG.aiUpgrade[this.enemyLevel]
+          ) {
+            this.aiEnergy -= CONFIG.aiUpgrade[this.enemyLevel];
+            this.enemyLevel++;
+            this.enemyMax += 200;
+            this.enemyHp += 200;
+            this.enemyGlow = 1;
+            this.fx.emit(this.w - 58, this.ground - 60, 20, "#00E5FF");
+            this.ui.toast(
+              "Клан прилива достроил замок · ур. " + this.enemyLevel,
+            );
+          }
+          this.enemySpawn -= dt;
+          if (this.enemySpawn <= 0) {
+            let type = 0;
+            if (this.enemyLevel >= 5 && Math.random() < 0.17) type = 3;
+            else if (this.enemyLevel >= 3 && Math.random() < 0.3) type = 1;
+            else if (this.enemyLevel >= 2 && Math.random() < 0.28) type = 2;
+            let price = type === 3 ? 22 : type === 1 ? 9 : 5;
+            if (
+              this.aiEnergy >= price &&
+              this.units.spawn(1, CONFIG.enemies[type])
+            )
+              this.aiEnergy -= price;
+            this.enemySpawn = Math.max(
+              2.6,
+              7.5 / (1 + (this.enemyLevel - 1) * 0.15) - this.elapsed * 0.003,
+            );
+          }
+          this.units.update(dt);
+          if (this.ourHp <= 0 || this.enemyHp <= 0) {
+            let win = this.enemyHp <= 0;
+            this.state = win ? "won" : "lost";
+            if (win) {
+              this.coins += 80;
+              this.wins++;
+            }
+            this.persist();
+            this.ui.result(win);
+          }
+          this.saveTime += dt;
+          if (this.saveTime >= 5) {
+            this.saveTime = 0;
+            this.persist();
+          }
+        }
+        render() {
+          let c = this.c,
+            w = this.w,
+            h = this.h,
+            t = this.bg.time,
+            q = this.quality;
+          this.bg.draw(c, w, h, q, this.skin);
+          this.renderer.building(
+            52,
+            this.ground,
+            this.level,
+            false,
+            t,
+            this.buildGlow,
+          );
+          this.renderer.building(
+            w - 52,
+            this.ground,
+            this.enemyLevel,
+            true,
+            t,
+            this.enemyGlow,
+          );
+          let progress =
+            this.enemyLevel < 5
+              ? clamp(this.aiEnergy / CONFIG.aiUpgrade[this.enemyLevel], 0, 1)
+              : 1;
+          c.fillStyle = "#ffffff16";
+          c.fillRect(w - 86, this.ground - 150, 68, 3);
+          c.fillStyle = "#00E5FF";
+          c.fillRect(w - 86, this.ground - 150, 68 * progress, 3);
+          c.font = "8px monospace";
+          c.textAlign = "center";
+          c.fillStyle = "#98a4c9";
+          c.fillText(
+            this.enemyLevel < 5
+              ? "СТРОИТЕЛЬСТВО " + Math.floor(progress * 100) + "%"
+              : "ЗАМОК УР. 5",
+            w - 52,
+            this.ground - 157,
+          );
+          this.units.draw(c, t, q);
+          this.fx.draw(c, q);
+          if (this.wave > 0) {
+            let x = (1 - this.wave) * w * 1.4;
+            c.save();
+            c.strokeStyle = "#00FFA3";
+            c.shadowColor = "#00FFA3";
+            c.shadowBlur = q > 0 ? 30 : 0;
+            c.globalAlpha = this.wave;
+            c.lineWidth = 4;
+            c.beginPath();
+            c.ellipse(x, this.ground - 25, 18, 85, 0, 0, 7);
+            c.stroke();
+            let wave = c.createLinearGradient(x - 90, 0, x, 0);
+            wave.addColorStop(0, "#00ffa300");
+            wave.addColorStop(1, "#00ffa344");
+            c.fillStyle = wave;
+            c.fillRect(x - 90, this.ground - 110, 90, 150);
+            c.restore();
+          }
+        }
+        tick(now) {
+          requestAnimationFrame(this.tick);
+          if (this.hidden) {
+            this.last = 0;
+            return;
+          }
+          let raw = this.last ? (now - this.last) / 1000 : 1 / 60;
+          this.last = now;
+          let dt = Math.min(raw, 0.2);
+          this.fpsTime += raw;
+          this.frameCount++;
+          if (this.fpsTime >= 2) {
+            this.fps = this.frameCount / this.fpsTime;
+            this.adaptQuality(this.fps);
+            this.fpsTime = 0;
+            this.frameCount = 0;
+          }
+          this.advance(dt);
+          this.render();
+          this.uiTime += dt;
+          if (this.uiTime > 0.1) {
+            this.uiTime = 0;
+            this.ui.refresh();
+          }
+        }
+      }
+      const game = new GameLoop();
+      // Узкий диагностический интерфейс — позволяет тестировать бой без внешних зависимостей.
+      window.neonDojo = {
+        game,
+        CONFIG,
+        SaveSystem,
+        ParticlePool,
+        version: "3.1",
+      };
+    </script>
+  </body>
+</html>
