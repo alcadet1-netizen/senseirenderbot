@@ -396,6 +396,8 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
                         payout = 'needs_review'
                     if payout == 'confirmed':
                         alert_text += f"\n💎 <b>LUCKY HIT!</b> +{reward_amount} GRAM — xRocket подтвердил перевод."
+                    elif payout == 'rejected':
+                        alert_text += "\n⚠️ xRocket отклонил перевод GRAM. Выплата не подтверждена; администратору нужно проверить доступ API."
                     elif payout == 'needs_review':
                         alert_text += "\n⏳ GRAM: перевод требует проверки, повторная отправка автоматически не выполняется."
                 else:

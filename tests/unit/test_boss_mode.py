@@ -49,7 +49,7 @@ async def test_durable_award_reserves_before_external_transfer(reserved,confirme
     key=r.insert_one.call_args.args[0]['_id']
     assert len(key)==20
     if reserved:
-        c.xrocket_service.transfer.assert_awaited_once_with(7,'GRAM',.01,transfer_id=key)
+        c.xrocket_service.transfer.assert_awaited_once_with(7,'GRAM',.01,transfer_id=key,raise_rejection=True)
     else: c.xrocket_service.transfer.assert_not_awaited()
     assert r.update_one.call_args.args[1]['$set']['status']==expected
     assert db.boss_state.update_one.call_args.args[1]=={'$inc':{'gram_reserved':.01}}

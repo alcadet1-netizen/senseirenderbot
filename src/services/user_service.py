@@ -173,56 +173,8 @@ class UserService:
 
     async def process_referral(self, user_id: int, referrer_id: int) -> dict:
         """Обработать реферальную систему."""
-        try:
-            # We'll do this in a transaction-like manner (but MongoDB multi-document transactions are available)
-            # For simplicity, we'll do it without transaction and hope for the best.
-            # In production, we should use a transaction.
-
-            # 1. Get the user (referral)
-            user = await self.users.find_one({"id": user_id})
-            if not user:
-                return {"success": False, "error": "User not found"}
-
-            # 2. Check if user already has a referrer
-            if user.get("referrer_id"):
-                return {"success": False, "error": "Already has referrer"}
-
-            # 3. Check self referral
-            if user_id == referrer_id:
-                return {"success": False, "error": "Self referral"}
-
-            # 4. Get the referrer
-            referrer = await self.users.find_one({"id": referrer_id})
-            if not referrer:
-                return {"success": False, "error": "Referrer not found"}
-
-            # 5. Set the relationship
-            await self.users.update_one({"id": user_id}, {"$set": {"referrer_id": referrer_id}})
-            await self.users.update_one(
-                {"id": referrer_id},
-                {"$inc": {"referral_count": 1, "coins": 200.0, "xp": 100}}
-            )
-            await self.users.update_one(
-                {"id": user_id},
-                {"$inc": {"coins": 100.0, "xp": 100}}
-            )
-
-            # 6. Withdraw from bank (we don't have a bank service yet, so we'll skip for now)
-            # TODO: Implement bank withdrawal
-
-            # 7. Create transactions (we'll skip for now, but we can add later)
-            # TODO: Create transaction records
-
-            return {
-                "success": True,
-                "referrer_id": referrer_id,
-                "referrer_username": referrer.get("username"),
-                "referrer_reward": {"coins": 200.0, "xp": 100},
-                "referral_reward": {"coins": 100.0, "xp": 100},
-            }
-        except Exception as e:
-            logger.error(f"Error in process_referral: {e}")
-            return {"success": False, "error": str(e)}
+        from src.services.referral_economy import bind
+        return await bind(self.mongo_client, user_id, referrer_id)
 
     # We'll implement the rest of the methods as needed, but for now, we'll stub them out
     # to avoid breaking the bot. We'll fill them in later.
