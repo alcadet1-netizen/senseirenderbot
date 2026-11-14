@@ -38,6 +38,7 @@ class AIProviderFactory:
             )
         }
         self.active_provider = "groq" # Default as requested
+        self.vision_model = getattr(settings, "groq_vision_model", "")
 
     def get_provider(self, name: str = None) -> AIProvider:
         name = name or self.active_provider
@@ -108,3 +109,27 @@ class AIProviderFactory:
                         return f"❌ {provider.name} error: {resp.status} - {error_text}"
         except Exception as e:
             return f"❌ Error: {e}"
+
+
+    async def generate_vision(self, system, user, image):
+        """Use configured Groq vision model; never forward Telegram file URLs/tokens."""
+        import base64
+        provider = self.get_provider('groq')
+        if not self.vision_model or not provider.api_key:
+            raise ValueError('vision_not_configured')
+        if not image or len(image) > 4 * 1024 * 1024:
+            raise ValueError('vision_image_size')
+        payload = {'model': self.vision_model, 'max_tokens': 1000, 'temperature': 0.5,
+            'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': [
+                {'type': 'text', 'text': user},
+                {'type': 'image_url', 'image_url': {'url': 'data:image/jpeg;base64,' + base64.b64encode(image).decode('ascii')}}]}]}
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=35)) as session:
+            async with session.post(provider.url, headers={'Authorization': f'Bearer {provider.api_key}'}, json=payload) as response:
+                if response.status != 200:
+                    # Provider bodies may contain request data. Do not echo/log them.
+                    raise RuntimeError('vision_provider_rejected')
+                data = await response.json()
+        result = data['choices'][0]['message']['content']
+        if not isinstance(result, str) or not result.strip():
+            raise ValueError('vision_empty_response')
+        return result

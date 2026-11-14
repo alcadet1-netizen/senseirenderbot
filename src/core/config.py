@@ -93,6 +93,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
     sambanova_api_key: str = Field(default="", alias="SAMBANOVA_API_KEY")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
+    groq_vision_model: str = Field(default="", alias="GROQ_VISION_MODEL")
     max_messages: int = Field(default=1000, alias="MAX_MESSAGES")
     auto_digest_threshold: int = Field(default=1000, alias="AUTO_DIGEST_THRESHOLD")
     digest_cooldown: int = Field(default=600, alias="DIGEST_COOLDOWN")
