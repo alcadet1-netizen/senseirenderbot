@@ -14,7 +14,7 @@ from src.core.visuals import Visuals
 from src.bot.keyboards.inline import DigestCb
 from src.bot.utils import check_owner
 
-SENSEI_MUDRETS_RE = re.compile(r'(?:сенсей|сэнсей|сансэй|sensei)\s+мудрец\s+(.+)', re.IGNORECASE)
+from src.bot.sage_context import SAGE_PATTERN as SENSEI_MUDRETS_RE, handle_sage
 
 router = Router(name="digest")
 
@@ -288,27 +288,7 @@ async def cmd_stats(message: Message, container: Container):
     await message.reply(f"{mention}\n{table}", parse_mode=ParseMode.HTML)
 
 
-@router.message(F.text.regexp(SENSEI_MUDRETS_RE))
+@router.message(F.text.regexp(SENSEI_MUDRETS_RE) | F.caption.regexp(SENSEI_MUDRETS_RE))
 async def cmd_sage(message: Message, container: Container):
-    """Сенсей отвечает на вопрос"""
-    match = SENSEI_MUDRETS_RE.search(message.text)
-    if not match:
-        return
-
-    question = match.group(1).strip()
-
-    username = message.from_user.username
-    mention = f"@{username}" if username else f"<b>{html.escape(message.from_user.full_name)}</b>"
-
-    if not question:
-        await message.reply(f"{mention}\n\n👂 Ты позвал меня, но ничего не спросил. Ты пьян, ученик?")
-        return
-
-    await message.bot.send_chat_action(message.chat.id, "typing")
-
-    answer = await container.digest_service.ask_sensei(question)
-    # Если ответ пустой или состоит только из пробелов, предоставляем ответ по умолчанию
-    if not answer or not answer.strip():
-        answer = "*поправляет очки*\n\nВижу, ты задал вопрос, который даже меня поставил в тупик. Попробуй перефразировать или спросить о чем-то другом, ученик."
-
-    await message.reply(f"{mention}\n\n{answer}")
+    """Both sage aliases use the same explicit reply-aware path."""
+    await handle_sage(message, container)

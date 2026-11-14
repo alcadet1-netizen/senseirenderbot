@@ -40,7 +40,7 @@ CRYPTO_TOP_PATTERN = re.compile(r'(сенсей\s+дай\s+курс|📊 CoinGec
 CRYPTO_CALC_PATTERN = re.compile(r'курс\s+№\s*([a-zA-Z0-9]+)\s*№\s*([\d\.,]+)', re.IGNORECASE)
 CRYPTO_AMOUNT_PATTERN = re.compile(r'курс\s+(\d+(?:[.,]\d+)?)\s+([a-zA-Z0-9]+)', re.IGNORECASE)
 CRYPTO_PRICE_PATTERN = re.compile(r'курс\s+([a-zA-Z0-9]+)', re.IGNORECASE)
-SAGE_QUESTION_PATTERN = re.compile(r'мудрец\s+(?:сенсей|сэнсей|сансэй|sensei)\s+(.+)', re.IGNORECASE)
+from src.bot.sage_context import SAGE_PATTERN as SAGE_QUESTION_PATTERN, handle_sage
 VANGA_PATTERN = re.compile(r'(сенсей\s+вангуй)', re.IGNORECASE)
 
 # Admin trigger patterns
@@ -205,34 +205,10 @@ async def trigger_crypto_price(message: Message, container: Container):
             pass  # Fallback failed too
 
 
-@router.message(F.text.regexp(SAGE_QUESTION_PATTERN))
+@router.message(F.text.regexp(SAGE_QUESTION_PATTERN) | F.caption.regexp(SAGE_QUESTION_PATTERN))
 async def trigger_sage_question(message: Message, container: Container):
-    """Триггер на 'мудрец сенсей [вопрос]'."""
-    if not message.text:
-        return
-
-    match = SAGE_QUESTION_PATTERN.search(message.text)
-    if not match:
-        return
-
-    question = match.group(1)
-
-    # Формируем упоминание
-    username = message.from_user.username
-    mention = f"@{username}" if username else f"<b>{html.escape(message.from_user.full_name)}</b>"
-
-    # Отправляем "печатает..."
-    await message.bot.send_chat_action(message.chat.id, "typing")
-
-    try:
-        answer = await container.digest_service.ask_sage(question)
-        # Gemini возвращает Markdown, но без экранирования для V2 это опасно.
-        # Используем обычный текст или пробуем Markdown, если уверены.
-        # Для безопасности пока оставим без parse_mode или Markdown
-        await message.reply(f"{mention}\n\n{answer}")
-    except Exception as e:
-        logging.error(f"Sage error: {e}")
-        await message.reply(f"{mention}\n\n🧘‍♂️ Сенсей ушел в астрал. Попробуй позже.")
+    """Compatibility route; same context and behavior for either word order."""
+    await handle_sage(message, container)
 
 
 @router.message(F.text.regexp(VANGA_PATTERN))
