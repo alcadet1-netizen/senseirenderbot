@@ -98,9 +98,11 @@ async def coin_invoice(query, container):
     await query.answer()
     stage = 'create_invoice_link'
     try:
+        service = StarCoinService(container.mongo_client)
+        payload = await service.create_order(query.from_user.id, stars)
         link = await asyncio.wait_for(query.bot.create_invoice_link(title='SenseiCoin из SenseiBank',
             description=f'{stars} Stars → {PACKAGES[stars]} SenseiCoin. Без XP.',
-            payload=f'{PREFIX}{query.from_user.id}:{stars}', currency='XTR', provider_token='',
+            payload=payload, currency='XTR', provider_token='',
             prices=[LabeledPrice(label='SenseiCoin', amount=stars)]), timeout=8)
         markup = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text=f'Оплатить {stars} ⭐', url=link)],
@@ -111,20 +113,22 @@ async def coin_invoice(query, container):
         if query.message.chat.type in {'group', 'supergroup'}:
             # The group menu is shared, not owned by the payer. Editing it makes
             # it disappear for everyone and lets other users overwrite its bill.
-            await query.bot.send_message(chat_id=query.message.chat.id,
+            sent = await query.bot.send_message(chat_id=query.message.chat.id,
                 message_thread_id=query.message.message_thread_id,
                 text=f'Счёт для {query.from_user.first_name or "участника"} (ID {query.from_user.id})\n'+text,
                 reply_markup=markup, parse_mode=None)
         else:
             try:
-                await query.message.edit_text(text, reply_markup=markup, parse_mode=None)
+                sent = await query.message.edit_text(text, reply_markup=markup, parse_mode=None)
             except TelegramBadRequest as exc:
+                sent = query.message
                 if 'message is not modified' not in exc.message.lower():
                     # Definitive rejection: no edited message was delivered.
                     # Publish the already-created link, never create another bill.
                     logger.info('Stars coin edit rejected; publishing saved link error=%s', safe_payment_error(exc))
-                    await query.bot.send_message(chat_id=query.message.chat.id, text=text,
+                    sent = await query.bot.send_message(chat_id=query.message.chat.id, text=text,
                         reply_markup=markup, parse_mode=None)
+        await service.bind_invoice(payload, query.from_user.id, query.message.chat.id, sent.message_id)
         logger.info('Stars coin invoice ready user=%s stars=%s chat=%s',
                     query.from_user.id, stars, query.message.chat.id)
     except Exception as exc:
@@ -144,8 +148,8 @@ async def coin_checkout(query, container):
     try:
         if not valid(query.invoice_payload, query.from_user.id, query.currency, query.total_amount):
             raise GameError('Неверный счёт. Откройте /donate заново.')
-        await asyncio.wait_for(StarCoinService(container.mongo_client).check(
-            query.from_user.id, query.total_amount), timeout=7)
+        await asyncio.wait_for(StarCoinService(container.mongo_client).checkout(
+            query.invoice_payload, query.from_user.id, query.currency, query.total_amount), timeout=7)
         await query.answer(ok=True)
     except GameError as exc:
         await query.answer(ok=False, error_message=str(exc)[:200])
@@ -159,18 +163,38 @@ async def coin_received(message, container, *, payment=None, user_id=None):
         receipt = await service.receive(user_id if user_id is not None else message.from_user.id,
                                         payment or message.successful_payment)
         if receipt['state'] == 'fulfilled':
-            await message.answer(f"✅ Платёж учтён: {receipt['stars']} ⭐ → {receipt['coins']:,} SenseiCoin из SenseiBank.\n"
-                                 f"{payment_thanks(receipt.get('_id'))}\n"
-                                 'Повторная обработка квитанции не начисляет монеты снова.', parse_mode=None)
+            text = (f"✅ Платёж учтён: {receipt['stars']} ⭐ → {receipt['coins']:,} SenseiCoin из SenseiBank.\n"
+                    f"{payment_thanks(receipt.get('_id'))}")
+            await coin_notice(message, service, receipt, text)
         elif receipt['state'] in {'refund_required', 'refunded'}:
             if receipt['state'] != 'refunded':
                 await message.bot.refund_star_payment(user_id=receipt['user_id'],
                     telegram_payment_charge_id=receipt['_id'])
                 await service.receipts.update_one({'_id': receipt['_id']}, {'$set': {'state': 'refunded'}})
-            await message.answer('Stars возвращены: пакет не выдан, монеты не начислялись.', parse_mode=None)
+            await coin_notice(message, service, receipt, 'Stars возвращены: пакет не выдан, монеты не начислялись.')
     except Exception:
         logger.error('Stars coin payment requires reconciliation')
         await message.answer('Платёж требует проверки. Повторите /donate для восстановления или /paysupport. Не оплачивайте повторно.', parse_mode=None)
+
+
+async def coin_notice(message, service, receipt, text):
+    if receipt.get('notice_delivered'):
+        return
+    notice = receipt.get('notice')
+    if notice:
+        try:
+            await message.bot.edit_message_text(**notice, text=text, reply_markup=None, parse_mode=None)
+        except TelegramBadRequest as exc:
+            if 'message is not modified' not in exc.message.lower():
+                logger.warning('Stars coin receipt settled; original notice unavailable charge=%s', receipt['_id'])
+                return  # Never send a duplicate on uncertain delivery or alter the shared menu.
+        except Exception:
+            logger.warning('Stars coin notice update pending charge=%s', receipt['_id'])
+            return
+    else:
+        # Legacy invoices have no known originating message.
+        await message.answer(text, parse_mode=None)
+    await service.receipts.update_one({'_id': receipt['_id']}, {'$set': {'notice_delivered': True, 'notice_pending': False}})
 
 
 @router.callback_query(F.data.startswith('donate:'))

@@ -11,6 +11,7 @@ from tests.unit.test_paid_hedgehog import fixture, TxCollection
 async def setup():
     db,free,paid,base = await fixture()
     db.star_coin_payments = TxCollection()
+    db.star_coin_orders = TxCollection()
     return db, StarCoinService(NS(database=db))
 
 
@@ -89,7 +90,7 @@ async def test_new_invoice_and_precheckout_validate_package_and_owner():
          bot=NS(create_invoice_link=AsyncMock(return_value='https://t.me/$test')))
     await coin_invoice(q,container)
     invoice=q.bot.create_invoice_link.call_args.kwargs
-    assert invoice['payload']=='coinbuy:v1:7:10' and invoice['currency']=='XTR'
+    assert invoice['payload'].startswith('coinbuy:v2:7:10:') and invoice['currency']=='XTR'
     assert invoice['prices'][0].amount==10
     assert not db.star_coin_payments.docs
     q=NS(invoice_payload=invoice['payload'],from_user=NS(id=8),currency='XTR',total_amount=10,answer=AsyncMock())
@@ -131,8 +132,8 @@ async def test_group_purchase_does_not_edit_shared_menu_or_redirect_payer():
         await coin_invoice(q,container)
     message.edit_text.assert_not_awaited()
     assert bot.send_message.await_count==2
-    assert [c.kwargs['payload'] for c in bot.create_invoice_link.call_args_list]==[
-        'coinbuy:v1:7:50','coinbuy:v1:8:50']
+    assert [c.kwargs['payload'].rsplit(':', 1)[0] for c in bot.create_invoice_link.call_args_list]==[
+        'coinbuy:v2:7:50','coinbuy:v2:8:50']
     assert bot.send_message.call_args.kwargs['message_thread_id']==33
     assert bot.send_message.call_args.kwargs['chat_id']==-100222
     assert db.bank.docs['single']['coins']==before
@@ -188,3 +189,73 @@ async def test_ambiguous_publish_is_not_retried_or_new_invoice_created():
     q.bot.create_invoice_link.assert_awaited_once();q.bot.send_message.assert_awaited_once()
     q.message.answer.assert_awaited_once()
     assert not db.star_coin_payments.docs
+
+
+@pytest.mark.asyncio
+async def test_group_receipt_updates_original_personal_invoice_not_payment_chat():
+    from src.bot.handlers.donate import coin_invoice, coin_received
+    db, svc = await setup()
+    container = NS(mongo_client=NS(database=db))
+    menu = NS(chat=NS(id=-100222, type='supergroup'), message_thread_id=33,
+              edit_text=AsyncMock(), answer=AsyncMock())
+    bot = NS(create_invoice_link=AsyncMock(return_value='https://t.me/$test'),
+             send_message=AsyncMock(return_value=NS(message_id=91)), edit_message_text=AsyncMock())
+    query = NS(data='coinbuy:5', from_user=NS(id=7, first_name='Buyer'), message=menu,
+               answer=AsyncMock(), bot=bot)
+    await coin_invoice(query, container)
+    payload = bot.create_invoice_link.call_args.kwargs['payload']
+    notice = db.star_coin_orders.docs[payload]['notice']
+    assert notice == {'chat_id': -100222, 'message_id': 91}
+    msg = NS(from_user=NS(id=7), successful_payment=payment(), bot=bot, answer=AsyncMock())
+    msg.successful_payment.invoice_payload = payload
+    before = db.users.docs[7]['coins']
+    await coin_received(msg, container)
+    assert db.users.docs[7]['coins'] == before + 3500
+    edit = bot.edit_message_text.call_args.kwargs
+    assert edit['chat_id'] == -100222 and edit['message_id'] == 91
+    assert edit['reply_markup'] is None
+    assert 'Спасибо!' in edit['text']
+    msg.answer.assert_not_awaited()
+    menu.edit_text.assert_not_awaited()
+    await coin_received(msg, container)
+    assert bot.edit_message_text.await_count == 1
+    assert db.users.docs[7]['coins'] == before + 3500
+
+
+@pytest.mark.asyncio
+async def test_notice_timeout_recovers_on_donate_without_second_credit():
+    from src.bot.handlers.donate import coin_received, cmd_donate
+    db, svc = await setup()
+    container = NS(mongo_client=NS(database=db))
+    payload = await svc.create_order(7, 5)
+    await svc.bind_invoice(payload, 7, -100222, 91)
+    p = payment(); p.invoice_payload = payload
+    msg = NS(from_user=NS(id=7), successful_payment=p, answer=AsyncMock(),
+             bot=NS(edit_message_text=AsyncMock(side_effect=TimeoutError())))
+    before = db.users.docs[7]['coins']
+    await coin_received(msg, container)
+    assert db.users.docs[7]['coins'] == before + 3500
+    assert db.star_coin_payments.docs['charge']['notice_pending'] is True
+    msg.bot.edit_message_text.side_effect = None
+    await cmd_donate(msg, container)
+    assert db.users.docs[7]['coins'] == before + 3500
+    assert db.star_coin_payments.docs['charge']['notice_pending'] is False
+    assert await svc.pending(7) is None
+
+
+@pytest.mark.asyncio
+async def test_order_requires_bound_notice_and_rejects_reuse_and_wrong_user():
+    db, svc = await setup()
+    payload = await svc.create_order(7, 5)
+    with pytest.raises(GameError):
+        await svc.checkout(payload, 7, 'XTR', 5)
+    await svc.bind_invoice(payload, 7, -100222, 91)
+    with pytest.raises(GameError):
+        await svc.checkout(payload, 8, 'XTR', 5)
+    await svc.checkout(payload, 7, 'XTR', 5)
+    p = payment(); p.invoice_payload = payload
+    before = db.users.docs[7]['coins']
+    await svc.receive(7, p)
+    p.telegram_payment_charge_id = 'different-charge-same-order'
+    assert (await svc.receive(7, p))['state'] == 'refund_required'
+    assert db.users.docs[7]['coins'] == before + 3500
