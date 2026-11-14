@@ -9,7 +9,7 @@ from functools import lru_cache
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageColor
 
 from src.core.visuals import Visuals
-from src.widgets.katana_models import MODEL_NAMES, model_index, model_path
+from src.widgets.katana_models import katana_name, model_index, model_path
 from src.widgets.rendering import PALETTES, font
 
 WIDTH, HEIGHT = 760, 320
@@ -283,7 +283,7 @@ def render_forge(receipt, phase=1.0):
             size -= 1
         text(x + 12, 226, value, size, accent if i == 1 else c["text"])
     blade, rank = Visuals.get_katana_art(receipt.after)
-    summary = f"{MODEL_NAMES[school]} · {school+1}/15  |  Попытка: {receipt.cost:,.0f} монет"
+    summary = f"{katana_name(receipt.after)} · {school+1}/15  |  Попытка: {receipt.cost:,.0f} монет"
     size = 13
     while size > 10 and draw.textlength(summary, font=font(size * SCALE)) > 704 * SCALE:
         size -= 1

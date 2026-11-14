@@ -41,6 +41,8 @@ class PaidHedgehogService:
                                                   write_concern=WriteConcern('majority'))
 
     async def quote(self, uid):
+        from src.services.hedgehog_gallery import gallery_files
+        gallery_files()  # Fail before showing an invoice if no reward image exists.
         await self.available()
         day = utc_day()
 
@@ -89,6 +91,8 @@ class PaidHedgehogService:
         return await self.transaction(bind)
 
     async def checkout(self, oid, uid, amount, query_id):
+        from src.services.hedgehog_gallery import gallery_files
+        gallery_files()
         await self.available()
 
         async def check(tx):
@@ -162,16 +166,18 @@ class PaidHedgehogService:
                 await self.payments.update_one({'_id': charge}, {'$set': {'state': 'refund_required'}}, session=tx)
                 await self.orders.update_one({'_id': oid}, {'$set': {'state': 'ready', 'checkout_id': None, 'checkout_at': 0}}, session=tx)
                 return {**receipt, 'state': 'refund_required'}
+            from src.services.hedgehog_gallery import select_image
+            image_name, images_seen = select_image(user)
             session = dict(day=user['hedgehog_day'], token=secrets.token_urlsafe(24), state='pending',
                 deadline=None, duration=15, delivered=False, taps=0, extra_coins=0, queries=[],
-                base_coins=coins, paid_order=oid, reward=reward)
+                base_coins=coins, paid_order=oid, reward=reward, image_name=image_name)
             if coins:
                 debit = await self.db.bank.update_one({'_id': 'single', 'coins': {'$gte': coins}},
                     {'$inc': {'coins': -coins}}, session=tx)
                 if debit.matched_count != 1:
                     raise GameError('Банк изменился. Повторите /senseidaily; оплата сохранена.')
             await self.users.update_one({'id': uid}, {'$inc': {'coins': coins, 'xp': reward['total_xp']},
-                '$set': {'daily_pet': session}}, session=tx)
+                '$set': {'daily_pet': session, 'hedgehog_images_seen': images_seen}}, session=tx)
             await self.days.update_one({'_id': f'{uid}:{order["day"]}'},
                 {'$set': {'count': order['number']}}, upsert=True, session=tx)
             await self.orders.update_one({'_id': oid}, {'$set': {'state': 'fulfilled', 'charge': charge}}, session=tx)

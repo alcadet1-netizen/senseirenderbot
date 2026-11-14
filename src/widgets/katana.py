@@ -11,7 +11,7 @@ from io import BytesIO
 from PIL import Image
 
 from src.core.visuals import Visuals
-from src.widgets.katana_models import MODEL_NAMES, model_index
+from src.widgets.katana_models import katana_name
 from src.widgets.cards import Card, label, number
 from src.widgets.forge import FRAME_COUNT, HEIGHT, WIDTH, render_forge
 
@@ -56,7 +56,7 @@ class KatanaUpgrade:
                 ("Изменение", f"{self.delta:+.2f} см"),
                 ("Стало", f"{self.after:.2f} см"),
                 ("Стоимость попытки", f"{self.cost:,.0f} монет"),
-                ("Клинок", MODEL_NAMES[model_index(self.after)]),
+                ("Клинок", katana_name(self.after)),
                 ("Ранг", rank),
             ),
             art=Visuals.get_katana_art_ascii(self.after),

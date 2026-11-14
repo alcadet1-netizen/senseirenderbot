@@ -11,6 +11,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, LabeledPri
 
 from src.services.star_coin_service import StarCoinService, PACKAGES, PREFIX, valid
 from src.services.hedgehog_service import GameError
+from src.texts.payment_thanks import payment_thanks
 
 router = Router(name='donate')
 logger = logging.getLogger(__name__)
@@ -40,15 +41,34 @@ async def show_donate_menu(message, container, user):
             logger.error('Stars coin recovery unavailable')
             await message.answer('Не удалось проверить платежи. Повторите /donate позже или /paysupport.', parse_mode=None)
             return
-    buttons = [[InlineKeyboardButton(text=f'⭐ {stars} → {PACKAGES[stars]:,} Coin',
+    buttons = [[InlineKeyboardButton(text=f'{stars} ⭐ · {PACKAGES[stars]:,} Coin'.replace(',', ' '),
                     callback_data=f'coinbuy:{stars}') for stars in list(PACKAGES)[row:row+2]] for row in (0, 2)]
     buttons.append([InlineKeyboardButton(text='💎 Поддержать через xRocket', url=XROCKET_URL)])
+    buttons.append([InlineKeyboardButton(text='🛟 Помощь с оплатой', callback_data='coinhelp')])
     await message.answer(
         '⭐ SenseiCoin за Telegram Stars\n\n'
         '1 ⭐ → 500 Coin\n5 ⭐ → 3 500 Coin\n10 ⭐ → 8 000 Coin\n50 ⭐ → 45 000 Coin\n\n'
-        'Монеты переводятся из SenseiBank после подтверждения оплаты. XP не начисляется.\n'
+        'Выбери пакет ниже — затем подтверди оплату в Telegram.\n'
+        'Coin поступают из SenseiBank после подтверждения. XP не начисляется.\n\n'
+        '🦔 Повторная Ежа — отдельно в /senseidaily: полная награда, новая картинка и 15 секунд ласки.\n\n'
         'xRocket — отдельное добровольное пожертвование без начисления монет.',
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode=None)
+
+
+@router.callback_query(F.data == 'coinhelp')
+async def coin_help(query):
+    await query.answer(
+        'Оплатили, но Coin нет? Повторите /donate для проверки квитанции. '
+        'Не платите повторно. Если не помогло — /paysupport. Ежа: /senseidaily.', show_alert=True)
+
+
+@router.callback_query(F.data == 'coinmenu')
+async def coin_menu(query, container):
+    if not query.message:
+        await query.answer('Откройте /donate заново.', show_alert=True)
+        return
+    await query.answer()
+    await show_donate_menu(query.message, container, query.from_user)
 
 
 def safe_payment_error(exc):
@@ -83,7 +103,8 @@ async def coin_invoice(query, container):
             payload=f'{PREFIX}{query.from_user.id}:{stars}', currency='XTR', provider_token='',
             prices=[LabeledPrice(label='SenseiCoin', amount=stars)]), timeout=8)
         markup = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text=f'Оплатить {stars} ⭐', url=link)]])
+            InlineKeyboardButton(text=f'Оплатить {stars} ⭐', url=link)],
+            [InlineKeyboardButton(text='◀️ Другой пакет', callback_data='coinmenu')]])
         text = (f'⭐ {stars} → {PACKAGES[stars]:,} SenseiCoin\n'
             'После оплаты монеты поступят из SenseiBank. Не оплачивайте счёт повторно.')
         stage = 'publish_invoice'
@@ -139,6 +160,7 @@ async def coin_received(message, container, *, payment=None, user_id=None):
                                         payment or message.successful_payment)
         if receipt['state'] == 'fulfilled':
             await message.answer(f"✅ Платёж учтён: {receipt['stars']} ⭐ → {receipt['coins']:,} SenseiCoin из SenseiBank.\n"
+                                 f"{payment_thanks(receipt.get('_id'))}\n"
                                  'Повторная обработка квитанции не начисляет монеты снова.', parse_mode=None)
         elif receipt['state'] in {'refund_required', 'refunded'}:
             if receipt['state'] != 'refunded':
@@ -198,8 +220,8 @@ async def donation_received(message, container):
         # reconciliation against Telegram's getStarTransactions after an outage.
         logger.error('Donation receipt persistence failed; Stars reconciliation required')
         raise
-    await message.answer(f'❤️ Спасибо за поддержку — {payment.total_amount} ⭐!\n'
-                         'Ваше пожертвование помогает проекту жить.\n'
+    await message.answer(f'{payment_thanks(payment.telegram_payment_charge_id)}\n'
+                         f'Поддержка проекта: {payment.total_amount} ⭐.\n'
                          'Вопросы по оплате: /paysupport', parse_mode=None)
 
 
