@@ -52,7 +52,9 @@ try {
     );
     await page.goto(`http://127.0.0.1:${server.address().port}/miniapp/dojo`);
     await page.waitForFunction(() => window.calls?.includes("ready"));
-    await page.getByRole("button", {name:"∞ Свободная битва", exact:true}).click();
+    await page
+      .getByRole("button", { name: "∞ Свободная битва", exact: true })
+      .click();
     assert(
       await page.evaluate(
         () => calls.includes("expand") && calls.includes("back"),
@@ -66,8 +68,13 @@ try {
     );
     assert(
       await page.evaluate(
-        () => calls.includes("fullscreen") && calls.includes("swipes-off"),
+        () => !calls.includes("fullscreen") && calls.includes("swipes-off"),
       ),
+    );
+    await page.locator("#fullscreenBtn").click();
+    assert(
+      await page.evaluate(() => calls.includes("fullscreen")),
+      "fullscreen only on explicit tap",
     );
     assert.equal(
       await page.evaluate(() =>

@@ -88,7 +88,7 @@ try {
     }
     await page.setViewportSize({ width: 375, height: 812 });
     assert(await page.locator(".rotate-tip").isVisible());
-    checks.push("portrait recommends rotation without blocking play");
+    checks.push("portrait remains playable without requiring rotation");
     await page.evaluate(() => {
       window.fullscreenRequests = 0;
       document.documentElement.requestFullscreen = () => {

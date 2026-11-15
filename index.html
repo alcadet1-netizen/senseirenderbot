@@ -1435,7 +1435,7 @@
     <div class="app">
       <div class="rotate-tip" role="note">
         <span
-          >↻ Горизонтально — шире поле боя.</span
+          >Играй вертикально или горизонтально — как удобно.</span
         ><button class="tool" id="rotateFullscreenBtn">⛶ На весь экран</button>
       </div>
       <header class="brandbar">
@@ -5172,7 +5172,7 @@
             Promise.resolve(document.documentElement.requestFullscreen()).catch(
               () =>
                 game.ui.toast(
-                  "Полный экран недоступен. Поверни телефон горизонтально.",
+                  "Полный экран недоступен — игра продолжает работать в текущем окне.",
                 ),
             );
           } catch (_) {
@@ -5186,7 +5186,6 @@
         try {
           tg.ready();
           tg.expand();
-          requestGameFullscreen();
           try {
             tg.disableVerticalSwipes?.();
           } catch (_) {}
@@ -5309,6 +5308,17 @@
               this.g.last = 0;
             } else if (this.panel.hidden) this.main();
           });
+          document.addEventListener("visibilitychange", () => {
+            if (
+              !document.hidden &&
+              !this.stopped &&
+              this.ws &&
+              this.ws.readyState === WebSocket.CLOSED
+            ) {
+              clearTimeout(this.retry);
+              this.connect();
+            }
+          });
           this.install();
           this.main();
           const token = new URLSearchParams(location.search).get("room");
@@ -5340,6 +5350,28 @@
           this.panel.append(box);
           const first = box.querySelector("button:not(:disabled)");
           if (first) first.focus({ preventScroll: true });
+        }
+        savedRoom() {
+          try {
+            const saved = JSON.parse(
+              localStorage.getItem("dojo-active-pvp-v1") || "null",
+            );
+            if (
+              saved &&
+              /^[A-Za-z0-9_-]{22}$/.test(saved.room) &&
+              Number.isFinite(saved.until) &&
+              saved.until > Date.now()
+            )
+              return saved;
+          } catch {}
+          return null;
+        }
+        forgetRoom() {
+          try {
+            const saved = this.savedRoom();
+            if (!saved || saved.room === this.room)
+              localStorage.removeItem("dojo-active-pvp-v1");
+          } catch {}
         }
         main() {
           if (this.g.mode === "pvp" && !this.stopped) {
@@ -5384,6 +5416,14 @@
                         this.panel.hidden = true;
                         this.g.last = 0;
                       },
+                    ],
+                  ]
+                : []),
+              ...(this.savedRoom()
+                ? [
+                    [
+                      "↻ Вернуться в PvP-комнату",
+                      () => this.join(this.savedRoom().room),
                     ],
                   ]
                 : []),
@@ -5889,6 +5929,7 @@
             history.replaceState(null, "", u);
           } catch {}
           this.room = room;
+          if (this.invite?.room !== room) this.invite = null;
           this.seq = 0;
           this.stopped = false;
           this.failures = 0;
@@ -5899,6 +5940,12 @@
         }
         connect() {
           if (this.stopped) return;
+          if (
+            this.ws &&
+            [WebSocket.OPEN, WebSocket.CONNECTING].includes(this.ws.readyState)
+          )
+            return;
+          clearTimeout(this.retry);
           this.displayStatus = null;
           this.status = "соединение";
           this.g.ui.refresh();
@@ -5930,12 +5977,28 @@
             const data = JSON.parse(e.data);
             if (data.type === "welcome") {
               this.side = data.side;
+              if (data.invite_url)
+                this.invite = {
+                  room: this.room,
+                  invite_url: data.invite_url,
+                  prepared_id: data.prepared_id,
+                };
+              try {
+                localStorage.setItem(
+                  "dojo-active-pvp-v1",
+                  JSON.stringify({
+                    room: this.room,
+                    until: Date.now() + 45 * 60 * 1000,
+                  }),
+                );
+              } catch {}
               this.pending.clear();
               this.seq = Math.max(this.seq, data.seq);
               this.failures = 0;
             }
             if (data.type === "error") this.g.ui.toast(data.error);
             if (data.type === "fatal") {
+              if (data.code === "room") this.forgetRoom();
               this.stop(false);
               this.restore();
               this.error(data.error);
@@ -5971,7 +6034,10 @@
           return true;
         }
         stop(leave) {
-          if (leave) this.command("leave");
+          if (leave) {
+            this.command("leave");
+            this.forgetRoom();
+          }
           this.stopped = true;
           this.pending.clear();
           this.prompt = false;
@@ -6045,6 +6111,7 @@
           if (this.prompt && s.status !== "ended") return;
           const displayKey =
             s.status +
+            (s.status === "waiting" ? JSON.stringify([s.connected, s.joined]) : "") +
             (["paused", "countdown"].includes(s.status)
               ? Math.ceil(s.status === "paused" ? s.reconnectSeconds : s.countdown)
               : "");
@@ -6052,8 +6119,16 @@
           this.displayStatus = displayKey;
           if (s.status === "waiting") {
             this.screen(
-              "✉ Пригласи соперника",
-              "Ожидаем второго игрока. Приглашение — на 10 минут. Отправь его другу или в групповой чат. Сам с собой играть нельзя.",
+              this.side === 1
+                ? "Ожидаем создателя комнаты"
+                : s.joined?.[1]
+                  ? "Ожидаем возвращения соперника"
+                  : "✉ Пригласи соперника",
+              this.side === 1
+                ? "Ты в комнате. Создатель сейчас не подключён. Попроси его вернуться в игру: /dojo → «Вернуться в PvP-комнату». Поворачивать экран не нужно."
+                : s.joined?.[1]
+                  ? "Соперник уже входил, но сейчас отключён. Оба игрока должны держать игру открытой. Комната ждёт до 10 минут от создания."
+                  : "Приглашение — на 10 минут. Отправь его другу, затем вернись в игру и оставь её открытой. После повторного запуска: /dojo → «Вернуться в PvP-комнату».",
               [
                 ...(this.invite ? [["✉ Отправить в чат", () => this.share()]] : []),
                 [
@@ -6082,6 +6157,7 @@
                 : s.winner === side
                   ? "勝 · Победа!"
                   : "敗 · Поражение";
+            this.forgetRoom();
             this.stop(false);
             const reasons = {
               castle: "Замок разрушен.",
