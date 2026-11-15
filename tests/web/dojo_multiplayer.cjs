@@ -108,9 +108,33 @@ function signed(id) {
       .click();
     assert.equal(await a.evaluate(() => window.sharedPrepared), "prepared");
     const room = await a.evaluate(() => neonDojo.modes.room);
+    if (Number(process.env.DOJO_IDLE_TEST_SECONDS) > 0) {
+      await a.waitForTimeout(Number(process.env.DOJO_IDLE_TEST_SECONDS) * 1000);
+      assert(
+        await a.evaluate(
+          () =>
+            neonDojo.modes.ws.readyState === WebSocket.OPEN &&
+            neonDojo.modes.status === "waiting",
+        ),
+      );
+    }
+    // Reproduce Telegram closing/recreating the host WebView after chat sharing.
+    await a.goto(url);
+    await a
+      .getByRole("button", { name: "↻ Вернуться в PvP-комнату", exact: true })
+      .waitFor();
     await b.goto(url + "?room=" + room);
     await b
       .getByRole("button", { name: "☾ Играть за Тень", exact: true })
+      .click();
+    await b
+      .getByRole("heading", { name: "Ожидаем создателя комнаты", exact: true })
+      .waitFor();
+    await a
+      .getByRole("button", { name: "↻ Вернуться в PvP-комнату", exact: true })
+      .click();
+    await a
+      .getByRole("button", { name: "☀ Играть за Рассвет", exact: true })
       .click();
     await Promise.all([
       a.waitForFunction(() => neonDojo.game.state === "playing"),
@@ -162,7 +186,7 @@ function signed(id) {
       /Одиночная кампания доступна/,
     );
     console.log(
-      "PASS: menu, 30 stages, progression, native share mock, two real WS clients, commands, no solo writes, modal, reconnect, surrender, offline",
+      "PASS: menu, campaign, native share mock, host WebView reopen without room URL, waiting guest, two real WS clients, commands, reconnect, surrender, offline",
     );
   } finally {
     if (browser) await browser.close();

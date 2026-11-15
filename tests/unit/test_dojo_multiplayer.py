@@ -235,3 +235,58 @@ async def test_factions_are_validated_and_survive_reconnect():
         assert room.battle.players[0] == room.battle.players[1]
         await a.close()
         await b.close()
+
+
+async def test_waiting_guest_host_reopen_and_private_invite_metadata():
+    app = web.Application()
+    setup_dojo(app, container(), bot())
+    async with TestClient(TestServer(app)) as client:
+        headers = dict(Origin=str(client.make_url('')).rstrip('/'))
+        res = await client.post('/miniapp/dojo/rooms', headers=headers, json=dict(initData=signed(1)))
+        token = (await res.json())['room']
+        guest = await client.ws_connect('/miniapp/dojo/ws', headers=headers)
+        await guest.send_json(dict(type='hello', room=token, initData=signed(2)))
+        welcome = await receive_type(guest, 'welcome')
+        assert 'invite_url' not in welcome
+        state = await receive_type(guest, 'state')
+        assert state['status'] == 'waiting'
+        assert state['joined'] == [True, True] and state['connected'] == [False, True]
+        host = await client.ws_connect('/miniapp/dojo/ws', headers=headers)
+        await host.send_json(dict(type='hello', room=token, initData=signed(1)))
+        welcome = await receive_type(host, 'welcome')
+        assert welcome['invite_url'].endswith('dojo_' + token)
+        assert welcome['prepared_id'] == 'prepared'
+        state = await receive_type(guest, 'state')
+        while state['status'] != 'playing':
+            state = await receive_type(guest, 'state')
+        assert state['connected'] == [True, True]
+        await host.close()
+        await guest.close()
+
+
+async def test_fatal_errors_identify_auth_and_missing_room():
+    app = web.Application()
+    setup_dojo(app, container(), bot())
+    async with TestClient(TestServer(app)) as client:
+        headers = dict(Origin=str(client.make_url('')).rstrip('/'))
+        for raw, code in [('fake', 'auth'), (signed(1), 'room')]:
+            ws = await client.ws_connect('/miniapp/dojo/ws', headers=headers)
+            await ws.send_json(dict(type='hello', room='A'*22, initData=raw))
+            data = await receive_type(ws, 'fatal')
+            assert data['code'] == code
+            assert 'fake' not in data['error'] and 'A'*22 not in data['error']
+            await ws.close()
+
+
+async def test_reap_closes_idle_terminal_socket():
+    import asyncio
+    h = Hub(container(), bot(), clock=lambda:100)
+    room = Room('A'*22, dict(id=1), load_rules(), 0)
+    ws = SimpleNamespace(close=AsyncMock())
+    room.join(dict(id=1), dict(ws=ws), 0)
+    room.finish(None, 'expired', 0)
+    h.rooms[room.token] = room
+    h.reap()
+    await asyncio.sleep(0)
+    assert not h.rooms
+    ws.close.assert_awaited_once()

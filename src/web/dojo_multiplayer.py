@@ -24,6 +24,12 @@ TOKEN = re.compile(r'^[A-Za-z0-9_-]{22}$')
 HUB_KEY = web.AppKey('dojo_hub', object)
 
 
+class ClientError(ValueError):
+    def __init__(self, message, code):
+        super().__init__(message)
+        self.code = code
+
+
 class Room:
     def __init__(self, token, user, rules, now):
         self.token = token
@@ -91,6 +97,7 @@ class Room:
                     factions=[f if f is not None else i for i, f in enumerate(self.factions)],
                     names=[str((u or {}).get('first_name', 'Соперник'))[:48] for u in self.users],
                     connected=[bool(link) for link in self.links],
+                    joined=[user is not None for user in self.users],
                     countdown=max(0, round((self.countdown or now) - now, 1)),
                     reconnectSeconds=max(0, round(45 - max((now - s for s in self.missing if s is not None), default=0))))
         return data
@@ -178,6 +185,12 @@ class Hub:
                         self.members.pop(user['id'], None)
                 if now - room.changed > 60:
                     self.rooms.pop(token, None)
+                    # Authenticated idle sockets have no receive timeout; release
+                    # them when their terminal room is reaped, even if the client
+                    # ignores the result. Heartbeats still detect broken links.
+                    for link in room.links:
+                        if link:
+                            asyncio.create_task(link['ws'].close(code=1000, message=b'Room expired'))
 
     async def run(self):
         last, accumulator, publish = self.clock(), 0., 0.
@@ -267,7 +280,7 @@ def setup_multiplayer(app, container, bot=None):
         h = service(request)
         if len(h.sockets) >= 64:
             raise web.HTTPServiceUnavailable(text='Сервер занят.')
-        ws = web.WebSocketResponse(heartbeat=15, max_msg_size=12288, receive_timeout=60)
+        ws = web.WebSocketResponse(heartbeat=15, max_msg_size=12288)
         h.sockets.add(ws)
         try:
             await ws.prepare(request)
@@ -279,18 +292,26 @@ def setup_multiplayer(app, container, bot=None):
             first = await asyncio.wait_for(ws.receive_json(), timeout=10)
             if not isinstance(first, dict) or first.get('type') != 'hello':
                 raise ValueError('Нужна авторизация Telegram.')
-            user = h.authenticate(first.get('initData'))
+            try:
+                user = h.authenticate(first.get('initData'))
+            except (ValueError, TypeError, KeyError):
+                raise ClientError('Сессия Telegram устарела или не подтверждена. Открой /dojo заново.', 'auth') from None
             faction = first.get('faction', 0)
             if type(faction) is not int or faction not in (0, 1):
                 raise ValueError('Неверный клан.')
             link = dict(ws=ws, queue=asyncio.Queue(maxsize=1))
-            room, side, old = h.join(first.get('room'), user, link)
+            try:
+                room, side, old = h.join(first.get('room'), user, link)
+            except ValueError as exc:
+                raise ClientError(str(exc), 'room') from None
             # Choice is immutable after first connection, including reconnects.
             if room.factions[side] is None:
                 room.factions[side] = faction
             if old:
                 await old['ws'].close(code=4001, message=b'Opened in another tab')
-            await ws.send_json(dict(type='welcome', side=side, room=room.token, seq=room.last_seq[side]))
+            await ws.send_json(dict(type='welcome', side=side, room=room.token, seq=room.last_seq[side],
+                                    **(dict(invite_url=room.invite_url, prepared_id=room.prepared_id) if side == 0 else {})))
+            log.info('Dojo socket authenticated: side=%s status=%s connected=%s', side, room.status, [bool(x) for x in room.links])
 
             async def send():
                 try:
@@ -331,6 +352,10 @@ def setup_multiplayer(app, container, bot=None):
                         await ws.send_json(dict(type='error', error='Команда недоступна: проверь энергию, уровень и заряд.'))
                 else:
                     await ws.send_json(dict(type='error', error='Дождись начала или восстановления связи.'))
+        except ClientError as exc:
+            log.info('Dojo connection rejected: category=%s', exc.code)
+            if not ws.closed:
+                await ws.send_json(dict(type='fatal', code=exc.code, error=str(exc)))
         except (ValueError, TypeError, KeyError, TimeoutError):
             if not ws.closed:
                 # Never echo invalid payloads or authentication exception internals.
