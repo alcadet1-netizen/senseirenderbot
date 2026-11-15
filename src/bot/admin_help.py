@@ -69,7 +69,6 @@ SECTIONS = (
         '/welcomeon · /welcomeoff — приветствия.',
         '/autobanon · /autobanoff — автобан.',
         '/uvedomleniaon · /uvedomleniaoff — уведомления.',
-        '/captchaon · /captchaoff — капча.',
         '/popugai [процент|off] — шанс ответа попугая.',
         '/senseifly on|off|status — редкие реакции; только администратор самой группы.',
         '/senseifly без аргументов — визуальная лаборатория, доступна всем.',

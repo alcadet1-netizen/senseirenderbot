@@ -29,7 +29,6 @@ This document tracks the progress of migrating the Sensei bot from using Redis a
   - `src/services/trade_service.py`: Uses MongoClient directly
   - `src/services/stats_service.py`: Uses MongoClient directly with caching layer
   - `src/services/quiz_service.py`: Uses MongoClient directly
-  - `src/services/captcha_service.py`: Uses MongoDB TTL indexes instead of Redis
   - `src/services/chat_settings_service.py`: Uses MongoDB storage instead of Redis
   - `src/services/throttle_service.py`: Uses MongoDB TTL indexes instead of Redis
   - `src/services/daily_service.py`: Uses MongoClient directly

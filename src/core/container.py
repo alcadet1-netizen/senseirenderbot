@@ -45,7 +45,6 @@ class Container:
     _banzai_service: Optional["BanzaiService"] = field(default=None, init=False, repr=False)
     _xrocket_service: Optional["XRocketService"] = field(default=None, init=False, repr=False)
     _chat_settings_service: Optional["ChatSettingsService"] = field(default=None, init=False, repr=False)
-    _captcha_service: Optional["CaptchaService"] = field(default=None, init=False, repr=False)
 
     @property
     def comment_campaign_service(self):
@@ -238,13 +237,6 @@ class Container:
         return self._chat_activity_service
 
     @property
-    def captcha_service(self):
-        if self._captcha_service is None:
-            from src.services.captcha_service import CaptchaService
-            self._captcha_service = CaptchaService(self.mongo_client)
-        return self._captcha_service
-
-    @property
     def chat_settings_service(self):
         if self._chat_settings_service is None:
             from src.services.chat_settings_service import ChatSettingsService
@@ -326,7 +318,6 @@ if TYPE_CHECKING:
     from src.services.message_cleanup_service import MessageCleanupService
     from src.services.chat_activity_service import ChatActivityService
     from src.services.chat_settings_service import ChatSettingsService
-    from src.services.captcha_service import CaptchaService
     from src.services.throttle_service import ThrottleService
     from src.services.popugai_service import PopugaiService
     from src.services.boss_service import BossService
