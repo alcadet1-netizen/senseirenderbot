@@ -136,8 +136,6 @@
 - `cmd_autobanoff` — `router.message(Command('autobanoff'))`
 - `cmd_uvedomleniaon` — `router.message(Command('uvedomleniaon'))`
 - `cmd_uvedomleniaoff` — `router.message(Command('uvedomleniaoff'))`
-- `cmd_captchaon` — `router.message(Command('captchaon'))`
-- `cmd_captchaoff` — `router.message(Command('captchaoff'))`
 - `cmd_popugai` — `router.message(Command('popugai'))`
 
 ### src/bot/handlers/digest.py
@@ -355,10 +353,6 @@
 - `BroadcastMessage`: `is_valid`
 - `BroadcastResult`: `success_rate`
 - `BroadcastService`: `get_users`, `get_count`, `set_pending`, `get_pending`, `clear_pending`, `broadcast`
-
-### src/services/captcha_service.py
-
-- `CaptchaService`: `set_lock`, `get_solved`, `set_solved`
 
 ### src/services/chat_activity_service.py
 
