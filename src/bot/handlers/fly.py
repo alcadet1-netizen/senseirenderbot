@@ -11,6 +11,7 @@ from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure
 from src.services.fly_service import (FlyService, REPLY_CHANCE_BPS, DAILY_ATTEMPT_LIMIT,
     CHAT_COOLDOWN_SECONDS, USER_COOLDOWN_SECONDS)
 from src.widgets.fly import fly_html
+from src.services.fly_censor import censor_fly_reply
 
 logger = logging.getLogger(__name__)
 router = Router(name='fly')
@@ -91,7 +92,7 @@ class FlyReactionMiddleware(BaseMiddleware):
                     await self.service.db.fly_decisions.update_one({'_id': key}, {'$set': {'status': 'access_lost'}})
                     return result
                 try:
-                    await event.answer(text, parse_mode=None,
+                    await event.answer(censor_fly_reply(text), parse_mode=None,
                         reply_parameters=ReplyParameters(message_id=event.message_id, allow_sending_without_reply=False))
                 except Exception:
                     # No automatic retries after an ambiguous send: avoid duplicates.
