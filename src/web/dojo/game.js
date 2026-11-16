@@ -12,13 +12,10 @@ const CONFIG = {
   lives: 3,
   army: 6,
   damage: 5,
-  attackPeriod: 0.34,
-  range: 380,
+  attackPeriod: 0.27,
+  range: 1200,
   enemySpeed: 46,
   shotSpeed: 640,
-  dashCooldown: 4,
-  dashDistance: 120,
-  dashInvulnerability: 0.3,
   comboWindow: 3,
   magnetRadius: 100,
   dropChance: 0.37,
@@ -26,11 +23,11 @@ const CONFIG = {
   shopSeconds: 4,
   cost: { warrior: 50, damage: 75, speed: 75 },
   waves: [
-    { count: 18, hp: 20, speed: 1 },
-    { count: 26, hp: 24, speed: 1.13 },
-    { count: 32, hp: 28, speed: 1.2, boss: 650, bossKind: "oni" },
-    { count: 40, hp: 32, speed: 1.3 },
-    { count: 48, hp: 36, speed: 1.4, boss: 1100, bossKind: "lich" },
+    { count: 48, hp: 20, speed: 1 },
+    { count: 66, hp: 24, speed: 1.13 },
+    { count: 84, hp: 28, speed: 1.2, boss: 650, bossKind: "oni" },
+    { count: 102, hp: 32, speed: 1.3 },
+    { count: 126, hp: 36, speed: 1.4, boss: 1100, bossKind: "lich" },
   ],
 };
 const canvas = document.querySelector("#game"),
@@ -41,7 +38,7 @@ const $ = (s) => document.querySelector(s),
 // Единая перспективная проекция. Бой остаётся в координатах мира;
 // дальность, снаряды, телеграфы и указатель используют одну геометрию.
 function project(x, y) {
-  if(window.dojoRenderer)return window.dojoRenderer.project(x,y);
+  if (window.dojoRenderer) return window.dojoRenderer.project(x, y);
   const depth = clamp((y + 60) / 960, 0, 1.2),
     scale = 0.28 + 0.82 * depth;
   return {
@@ -108,38 +105,8 @@ class Player {
     this.period = CONFIG.attackPeriod;
     this.cooldown = 0;
     this.shuriken = false;
-    this.dashCooldown = 0;
-    this.invulnerable = 0;
-    this.direction = 1;
-    this.trails = [];
-  }
-  dash(g) {
-    if (g.state !== "game" || this.dashCooldown > 0) return false;
-    const direction =
-      Math.abs(this.target - this.x) > 8
-        ? Math.sign(this.target - this.x)
-        : this.direction;
-    const dest = clamp(
-      this.x + direction * CONFIG.dashDistance,
-      ...CONFIG.road,
-    );
-    if (Math.abs(dest - this.x) < 10) return false;
-    for (let i = 0; i < 5; i++)
-      this.trails.push({ x: this.x + ((dest - this.x) * i) / 5, life: 0.35 });
-    this.x = this.target = dest;
-    this.invulnerable = CONFIG.dashInvulnerability;
-    this.dashCooldown = CONFIG.dashCooldown;
-    g.burst(this.x, this.y, "#a5efff", 16);
-    g.sound.play("pick");
-    return true;
   }
   update(dt, g) {
-    this.dashCooldown = Math.max(0, this.dashCooldown - dt);
-    this.invulnerable = Math.max(0, this.invulnerable - dt);
-    this.trails.forEach((t) => (t.life -= dt));
-    this.trails = this.trails.filter((t) => t.life > 0);
-    if (Math.abs(this.target - this.x) > 2)
-      this.direction = Math.sign(this.target - this.x);
     this.x += (this.target - this.x) * Math.min(1, dt * 13);
     this.cooldown -= dt;
     if (this.cooldown <= 0) {
@@ -151,11 +118,11 @@ class Player {
         .sort(
           (a, b) => (a.type === "crate") - (b.type === "crate") || b.y - a.y,
         );
-      if (targets.length) {
+      {
         this.cooldown = this.period;
         for (let i = 0; i < this.army; i++) {
-          const e = targets[i % targets.length];
-          if (!e.dead) {
+          const e = targets.length ? targets[i % targets.length] : null;
+          if (!e || !e.dead) {
             g.shots.push(
               new Projectile(
                 this.x + ((i % 5) - 2) * 15,
@@ -172,20 +139,6 @@ class Player {
     }
   }
   draw(t) {
-    for (const trail of this.trails) {
-      ctx.save();
-      ctx.globalAlpha = trail.life * 0.9;
-      worldDraw(trail.x, this.y, () => samurai(trail.x, this.y));
-      ctx.restore();
-    }
-    if (this.invulnerable > 0) {
-      const p = project(this.x, this.y);
-      ctx.strokeStyle = "#9fe8ff";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y + 14 * p.scale, 36 * p.scale, 46 * p.scale, 0, 0, 7);
-      ctx.stroke();
-    }
     for (let i = this.army - 1; i >= 0; i--) {
       const row = Math.floor(i / 6),
         x = this.x + ((i % 6) - 2.5) * 22,
@@ -204,14 +157,34 @@ class Projectile {
       target,
       damage,
       star,
-      life: 1.5,
+      life: 2.5,
       dead: false,
       angle: 0,
     });
   }
   update(dt, g) {
     this.life -= dt;
-    if (this.target.dead || this.life <= 0) {
+    if (this.target?.dead) this.target = null;
+    if (!this.target) {
+      const nextY = this.y - CONFIG.shotSpeed * dt;
+      const hit = g.enemies.find(
+        (e) =>
+          !e.dead &&
+          Math.abs(e.x - this.x) < e.r &&
+          e.y <= this.y &&
+          e.y >= nextY - e.r,
+      );
+      if (hit) {
+        hit.hit(this.damage, g);
+        this.dead = true;
+        g.burst(this.x, hit.y, "#69eaff", 3);
+        return;
+      }
+      this.y = nextY;
+      if (this.life <= 0 || this.y < -100) this.dead = true;
+      return;
+    }
+    if (this.life <= 0) {
       this.dead = true;
       return;
     }
@@ -332,7 +305,7 @@ class Enemy {
 
     if (this.y > CONFIG.playerY + 12) {
       this.dead = true;
-      if (g.player.invulnerable <= 0) g.player.lives--;
+      g.player.lives--;
       g.combo = 0;
       g.comboTime = 0;
       g.shake = 9;
@@ -427,11 +400,7 @@ class Boss extends Enemy {
               ),
             );
         }
-        if (
-          this.kind !== "lich" &&
-          Math.abs(g.player.x - this.attackX) < 62 &&
-          g.player.invulnerable <= 0
-        ) {
+        if (this.kind !== "lich" && Math.abs(g.player.x - this.attackX) < 62) {
           g.player.army = Math.max(0, g.player.army - 2);
           g.shake = 12;
           g.sound.play("hurt");
@@ -541,7 +510,7 @@ class EnemyBolt {
     this.y += this.vy * dt;
     if (this.y >= CONFIG.playerY) {
       this.dead = true;
-      if (Math.abs(this.x - g.player.x) < 30 && g.player.invulnerable <= 0) {
+      if (Math.abs(this.x - g.player.x) < 30) {
         g.player.army = Math.max(0, g.player.army - 1);
         g.shake = 6;
         g.sound.play("hurt");
@@ -558,7 +527,7 @@ class EnemyBolt {
     ctx.restore();
   }
 }
-// Ворота набора: выбирай край моста, чтобы усилить строй.
+// Ворота набора: выбирай край тропы, чтобы усилить строй.
 class RecruitGate {
   constructor(x, y, value = 1) {
     Object.assign(this, { x, y, value, dead: false });
@@ -627,7 +596,7 @@ class WaveManager {
     this.g = g;
     this.index = 0;
     this.spawned = 0;
-    this.timer = 1;
+    this.timer = 0;
     this.bossSpawned = false;
     this.crateSpawned = false;
     this.cleared = false;
@@ -647,12 +616,12 @@ class WaveManager {
     }
     this.timer -= dt;
     if (this.spawned < this.spec.count && this.timer <= 0) {
-      // Пачки по 2–3 существа создают орду, а не длинную очередь одиночек.
+      // Крупные пачки с первого кадра волны, а не очередь одиночных врагов.
       const batch = Math.min(
         this.spec.count - this.spawned,
-        this.index < 2 ? 2 : 3,
+        this.index < 2 ? 10 : 12,
       );
-      this.timer = Math.max(0.85, 1.7 - this.index * 0.12);
+      this.timer = Math.max(0.65, 1.05 - this.index * 0.08);
       for (let i = 0; i < batch; i++) {
         const n = Math.random();
         const type =
@@ -671,7 +640,7 @@ class WaveManager {
           110,
           430,
         );
-        enemy.y = -45 - i * 22;
+        enemy.y = -15 - Math.floor(i / 4) * 28;
         g.enemies.push(enemy);
         this.spawned++;
       }
@@ -698,7 +667,7 @@ class WaveManager {
   next() {
     this.index++;
     this.spawned = 0;
-    this.timer = 1;
+    this.timer = 0;
     this.bossSpawned = false;
     this.crateSpawned = false;
     this.cleared = false;
@@ -717,11 +686,6 @@ class UIScene {
     this.toastTime -= dt;
     if (this.toastTime <= 0) $("#toast").textContent = "";
     const g = this.g;
-    $("#dash").disabled = g.state !== "game" || g.player.dashCooldown > 0;
-    $("#dash").textContent =
-      g.player.dashCooldown > 0
-        ? "Рывок " + g.player.dashCooldown.toFixed(1)
-        : "↔ РЫВОК";
     $("#combo").textContent =
       g.combo >= 3
         ? "СЕРИЯ ×" +
@@ -766,7 +730,7 @@ class MenuScene {
   show() {
     this.g.state = "menu";
     this.g.ui.panel(
-      '<div class="eyebrow">SENSEI GAMES · BRIDGE DEFENCE</div><div class="seal">⚔</div><h1>Последний<br><em>рубеж</em></h1><p>Прорывай орду. Собирай отряд.<br>Пять волн на мосту над океаном.</p><button class="primary" id="play">В бой →</button><div class="hint">Веди пальцем по дороге · атака автоматическая<br>Голубые ворота +1 пополняют отряд<br>Рывок — кнопка ↔ или Shift<br>Монеты только игровые, без выплат и ставок.</div>',
+      '<div class="eyebrow">SENSEI GAMES · SHADOW PATH</div><div class="seal">⚔</div><h1>Последний<br><em>рубеж</em></h1><p>Прорывай орду. Собирай отряд.<br>Пять волн на тропе древнего храма.</p><button class="primary" id="play">В бой →</button><div class="hint">Веди пальцем по дороге · атака автоматическая<br>Голубые ворота +1 пополняют отряд<br>Монеты только игровые, без выплат и ставок.</div>',
     );
     $("#play").onclick = () => this.g.start();
   }
@@ -831,10 +795,6 @@ class GameScene {
     window.addEventListener("keydown", (e) => {
       if (["ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
       this.keys.add(e.key);
-      if (e.key === "Shift" && !e.repeat) {
-        e.preventDefault();
-        this.player.dash(this);
-      }
       if ((e.key === "Escape" || e.key === " ") && !e.repeat) this.pause();
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.key));
@@ -846,7 +806,6 @@ class GameScene {
       if (document.hidden && this.state === "game") this.pause();
     });
     $("#pause").onclick = () => this.pause();
-    $("#dash").onclick = () => this.player.dash(this);
     $("#sound").onclick = () => {
       this.sound.on = !this.sound.on;
       $("#sound").textContent = this.sound.on ? "♪" : "×";
@@ -1008,7 +967,10 @@ class GameScene {
     requestAnimationFrame((t) => this.loop(t));
   }
   draw() {
-    if(window.dojoRenderer){window.dojoRenderer.render(this);return;}
+    if (window.dojoRenderer) {
+      window.dojoRenderer.render(this);
+      return;
+    }
     ctx.save();
     ctx.translate(rand(-this.shake, this.shake), rand(-this.shake, this.shake));
     background(this.time);
@@ -1543,126 +1505,88 @@ function boar(x, y, r, type, flash) {
   }
   ctx.restore();
 }
-// Декорации детерминированы: каменная мостовая, огни, сакура, ворота.
+// Декорации детерминированы: каменная тропа, огни, сакура, ворота.
 const scenery = document.createElement("canvas");
 scenery.width = 540;
 scenery.height = 960;
 function makeScenery() {
   const c = scenery.getContext("2d");
-  const ocean = c.createLinearGradient(0, 0, 0, 960);
-  ocean.addColorStop(0, "#a1e5f5");
-  ocean.addColorStop(0.5, "#52cbe6");
-  ocean.addColorStop(1, "#1daccf");
-  c.fillStyle = ocean;
+  c.fillStyle = "#182231";
   c.fillRect(0, 0, 540, 960);
-  const quad = (pts, color, stroke) => {
-    c.beginPath();
-    pts.forEach((p, i) => (i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
-    c.closePath();
+  const quad = (points, color) => {
     c.fillStyle = color;
-    c.fill();
-    if (stroke) {
-      c.strokeStyle = stroke;
-      c.stroke();
-    }
-  };
-  // Световые блики на воде заранее рисуются в статический слой.
-  for (let i = 0; i < 650; i++) {
-    const x = (i * 127.7) % 540,
-      y = (i * 71.3) % 960;
-    c.fillStyle = i % 3 ? "#d4ffff66" : "#fff9";
-    c.fillRect(x, y, 3 + (i % 9), 1);
-  }
-  for (const side of [-1, 1]) {
-    const edge = side < 0 ? 55 : 485;
-    quad(
-      [
-        project(edge, -60),
-        project(edge + side * 17, -60),
-        project(edge + side * 17, 960),
-        project(edge, 960),
-      ],
-      "#539aae",
-    );
-    for (let y = 0; y < 960; y += 150) {
-      const p = project(edge + side * 15, y);
-      c.fillStyle = "#266f8755";
-      c.fillRect(p.x, p.y, 12 * p.scale, 90 * p.scale);
-    }
-  }
-  const floor = c.createLinearGradient(0, 100, 0, 960);
-  floor.addColorStop(0, "#b6b9c4");
-  floor.addColorStop(0.4, "#d9d5dc");
-  floor.addColorStop(1, "#e9e2e2");
-  quad(
-    [project(65, -60), project(475, -60), project(475, 960), project(65, 960)],
-    floor,
-  );
-  // Дорожная разметка и поперечные стыки подчёркивают глубину.
-  for (let y = -40; y < 960; y += 75) {
-    quad(
-      [
-        project(267, y),
-        project(273, y),
-        project(273, y + 37),
-        project(267, y + 37),
-      ],
-      "#ffffffaa",
-    );
-    const a = project(65, y),
-      b = project(475, y);
-    c.strokeStyle = "#a3a2b02b";
     c.beginPath();
-    c.moveTo(a.x, a.y);
-    c.lineTo(b.x, b.y);
-    c.stroke();
-  }
-  for (const side of [-1, 1]) {
-    const x = side < 0 ? 65 : 475;
-    quad(
-      [
-        project(x, -60),
-        project(x - side * 9, -60),
-        project(x - side * 9, 960),
-        project(x, 960),
-      ],
-      "#fafbff",
-    );
-    quad(
-      [
-        project(x, -60),
-        project(x, 960),
-        { x: project(x, 960).x, y: project(x, 960).y - 22 },
-        { x: project(x, -60).x, y: project(x, -60).y - 5 },
-      ],
-      "#90a9ba",
-      "#e8f9ff",
-    );
-    for (let y = -30; y < 950; y += 65) {
-      const p = project(x, y);
-      c.strokeStyle = "#627c93";
-      c.lineWidth = 3 * p.scale;
-      c.beginPath();
-      c.moveTo(p.x, p.y);
-      c.lineTo(p.x, p.y - 24 * p.scale);
-      c.stroke();
+    points.forEach((p, i) => (i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
+    c.closePath();
+    c.fill();
+  };
+  quad(
+    [
+      project(65, -100),
+      project(475, -100),
+      project(475, 1000),
+      project(65, 1000),
+    ],
+    "#47434a",
+  );
+  for (let y = -100; y < 1050; y += 42)
+    for (let col = 0; col < 9; col++) {
+      const x = 65 + col * 45 + (Math.floor(y / 42) % 2) * 6;
+      quad(
+        [
+          project(x, y),
+          project(x + 43, y),
+          project(x + 43, y + 40),
+          project(x, y + 40),
+        ],
+        ["#5a5560", "#655c60", "#4c5357"][
+          Math.abs(col + Math.floor(y / 42)) % 3
+        ],
+      );
     }
-  }
+  for (const side of [-1, 1])
+    for (let y = -50; y < 1050; y += 130) {
+      const p = project(side < 0 ? 42 : 498, y),
+        k = p.scale;
+      c.fillStyle = "#50303c";
+      c.fillRect(p.x - 4 * k, p.y - 150 * k, 8 * k, 150 * k);
+      c.fillStyle = "#a02849";
+      c.fillRect(p.x - 24 * k, p.y - 135 * k, 48 * k, 85 * k);
+      c.fillStyle = "#ecd3a0";
+      c.font = `bold ${30 * k}px serif`;
+      c.textAlign = "center";
+      c.fillText("侍", p.x, p.y - 85 * k);
+      c.fillStyle = "#b14d86";
+      for (let n = 0; n < 16; n++) {
+        c.beginPath();
+        c.arc(
+          p.x + Math.sin(n * 7) * 45 * k,
+          p.y - 170 * k + Math.cos(n * 3) * 30 * k,
+          (8 + (n % 4)) * k,
+          0,
+          Math.PI * 2,
+        );
+        c.fill();
+      }
+      c.fillStyle = "#ffc77c";
+      c.shadowColor = "#ffb84c";
+      c.shadowBlur = 12;
+      c.fillRect(p.x - 6 * k, p.y - 26 * k, 12 * k, 18 * k);
+      c.shadowBlur = 0;
+    }
 }
 makeScenery();
 function background(t) {
   ctx.drawImage(scenery, 0, 0);
-  // Небольшие бегущие блики, без тяжёлых шейдеров и внешних текстур.
-  ctx.strokeStyle = "#ddffff77";
-  ctx.lineWidth = 1;
-  for (let i = 0; i < 45; i++) {
-    const side = i % 2 ? 1 : -1,
-      x = 270 + side * (185 + ((i * 29) % 130)),
-      y = (i * 47 + t * 14) % 960;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + 10 + Math.sin(t + i) * 6, y);
-    ctx.stroke();
+  ctx.fillStyle = "#f9b5d5aa";
+  for (let i = 0; i < 24; i++) {
+    const x = (i * 83 + Math.sin(t + i) * 25) % 540,
+      y = (i * 137 + t * 17) % 960;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(t + i);
+    ctx.fillRect(-2, -1, 5, 3);
+    ctx.restore();
   }
 }
 const game = new GameScene();
