@@ -8,6 +8,7 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
 from src.bot.handlers.dojo import cmd_dojo, dojo_url
+from src.domain.entities.referral import ReferralStats
 from src.web.dojo_app import setup_dojo
 from tests.unit.test_hedgehog_game import signed
 
@@ -47,6 +48,9 @@ async def test_miner_assets_and_csp():
             assert response.status == 200, path
             assert "connect-src 'self'" in response.headers['Content-Security-Policy']
             assert 'https://telegram.org' in response.headers['Content-Security-Policy']
+        page = await client.get('/miniapp/dojo')
+        html = await page.text()
+        assert 'data-tab="referrals"' in html and 'id="view-referrals"' in html
         webp = await client.get('/miniapp/dojo/assets/sensei.webp')
         assert webp.headers['Content-Type'] == 'image/webp'
         assert (await client.get('/miniapp/dojo/game.js')).status == 404
@@ -75,17 +79,30 @@ async def test_api_requires_signature_and_dispatches_actions():
     create_invoice = AsyncMock(return_value='https://t.me/invoice/1')
     bank = AsyncMock(return_value={
         'bank_balance': 900, 'circulation': 100, 'total_supply': 1000, 'users': 2})
+    referral_stats = ReferralStats(
+        user_id=7, level_1_count=3, level_1_active=2, level_2_count=1,
+        level_3_count=4, level_3_active=1, total_coins_earned=125.5,
+        bonus_eligible=True, activity_days=2, paid_upgrade=True)
+    referral_stats = AsyncMock(return_value=referral_stats)
+    referral_members = AsyncMock(return_value=[
+        {'name': 'Sensei', 'username': 'sensei', 'active': True}])
     container = SimpleNamespace(
         settings=SimpleNamespace(bot_token='test-token', maintenance_mode=False),
         dojo_miner_service=SimpleNamespace(state=state, start=start, collect=collect),
         dojo_task_service=SimpleNamespace(list_tasks=list_tasks, claim=claim),
         dojo_upgrade_service=SimpleNamespace(snapshot=upgrades, prepare=prepare),
         stats_service=SimpleNamespace(get_bank_summary=bank),
-        bot=SimpleNamespace(create_invoice_link=create_invoice))
+        referral_service=SimpleNamespace(
+            get_stats=referral_stats, get_level_members=referral_members),
+        bot=SimpleNamespace(
+            create_invoice_link=create_invoice,
+            get_me=AsyncMock(return_value=SimpleNamespace(username='sensei_bot'))))
     app = web.Application()
     setup_dojo(app, container)
     async with TestClient(TestServer(app)) as client:
         assert (await client.post('/miniapp/dojo/api/state', json={})).status == 401
+        assert (await client.post('/miniapp/dojo/api/referrals', json={
+            'level': 1})).status == 401
         assert (await client.post('/miniapp/dojo/api/state', json={
             'initData': signed(now=int(time.time())) + '&user=evil'})).status == 401
         auth = signed(now=int(time.time()))
@@ -122,5 +139,20 @@ async def test_api_requires_signature_and_dispatches_actions():
         response = await client.post('/miniapp/dojo/api/bank', json={'initData': auth})
         assert response.status == 200 and (await response.json())['total_supply'] == 1000
         bank.assert_awaited_once()
+        response = await client.post('/miniapp/dojo/api/referrals', json={
+            'initData': auth, 'level': 2})
+        data = await response.json()
+        assert response.status == 200
+        assert data['link'] == 'https://t.me/sensei_bot?start=ref_7'
+        assert data['earned'] == 125.5 and data['level'] == 2
+        assert [item['count'] for item in data['levels']] == [3, 1, 4]
+        assert data['members'][0]['username'] == 'sensei'
+        assert data['rank']['title'] == 'Новичок'
+        assert data['rank']['next']['title'] == 'Ученик'
+        assert data['rank']['progress'] == 60.0
+        assert data['bonus'] == {
+            'eligible': True, 'paid': False, 'activity_days': 2,
+            'paid_upgrade': True}
+        referral_members.assert_awaited_once_with(7, level=2, limit=10)
         assert (await client.post('/miniapp/dojo/api/kick', json={'initData': auth})).status == 404
         assert (await client.post('/miniapp/dojo/api/nope', json={'initData': auth})).status == 404

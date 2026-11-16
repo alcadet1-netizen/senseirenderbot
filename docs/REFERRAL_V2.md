@@ -21,6 +21,7 @@ The branch also contains the preceding xRocket 403 diagnostic work. This does no
 
 
 ## Follow-up usability and correctness review
+- The Mini App tab **Рефералы** (`/miniapp/dojo`) is a read-only view over the same `ReferralService.get_stats` and level query as `/senseireferal`; it adds no separate referral storage. It shows the invite link, earned Coin, per-level counts and paid bonuses, rank progress, activation bonus state, and up to ten names of the selected level. Its API requires valid Telegram initData and only returns the caller's own network.
 - Personal bonus progress displays 0–3 activity days, paid upgrade status, paid/pending explanation; legacy users are not promised a second activation bonus.
 - Paid upgrades persist their activity date transactionally, including for users who do not send ordinary chat messages. At most three distinct dates retained.
 - Group command opens the private cabinet via `start=referrals_menu`, instead of publishing personal income/network.

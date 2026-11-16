@@ -189,6 +189,81 @@
           </p>
         </section>
 
+        <section id="view-referrals" class="view tab-view" hidden>
+          <p class="view-eyebrow">ДОДЗЁ ПРИГЛАШЕНИЙ</p>
+          <h2>РЕФЕРАЛЫ</h2>
+          <p class="view-copy">
+            Те же цифры, что в /senseireferal: твоя сеть, доход и бонус за
+            активацию учеников.
+          </p>
+
+          <div class="ref-rank">
+            <div class="ref-rank-head">
+              <b id="ref-rank">—</b>
+              <span id="ref-rank-next">—</span>
+            </div>
+            <div
+              class="ref-progress"
+              id="ref-progress-track"
+              role="progressbar"
+              aria-label="Прогресс до следующего звания"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+            >
+              <span id="ref-progress"></span>
+            </div>
+          </div>
+
+          <div class="stat-list">
+            <div class="stat-row">
+              <span>Заработано</span><b id="ref-earned">—</b>
+            </div>
+            <div class="stat-row">
+              <span>I уровень</span><b id="ref-level-1">—</b>
+            </div>
+            <div class="stat-row">
+              <span>II уровень</span><b id="ref-level-2">—</b>
+            </div>
+            <div class="stat-row">
+              <span>III уровень</span><b id="ref-level-3">—</b>
+            </div>
+          </div>
+
+          <div class="ref-levels" role="group" aria-label="Уровень сети">
+            <button class="ref-level active" data-ref-level="1" type="button">
+              I
+            </button>
+            <button class="ref-level" data-ref-level="2" type="button">
+              II
+            </button>
+            <button class="ref-level" data-ref-level="3" type="button">
+              III
+            </button>
+          </div>
+          <div id="ref-members" class="ref-members" aria-live="polite">
+            <p class="task-empty">ЗАГРУЖАЕМ УЧЕНИКОВ…</p>
+          </div>
+
+          <div class="ref-actions">
+            <button id="ref-copy" class="bank-refresh" type="button">
+              СКОПИРОВАТЬ ССЫЛКУ
+            </button>
+            <button id="ref-share" class="bank-refresh" type="button">
+              ПОДЕЛИТЬСЯ
+            </button>
+          </div>
+
+          <div class="ref-bonus">
+            <b>🎁 Бонус за ученика</b>
+            <p id="ref-bonus-text">—</p>
+          </div>
+          <p class="task-note">
+            10% / 1% / 0,1% с каждого платного апа катаны по трём уровням.
+            Остаток уходит в SenseiBank.
+          </p>
+        </section>
+
         <section id="view-profile" class="view tab-view" hidden>
           <p class="view-eyebrow">ПРОФИЛЬ</p>
           <h2>СЕНСЕЙ-МАЙНЕР</h2>
@@ -253,6 +328,15 @@
             />
           </svg>
           <span>Банк</span>
+        </button>
+        <button class="tab" data-tab="referrals">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+          <span>Рефералы</span>
         </button>
         <button class="tab" data-tab="profile">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">

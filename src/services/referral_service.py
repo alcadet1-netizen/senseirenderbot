@@ -76,6 +76,31 @@ class ReferralService:
             activity_days=min(3, len(set(user.get('referral_activity_days') or []))),
             paid_upgrade=bool(user.get('referral_paid_upgrade')))
 
+    async def get_level_members(self, user_id: int, level: int = 1, limit: int = 10):
+        """Public first/last names of one level of the user's own network.
+
+        The Mini App mirrors the chat's ``Мои ученики`` view; it never returns
+        ids, referrer chains or another user's data.
+        """
+        level = level if level in (1, 2, 3) else 1
+        limit = max(1, min(50, int(limit)))
+        db = self.mongo_client.database
+        pipeline = [{'$match': {'referrer_id': user_id}}]
+        for _ in range(level - 1):
+            pipeline += [
+                {'$lookup': {'from': 'users', 'localField': 'id',
+                             'foreignField': 'referrer_id', 'as': 'children'}},
+                {'$unwind': '$children'},
+                {'$replaceRoot': {'newRoot': '$children'}},
+            ]
+        pipeline += [{'$sort': {'id': 1}}, {'$limit': limit}]
+        rows = await db.users.aggregate(pipeline).to_list(length=limit)
+        return [{
+            'name': (row.get('first_name') or row.get('username') or 'Ученик')[:50],
+            'username': row.get('username') or None,
+            'active': bool(row.get('referral_bonus_paid')),
+        } for row in rows]
+
     async def get_top(self, limit=10):
         return []
 

@@ -10,6 +10,11 @@
     Number.isFinite(Number(value))
       ? Math.floor(Number(value)).toLocaleString("ru-RU")
       : "—";
+  // Referral commissions include fractions of a coin (10% / 1% / 0,1%).
+  const coinExact = (value) =>
+    Number.isFinite(Number(value))
+      ? Number(value).toLocaleString("ru-RU", { maximumFractionDigits: 3 })
+      : "—";
 
   const ICONS = {
     pickaxe: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -97,6 +102,11 @@
   let upgradesLoaded = false;
   let upgradeBusy = null;
   let bank = null;
+  let referrals = null;
+  let referralsLoaded = false;
+  let referralLevel = 1;
+  let referralBusy = false;
+  let referralReload = false;
 
   try {
     tg?.ready?.();
@@ -721,8 +731,176 @@
     }
   }
 
+  function renderReferrals(emptyText = "ПОКА НЕТ УЧЕНИКОВ") {
+    const members = $("ref-members");
+    const bonusText = $("ref-bonus-text");
+    if (!referrals) {
+      if (members) members.innerHTML = `<p class="task-empty">${emptyText}</p>`;
+      if (bonusText) bonusText.textContent = "—";
+      return;
+    }
+
+    const rank = referrals.rank || {};
+    $("ref-rank").textContent =
+      rank.emoji && rank.title ? `${rank.emoji} ${rank.title}` : "—";
+    $("ref-rank-next").textContent = rank.next
+      ? `ДО ${rank.next.title.toUpperCase()} · ${coin(rank.next.required)}`
+      : "МАКСИМАЛЬНОЕ ЗВАНИЕ";
+
+    const progress = Math.max(0, Math.min(100, Number(rank.progress) || 0));
+    const bar = $("ref-progress");
+    if (bar) bar.style.width = `${progress}%`;
+    const track = $("ref-progress-track");
+    if (track) {
+      track.setAttribute("aria-valuenow", progress.toFixed(1));
+      track.setAttribute(
+        "aria-valuetext",
+        rank.next
+          ? `${progress.toFixed(1)}% до звания ${rank.next.title}`
+          : "Максимальное звание",
+      );
+    }
+
+    $("ref-earned").textContent = `${coinExact(referrals.earned)} Coin`;
+    const levels = referrals.levels || [];
+    levels.forEach((item) => {
+      const node = $(`ref-level-${item.level}`);
+      if (node)
+        node.textContent = `${coin(item.count)} · ✅ ${coin(item.active)}`;
+    });
+
+    document.querySelectorAll("[data-ref-level]").forEach((button) => {
+      button.classList.toggle(
+        "active",
+        Number(button.dataset.refLevel) === referralLevel,
+      );
+    });
+
+    const bonus = referrals.bonus || {};
+    if (!bonus.eligible) {
+      bonusText.textContent =
+        "Твой аккаунт не участвует в бонусной программе активации. Комиссии 10% / 1% / 0,1% продолжают начисляться.";
+    } else if (bonus.paid) {
+      bonusText.textContent = "✅ Получено 50 Coin за активацию ученика.";
+    } else {
+      const days = Math.min(3, Math.max(0, Number(bonus.activity_days) || 0));
+      bonusText.textContent = `Дни активности: ${days}/3 · платный ап: ${
+        bonus.paid_upgrade ? "✅" : "○"
+      }. Выплата при наличии средств SenseiBank.`;
+    }
+
+    if (!members) return;
+    if (!referrals.members?.length) {
+      members.innerHTML = `<p class="task-empty">${emptyText}</p>`;
+      return;
+    }
+    const list = document.createElement("div");
+    list.className = "ref-member-list";
+    referrals.members.forEach((member) => {
+      const row = document.createElement("div");
+      row.className = "ref-member";
+      const status = document.createElement("span");
+      status.className = "ref-member-status";
+      status.textContent = member.active ? "✅" : "💤";
+      const name = document.createElement("span");
+      name.className = "ref-member-name";
+      name.textContent = member.username
+        ? `@${member.username}`
+        : member.name || "Ученик";
+      row.append(status, name);
+      list.appendChild(row);
+    });
+    members.replaceChildren(list);
+  }
+
+  async function loadReferrals(force = false) {
+    if (!initData()) {
+      referrals = null;
+      referralsLoaded = false;
+      renderReferrals("ОТКРОЙ ЧЕРЕЗ /DOJO");
+      return;
+    }
+    if (referralBusy) {
+      // A quick level switch must not be silently dropped by an in-flight load.
+      referralReload = true;
+      return;
+    }
+    if (referralsLoaded && !force && referrals?.level === referralLevel) return;
+    referralBusy = true;
+    try {
+      const data = await api("referrals", { level: referralLevel });
+      // A level switched while this request was in flight; the queued reload
+      // will render the level the player actually selected.
+      if (data.level !== referralLevel) return;
+      referrals = data;
+      referralsLoaded = true;
+      renderReferrals();
+    } catch (error) {
+      referralsLoaded = false;
+      renderReferrals("НЕ УДАЛОСЬ ЗАГРУЗИТЬ РЕФЕРАЛОВ");
+      showToast(error.message, true);
+    } finally {
+      referralBusy = false;
+      if (referralReload) {
+        referralReload = false;
+        loadReferrals(true);
+      }
+    }
+  }
+
+  async function copyReferralLink() {
+    const link = referrals?.link;
+    if (!link) {
+      showToast("Ссылка недоступна. Открой майнер через /dojo.", true);
+      return;
+    }
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        const field = document.createElement("textarea");
+        field.value = link;
+        field.setAttribute("readonly", "");
+        field.style.position = "fixed";
+        field.style.opacity = "0";
+        document.body.appendChild(field);
+        field.select();
+        document.execCommand("copy");
+        field.remove();
+      }
+      showToast("Ссылка приглашения скопирована");
+    } catch {
+      showToast(link);
+    }
+  }
+
+  function shareReferralLink() {
+    const link = referrals?.link;
+    if (!link) {
+      showToast("Ссылка недоступна. Открой майнер через /dojo.", true);
+      return;
+    }
+    const text = "Заходи в додзё Сенсея — вместе майним SenseiCoin 🥷";
+    const url = `https://t.me/share/url?url=${encodeURIComponent(
+      link,
+    )}&text=${encodeURIComponent(text)}`;
+    try {
+      if (tg?.openTelegramLink) tg.openTelegramLink(url);
+      else window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      showToast(url, true);
+    }
+  }
+
   function setTab(name) {
-    const tabs = ["mining", "tasks", "upgrades", "bank", "profile"];
+    const tabs = [
+      "mining",
+      "tasks",
+      "upgrades",
+      "bank",
+      "referrals",
+      "profile",
+    ];
     if (!tabs.includes(name)) return;
     activeTab = name;
     document.querySelectorAll(".tab").forEach((tab) => {
@@ -737,6 +915,7 @@
     if (name === "tasks") loadTasks();
     if (name === "upgrades") loadUpgrades();
     if (name === "bank") loadBank(true);
+    if (name === "referrals") loadReferrals(true);
     // Chat games/mining change users.coins outside this WebView; re-read the
     // authoritative server balance whenever the player returns to a view.
     if (name === "mining" || name === "profile") refresh(true);
@@ -767,6 +946,27 @@
 
   $("bank-refresh").addEventListener("click", () => loadBank(true));
 
+  document.querySelectorAll("[data-ref-level]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const level = Number(button.dataset.refLevel);
+      if (level === referralLevel || ![1, 2, 3].includes(level)) return;
+      referralLevel = level;
+      document.querySelectorAll("[data-ref-level]").forEach((node) => {
+        node.classList.toggle(
+          "active",
+          Number(node.dataset.refLevel) === referralLevel,
+        );
+      });
+      const members = $("ref-members");
+      if (members)
+        members.innerHTML = '<p class="task-empty">ЗАГРУЖАЕМ УЧЕНИКОВ…</p>';
+      loadReferrals(true);
+    });
+  });
+
+  $("ref-copy").addEventListener("click", copyReferralLink);
+  $("ref-share").addEventListener("click", shareReferralLink);
+
   document.querySelectorAll("[data-close='sheet']").forEach((node) => {
     node.addEventListener("click", closeSheet);
   });
@@ -776,7 +976,10 @@
   });
 
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) refresh(true);
+    if (!document.hidden) {
+      refresh(true);
+      if (activeTab === "referrals") loadReferrals(true);
+    }
   });
   setInterval(tick, 250);
   setInterval(() => {
@@ -793,5 +996,6 @@
   } else {
     renderTasks("ОТКРОЙ ЧЕРЕЗ /DOJO");
     renderUpgrades("ОТКРОЙ ЧЕРЕЗ /DOJO");
+    renderReferrals("ОТКРОЙ ЧЕРЕЗ /DOJO");
   }
 })();
