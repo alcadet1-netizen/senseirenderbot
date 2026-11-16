@@ -148,6 +148,28 @@ async def test_network_page_limits_escapes_and_has_navigation():
 
 
 @pytest.mark.asyncio
+async def test_mini_app_level_members_are_scoped_and_public():
+    from unittest.mock import MagicMock
+    from src.services.referral_service import ReferralService
+    cursor = NS(to_list=AsyncMock(return_value=[
+        {'id': 9, 'first_name': 'Ученик', 'username': 'student',
+         'referral_bonus_paid': True},
+        {'id': 10, 'username': 'quiet'},
+    ]))
+    users = NS(aggregate=MagicMock(return_value=cursor))
+    service = ReferralService(NS(database=NS(users=users)))
+    rows = await service.get_level_members(7, level=3, limit=10)
+    pipeline = users.aggregate.call_args.args[0]
+    assert pipeline[0] == {'$match': {'referrer_id': 7}}
+    assert sum('$lookup' in step for step in pipeline) == 2
+    assert {'$limit': 10} in pipeline
+    assert rows == [
+        {'name': 'Ученик', 'username': 'student', 'active': True},
+        {'name': 'quiet', 'username': 'quiet', 'active': False},
+    ]
+
+
+@pytest.mark.asyncio
 async def test_unchanged_page_is_not_an_error():
     from aiogram.exceptions import TelegramBadRequest
     from aiogram.methods import EditMessageText

@@ -19,6 +19,66 @@ ASSETS = {
 }
 
 
+def _referral_level(value) -> int:
+    try:
+        level = int(value)
+    except (TypeError, ValueError):
+        return 1
+    return level if level in (1, 2, 3) else 1
+
+
+async def _referrals_payload(container, user_id: int, level) -> dict:
+    """Reuse the /senseireferal data source so chat and Mini App never diverge."""
+    level = _referral_level(level)
+    service = container.referral_service
+    stats, members = await asyncio.gather(
+        service.get_stats(user_id),
+        service.get_level_members(user_id, level=level, limit=10),
+    )
+
+    link = ''
+    bot = getattr(container, 'bot', None)
+    if bot is not None:
+        try:
+            me = await asyncio.wait_for(bot.get_me(), timeout=5)
+            username = getattr(me, 'username', None)
+            if username:
+                link = f'https://t.me/{username}?start=ref_{user_id}'
+        except Exception:
+            # A missing bot username must not make the whole tab unavailable.
+            logging.getLogger(__name__).warning('Dojo referrals link unavailable')
+
+    rank, next_rank = stats.rank, stats.next_rank
+    return {
+        'link': link,
+        'earned': float(stats.total_coins_earned),
+        'levels': [
+            {'level': n, 'count': getattr(stats, f'level_{n}_count'),
+             'active': getattr(stats, f'level_{n}_active')}
+            for n in (1, 2, 3)
+        ],
+        'level': level,
+        'members': members,
+        'rank': {
+            'id': rank.id_,
+            'emoji': rank.emoji,
+            'title': rank.title,
+            'progress': round(stats.progress_to_next, 1),
+            'next': None if next_rank is None else {
+                'emoji': next_rank.emoji,
+                'title': next_rank.title,
+                'required': next_rank.required,
+            },
+        },
+        'bonus': {
+            'eligible': bool(stats.bonus_eligible),
+            'paid': bool(stats.bonus_paid),
+            'activity_days': int(stats.activity_days),
+            'paid_upgrade': bool(stats.paid_upgrade),
+        },
+    }
+
+
 def setup_dojo(app, container=None):
     headers = {
         'Cache-Control': 'no-store',
@@ -111,6 +171,9 @@ def setup_dojo(app, container=None):
                           'stars': order['stars']}
             elif action == 'bank':
                 result = await container.stats_service.get_bank_summary()
+            elif action == 'referrals':
+                result = await _referrals_payload(container, user['id'],
+                                                   payload.get('level', 1))
             else:
                 result = await service.collect(user['id'])
                 # The bank/emission tab must not show a snapshot older than the
@@ -136,5 +199,5 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/assets/{asset:sensei\\.webp}', page)
     app.router.add_post(
-        '/miniapp/dojo/api/{action:state|start|collect|tasks|task|upgrades|buy|bank}',
+        '/miniapp/dojo/api/{action:state|start|collect|tasks|task|upgrades|buy|bank|referrals}',
         api)
