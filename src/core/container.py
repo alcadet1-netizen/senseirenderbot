@@ -68,6 +68,13 @@ class Container:
         return self._daily_pet_service
 
     @property
+    def dojo_service(self):
+        if self._dojo_service is None:
+            from src.services.dojo_reward_service import DojoRewardService
+            self._dojo_service = DojoRewardService(self.mongo_client, self.economy_service)
+        return self._dojo_service
+
+    @property
     def hedgehog_service(self):
         if getattr(self, '_hedgehog_service', None) is None:
             from src.services.hedgehog_service import HedgehogService

@@ -71,7 +71,14 @@ const assert = require("node:assert/strict");
         await page.click('[data-buy="warrior"]');
         await page.click('[data-buy="damage"]');
         await page.click('[data-buy="speed"]');
-        assert.equal(await page.evaluate(() => game.coins), 300);
+        assert.equal(
+          await page.evaluate(() => game.coins),
+          500 -
+            (await page.evaluate(
+              () =>
+                CONFIG.cost.warrior + CONFIG.cost.damage + CONFIG.cost.speed,
+            )),
+        );
         await page.click("#next");
       } else assert.equal(await page.evaluate(() => game.state), "victory");
     }
@@ -134,13 +141,15 @@ const assert = require("node:assert/strict");
         throw Error("instant damage instead of projectile");
       for (let i = 0; i < 80; i++)
         for (const shot of game.shots) if (!shot.dead) shot.update(0.01, game);
-      if (!e.dead) throw Error("projectiles do not land");
+      if (e.hp >= hp) throw Error("projectiles do not land");
       for (let i = 0; i < 5; i++) {
         const foe = new Enemy(CONFIG.waves[0]);
         foe.hit(999, game);
       }
       if (game.combo < 5 || !game.coins) throw Error("combo rewards");
-      game.comboTime = 0.01;
+      game.comboTime = 0;
+      game.enemies = [];
+      game.shots = [];
       game.update(0.02);
       if (game.combo !== 0) throw Error("combo never expires");
       game.start();

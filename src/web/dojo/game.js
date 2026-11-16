@@ -2,32 +2,34 @@
 // Все игровые величины заданы в логических координатах 540 × 960.
 const CONFIG = {
   width: 540,
-  maxArmy: 24,
-  gatePeriod: 2.4,
+  maxArmy: 11,
+  gatePeriod: 3.4,
   gateSpeed: 82,
   crateHp: 138,
   height: 960,
   road: [90, 450],
   playerY: 755,
-  lives: 3,
+  lives: 2,
+  maxLives: 2,
   army: 6,
+  leakArmyLoss: 1,
   damage: 5,
-  attackPeriod: 0.27,
+  attackPeriod: 0.28,
   range: 1200,
-  enemySpeed: 46,
+  enemySpeed: 56,
   shotSpeed: 640,
   comboWindow: 3,
   magnetRadius: 100,
-  dropChance: 0.37,
+  dropChance: 0.12,
   slowSeconds: 5,
   shopSeconds: 4,
-  cost: { warrior: 50, damage: 75, speed: 75 },
+  cost: { warrior: 100, damage: 150, speed: 150 },
   waves: [
-    { count: 48, hp: 20, speed: 1 },
-    { count: 66, hp: 24, speed: 1.13 },
-    { count: 84, hp: 28, speed: 1.2, boss: 650, bossKind: "oni" },
-    { count: 102, hp: 32, speed: 1.3 },
-    { count: 126, hp: 36, speed: 1.4, boss: 1100, bossKind: "lich" },
+    { count: 48, hp: 40, speed: 1.02 },
+    { count: 66, hp: 100, speed: 1.2 },
+    { count: 84, hp: 190, speed: 1.38, boss: 2200, bossKind: "oni" },
+    { count: 102, hp: 300, speed: 1.56 },
+    { count: 126, hp: 450, speed: 1.75, boss: 4000, bossKind: "lich" },
   ],
 };
 const canvas = document.querySelector("#game"),
@@ -306,6 +308,7 @@ class Enemy {
     if (this.y > CONFIG.playerY + 12) {
       this.dead = true;
       g.player.lives--;
+      g.player.army = Math.max(0, g.player.army - CONFIG.leakArmyLoss);
       g.combo = 0;
       g.comboTime = 0;
       g.shake = 9;
@@ -453,7 +456,7 @@ class Pickup {
           p.shuriken = true;
           break;
         case "heart":
-          p.lives = Math.min(3, p.lives + 1);
+          p.lives = Math.min(CONFIG.maxLives, p.lives + 1);
           break;
         case "slow":
           g.slow = CONFIG.slowSeconds;
@@ -730,7 +733,7 @@ class MenuScene {
   show() {
     this.g.state = "menu";
     this.g.ui.panel(
-      '<div class="eyebrow">SENSEI GAMES · SHADOW PATH</div><div class="seal">⚔</div><h1>Последний<br><em>рубеж</em></h1><p>Прорывай орду. Собирай отряд.<br>Пять волн на тропе древнего храма.</p><button class="primary" id="play">В бой →</button><div class="hint">Веди пальцем по дороге · атака автоматическая<br>Голубые ворота +1 пополняют отряд<br>Монеты только игровые, без выплат и ставок.</div>',
+      '<div class="eyebrow">SENSEI GAMES · SHADOW PATH</div><div class="seal">⚔</div><h1>Последний<br><em>рубеж</em></h1><p>Прорывай орду. Собирай отряд.<br>Пять волн на тропе древнего храма.</p><button class="primary" id="play">В бой →</button><div class="hint">Веди пальцем по дороге · атака автоматическая<br>Два сердца и никакого рывка: прорыв стоит бойца<br>Победа даёт до 14 SenseiCoin · дневной лимит 30<br><b>Фарм намеренно жестокий: пятая волна решает всё.</b></div>',
     );
     $("#play").onclick = () => this.g.start();
   }
@@ -766,9 +769,12 @@ class GameScene {
     this.labels = [];
     this.combo = 0;
     this.comboTime = 0;
+    this.resultSerial = 0;
   }
   start() {
     this.reset();
+    this.resultSerial++;
+    if (window.DojoEconomy) window.DojoEconomy.begin();
     this.state = "game";
     this.ui.hide();
     this.sound.play("pick");
@@ -880,10 +886,34 @@ class GameScene {
   }
   end(win) {
     this.state = win ? "victory" : "defeat";
+    const wave = this.waves.index + 1;
+    const serial = ++this.resultSerial;
     this.ui.panel(
-      `<div class="eyebrow">${win ? "ПЯТЬ ВОЛН · ОДНА ЛЕГЕНДА" : "ТВОЙ ПУТЬ ЕЩЁ НЕ ОКОНЧЕН"}</div><div class="seal">${win ? "🏆" : "⚔"}</div><h1>${win ? "Додзё<br><em>выстояло</em>" : "Последний<br><em>павший лист</em>"}</h1><p>${win ? "Стихия отступила. Стражи стали легендой." : "Даже великий воин однажды падает.<br>Встань и попробуй снова."}<br>Побеждено они: ${this.kills} · Монеты: ${this.coins}</p><button class="primary" id="again">Новый поход →</button>`,
+      `<div class="eyebrow">${win ? "ПЯТЬ ВОЛН · ОДНА ЛЕГЕНДА" : "ТВОЙ ПУТЬ ЕЩЁ НЕ ОКОНЧЕН"}</div><div class="seal">${win ? "🏆" : "⚔"}</div><h1>${win ? "Додзё<br><em>выстояло</em>" : "Последний<br><em>павший лист</em>"}</h1><p>${win ? "Стихия отступила. Стражи стали легендой." : "Даже великий воин однажды падает.<br>Встань и попробуй снова."}<br>Волна ${wave}/5 · Побеждено они: ${this.kills} · Монеты: ${this.coins}</p><div class="reward" id="dojo-reward">Считаем SenseiCoin…</div><button class="primary" id="again">Новый поход →</button>`,
     );
     $("#again").onclick = () => this.start();
+    this.claimSenseiCoins(win, wave, serial);
+  }
+  claimSenseiCoins(win, wave, serial) {
+    const slot = () => document.getElementById("dojo-reward");
+    if (!window.DojoEconomy) {
+      if (slot()) slot().textContent = "SenseiCoin: только внутри Telegram";
+      return;
+    }
+    window.DojoEconomy.finish(wave, win)
+      .then((result) => {
+        if (serial !== this.resultSerial || !slot()) return;
+        if (result?.coins !== undefined) {
+          slot().classList.add("won");
+          slot().textContent = `SenseiCoin +${result.coins} · сегодня ${result.daily_earned}/${result.daily_cap}`;
+        } else {
+          slot().textContent = `SenseiCoin: ${result?.error || "награда не выдана"}`;
+        }
+      })
+      .catch(() => {
+        if (serial === this.resultSerial && slot())
+          slot().textContent = "SenseiCoin: сервер недоступен";
+      });
   }
   burst(x, y, color, n) {
     for (let i = 0; i < n; i++)

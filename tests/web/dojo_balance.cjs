@@ -24,10 +24,14 @@ const { chromium } = require("playwright-core");
       for (; steps < 45000 && ["game", "shop"].includes(game.state); steps++) {
         if (game.state === "shop") {
           game.shopWait = 0;
-          while (game.coins >= 50 && game.player.army < 14) game.buy("warrior");
-          while (game.coins >= 75 && game.player.damage < 23)
+          while (
+            game.coins >= CONFIG.cost.warrior &&
+            game.player.army < CONFIG.maxArmy
+          )
+            game.buy("warrior");
+          while (game.coins >= CONFIG.cost.damage && game.player.damage < 23)
             game.buy("damage");
-          if (game.coins >= 75) game.buy("speed");
+          if (game.coins >= CONFIG.cost.speed) game.buy("speed");
           game.waves.next();
           game.state = "game";
           continue;
@@ -62,7 +66,13 @@ const { chromium } = require("playwright-core");
     game.state = "pause";
     return results;
   });
-  for (const r of results) assert.equal(r.result, "victory", JSON.stringify(r));
+  // "На грани": all three optimised runs must reach the final wave, at least
+  // one must win, and at least one must fall — a full sweep means the game
+  // became too easy again, an early death means it is unwinnable.
+  for (const r of results) assert.equal(r.wave, 5, JSON.stringify(r));
+  const wins = results.filter((r) => r.result === "victory").length;
+  assert.ok(wins >= 1, "no seed can win: " + JSON.stringify(results));
+  assert.ok(wins < results.length, "too easy: " + JSON.stringify(results));
   console.log(results);
   await b.close();
 })().catch((e) => {

@@ -362,3 +362,23 @@ footer {
   background: #101723;
   color: #c9c7d1;
 }
+
+#overlay .reward {
+  margin: 18px auto 6px;
+  padding: 11px 16px;
+  max-width: 340px;
+  border: 1px solid #8c6a4b;
+  border-radius: 12px;
+  background: #0f1724cc;
+  color: #d9c7b4;
+  font-size: 14px;
+  line-height: 1.35;
+}
+#overlay .reward.won {
+  border-color: #e5b65c;
+  color: #ffe4a3;
+  box-shadow: 0 0 22px #e5b65c33;
+}
+#overlay .hint b {
+  color: #f0b96a;
+}
