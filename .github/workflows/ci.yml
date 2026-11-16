@@ -34,7 +34,14 @@ jobs:
           docker run --detach --name campaign-mongo --publish 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
           python -m scripts.start_test_mongo
       - name: Run tests
-        run: python -m pytest -q --junitxml=.cache/test-results.xml
+        run: python -m pytest -q --timeout=90 --junitxml=.cache/test-results.xml
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: .cache/test-results.xml
+          if-no-files-found: ignore
       - name: Annotate test failures
         if: failure()
         run: |
