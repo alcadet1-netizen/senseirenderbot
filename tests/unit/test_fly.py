@@ -116,7 +116,7 @@ async def test_handler_native_widget_and_admin_setting():
 async def test_middleware_strict_reply_and_ambiguous_send_not_retried():
     from src.bot.handlers.fly import FlyReactionMiddleware
     db,s,_=fixture()
-    s.container.digest_service=NS(chat_sage_reply=AsyncMock(return_value='А что хочется улучшить в виджете?'))
+    s.container.digest_service=NS(chat_sage_reply=AsyncMock(return_value='Не еби мозги, заебал, иди на хуй!'))
     middleware=FlyReactionMiddleware(s.container)
     middleware.service=s
     event=NS(text='Интересно как устроен этот новый виджет',from_user=NS(id=7,is_bot=False),
@@ -128,6 +128,8 @@ async def test_middleware_strict_reply_and_ambiguous_send_not_retried():
         assert await middleware(handler,event,{})=='handled'
         await middleware(handler,event,{})
     event.answer.assert_awaited_once()
+    assert event.answer.call_args.args[0] == 'Не е#и мозги, з"еб%л, иди на х№й!'
+    assert event.text == 'Интересно как устроен этот новый виджет'
     assert event.answer.call_args.kwargs['reply_parameters'].allow_sending_without_reply is False
     assert (await db.fly_decisions.find_one({'_id':'-100222:1'}))['status']=='send_failed_or_unknown'
 

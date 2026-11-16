@@ -15,6 +15,7 @@ import asyncio
 import html
 import logging
 import random
+import re
 import time
 from typing import Dict, List, Optional, Set
 from collections import Counter
@@ -27,6 +28,7 @@ from aiogram.exceptions import TelegramBadRequest
 from src.core.config import settings
 from src.core.container import Container
 from src.core.visuals import Visuals
+from src.services.wave_activity import active_waves as _active_waves
 
 router = Router(name="wave")
 logger = logging.getLogger(__name__)
@@ -113,9 +115,10 @@ COMBO_MESSAGES = [
 ]
 
 # Хранилища
-_active_waves: Dict[int, dict] = {}
 _wave_streaks: Dict[int, int] = {}
 _wave_cooldowns: Dict[int, float] = {}
+_starting_waves: Set[int] = set()
+_finishing_waves: Set[int] = set()
 
 
 class HasActiveWave:
@@ -240,6 +243,8 @@ def _build_wave_start_message(
     ])
 
     return (
+        "💬 <b>Пока идёт волна: 30 SenseiCoin за сообщение!</b>\n"
+        "После завершения вернутся обычные награды.\n\n"
         f"{upper_row}{upper_row}{upper_row}\n"
         f"  {lightning} <b>ВОЛНА АКТИВА</b> {lightning}\n"
         f"{lower_row}{lower_row}{lower_row}\n\n"
@@ -302,7 +307,7 @@ def _build_progress_message(
         leaders_text = "\n\n🏆 <b>ЛИДЕРЫ ВОЛНЫ:</b>\n"
         for i, (name, count) in enumerate(top3):
             fire = "🔥" if count >= 10 else "⚡" if count >= 5 else ""
-            escaped_name = html.escape(name[:10])
+            escaped_name = html.escape(name[:60])
             leaders_text += f"   {medals[i]} {escaped_name}: <b>{count}</b> {fire}\n"
     
     # Мотивация с рандомом
@@ -368,7 +373,7 @@ def _build_victory_message(
         mult = multipliers[i] if i < 3 else 1.0
         reward = int(base_reward * streak_mult * mult)
         fire = f"{Visuals.fire_raw()}{Visuals.fire_raw()}" if i == 0 else Visuals.fire_raw() if i == 1 else "⚡"
-        escaped_name = html.escape(name[:12])
+        escaped_name = html.escape(name[:60])
         mvp_text += f"   {medals[i]} <b>{titles[i]}</b> {escaped_name}\n"
         mvp_text += f"       {count} сообщ. → <b>+{reward:,}</b> {fire}\n"
     
@@ -391,58 +396,30 @@ def _build_victory_message(
     elif len(participants) >= 10:
         army_achievement = "\n\n🏅 <b>ДОСТИЖЕНИЕ:</b> «Сила в единстве!»"
     
-    top_border = (
-        '<tg-emoji emoji-id="5318932854221069098">🤑</tg-emoji>'
-        '<tg-emoji emoji-id="5318824539440831060">🤑</tg-emoji>'
-        '<tg-emoji emoji-id="5319190161416803254">🤑</tg-emoji>'
-        '<tg-emoji emoji-id="5319083281155643596">🤑</tg-emoji>'
-        '<tg-emoji emoji-id="5316522419790307271">🤑</tg-emoji>'
-        '<tg-emoji emoji-id="5319029538229868743">🤑</tg-emoji>'
-        '<tg-emoji emoji-id="5318793933503879923">🤑</tg-emoji>'
-        '<tg-emoji emoji-id="5316811539808807793">🤑</tg-emoji>'
-    )
-    bottom_border = (
-        '<tg-emoji emoji-id="5415807885986789306">�</tg-emoji>'
-        '<tg-emoji emoji-id="5415834669402846332">�</tg-emoji>'
-        '<tg-emoji emoji-id="5415699884739161559">�</tg-emoji>'
-        '<tg-emoji emoji-id="5416039273054894373">�</tg-emoji>'
-        '<tg-emoji emoji-id="5415806640446271242">�</tg-emoji>'
-        '<tg-emoji emoji-id="5415584968594193062">�</tg-emoji>'
-        '<tg-emoji emoji-id="5416079808956232584">�</tg-emoji>'
-        '<tg-emoji emoji-id="5415639209736174375">�</tg-emoji>'
-        '<tg-emoji emoji-id="5415680454307117394">�</tg-emoji>'
-    )
-    premium_trophy = '<tg-emoji emoji-id="5447112111605964162">�</tg-emoji>'
-    
-    victory_wave = random.choice([
-        '<tg-emoji emoji-id="5206169707635291145">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5204246893726547065">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5206272473317782147">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5206407781967475993">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5204117842844205046">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5206402954424234617">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5204147911910242898">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5206226839290262426">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5204374187967265711">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5206212146207143685">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5203966260563426049">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5206376793778437124">🌊</tg-emoji>'
-    ])
-    
     return (
-        f"{top_border}\n"
-        f"   {premium_trophy} <b>{victory_phrase}</b> {premium_trophy}\n"
-        f"{bottom_border}\n\n"
-        f"{victory_wave} <b>ВОЛНА ПОКОРЕНА!</b>\n\n"
-        f"{Visuals.check_raw()} Цель: <b>{current}/{target}</b>\n"
-        f"👥 Бойцов: <b>{len(participants)}</b>\n"
-        f"💰 Всего роздано: <b>~{total_distributed:,}</b>\n\n"
-        f'<tg-emoji emoji-id="5305750989704274804">🏆</tg-emoji> <b>ГЕРОИ ВОЛНЫ:</b>\n'
+        "🌊⚡️🌊⚡️🌊\n"
+        "<b>ЦУНАМИ СЕНСЕЯ: ФИНАЛ</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"🏆 <b>{victory_phrase}</b>\n"
+        "<b>ВОЛНА ПОКОРЕНА!</b>\n\n"
+        "Океан ревел. Чат не дрогнул.\n"
+        "Вы собрались в один кулак и укротили стихию! 🥋\n\n"
+        "📜 <b>ЛЕТОПИСЬ ПОБЕДЫ</b>\n"
+        f"🎯 Цель: <b>{current}/{target}</b> сообщений\n"
+        f"⚔️ Бойцов: <b>{len(participants)}</b>\n"
+        f"🔥 Побед подряд: <b>{streak}</b>\n"
+        f"💰 Всего роздано: <b>~{total_distributed:,}</b> SenseiCoin\n\n"
+        "👑 <b>ЗАЛ СЛАВЫ ВОЛНЫ</b>\n"
         f"{mvp_text}\n"
-        f"� Остальные: <b>+{regular_reward:,}</b> каждому"
+        f"🎁 Базовый приз участника: <b>+{regular_reward:,}</b> SenseiCoin\n"
+        "<i>Топ-3 получают приз с множителем: ×3 / ×2 / ×1,5.</i>"
         f"{streak_block}"
         f"{army_achievement}\n\n"
-        f"🎁 <b>Все участники награждены!</b>"
+        "🎁 <b>Все участники награждены!</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "💬 Бонус 30 SenseiCoin за сообщение завершён — обычные награды восстановлены.\n\n"
+        "🥋 <i>Сенсей склоняет голову: такую волну делают не одиночки. "
+        "Такую волну делает команда.</i>"
     )
 
 
@@ -463,42 +440,27 @@ def _build_timeout_message(
         medals = ["🥇", "🥈", "🥉"]
         tried_text = "\n\n💪 <b>СРАЖАЛИСЬ ДО КОНЦА:</b>\n"
         for i, (name, count) in enumerate(top3):
-            escaped_name = html.escape(name[:10])
+            escaped_name = html.escape(name[:60])
             tried_text += f"   {medals[i]} {escaped_name}: <b>{count}</b>\n"
     
-    failure_border = (
-        '<tg-emoji emoji-id="5431554125152156092">�</tg-emoji>'
-        '<tg-emoji emoji-id="5431444113859835179">�</tg-emoji>'
-        '<tg-emoji emoji-id="5429574836718434979">�</tg-emoji>'
-        '<tg-emoji emoji-id="5431793767147404128">�</tg-emoji>'
-        '<tg-emoji emoji-id="5431651857132976759">�</tg-emoji>'
-        '<tg-emoji emoji-id="5431587518522881319">�</tg-emoji>'
-        '<tg-emoji emoji-id="5429094496165992077">�</tg-emoji>'
-        '<tg-emoji emoji-id="5431510853356647863">�</tg-emoji>'
-    )
-    
-    separator_strip = (
-        '<tg-emoji emoji-id="5220053631801259840">〰️</tg-emoji>'
-        '<tg-emoji emoji-id="5219832002898859117">〰️</tg-emoji>'
-        '<tg-emoji emoji-id="5220006417225773757">〰️</tg-emoji>'
-        '<tg-emoji emoji-id="5221971124245524858">〰️</tg-emoji>'
-        '<tg-emoji emoji-id="5220022682266925997">〰️</tg-emoji>'
-        '<tg-emoji emoji-id="5220204900549423954">〰️</tg-emoji>'
-        '<tg-emoji emoji-id="5220013993548084819">〰️</tg-emoji>'
-        '<tg-emoji emoji-id="5219756243970718240">〰️</tg-emoji>'
-        '<tg-emoji emoji-id="5219759332052204342">〰️</tg-emoji>'
-    )
-    
     return (
-        f"{failure_border}\n"
-        f"  😢 <b>ВОЛНА ОТКАТИЛАСЬ...</b>\n"
-        f"{separator_strip}\n\n"
-        f"📊 Прогресс: <b>{current}/{target}</b> ({percent}%)\n"
-        f"{Visuals.cross()} Не хватило: <b>{remaining}</b> сообщений\n"
-        f"👥 Бойцов: <b>{len(participants)}</b>"
+        "🌊🌑🌊\n"
+        "<b>ЦУНАМИ СЕНСЕЯ: ФИНАЛ</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🌘 <b>ВОЛНА ОТКАТИЛАСЬ...</b>\n\n"
+        "Стихия оказалась сильнее — но тех, кто держал строй, "
+        "Сенсей запомнит. ⚔️\n\n"
+        "📜 <b>ИТОГИ СРАЖЕНИЯ</b>\n"
+        f"🎯 Прогресс: <b>{current}/{target}</b> ({percent}%)\n"
+        f"⏳ Не хватило: <b>{remaining}</b> сообщений\n"
+        f"🥋 Бойцов: <b>{len(participants)}</b>"
         f"{tried_text}\n"
-        f"🔄 <i>Серия сброшена до 0</i>\n\n"
-        f"💪 <b>В следующий раз победим!</b>"
+        "🔄 Серия побед сброшена до <b>0</b>.\n"
+        "🎁 Финальные призы не начисляются: цель не достигнута.\n"
+        "<i>Уже начисленные монеты за сообщения остаются у игроков.</i>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "💬 Бонус 30 SenseiCoin за сообщение завершён — обычные награды восстановлены.\n\n"
+        "🔥 <b>Это не конец истории. Это затишье перед реваншем.</b>"
     )
 
 
@@ -545,6 +507,22 @@ def _build_already_active_message(current: int, target: int, remaining: int, par
 
 @router.message(Command("senseiwave"))
 async def cmd_senseiwave(message: Message, container: Container):
+    # Reserve synchronously before animation/network awaits to prevent double starts.
+    chat_id = message.chat.id
+    if chat_id in _finishing_waves:
+        await message.answer("🌊 Волна завершена — подводим итоги и начисляем награды!")
+        return
+    if chat_id in _starting_waves:
+        await message.answer("🌊 Волна уже запускается!")
+        return
+    _starting_waves.add(chat_id)
+    try:
+        await _start_wave(message, container)
+    finally:
+        _starting_waves.discard(chat_id)
+
+
+async def _start_wave(message: Message, container: Container):
     """🌊 Запустить ЭПИЧЕСКУЮ волну (только для админов)!"""
     logger.info(f"👉 [WAVE] Step 1: Command triggered by {message.from_user.id} in chat {message.chat.id}")
     
@@ -582,18 +560,13 @@ async def cmd_senseiwave(message: Message, container: Container):
     logger.info(f"👉 [WAVE] Step 4: Checking active waves")
     if chat_id in _active_waves:
         wave = _active_waves[chat_id]
-        remaining = int(wave["expires"] - current_time)
-        if remaining > 0:
-            logger.info(f"👉 [WAVE] Step 4a: Wave already active, {remaining}s remaining")
-            msg = _build_already_active_message(
-                wave["current"],
-                wave["target"],
-                remaining,
-                len(wave["participants"])
-            )
-            await message.answer(msg, parse_mode="HTML")
-            return
-    
+        remaining = max(0, int(wave["expires"] - current_time))
+        msg = _build_already_active_message(
+            wave["current"], wave["target"], remaining, len(wave["participants"])
+        )
+        await message.answer(msg, parse_mode="HTML")
+        return
+
     # Проверяем кулдаун
     logger.info(f"👉 [WAVE] Step 5: Checking cooldown")
     if chat_id in _wave_cooldowns:
@@ -644,7 +617,8 @@ async def cmd_senseiwave(message: Message, container: Container):
         "message_counts": Counter(),  # {name: count} - для отображения
         "user_id_counts": Counter(),  # {user_id: count} - для наград MVP
         "user_names": {},  # {user_id: name}
-        "expires": current_time + duration_seconds + 3,
+        "expires": time.time() + duration_seconds,
+        "ui_lock": asyncio.Lock(),
         "message_id": anim_msg.message_id,
         "last_update": current_time,
         "container": container,
@@ -652,17 +626,18 @@ async def cmd_senseiwave(message: Message, container: Container):
     }
     
     # Запускаем таймеры
-    asyncio.create_task(_wave_worker(message.bot, chat_id, container))
+    asyncio.create_task(_wave_worker(message.bot, chat_id, container, _active_waves[chat_id]))
     
     logger.info(f"🌊 EPIC Wave started in {chat_id}, target: {WAVE_TARGET_MESSAGES}")
 
 
-async def _wave_worker(bot: Bot, chat_id: int, container: Container):
+async def _wave_worker(bot: Bot, chat_id: int, container: Container, expected_wave=None):
     """Воркер волны с обновлениями."""
+    expected_wave = expected_wave or _active_waves.get(chat_id)
     while True:
         await asyncio.sleep(WAVE_UPDATE_INTERVAL)
         
-        if chat_id not in _active_waves:
+        if _active_waves.get(chat_id) is not expected_wave:
             return
         
         wave = _active_waves[chat_id]
@@ -684,16 +659,16 @@ async def _wave_worker(bot: Bot, chat_id: int, container: Container):
         )
         
         try:
-            await bot.edit_message_text(
-                msg,
-                chat_id=chat_id,
-                message_id=wave["message_id"],
-                parse_mode="HTML"
-            )
+            async with wave.setdefault("ui_lock", asyncio.Lock()):
+                if _active_waves.get(chat_id) is not wave:
+                    return
+                await bot.edit_message_text(
+                    msg, chat_id=chat_id, message_id=wave["message_id"], parse_mode="HTML"
+                )
         except TelegramBadRequest:
             pass
-        except Exception as e:
-            logger.warning(f"Wave update error: {e}")
+        except Exception:
+            logger.warning("Wave update error chat=%s", chat_id, exc_info=True)
 
 
 async def _finish_wave(bot: Bot, chat_id: int, container: Container):
@@ -702,11 +677,27 @@ async def _finish_wave(bot: Bot, chat_id: int, container: Container):
         return
     
     wave = _active_waves.pop(chat_id)
-    
+    # Block a new round while rewards and the final notification are in flight.
+    _finishing_waves.add(chat_id)
+    try:
+        await _settle_wave(bot, chat_id, container, wave)
+    finally:
+        _finishing_waves.discard(chat_id)
+        _wave_cooldowns[chat_id] = time.time() + WAVE_COOLDOWN
+
+
+async def _settle_wave(bot: Bot, chat_id: int, container: Container, wave: dict):
     is_success = wave["current"] >= wave["target"]
     participants = wave["participants"]
     message_counts = wave["message_counts"]
     user_names = wave["user_names"]
+    # Rank by identity, not display name: two players may have identical names.
+    if wave.get("user_id_counts"):
+        message_counts = Counter({
+            f"{user_names.get(uid, str(uid))[:40]} · {uid}": count
+            for uid, count in wave["user_id_counts"].most_common()
+        })
+    failed_rewards = 0
     streak = _wave_streaks.get(chat_id, 0)
     
     if is_success:
@@ -723,7 +714,6 @@ async def _finish_wave(bot: Bot, chat_id: int, container: Container):
         # Начисляем награды
         # Подготовка данных для наград
         rewards_data = [] # List[Tuple[int, int, str]]
-        total_needed = 0.0
         
         for user_id in participants:
             # Определяем множитель
@@ -741,7 +731,6 @@ async def _finish_wave(bot: Bot, chat_id: int, container: Container):
                 rank_desc = ""
             
             reward = int(WAVE_BASE_REWARD * streak_mult * user_mult)
-            total_needed += reward
             
             desc = f"Волна #{new_streak}" + (f" ({rank_desc})" if rank_desc else "")
             rewards_data.append((user_id, reward, desc))
@@ -750,23 +739,23 @@ async def _finish_wave(bot: Bot, chat_id: int, container: Container):
         try:
             economy_service = container.economy_service
 
-            # Депозит общей суммы из банка
-            await economy_service._withdraw_from_bank(total_needed)
-
+            # process_game_win withdraws each prize itself; do not debit twice.
             # Раздаем награды участникам
             for uid, rew, desc in rewards_data:
-                result = await economy_service.process_game_win(
-                    user_id=uid,
-                    coins=rew,
-                    xp=0,  # Волна не дает XP напрямую через это (но можно добавить если нужно)
-                    description=desc
-                )
-                if not result["success"]:
-                    logger.error(f"Failed to award wave prize to user {uid}: {result}")
+                try:
+                    result = await economy_service.process_game_win(
+                        user_id=uid, coins=rew, xp=0, description=desc
+                    )
+                    if not result.get("success"):
+                        failed_rewards += 1
+                        logger.error("Wave prize rejected user=%s result=%s", uid, result)
+                except Exception:
+                    failed_rewards += 1
+                    logger.exception("Wave prize requires review user=%s", uid)
+        except Exception:
+            failed_rewards = len(rewards_data)
+            logger.exception("Error rewarding wave participants chat=%s", chat_id)
 
-        except Exception as e:
-            logger.error(f"Error rewarding wave participants: {e}")
-        
         # Финальное сообщение
         final_msg = _build_victory_message(
             wave["current"],
@@ -791,18 +780,38 @@ async def _finish_wave(bot: Bot, chat_id: int, container: Container):
         
         logger.info(f"🌊 Wave FAILED in {chat_id}: {wave['current']}/{wave['target']}")
     
-    try:
-        await bot.edit_message_text(
-            final_msg,
-            chat_id=chat_id,
-            message_id=wave["message_id"],
-            parse_mode="HTML"
+    if failed_rewards:
+        final_msg = re.sub(r"💰 Всего роздано:.*?\n", "", final_msg)
+        final_msg = final_msg.replace(
+            "🎁 <b>Все участники награждены!</b>",
+            f"⚠️ Награды требуют проверки: <b>{failed_rewards}</b>. "
+            "Выше указаны расчётные суммы, не подтверждение начисления."
         )
-    except Exception as e:
-        logger.warning(f"Failed to edit final wave message: {e}")
-    
-    # Кулдаун
-    _wave_cooldowns[chat_id] = time.time() + WAVE_COOLDOWN
+
+    await _publish_wave_result(bot, chat_id, wave, final_msg)
+
+
+async def _publish_wave_result(bot: Bot, chat_id: int, wave: dict, text: str):
+    """Update the scoreboard AND post a fresh notification at the end of the chat."""
+    # Final results must not depend on support for premium/custom emoji.
+    text = re.sub(r"<tg-emoji[^>]*>(.*?)</tg-emoji>", r"\1", text)
+    async with wave.setdefault("ui_lock", asyncio.Lock()):
+        try:
+            await bot.edit_message_text(
+                text, chat_id=chat_id, message_id=wave["message_id"], parse_mode="HTML"
+            )
+        except Exception:
+            logger.warning("Failed to edit final wave message chat=%s", chat_id, exc_info=True)
+        try:
+            await bot.send_message(chat_id, text, parse_mode="HTML")
+        except TelegramBadRequest:
+            # A deleted scoreboard or rejected markup must not swallow the finale.
+            plain = html.unescape(re.sub(r"<[^>]+>", "", text))
+            await bot.send_message(chat_id, plain, parse_mode=None)
+        except Exception:
+            logger.exception("Failed to send wave finale chat=%s", chat_id)
+            raise
+    logger.info("Wave finale delivered chat=%s", chat_id)
 
 
 @router.message(F.text & ~F.text.startswith("/"), HasActiveWave())

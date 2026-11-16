@@ -213,7 +213,8 @@ class RewardProcessor(Protocol):
         username: Optional[str],
         first_name: str,
         last_name: Optional[str],
-        apply_rewards: bool
+        apply_rewards: bool,
+        chat_id: Optional[int] = None,
     ) -> RewardResult:
         """Обрабатывает награду за сообщение."""
         ...
@@ -596,7 +597,7 @@ class ActivityProcessor:
         notifications: List[Notification] = []
 
         # Обрабатываем награду за сообщение
-        result = await self._process_reward(user, apply_rewards)
+        result = await self._process_reward(user, apply_rewards, chat_id)
 
         if not result.success:
             logger.debug(f"Reward processing failed for {user.id}: {result.error}")
@@ -625,7 +626,8 @@ class ActivityProcessor:
     async def _process_reward(
         self,
         user: User,
-        apply_rewards: bool
+        apply_rewards: bool,
+        chat_id: Optional[int] = None,
     ) -> RewardResult:
         """Обрабатывает награду за сообщение."""
         try:
@@ -636,6 +638,7 @@ class ActivityProcessor:
                 last_name=user.last_name,
                 is_bot=user.is_bot or False,
                 apply_rewards=apply_rewards,
+                chat_id=chat_id,
             )
 
             if not raw_result or not raw_result.get("success"):

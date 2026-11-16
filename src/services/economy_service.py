@@ -150,7 +150,8 @@ class EconomyService:
         first_name: str = "",
         last_name: Optional[str] = None,
         is_bot: bool = False,
-        apply_rewards: bool = True
+        apply_rewards: bool = True,
+        chat_id: Optional[int] = None,
     ) -> dict:
         """Обработать награду за сообщение."""
         logger.info(f"[ECONOMY] process_message_reward called for user {user_id}, apply_rewards={apply_rewards}")
@@ -234,7 +235,12 @@ class EconomyService:
                 logger.info(f"[ECONOMY] User {user_id} total_circulation={total_circulation}, multiplier={multiplier}")
 
                 xp_reward = int(XP_PER_MESSAGE * multiplier)
-                coins_reward = COINS_PER_MESSAGE * multiplier
+                # A local wave boost replaces, not supplements, normal coins.
+                # Resolve inside the user lock so expired/completed rounds cannot
+                # keep granting a boost to requests waiting on that lock.
+                from src.services.wave_activity import wave_message_reward
+                wave_coins = wave_message_reward(chat_id)
+                coins_reward = wave_coins if wave_coins is not None else COINS_PER_MESSAGE * multiplier
                 logger.info(f"[ECONOMY] User {user_id} xp_reward={xp_reward}, coins_reward={coins_reward}")
 
                 # Check bank balance and withdraw if possible
@@ -265,7 +271,8 @@ class EconomyService:
                     "tx_type": "message_reward",  # We'll use string for simplicity, or we can define constants
                     "xp_change": xp_reward,
                     "coins_change": coins_reward,
-                    "description": f"Message reward (x{multiplier:.3f})",
+                    "description": ("Wave message reward (30 SenseiCoin)" if wave_coins is not None
+                                    else f"Message reward (x{multiplier:.3f})"),
                     "created_at": datetime.now(timezone.utc),
                 }
                 await self.transactions.insert_one(tx_doc)
