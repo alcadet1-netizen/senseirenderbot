@@ -1,4 +1,4 @@
-"""SenseiCoin miner Mini App: one kick starts an eight-hour bank-funded cycle."""
+"""SenseiCoin miner Mini App: one start runs an eight-hour bank-funded cycle."""
 import logging
 from pathlib import Path
 
@@ -13,8 +13,7 @@ ASSETS = {
     'index.html',
     'style.css',
     'miner.js',
-    'assets/kick.webp',
-    'assets/mining.webp',
+    'assets/sensei.webp',
 }
 
 
@@ -62,8 +61,19 @@ def setup_dojo(app, container=None):
             service = container.dojo_miner_service
             if action == 'state':
                 result = await service.state(user['id'])
-            elif action == 'kick':
-                result = await service.kick(user['id'])
+            elif action == 'start':
+                result = await service.start(user['id'])
+            elif action == 'tasks':
+                tasks = await container.dojo_task_service.list_tasks(user['id'])
+                result = {'tasks': tasks}
+            elif action == 'task':
+                claim = await container.dojo_task_service.claim(
+                    user['id'], payload.get('slug'))
+                result = await service.state(user['id'])
+                result['balance'] = claim.get('new_coins', result.get('balance', 0))
+                result['task'] = claim['task']
+                result['reward_coins'] = claim['reward_coins']
+                result['energy_bonus'] = claim['energy_bonus']
             else:
                 result = await service.collect(user['id'])
             return web.json_response(result, headers=headers)
@@ -81,5 +91,6 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/{asset:style\\.css|miner\\.js}', page)
     app.router.add_get(
-        '/miniapp/dojo/assets/{asset:kick\\.webp|mining\\.webp}', page)
-    app.router.add_post('/miniapp/dojo/api/{action:state|kick|collect}', api)
+        '/miniapp/dojo/assets/{asset:sensei\\.webp}', page)
+    app.router.add_post(
+        '/miniapp/dojo/api/{action:state|start|collect|tasks|task}', api)

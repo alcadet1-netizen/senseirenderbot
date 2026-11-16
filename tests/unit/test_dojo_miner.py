@@ -1,4 +1,4 @@
-"""Майнер /dojo: лаунчер, статика и подписанный API пинка/сбора."""
+"""Майнер /dojo: лаунчер, статика и подписанный API старта/сбора."""
 import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -30,9 +30,10 @@ async def test_launcher():
         settings=SimpleNamespace(dojo_app_url='https://example.com/miniapp/dojo')))
     button = msg.answer.call_args.kwargs['reply_markup'].inline_keyboard[0][0]
     assert button.web_app.url.endswith('/miniapp/dojo')
-    assert 'Пнуть Пашу' in button.text
+    assert 'Начать майнинг' in button.text
     text = msg.answer.call_args.args[0]
     assert '8 часов' in text and 'SenseiCoin' in text and '120' in text
+    assert 'SenseiBank' in text and 'Задания' in text
 
 
 @pytest.mark.asyncio
@@ -41,29 +42,35 @@ async def test_miner_assets_and_csp():
     setup_dojo(app)
     async with TestClient(TestServer(app)) as client:
         for path in ('/miniapp/dojo', '/miniapp/dojo/', '/miniapp/dojo/style.css',
-                     '/miniapp/dojo/miner.js', '/miniapp/dojo/assets/kick.webp',
-                     '/miniapp/dojo/assets/mining.webp'):
+                     '/miniapp/dojo/miner.js', '/miniapp/dojo/assets/sensei.webp'):
             response = await client.get(path)
             assert response.status == 200, path
             assert "connect-src 'self'" in response.headers['Content-Security-Policy']
             assert 'https://telegram.org' in response.headers['Content-Security-Policy']
-        webp = await client.get('/miniapp/dojo/assets/kick.webp')
+        webp = await client.get('/miniapp/dojo/assets/sensei.webp')
         assert webp.headers['Content-Type'] == 'image/webp'
         assert (await client.get('/miniapp/dojo/game.js')).status == 404
         assert (await client.get('/miniapp/dojo/renderer.js')).status == 404
-        assert (await client.get('/miniapp/dojo/assets/kick.png')).status == 404
+        assert (await client.get('/miniapp/dojo/assets/kick.webp')).status == 404
+        assert (await client.get('/miniapp/dojo/assets/mining.webp')).status == 404
         assert (await client.get('/miniapp/dojo/ws')).status == 404
         assert (await client.post('/miniapp/dojo/api/state', json={})).status == 503
 
 
 @pytest.mark.asyncio
 async def test_api_requires_signature_and_dispatches_actions():
-    state = AsyncMock(return_value={'phase': 'ready', 'reward': 120})
-    kick = AsyncMock(return_value={'phase': 'mining', 'reward': 120})
+    state = AsyncMock(return_value={'phase': 'ready', 'reward': 120, 'balance': 1000})
+    start = AsyncMock(return_value={'phase': 'mining', 'reward': 120})
     collect = AsyncMock(return_value={'phase': 'ready', 'mined': 120, 'balance': 1000})
+    list_tasks = AsyncMock(return_value=[{'slug': 'senseidurova', 'claimed': False}])
+    claim = AsyncMock(return_value={
+        'task': {'slug': 'senseidurova', 'claimed': True},
+        'reward_coins': 10_000, 'energy_bonus': 100, 'new_coins': 20_000,
+    })
     container = SimpleNamespace(
         settings=SimpleNamespace(bot_token='test-token', maintenance_mode=False),
-        dojo_miner_service=SimpleNamespace(state=state, kick=kick, collect=collect))
+        dojo_miner_service=SimpleNamespace(state=state, start=start, collect=collect),
+        dojo_task_service=SimpleNamespace(list_tasks=list_tasks, claim=claim))
     app = web.Application()
     setup_dojo(app, container)
     async with TestClient(TestServer(app)) as client:
@@ -74,10 +81,22 @@ async def test_api_requires_signature_and_dispatches_actions():
         response = await client.post('/miniapp/dojo/api/state', json={'initData': auth})
         assert response.status == 200 and (await response.json())['phase'] == 'ready'
         state.assert_awaited_once_with(7)
-        response = await client.post('/miniapp/dojo/api/kick', json={'initData': auth})
+        response = await client.post('/miniapp/dojo/api/start', json={'initData': auth})
         assert response.status == 200 and (await response.json())['phase'] == 'mining'
-        kick.assert_awaited_once_with(7)
+        start.assert_awaited_once_with(7)
         response = await client.post('/miniapp/dojo/api/collect', json={'initData': auth})
         assert response.status == 200 and (await response.json())['mined'] == 120
         collect.assert_awaited_once_with(7)
+        response = await client.post('/miniapp/dojo/api/tasks', json={'initData': auth})
+        assert response.status == 200
+        assert (await response.json())['tasks'][0]['slug'] == 'senseidurova'
+        list_tasks.assert_awaited_once_with(7)
+        response = await client.post('/miniapp/dojo/api/task', json={
+            'initData': auth, 'slug': 'senseidurova'})
+        data = await response.json()
+        assert response.status == 200 and data['phase'] == 'ready'
+        assert data['reward_coins'] == 10_000 and data['energy_bonus'] == 100
+        assert data['balance'] == 20_000 and data['task']['claimed'] is True
+        claim.assert_awaited_once_with(7, 'senseidurova')
+        assert (await client.post('/miniapp/dojo/api/kick', json={'initData': auth})).status == 404
         assert (await client.post('/miniapp/dojo/api/nope', json={'initData': auth})).status == 404

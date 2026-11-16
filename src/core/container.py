@@ -16,6 +16,7 @@ class Container:
     settings: Settings
     mongo_client: MongoClient
     start_time: float = field(default_factory=lambda: 0.0)
+    bot: Optional[object] = field(default=None, init=False, repr=False)
     native_widget_transport: Optional[object] = field(default=None, init=False, repr=False)
     _redis: Optional[object] = field(default=None, init=False, repr=False)
     _sensei_check_service: Optional["SenseiCheckService"] = field(default=None, init=False, repr=False)
@@ -23,6 +24,7 @@ class Container:
     _user_service: Optional["UserService"] = field(default=None, init=False, repr=False)
     _economy_service: Optional["EconomyService"] = field(default=None, init=False, repr=False)
     _daily_service: Optional["DailyService"] = field(default=None, init=False, repr=False)
+    _dojo_task_service: Optional["DojoTaskService"] = field(default=None, init=False, repr=False)
     _dojo_miner_service: Optional["DojoMinerService"] = field(default=None, init=False, repr=False)
     _exchange_service: Optional["ExchangeService"] = field(default=None, init=False, repr=False)
     _achievement_service: Optional["AchievementService"] = field(default=None, init=False, repr=False)
@@ -69,10 +71,18 @@ class Container:
         return self._daily_pet_service
 
     @property
+    def dojo_task_service(self):
+        if self._dojo_task_service is None:
+            from src.services.dojo_task_service import DojoTaskService
+            self._dojo_task_service = DojoTaskService(self)
+        return self._dojo_task_service
+
+    @property
     def dojo_miner_service(self):
         if self._dojo_miner_service is None:
             from src.services.dojo_miner_service import DojoMinerService
-            self._dojo_miner_service = DojoMinerService(self.mongo_client, self.economy_service)
+            self._dojo_miner_service = DojoMinerService(
+                self.mongo_client, self.economy_service, self.dojo_task_service)
         return self._dojo_miner_service
 
     @property
