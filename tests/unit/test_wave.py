@@ -183,3 +183,18 @@ async def test_command_launches_state_and_worker():
     assert state['target'] == w.WAVE_TARGET_MESSAGES
     worker.assert_awaited_once_with(bot, -100, None, state)
     assert not w._starting_waves
+
+
+def test_epic_finales_use_standard_emoji_and_keep_reward_rules_clear():
+    victory = w._build_victory_message(100, 100, {1}, Counter({'<Ronin>': 100}), 3, 300)
+    timeout = w._build_timeout_message(50, 100, {1}, Counter({'<Ronin>': 50}))
+    for text in (victory, timeout):
+        assert 'ЦУНАМИ СЕНСЕЯ: ФИНАЛ' in text
+        assert '<tg-emoji' not in text
+        assert '\ufffd' not in text
+        assert '&lt;Ronin&gt;' in text
+        assert 'обычные награды восстановлены' in text
+        assert len(text) < 4096
+    assert 'ЗАЛ СЛАВЫ' in victory
+    assert 'Финальные призы не начисляются' in timeout
+    assert 'остаются у игроков' in timeout

@@ -307,7 +307,7 @@ def _build_progress_message(
         leaders_text = "\n\n🏆 <b>ЛИДЕРЫ ВОЛНЫ:</b>\n"
         for i, (name, count) in enumerate(top3):
             fire = "🔥" if count >= 10 else "⚡" if count >= 5 else ""
-            escaped_name = html.escape(name[:10])
+            escaped_name = html.escape(name[:60])
             leaders_text += f"   {medals[i]} {escaped_name}: <b>{count}</b> {fire}\n"
     
     # Мотивация с рандомом
@@ -373,7 +373,7 @@ def _build_victory_message(
         mult = multipliers[i] if i < 3 else 1.0
         reward = int(base_reward * streak_mult * mult)
         fire = f"{Visuals.fire_raw()}{Visuals.fire_raw()}" if i == 0 else Visuals.fire_raw() if i == 1 else "⚡"
-        escaped_name = html.escape(name[:12])
+        escaped_name = html.escape(name[:60])
         mvp_text += f"   {medals[i]} <b>{titles[i]}</b> {escaped_name}\n"
         mvp_text += f"       {count} сообщ. → <b>+{reward:,}</b> {fire}\n"
     
@@ -396,59 +396,30 @@ def _build_victory_message(
     elif len(participants) >= 10:
         army_achievement = "\n\n🏅 <b>ДОСТИЖЕНИЕ:</b> «Сила в единстве!»"
     
-    top_border = (
-        '<tg-emoji emoji-id="5318932854221069098">🤑</tg-emoji>'
-        '<tg-emoji emoji-id="5318824539440831060">🤑</tg-emoji>'
-        '<tg-emoji emoji-id="5319190161416803254">🤑</tg-emoji>'
-        '<tg-emoji emoji-id="5319083281155643596">🤑</tg-emoji>'
-        '<tg-emoji emoji-id="5316522419790307271">🤑</tg-emoji>'
-        '<tg-emoji emoji-id="5319029538229868743">🤑</tg-emoji>'
-        '<tg-emoji emoji-id="5318793933503879923">🤑</tg-emoji>'
-        '<tg-emoji emoji-id="5316811539808807793">🤑</tg-emoji>'
-    )
-    bottom_border = (
-        '<tg-emoji emoji-id="5415807885986789306">🏆</tg-emoji>'
-        '<tg-emoji emoji-id="5415834669402846332">🏆</tg-emoji>'
-        '<tg-emoji emoji-id="5415699884739161559">🏆</tg-emoji>'
-        '<tg-emoji emoji-id="5416039273054894373">🏆</tg-emoji>'
-        '<tg-emoji emoji-id="5415806640446271242">🏆</tg-emoji>'
-        '<tg-emoji emoji-id="5415584968594193062">🏆</tg-emoji>'
-        '<tg-emoji emoji-id="5416079808956232584">🏆</tg-emoji>'
-        '<tg-emoji emoji-id="5415639209736174375">🏆</tg-emoji>'
-        '<tg-emoji emoji-id="5415680454307117394">🏆</tg-emoji>'
-    )
-    premium_trophy = '<tg-emoji emoji-id="5447112111605964162">🏆</tg-emoji>'
-    
-    victory_wave = random.choice([
-        '<tg-emoji emoji-id="5206169707635291145">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5204246893726547065">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5206272473317782147">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5206407781967475993">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5204117842844205046">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5206402954424234617">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5204147911910242898">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5206226839290262426">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5204374187967265711">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5206212146207143685">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5203966260563426049">🌊</tg-emoji>',
-        '<tg-emoji emoji-id="5206376793778437124">🌊</tg-emoji>'
-    ])
-    
     return (
-        f"{top_border}\n"
-        f"   {premium_trophy} <b>{victory_phrase}</b> {premium_trophy}\n"
-        f"{bottom_border}\n\n"
-        f"{victory_wave} <b>ВОЛНА ПОКОРЕНА!</b>\n\n"
-        f"{Visuals.check_raw()} Цель: <b>{current}/{target}</b>\n"
-        f"👥 Бойцов: <b>{len(participants)}</b>\n"
-        f"💰 Всего роздано: <b>~{total_distributed:,}</b>\n\n"
-        f'<tg-emoji emoji-id="5305750989704274804">🏆</tg-emoji> <b>ГЕРОИ ВОЛНЫ:</b>\n'
+        "🌊⚡️🌊⚡️🌊\n"
+        "<b>ЦУНАМИ СЕНСЕЯ: ФИНАЛ</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"🏆 <b>{victory_phrase}</b>\n"
+        "<b>ВОЛНА ПОКОРЕНА!</b>\n\n"
+        "Океан ревел. Чат не дрогнул.\n"
+        "Вы собрались в один кулак и укротили стихию! 🥋\n\n"
+        "📜 <b>ЛЕТОПИСЬ ПОБЕДЫ</b>\n"
+        f"🎯 Цель: <b>{current}/{target}</b> сообщений\n"
+        f"⚔️ Бойцов: <b>{len(participants)}</b>\n"
+        f"🔥 Побед подряд: <b>{streak}</b>\n"
+        f"💰 Всего роздано: <b>~{total_distributed:,}</b> SenseiCoin\n\n"
+        "👑 <b>ЗАЛ СЛАВЫ ВОЛНЫ</b>\n"
         f"{mvp_text}\n"
-        f"💰 Остальные: <b>+{regular_reward:,}</b> каждому"
+        f"🎁 Базовый приз участника: <b>+{regular_reward:,}</b> SenseiCoin\n"
+        "<i>Топ-3 получают приз с множителем: ×3 / ×2 / ×1,5.</i>"
         f"{streak_block}"
         f"{army_achievement}\n\n"
-        f"🎁 <b>Все участники награждены!</b>\n"
-        f"💬 Бонус волны завершён — обычные награды за сообщения восстановлены."
+        "🎁 <b>Все участники награждены!</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "💬 Бонус 30 SenseiCoin за сообщение завершён — обычные награды восстановлены.\n\n"
+        "🥋 <i>Сенсей склоняет голову: такую волну делают не одиночки. "
+        "Такую волну делает команда.</i>"
     )
 
 
@@ -469,43 +440,27 @@ def _build_timeout_message(
         medals = ["🥇", "🥈", "🥉"]
         tried_text = "\n\n💪 <b>СРАЖАЛИСЬ ДО КОНЦА:</b>\n"
         for i, (name, count) in enumerate(top3):
-            escaped_name = html.escape(name[:10])
+            escaped_name = html.escape(name[:60])
             tried_text += f"   {medals[i]} {escaped_name}: <b>{count}</b>\n"
     
-    failure_border = (
-        '<tg-emoji emoji-id="5431554125152156092">🏆</tg-emoji>'
-        '<tg-emoji emoji-id="5431444113859835179">🏆</tg-emoji>'
-        '<tg-emoji emoji-id="5429574836718434979">🏆</tg-emoji>'
-        '<tg-emoji emoji-id="5431793767147404128">🏆</tg-emoji>'
-        '<tg-emoji emoji-id="5431651857132976759">🏆</tg-emoji>'
-        '<tg-emoji emoji-id="5431587518522881319">🏆</tg-emoji>'
-        '<tg-emoji emoji-id="5429094496165992077">🏆</tg-emoji>'
-        '<tg-emoji emoji-id="5431510853356647863">🏆</tg-emoji>'
-    )
-    
-    separator_strip = (
-        '<tg-emoji emoji-id="5220053631801259840">〰️</tg-emoji>'
-        '<tg-emoji emoji-id="5219832002898859117">〰️</tg-emoji>'
-        '<tg-emoji emoji-id="5220006417225773757">〰️</tg-emoji>'
-        '<tg-emoji emoji-id="5221971124245524858">〰️</tg-emoji>'
-        '<tg-emoji emoji-id="5220022682266925997">〰️</tg-emoji>'
-        '<tg-emoji emoji-id="5220204900549423954">〰️</tg-emoji>'
-        '<tg-emoji emoji-id="5220013993548084819">〰️</tg-emoji>'
-        '<tg-emoji emoji-id="5219756243970718240">〰️</tg-emoji>'
-        '<tg-emoji emoji-id="5219759332052204342">〰️</tg-emoji>'
-    )
-    
     return (
-        f"{failure_border}\n"
-        f"  😢 <b>ВОЛНА ОТКАТИЛАСЬ...</b>\n"
-        f"{separator_strip}\n\n"
-        f"📊 Прогресс: <b>{current}/{target}</b> ({percent}%)\n"
-        f"{Visuals.cross()} Не хватило: <b>{remaining}</b> сообщений\n"
-        f"👥 Бойцов: <b>{len(participants)}</b>"
+        "🌊🌑🌊\n"
+        "<b>ЦУНАМИ СЕНСЕЯ: ФИНАЛ</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🌘 <b>ВОЛНА ОТКАТИЛАСЬ...</b>\n\n"
+        "Стихия оказалась сильнее — но тех, кто держал строй, "
+        "Сенсей запомнит. ⚔️\n\n"
+        "📜 <b>ИТОГИ СРАЖЕНИЯ</b>\n"
+        f"🎯 Прогресс: <b>{current}/{target}</b> ({percent}%)\n"
+        f"⏳ Не хватило: <b>{remaining}</b> сообщений\n"
+        f"🥋 Бойцов: <b>{len(participants)}</b>"
         f"{tried_text}\n"
-        f"🔄 <i>Серия сброшена до 0</i>\n\n"
-        f"💪 <b>В следующий раз победим!</b>\n"
-        f"💬 Бонус волны завершён — обычные награды за сообщения восстановлены."
+        "🔄 Серия побед сброшена до <b>0</b>.\n"
+        "🎁 Финальные призы не начисляются: цель не достигнута.\n"
+        "<i>Уже начисленные монеты за сообщения остаются у игроков.</i>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "💬 Бонус 30 SenseiCoin за сообщение завершён — обычные награды восстановлены.\n\n"
+        "🔥 <b>Это не конец истории. Это затишье перед реваншем.</b>"
     )
 
 
