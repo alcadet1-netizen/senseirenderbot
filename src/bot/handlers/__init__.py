@@ -2,8 +2,8 @@
 🎯 Handlers package.
 """
 
-from src.bot.handlers.dojo import router as dojo_router
 from aiogram import Router
+from src.bot.handlers.dojo import router as dojo_router
 from src.bot.handlers.fly import router as fly_router
 
 from src.bot.handlers.paid_hedgehog import router as paid_hedgehog_router

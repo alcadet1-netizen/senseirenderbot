@@ -82,7 +82,8 @@ class Settings(BaseSettings):
     # Private HD hedgehog Mini App; falls back to Render RENDER_EXTERNAL_URL when empty.
     mini_app_url: str = Field(default="", alias="MINI_APP_URL")
 
-    # Full HTTPS URL of the standalone dojo; Render origin is the fallback.
+
+    # Новая одиночная игра «Последний рубеж».
     dojo_app_url: str = Field(default="", alias="DOJO_APP_URL")
 
     # BANK
