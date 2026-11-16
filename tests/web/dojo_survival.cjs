@@ -21,7 +21,7 @@ const assert = require("node:assert/strict");
     await page.click("#play");
     assert.equal(await page.evaluate(() => game.state), "game");
     await page.keyboard.down("ArrowRight");
-    await page.waitForTimeout(300);
+    await page.waitForFunction(() => game.player.x > 300);
     await page.keyboard.up("ArrowRight");
     assert.ok(await page.evaluate(() => game.player.x > 300));
     await page.click("#pause");
@@ -93,6 +93,59 @@ const assert = require("node:assert/strict");
       game.enemies[0].warning = 0.001;
       game.update(0.01);
       if (game.player.army !== 4) throw Error("boss aoe");
+    });
+    // Новые механики проверяются без подмены формулы урона.
+    await page.evaluate(() => {
+      game.start();
+      game.state = "game";
+      const p = game.player;
+      p.x = p.target = 270;
+      p.direction = 1;
+      if (!p.dash(game) || p.x !== 390 || p.invulnerable <= 0)
+        throw Error("dash failed");
+      if (p.dash(game)) throw Error("dash ignores cooldown");
+      const boss = new Boss(CONFIG.waves[2]);
+      boss.y = 500;
+      boss.warning = 0.001;
+      boss.attackX = p.x;
+      const army = p.army;
+      boss.update(0.01, game);
+      if (p.army !== army) throw Error("dash invulnerability");
+      game.start();
+      const e = new Enemy(CONFIG.waves[0]);
+      e.x = 270;
+      e.y = 600;
+      game.enemies = [e];
+      const hp = e.hp;
+      game.player.update(0.01, game);
+      if (e.hp !== hp || !game.shots.length)
+        throw Error("instant damage instead of projectile");
+      for (let i = 0; i < 80; i++)
+        for (const shot of game.shots) if (!shot.dead) shot.update(0.01, game);
+      if (!e.dead) throw Error("projectiles do not land");
+      for (let i = 0; i < 5; i++) {
+        const foe = new Enemy(CONFIG.waves[0]);
+        foe.hit(999, game);
+      }
+      if (game.combo < 5 || !game.coins) throw Error("combo rewards");
+      game.comboTime = 0.01;
+      game.update(0.02);
+      if (game.combo !== 0) throw Error("combo never expires");
+      game.start();
+      const b = new Boss(CONFIG.waves[2]);
+      b.y = 500;
+      game.enemies = [b];
+      game.waves.timer = 999;
+      for (let i = 0; i < 6000 && !b.dead && game.state === "game"; i++) {
+        game.player.target =
+          b.warning > 0 ? (b.attackX < 270 ? 430 : 110) : b.x;
+        game.update(0.02);
+      }
+      if (!b.dead)
+        throw Error(
+          "boss cannot be defeated with default army/range, hp=" + b.hp,
+        );
+      game.state = "pause";
     });
     for (const size of [
       { width: 320, height: 568 },

@@ -9,8 +9,14 @@ const CONFIG = {
   army: 6,
   damage: 9,
   attackPeriod: 0.65,
-  range: 230,
-  enemySpeed: 30,
+  range: 300,
+  enemySpeed: 38,
+  shotSpeed: 640,
+  dashCooldown: 4,
+  dashDistance: 120,
+  dashInvulnerability: 0.3,
+  comboWindow: 3,
+  magnetRadius: 100,
   dropChance: 0.37,
   slowSeconds: 5,
   shopSeconds: 4,
@@ -66,8 +72,38 @@ class Player {
     this.period = CONFIG.attackPeriod;
     this.cooldown = 0;
     this.shuriken = false;
+    this.dashCooldown = 0;
+    this.invulnerable = 0;
+    this.direction = 1;
+    this.trails = [];
+  }
+  dash(g) {
+    if (g.state !== "game" || this.dashCooldown > 0) return false;
+    const direction =
+      Math.abs(this.target - this.x) > 8
+        ? Math.sign(this.target - this.x)
+        : this.direction;
+    const dest = clamp(
+      this.x + direction * CONFIG.dashDistance,
+      ...CONFIG.road,
+    );
+    if (Math.abs(dest - this.x) < 10) return false;
+    for (let i = 0; i < 5; i++)
+      this.trails.push({ x: this.x + ((dest - this.x) * i) / 5, life: 0.35 });
+    this.x = this.target = dest;
+    this.invulnerable = CONFIG.dashInvulnerability;
+    this.dashCooldown = CONFIG.dashCooldown;
+    g.burst(this.x, this.y, "#a5efff", 16);
+    g.sound.play("pick");
+    return true;
   }
   update(dt, g) {
+    this.dashCooldown = Math.max(0, this.dashCooldown - dt);
+    this.invulnerable = Math.max(0, this.invulnerable - dt);
+    this.trails.forEach((t) => (t.life -= dt));
+    this.trails = this.trails.filter((t) => t.life > 0);
+    if (Math.abs(this.target - this.x) > 2)
+      this.direction = Math.sign(this.target - this.x);
     this.x += (this.target - this.x) * Math.min(1, dt * 13);
     this.cooldown -= dt;
     if (this.cooldown <= 0) {
@@ -82,14 +118,15 @@ class Player {
         for (let i = 0; i < this.army; i++) {
           const e = targets[i % targets.length];
           if (!e.dead) {
-            g.shots.push({
-              x: this.x + ((i % 5) - 2) * 15,
-              y: this.y + 35,
-              tx: e.x,
-              ty: e.y,
-              life: 0.22,
-            });
-            e.hit(this.damage, g);
+            g.shots.push(
+              new Projectile(
+                this.x + ((i % 5) - 2) * 15,
+                this.y + 35,
+                e,
+                this.damage,
+                this.shuriken,
+              ),
+            );
           }
         }
         g.sound.play("hit");
@@ -97,6 +134,19 @@ class Player {
     }
   }
   draw(t) {
+    for (const trail of this.trails) {
+      ctx.save();
+      ctx.globalAlpha = trail.life * 0.9;
+      samurai(trail.x, this.y);
+      ctx.restore();
+    }
+    if (this.invulnerable > 0) {
+      ctx.strokeStyle = "#9fe8ff";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(this.x, this.y + 14, 36, 46, 0, 0, 7);
+      ctx.stroke();
+    }
     for (let i = this.army - 1; i >= 0; i--) {
       const row = Math.floor(i / 6),
         x = this.x + ((i % 6) - 2.5) * 22,
@@ -104,6 +154,67 @@ class Player {
       hedgehog(x, y, Math.sin(t * 6 + i) * 1.5);
     }
     samurai(this.x, this.y);
+  }
+}
+// Снаряд наносит урон при попадании, а не при запуске.
+class Projectile {
+  constructor(x, y, target, damage, star) {
+    Object.assign(this, {
+      x,
+      y,
+      target,
+      damage,
+      star,
+      life: 1.5,
+      dead: false,
+      angle: 0,
+    });
+  }
+  update(dt, g) {
+    this.life -= dt;
+    if (this.target.dead || this.life <= 0) {
+      this.dead = true;
+      return;
+    }
+    const dx = this.target.x - this.x,
+      dy = this.target.y - this.y,
+      d = Math.hypot(dx, dy);
+    this.angle = Math.atan2(dy, dx);
+    if (d < CONFIG.shotSpeed * dt + this.target.r * 0.7) {
+      this.target.hit(this.damage, g);
+      this.dead = true;
+      g.burst(this.x, this.y, this.star ? "#9eeaff" : "#ffe4ad", 3);
+    } else {
+      this.x += (dx / d) * CONFIG.shotSpeed * dt;
+      this.y += (dy / d) * CONFIG.shotSpeed * dt;
+    }
+  }
+  draw(t) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.star ? t * 23 : this.angle);
+    ctx.shadowColor = this.star ? "#75d7ff" : "#ffd37a";
+    ctx.shadowBlur = 7;
+    if (this.star) {
+      ctx.fillStyle = "#b4ecff";
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4,
+          r = i % 2 ? 2 : 8;
+        i
+          ? ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r)
+          : ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = "#ffe9c1";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-12, 0);
+      ctx.lineTo(5, 0);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 }
 class Enemy {
@@ -124,11 +235,18 @@ class Enemy {
     this.phase = rand(0, 6);
   }
   hit(d, g) {
+    if (this.dead) return;
     this.hp -= d;
+    g.floatText(this.x, this.y - 20, Math.ceil(d), "#fff0c7");
     this.flash = 0.12;
     if (this.hp <= 0 && !this.dead) {
       this.dead = true;
-      g.coins += this.type === "boss" ? 60 : 9;
+      g.combo = g.comboTime > 0 ? g.combo + 1 : 1;
+      g.comboTime = CONFIG.comboWindow;
+      const bonus = Math.min(3, Math.floor(g.combo / 5));
+      const bounty = (this.type === "boss" ? 60 : 9) + bonus;
+      g.coins += bounty;
+      g.floatText(this.x, this.y, "+" + bounty + " ◉", "#ffd978");
       g.kills++;
       g.burst(this.x, this.y, "#ffcf7c", 12);
       g.sound.play("kill");
@@ -137,11 +255,20 @@ class Enemy {
     }
   }
   update(dt, g) {
+    // Быстрые разведчики виляют, но остаются в пределах дороги.
+    if (this.type === "fast")
+      this.x = clamp(
+        this.x + Math.sin(g.time * 3 + this.phase) * 30 * dt,
+        105,
+        435,
+      );
     this.y += this.speed * dt * (g.slow > 0 ? 0.42 : 1);
     this.flash = Math.max(0, this.flash - dt);
     if (this.y > CONFIG.playerY + 12) {
       this.dead = true;
-      g.player.lives--;
+      if (g.player.invulnerable <= 0) g.player.lives--;
+      g.combo = 0;
+      g.comboTime = 0;
       g.shake = 9;
       g.sound.play("hurt");
       g.burst(this.x, this.y, "#ef6475", 16);
@@ -176,6 +303,7 @@ class Boss extends Enemy {
     this.r = 48;
     this.speed = 16 * w.speed;
     this.charge = 4;
+    this.enraged = false;
     this.warning = 0;
     this.attackX = 270;
   }
@@ -183,6 +311,13 @@ class Boss extends Enemy {
     super.update(dt, g);
     this.y = Math.min(500, this.y);
     this.x = 270 + Math.sin(g.time * 0.55) * 120;
+    if (this.hp < this.maxHp * 0.45 && !this.enraged) {
+      this.enraged = true;
+      g.ui.toast("ВОЖДЬ В ЯРОСТИ · УДАРЫ ЧАЩЕ!");
+      g.burst(this.x, this.y, "#ff697e", 25);
+    }
+    // Вождь сначала должен появиться на поле, а не бить из-за экрана.
+    if (this.y < 180) return;
     this.charge -= dt;
     if (this.charge <= 0 && this.warning <= 0) {
       this.warning = 1.25;
@@ -192,8 +327,11 @@ class Boss extends Enemy {
     if (this.warning > 0) {
       this.warning -= dt;
       if (this.warning <= 0) {
-        this.charge = 4;
-        if (Math.abs(g.player.x - this.attackX) < 62) {
+        this.charge = this.enraged ? 2.7 : 4;
+        if (
+          Math.abs(g.player.x - this.attackX) < 62 &&
+          g.player.invulnerable <= 0
+        ) {
           g.player.army = Math.max(0, g.player.army - 2);
           g.shake = 12;
           g.sound.play("hurt");
@@ -234,6 +372,12 @@ class Pickup {
   }
   update(dt, g) {
     this.y += 65 * dt;
+    if (
+      Math.hypot(this.x - g.player.x, this.y - g.player.y) < CONFIG.magnetRadius
+    ) {
+      this.x += (g.player.x - this.x) * Math.min(1, dt * 5);
+      this.y += (g.player.y - this.y) * Math.min(1, dt * 5);
+    }
     if (
       Math.abs(this.x - g.player.x) < 46 &&
       Math.abs(this.y - g.player.y) < 45
@@ -354,6 +498,19 @@ class UIScene {
     this.toastTime -= dt;
     if (this.toastTime <= 0) $("#toast").textContent = "";
     const g = this.g;
+    $("#dash").disabled = g.state !== "game" || g.player.dashCooldown > 0;
+    $("#dash").textContent =
+      g.player.dashCooldown > 0
+        ? "Рывок " + g.player.dashCooldown.toFixed(1)
+        : "↔ РЫВОК";
+    $("#combo").textContent =
+      g.combo >= 3
+        ? "СЕРИЯ ×" +
+          g.combo +
+          " · БОНУС +" +
+          Math.min(3, Math.floor(g.combo / 5)) +
+          " ◉"
+        : "";
     $("#hearts").textContent = "♥ " + g.player.lives;
     $("#coins").textContent = "◉ " + g.coins;
     $("#wave").textContent = `Волна ${g.waves.index + 1}/5`;
@@ -389,7 +546,7 @@ class MenuScene {
   show() {
     this.g.state = "menu";
     this.g.ui.panel(
-      '<div class="eyebrow">SENSEI GAMES · 生き残れ</div><div class="seal">道場</div><h1>Последний<br><em>рубеж</em></h1><p>Один самурай. Отряд верных ежей.<br>Пять волн, чтобы защитить додзё.</p><button class="primary" id="play">В бой →</button><div class="hint">Веди пальцем по дороге · атака автоматическая<br>Монеты только игровые, без выплат и ставок.</div>',
+      '<div class="eyebrow">SENSEI GAMES · 生き残れ</div><div class="seal">⚔</div><h1>Последний<br><em>рубеж</em></h1><p>Один самурай. Отряд верных ежей.<br>Пять волн, чтобы защитить додзё.</p><button class="primary" id="play">В бой →</button><div class="hint">Веди пальцем по дороге · атака автоматическая<br>Рывок — кнопка ↔ или Shift · уходи от красной зоны<br>Монеты только игровые, без выплат и ставок.</div>',
     );
     $("#play").onclick = () => this.g.start();
   }
@@ -418,6 +575,9 @@ class GameScene {
     this.time = 0;
     this.slow = 0;
     this.shake = 0;
+    this.labels = [];
+    this.combo = 0;
+    this.comboTime = 0;
   }
   start() {
     this.reset();
@@ -445,6 +605,10 @@ class GameScene {
     window.addEventListener("keydown", (e) => {
       if (["ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
       this.keys.add(e.key);
+      if (e.key === "Shift" && !e.repeat) {
+        e.preventDefault();
+        this.player.dash(this);
+      }
       if ((e.key === "Escape" || e.key === " ") && !e.repeat) this.pause();
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.key));
@@ -456,12 +620,17 @@ class GameScene {
       if (document.hidden && this.state === "game") this.pause();
     });
     $("#pause").onclick = () => this.pause();
+    $("#dash").onclick = () => this.player.dash(this);
+    $("#sound").onclick = () => {
+      this.sound.on = !this.sound.on;
+      $("#sound").textContent = this.sound.on ? "♪" : "×";
+    };
   }
   pause() {
     if (this.state === "game") {
       this.state = "pause";
       this.ui.panel(
-        '<div class="seal">休</div><h1>Затишье<br><em>перед бурей</em></h1><p>Вдохни. Отряд ждёт твоего приказа.</p><button class="primary" id="resume">Продолжить бой</button><button class="secondary" id="restart">Начать заново</button>',
+        '<div class="seal">Ⅱ</div><h1>Затишье<br><em>перед бурей</em></h1><p>Вдохни. Отряд ждёт твоего приказа.</p><button class="primary" id="resume">Продолжить бой</button><button class="secondary" id="restart">Начать заново</button>',
       );
       $("#resume").onclick = () => {
         this.state = "game";
@@ -480,7 +649,7 @@ class GameScene {
   }
   showShop() {
     this.ui.panel(
-      `<div class="eyebrow">ВОЛНА ${this.waves.index + 1} ПОКОРЕНА</div><div class="seal">鍛</div><h1>Привал<br><em>у кузнеца</em></h1><p>Отряд держит строй. Усиль его перед новой волной.<br>Кошелёк: <b>${this.coins} ◉</b></p><div class="shop">${[
+      `<div class="eyebrow">ВОЛНА ${this.waves.index + 1} ПОКОРЕНА</div><div class="seal">⚒</div><h1>Привал<br><em>у кузнеца</em></h1><p>Отряд держит строй. Усиль его перед новой волной.<br>Кошелёк: <b>${this.coins} ◉</b></p><div class="shop">${[
         ["hedgehog", "🦔 Ещё один воин"],
         ["damage", "⚔ Урон армии +2"],
         ["speed", "✦ Скорость атак +10%"],
@@ -523,7 +692,7 @@ class GameScene {
   end(win) {
     this.state = win ? "victory" : "defeat";
     this.ui.panel(
-      `<div class="eyebrow">${win ? "ПЯТЬ ВОЛН · ОДНА ЛЕГЕНДА" : "ТВОЙ ПУТЬ ЕЩЁ НЕ ОКОНЧЕН"}</div><div class="seal">${win ? "勝" : "忍"}</div><h1>${win ? "Додзё<br><em>выстояло</em>" : "Последний<br><em>павший лист</em>"}</h1><p>${win ? "Стихия отступила. Ежи стали легендой." : "Даже великий воин однажды падает.<br>Встань и попробуй снова."}<br>Побеждено они: ${this.kills} · Монеты: ${this.coins}</p><button class="primary" id="again">Новый поход →</button>`,
+      `<div class="eyebrow">${win ? "ПЯТЬ ВОЛН · ОДНА ЛЕГЕНДА" : "ТВОЙ ПУТЬ ЕЩЁ НЕ ОКОНЧЕН"}</div><div class="seal">${win ? "🏆" : "⚔"}</div><h1>${win ? "Додзё<br><em>выстояло</em>" : "Последний<br><em>павший лист</em>"}</h1><p>${win ? "Стихия отступила. Ежи стали легендой." : "Даже великий воин однажды падает.<br>Встань и попробуй снова."}<br>Побеждено они: ${this.kills} · Монеты: ${this.coins}</p><button class="primary" id="again">Новый поход →</button>`,
     );
     $("#again").onclick = () => this.start();
   }
@@ -538,6 +707,10 @@ class GameScene {
         color,
       });
   }
+  floatText(x, y, text, color) {
+    this.labels.push({ x, y, text, color, life: 0.8 });
+    if (this.labels.length > 65) this.labels.shift();
+  }
   update(dt) {
     if (this.state === "shop") {
       const old = Math.ceil(this.shopWait);
@@ -547,6 +720,13 @@ class GameScene {
     }
     if (this.state !== "game") return;
     this.time += dt;
+    this.comboTime = Math.max(0, this.comboTime - dt);
+    if (!this.comboTime) this.combo = 0;
+    for (const l of this.labels) {
+      l.y -= 28 * dt;
+      l.life -= dt;
+    }
+    this.labels = this.labels.filter((l) => l.life > 0);
     this.slow = Math.max(0, this.slow - dt);
     if (this.keys.has("ArrowLeft") || this.keys.has("a"))
       this.player.target = clamp(this.player.target - 320 * dt, ...CONFIG.road);
@@ -557,8 +737,9 @@ class GameScene {
     for (const p of this.pickups) p.update(dt, this);
     this.enemies = this.enemies.filter((e) => !e.dead);
     this.pickups = this.pickups.filter((p) => !p.dead);
-    for (const s of this.shots) s.life -= dt;
-    this.shots = this.shots.filter((s) => s.life > 0);
+    for (const shot of this.shots) shot.update(dt, this);
+    this.shots = this.shots.filter((shot) => !shot.dead);
+    this.enemies = this.enemies.filter((e) => !e.dead);
     for (const p of this.particles) {
       p.life -= dt;
       p.x += p.vx * dt;
@@ -589,17 +770,17 @@ class GameScene {
     for (const e of [...this.enemies].sort((a, b) => a.y - b.y))
       e.draw(this.time);
     this.player.draw(this.time);
-    for (const s of this.shots) {
-      ctx.strokeStyle = this.player.shuriken ? "#8edaff" : "#ffdba2";
-      ctx.lineWidth = 2;
-      const t = 1 - s.life / 0.22;
-      ctx.beginPath();
-      ctx.moveTo(s.x + (s.tx - s.x) * t, s.y + (s.ty - s.y) * t);
-      ctx.lineTo(
-        s.x + (s.tx - s.x) * Math.min(1, t + 0.18),
-        s.y + (s.ty - s.y) * Math.min(1, t + 0.18),
-      );
-      ctx.stroke();
+    for (const shot of this.shots) shot.draw(this.time);
+    for (const l of this.labels) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, l.life * 3);
+      ctx.textAlign = "center";
+      ctx.font = "bold 15px system-ui";
+      ctx.shadowColor = "#000";
+      ctx.shadowBlur = 3;
+      ctx.fillStyle = l.color;
+      ctx.fillText(l.text, l.x, l.y);
+      ctx.restore();
     }
     for (const p of this.particles) {
       ctx.globalAlpha = p.life * 2;
@@ -682,93 +863,240 @@ function ellipse(x, y, rx, ry, color) {
   ctx.ellipse(x, y, rx, ry, 0, 0, 7);
   ctx.fill();
 }
+// Слоистые миниатюры: оружие, ламеллярные доспехи, блики и контактные тени.
 function samurai(x, y) {
-  ellipse(x, y + 23, 22, 7, "#0007");
-  ctx.fillStyle = "#211e29";
-  ctx.fillRect(x - 12, y - 4, 24, 25);
-  ctx.fillStyle = "#c14245";
-  ctx.fillRect(x - 14, y + 6, 28, 6);
-  ctx.fillRect(x - 23, y + 7, 12, 5);
-  ellipse(x, y - 10, 11, 12, "#181922");
-  ctx.fillStyle = "#d8ae70";
+  ctx.save();
+  ctx.translate(x, y);
+  ellipse(0, 27, 28, 9, "#100b1899");
+  const coat = ctx.createLinearGradient(-16, 0, 18, 20);
+  coat.addColorStop(0, "#4b4657");
+  coat.addColorStop(0.5, "#242530");
+  coat.addColorStop(1, "#11141f");
+  ctx.fillStyle = "#181520";
+  ctx.fillRect(-13, 14, 10, 15);
+  ctx.fillRect(4, 14, 10, 15);
+  ctx.fillStyle = coat;
   ctx.beginPath();
-  ctx.moveTo(x - 27, y - 12);
-  ctx.lineTo(x, y - 32);
-  ctx.lineTo(x + 27, y - 12);
-  ctx.closePath();
+  ctx.moveTo(-12, -8);
+  ctx.lineTo(11, -8);
+  ctx.lineTo(20, 21);
+  ctx.lineTo(-20, 21);
   ctx.fill();
-  ctx.strokeStyle = "#ffe1a2";
-  ctx.stroke();
-  ctx.strokeStyle = "#d8e1e8";
-  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#957b72";
+  ctx.lineWidth = 1;
+  for (let y = 0; y < 19; y += 5) {
+    ctx.beginPath();
+    ctx.moveTo(-13, y);
+    ctx.lineTo(14, y);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "#c84249";
+  ctx.fillRect(-17, 6, 34, 5);
   ctx.beginPath();
-  ctx.moveTo(x + 10, y + 12);
-  ctx.lineTo(x + 31, y - 8);
+  ctx.moveTo(-12, 7);
+  ctx.lineTo(-36, 2);
+  ctx.lineTo(-28, 10);
+  ctx.lineTo(-39, 18);
+  ctx.lineTo(-12, 12);
+  ctx.fill();
+  ellipse(0, -12, 10, 12, "#181a24");
+  ctx.fillStyle = "#d8ad81";
+  ctx.fillRect(-6, -11, 12, 4);
+  ctx.fillStyle = "#fbe3b5";
+  ctx.fillRect(-5, -10, 3, 1);
+  ctx.fillRect(3, -10, 3, 1);
+  const hat = ctx.createLinearGradient(0, -37, 0, -10);
+  hat.addColorStop(0, "#f7d490");
+  hat.addColorStop(1, "#9a693f");
+  ctx.fillStyle = hat;
+  ctx.beginPath();
+  ctx.moveTo(-31, -13);
+  ctx.quadraticCurveTo(-14, -19, 0, -37);
+  ctx.quadraticCurveTo(14, -19, 31, -13);
+  ctx.quadraticCurveTo(0, -5, -31, -13);
+  ctx.fill();
+  ctx.strokeStyle = "#dfb77b";
+  ctx.lineWidth = 1;
   ctx.stroke();
+  for (let i = -24; i < 25; i += 6) {
+    ctx.beginPath();
+    ctx.moveTo(0, -34);
+    ctx.lineTo(i, -13);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "#4d3438";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(10, 15);
+  ctx.lineTo(31, -7);
+  ctx.stroke();
+  ctx.strokeStyle = "#e4edf5";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(17, 8);
+  ctx.quadraticCurveTo(31, -5, 36, -18);
+  ctx.stroke();
+  ctx.restore();
 }
 function hedgehog(x, y, bob) {
   y += bob;
-  ellipse(x, y + 10, 12, 5, "#0005");
-  ellipse(x, y, 12, 13, "#684538");
-  ctx.fillStyle = "#bb9871";
-  for (let i = 0; i < 9; i++) {
-    const a = (i / 9) * Math.PI * 2;
-    ctx.beginPath();
-    ctx.moveTo(x + Math.cos(a) * 8, y + Math.sin(a) * 9);
-    ctx.lineTo(x + Math.cos(a + 0.2) * 15, y + Math.sin(a + 0.2) * 16);
-    ctx.lineTo(x + Math.cos(a + 0.4) * 8, y + Math.sin(a + 0.4) * 9);
-    ctx.fill();
-  }
-  ctx.fillStyle = "#bd4249";
-  ctx.fillRect(x - 12, y + 3, 24, 4);
-  ellipse(x, y + 7, 6, 5, "#d3ab82");
+  ctx.save();
+  ctx.translate(x, y);
+  ellipse(0, 12, 13, 5, "#0006");
+  const fur = ctx.createRadialGradient(-4, -5, 1, 0, 0, 16);
+  fur.addColorStop(0, "#c3976d");
+  fur.addColorStop(1, "#3c2831");
+  ellipse(0, 0, 14, 15, fur);
+  for (let ring = 0; ring < 3; ring++)
+    for (let i = 0; i < 10; i++) {
+      const a = i * 0.63 + ring * 0.3,
+        r = 5 + ring * 3,
+        px = Math.cos(a) * r,
+        py = Math.sin(a) * r;
+      ctx.strokeStyle = (i + ring) % 2 ? "#dfb184" : "#876451";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + Math.cos(a) * 5, py - 5 + Math.sin(a) * 3);
+      ctx.stroke();
+    }
+  ctx.fillStyle = "#b83c46";
+  ctx.fillRect(-13, 3, 26, 4);
+  ellipse(0, 9, 7, 5, "#bd926d");
+  ellipse(0, 12, 2.4, 1.8, "#241e28");
+  ctx.fillStyle = "#ffe6a3";
+  ctx.fillRect(-5, 7, 2, 2);
+  ctx.fillRect(3, 7, 2, 2);
+  ctx.strokeStyle = "#dbd9d2";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(13, 4);
+  ctx.lineTo(17, -9);
+  ctx.stroke();
+  ctx.restore();
 }
 function boar(x, y, r, type, flash) {
   ctx.save();
   ctx.translate(x, y);
-  ellipse(0, r * 0.8, r * 0.9, r * 0.25, "#0005");
-  const body = ctx.createRadialGradient(-r * 0.3, -r * 0.4, 1, 0, 0, r);
-  body.addColorStop(
-    0,
-    flash
-      ? "#fff4c3"
-      : type === "armored"
-        ? "#8893a1"
-        : type === "fast"
-          ? "#a17950"
-          : "#ac534b",
-  );
-  body.addColorStop(1, type === "armored" ? "#303541" : "#45272f");
-  ellipse(0, 0, r * 0.9, r, body);
-  ctx.fillStyle = "#2a2330";
-  ctx.fillRect(-r * 0.9, r * 0.4, r * 0.6, r * 0.55);
-  ctx.fillRect(r * 0.3, r * 0.4, r * 0.6, r * 0.55);
-  ctx.fillStyle = "#e0b17e";
-  for (const side of [-1, 1]) {
+  ctx.scale(r / 30, r / 30);
+  const armored = type === "armored",
+    boss = type === "boss",
+    fast = type === "fast";
+  ellipse(0, 30, 34, 10, "#100b1877");
+  // Булава и руки читаются по силуэту даже в маленьком масштабе.
+  ctx.save();
+  ctx.translate(-34, 5);
+  ctx.rotate(-0.45);
+  ctx.fillStyle = "#7b5841";
+  ctx.fillRect(-3, -13, 6, 43);
+  ellipse(0, 25, 9, 13, "#34303e");
+  ctx.strokeStyle = "#ad9b8a";
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 4; i++) {
     ctx.beginPath();
-    ctx.moveTo(side * r * 0.4, -r * 0.55);
-    ctx.lineTo(side * r * 0.8, -r * 1.2);
-    ctx.lineTo(side * r * 0.8, -r * 0.4);
+    ctx.moveTo(-11, 17 + i * 6);
+    ctx.lineTo(11, 17 + i * 6);
+    ctx.stroke();
+  }
+  ctx.restore();
+  ctx.fillStyle = "#24232c";
+  ctx.fillRect(-24, 18, 16, 18);
+  ctx.fillRect(9, 18, 16, 18);
+  ctx.fillStyle = "#7b5345";
+  ctx.fillRect(-25, 31, 18, 5);
+  ctx.fillRect(9, 31, 18, 5);
+  const body = ctx.createLinearGradient(-30, -15, 30, 28);
+  body.addColorStop(0, armored ? "#8893a2" : "#9c5149");
+  body.addColorStop(0.45, armored ? "#434853" : "#50323d");
+  body.addColorStop(1, "#25212d");
+  ellipse(0, 9, 29, 24, body);
+  ellipse(-29, 7, 10, 15, body);
+  ellipse(29, 7, 10, 15, body);
+  ctx.strokeStyle = boss ? "#e5b65d" : "#9a7c66";
+  ctx.lineWidth = 2;
+  for (let row = 0; row < 3; row++) {
+    ctx.fillStyle = armored ? "#414954" : "#342a35";
+    ctx.fillRect(-24, 5 + row * 7, 48, 6);
+    ctx.strokeRect(-24, 5 + row * 7, 48, 6);
+    for (let col = -19; col < 23; col += 8) {
+      ctx.fillStyle = "#c69a6c";
+      ctx.fillRect(col, 7 + row * 7, 2, 2);
+    }
+  }
+  for (const side of [-1, 1]) {
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.moveTo(side * 17, -19);
+    ctx.lineTo(side * 24, -39);
+    ctx.lineTo(side * 30, -16);
+    ctx.fill();
+    ctx.stroke();
+  }
+  const face = ctx.createRadialGradient(-9, -20, 1, 0, -9, 30);
+  face.addColorStop(0, flash ? "#fff5c7" : fast ? "#bd9365" : "#b86d5c");
+  face.addColorStop(1, "#4a2935");
+  ellipse(0, -10, 24, 24, face);
+  // Ирокез и красная повязка.
+  ctx.fillStyle = "#211e2a";
+  for (let i = -3; i <= 3; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * 5, -29);
+    ctx.lineTo(i * 5 + 3, -40 + Math.abs(i) * 2);
+    ctx.lineTo(i * 5 + 7, -27);
     ctx.fill();
   }
-  ellipse(0, -r * 0.1, r * 0.7, r * 0.65, body);
-  ctx.strokeStyle = type === "boss" ? "#e9b757" : "#b58f64";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(-r * 0.7, r * 0.2, r * 1.4, r * 0.35);
-  ellipse(0, r * 0.1, r * 0.38, r * 0.25, "#c98d70");
-  ellipse(-r * 0.13, r * 0.1, r * 0.07, r * 0.1, "#40242b");
-  ellipse(r * 0.13, r * 0.1, r * 0.07, r * 0.1, "#40242b");
-  ctx.fillStyle = "#ffe8ae";
-  ctx.fillRect(-r * 0.5, -r * 0.3, r * 0.26, 3);
-  ctx.fillRect(r * 0.24, -r * 0.3, r * 0.26, 3);
-  ctx.strokeStyle = "#fff0c9";
-  ctx.lineWidth = 3;
+  ctx.fillStyle = fast ? "#4d846d" : "#b52f40";
+  ctx.fillRect(-23, -25, 46, 6);
+  ctx.fillStyle = "#2c1a25";
   ctx.beginPath();
-  ctx.moveTo(-r * 0.4, r * 0.25);
-  ctx.lineTo(-r * 0.48, -r * 0.02);
-  ctx.moveTo(r * 0.4, r * 0.25);
-  ctx.lineTo(r * 0.48, -r * 0.02);
-  ctx.stroke();
+  ctx.moveTo(-19, -16);
+  ctx.lineTo(-5, -12);
+  ctx.lineTo(-7, -7);
+  ctx.lineTo(-19, -10);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(19, -16);
+  ctx.lineTo(5, -12);
+  ctx.lineTo(7, -7);
+  ctx.lineTo(19, -10);
+  ctx.fill();
+  ctx.fillStyle = "#ffe19a";
+  ctx.fillRect(-16, -12, 8, 3);
+  ctx.fillRect(8, -12, 8, 3);
+  ellipse(0, 4, 13, 9, "#d7977a");
+  ellipse(-5, 4, 3, 4, "#552f3a");
+  ellipse(5, 4, 3, 4, "#552f3a");
+  ctx.fillStyle = "#ffe3ab";
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(side * 12, 9);
+    ctx.quadraticCurveTo(side * 27, 9, side * 20, -9);
+    ctx.quadraticCurveTo(side * 18, 3, side * 10, 4);
+    ctx.fill();
+  }
+  if (armored || boss) {
+    ctx.fillStyle = "#343642";
+    ctx.strokeStyle = "#d0aa67";
+    ctx.lineWidth = 2;
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(side * 24, -7);
+      ctx.lineTo(side * 40, -1);
+      ctx.lineTo(side * 38, 12);
+      ctx.lineTo(side * 26, 9);
+      ctx.fill();
+      ctx.stroke();
+    }
+    if (boss) {
+      ctx.beginPath();
+      ctx.arc(0, -24, 25, Math.PI, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+  if (flash) {
+    ctx.globalAlpha = 0.25;
+    ellipse(0, 0, 30, 36, "#fff3c9");
+  }
   ctx.restore();
 }
 // Декорации детерминированы: каменная мостовая, огни, сакура, ворота.
