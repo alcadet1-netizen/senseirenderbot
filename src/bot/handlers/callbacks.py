@@ -229,6 +229,9 @@ async def cb_do_upgrade_katana(query: CallbackQuery, callback_data: MenuCb, cont
         
     try:
         result = await container.economy_service.upgrade_katana(query.from_user.id)
+        stats = getattr(container, "stats_service", None)
+        if stats is not None:
+            stats.invalidate()
         if container.settings.widgets_enabled:
             try:
                 await query.answer()
@@ -483,8 +486,10 @@ async def cb_buy_katana(query: CallbackQuery, callback_data: MenuCb, container: 
         
     try:
         result = await container.economy_service.buy_katana(query.from_user.id)
-        
         if result["success"]:
+            stats = getattr(container, "stats_service", None)
+            if stats is not None:
+                stats.invalidate()
             try:
                 await query.answer("⚔️ Катана куплена! Поздравляю!", show_alert=True)
             except TelegramBadRequest:

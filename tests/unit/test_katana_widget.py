@@ -175,6 +175,20 @@ async def test_command_never_retries_economy_when_rendering_fails():
     msg.answer.assert_awaited_once()
 
 
+@pytest.mark.asyncio
+async def test_katana_upgrade_invalidates_bank_cache_immediately():
+    msg = message()
+    stats = MagicMock()
+    container = SimpleNamespace(
+        economy_service=SimpleNamespace(upgrade_katana=AsyncMock(return_value=result())),
+        stats_service=stats,
+        settings=SimpleNamespace(widgets_enabled=False, widget_animations_enabled=False),
+    )
+    await cmd_upkatana(msg, container)
+    stats.invalidate.assert_called_once()
+    container.economy_service.upgrade_katana.assert_awaited_once_with(7)
+
+
 @pytest.mark.parametrize(
     "error", [CooldownError(60), NoKatanaError(), InsufficientFundsError(100, 5)]
 )
@@ -367,11 +381,13 @@ async def test_profile_upgrade_uses_same_animation_without_repeating_economy():
     msg = message()
     query = SimpleNamespace(from_user=msg.from_user, message=msg, answer=AsyncMock())
     service = SimpleNamespace(upgrade_katana=AsyncMock(return_value=result()))
-    container = SimpleNamespace(economy_service=service,
+    stats = MagicMock()
+    container = SimpleNamespace(economy_service=service, stats_service=stats,
         settings=SimpleNamespace(widgets_enabled=True, widget_animations_enabled=True))
     with patch('src.bot.handlers.callbacks.send_katana_upgrade', new_callable=AsyncMock) as send:
         await cb_do_upgrade_katana(query, MenuCb(action='confirm_upgrade_katana', user_id=7), container)
     service.upgrade_katana.assert_awaited_once_with(7)
+    stats.invalidate.assert_called_once()
     send.assert_awaited_once()
     assert send.call_args.kwargs['animate'] is True
 
