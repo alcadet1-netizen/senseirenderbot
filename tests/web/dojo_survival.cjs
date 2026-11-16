@@ -15,11 +15,13 @@ const assert = require("node:assert/strict");
     });
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    if(process.env.DOJO_CANVAS) await page.route("**/renderer.js", route => route.abort());
+    if (process.env.DOJO_CANVAS)
+      await page.route("**/renderer.js", (route) => route.abort());
     await page.goto(
       process.env.DOJO_URL || "http://127.0.0.1:8080/miniapp/dojo",
     );
-    if(!process.env.DOJO_CANVAS) await page.waitForFunction(() => !!window.dojoRenderer);
+    if (!process.env.DOJO_CANVAS)
+      await page.waitForFunction(() => !!window.dojoRenderer);
     await page.click("#play");
     assert.equal(await page.evaluate(() => game.state), "game");
     await page.keyboard.down("ArrowRight");
@@ -103,17 +105,24 @@ const assert = require("node:assert/strict");
       game.state = "game";
       const p = game.player;
       p.x = p.target = 270;
-      p.direction = 1;
-      if (!p.dash(game) || p.x !== 390 || p.invulnerable <= 0)
-        throw Error("dash failed");
-      if (p.dash(game)) throw Error("dash ignores cooldown");
-      const boss = new Boss(CONFIG.waves[2]);
-      boss.y = 500;
-      boss.warning = 0.001;
-      boss.attackX = p.x;
-      const army = p.army;
-      boss.update(0.01, game);
-      if (p.army !== army) throw Error("dash invulnerability");
+      if (document.querySelector("#dash") || typeof p.dash !== "undefined")
+        throw Error("dash remains");
+      game.enemies = [];
+      p.update(0.01, game);
+      if (!game.shots.length) throw Error("no fire at wave start");
+      const emptyShot = game.shots[0],
+        startY = emptyShot.y;
+      emptyShot.update(0.1, game);
+      if (emptyShot.dead || emptyShot.y >= startY)
+        throw Error("idle shot does not fly");
+      game.shots = [];
+      p.cooldown = 0;
+      const far = new Enemy(CONFIG.waves[0]);
+      far.y = -15;
+      game.enemies = [far];
+      p.update(0.01, game);
+      if (!game.shots.some((s) => s.target === far))
+        throw Error("far enemy not targeted");
       game.start();
       const e = new Enemy(CONFIG.waves[0]);
       e.x = 270;
@@ -257,8 +266,13 @@ const assert = require("node:assert/strict");
       boss.x = 270;
       boss.y = 270;
       game.enemies.push(boss);
-      const crate=new SupplyCrate(CONFIG.waves[4]);crate.x=420;crate.y=540;game.enemies.push(crate);
-      game.gates=[];for(let i=0;i<7;i++)game.gates.push(new RecruitGate(110,80+i*93,1));
+      const crate = new SupplyCrate(CONFIG.waves[4]);
+      crate.x = 420;
+      crate.y = 540;
+      game.enemies.push(crate);
+      game.gates = [];
+      for (let i = 0; i < 7; i++)
+        game.gates.push(new RecruitGate(110, 80 + i * 93, 1));
       game.waves.index = 4;
       game.ui.toastTime = 0;
       game.pickups = Object.keys(PICKUPS).map(
