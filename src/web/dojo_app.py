@@ -1,7 +1,9 @@
 """SenseiCoin miner Mini App: one start runs an eight-hour bank-funded cycle."""
+import asyncio
 import logging
 from pathlib import Path
 
+from aiogram.types import LabeledPrice
 from aiohttp import web
 
 from src.services.hedgehog_service import GameError
@@ -74,6 +76,37 @@ def setup_dojo(app, container=None):
                 result['task'] = claim['task']
                 result['reward_coins'] = claim['reward_coins']
                 result['energy_bonus'] = claim['energy_bonus']
+            elif action == 'upgrades':
+                result = {'upgrades': await container.dojo_upgrade_service.snapshot(
+                    user['id'])}
+            elif action == 'buy':
+                order = await container.dojo_upgrade_service.prepare(
+                    user['id'], payload.get('kind'))
+                if container.bot is None:
+                    raise GameError('Оплата временно недоступна.')
+                try:
+                    link = await asyncio.wait_for(
+                        container.bot.create_invoice_link(
+                            title=order['title'],
+                            description=order['description'],
+                            payload=order['payload'],
+                            currency='XTR',
+                            provider_token='',
+                            prices=[LabeledPrice(
+                                label=order['title'], amount=order['stars'])],
+                        ),
+                        timeout=10,
+                    )
+                except Exception:
+                    logging.getLogger(__name__).error(
+                        'Dojo upgrade invoice failed kind=%s', payload.get('kind'))
+                    raise GameError('Не удалось создать счёт. Попробуй позже.')
+                if not link:
+                    raise GameError('Не удалось создать счёт. Попробуй позже.')
+                result = {'invoice_url': link, 'kind': order['kind'],
+                          'stars': order['stars']}
+            elif action == 'bank':
+                result = await container.stats_service.get_bank_summary()
             else:
                 result = await service.collect(user['id'])
             return web.json_response(result, headers=headers)
@@ -93,4 +126,5 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/assets/{asset:sensei\\.webp}', page)
     app.router.add_post(
-        '/miniapp/dojo/api/{action:state|start|collect|tasks|task}', api)
+        '/miniapp/dojo/api/{action:state|start|collect|tasks|task|upgrades|buy|bank}',
+        api)

@@ -13,6 +13,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _to_float(value, default=0):
+    """Numeric fallback for cached stats that may contain None/missing fields."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 class StatsService:
     """Сервис для сбора статистики."""
 
@@ -43,6 +51,8 @@ class StatsService:
                     'messages': {'$sum': '$messages_count'}}}]).to_list(length=1)
                 totals = users[0] if users else {}
                 bank = await self.bank.find_one({'_id': 'single'}) or {}
+                circulation = totals.get('coins', 0)
+                total_supply = max(0, bank.get('coins', 0.0)) + max(0, circulation)
                 tickets = await self.tickets.count_documents({'burned': False})
                 rows = await self.transactions.aggregate([{'$group': {
                     '_id': '$tx_type', 'count': {'$sum': 1},
@@ -51,8 +61,10 @@ class StatsService:
                     'users': {'total': totals.get('count', 0)},
                     'bank': {'balance': bank.get('coins', 0.0),
                              'initial_coins': getattr(settings, 'bank_initial_coins', 1000000.0),
-                             'total_emitted': 0, 'total_withdrawn': 0},
-                    'circulation': totals.get('coins', 0),
+                             'total_emitted': total_supply,
+                             'total_supply': total_supply,
+                             'total_withdrawn': 0},
+                    'circulation': circulation,
                     'tickets': {'active': tickets},
                     'messages': {'total': totals.get('messages', 0)},
                     'transactions': {row['_id'] or 'unknown': {
@@ -64,8 +76,29 @@ class StatsService:
                 logger.error('Admin statistics refresh failed', exc_info=True)
                 # Retain existing API contract, but never cache a failed refresh.
                 return {'users': {'total': 0}, 'bank': {'balance': 0, 'initial_coins': 0,
-                    'total_emitted': 0, 'total_withdrawn': 0}, 'circulation': 0,
-                    'tickets': {'active': 0}, 'messages': {'total': 0}, 'transactions': {}}
+                    'total_emitted': 0, 'total_supply': 0, 'total_withdrawn': 0},
+                    'circulation': 0, 'tickets': {'active': 0}, 'messages': {'total': 0},
+                    'transactions': {}}
+
+    async def get_bank_summary(self) -> dict:
+        """Compact /senseibank snapshot for the dojo Mini App.
+
+        Reuses the admin statistics cache: /senseibank and the miner show the
+        same emission snapshot instead of scanning users twice per minute.
+        """
+        stats = await self.get_admin_stats()
+        bank = stats.get('bank') or {}
+        circulation = max(0.0, _to_float(stats.get('circulation'), 0))
+        balance = max(0.0, _to_float(bank.get('balance'), 0))
+        total_supply = max(0.0, _to_float(bank.get('total_supply'), balance + circulation))
+        users = stats.get('users') or {}
+        return {
+            'bank_balance': round(balance, 2),
+            'circulation': round(circulation, 2),
+            'total_supply': round(total_supply, 2),
+            'initial_coins': bank.get('initial_coins', getattr(settings, 'bank_initial_coins', 1000000.0)),
+            'users': int(_to_float(users.get('total'), 0)),
+        }
 
     async def reset_new_season(self) -> dict:
         """Сброс сезона."""

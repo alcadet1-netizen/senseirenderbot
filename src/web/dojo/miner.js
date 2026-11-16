@@ -1,4 +1,4 @@
-// Сервер хранит 8-часовой цикл; интерфейс показывает таймер, энергию и сбор.
+// Сервер хранит 8-часовой цикл; интерфейс показывает таймер, энергию, прогресс и сбор.
 (() => {
   "use strict";
 
@@ -26,6 +26,10 @@
       <path d="M17 21v-4a7 7 0 0 1 14 0v4"/></svg>`,
     telegram: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
       <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>`,
+    bolt: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>`,
+    clock: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`,
   };
 
   let model = null;
@@ -37,6 +41,10 @@
   let tasks = [];
   let tasksLoaded = false;
   let taskBusy = null;
+  let upgrades = null;
+  let upgradesLoaded = false;
+  let upgradeBusy = null;
+  let bank = null;
 
   try {
     tg?.ready?.();
@@ -102,13 +110,35 @@
   }
 
   function energyValue() {
-    if (!initData()) return 0;
-    if (!model) return 0;
+    if (!initData() || !model) return 0;
     const max = energyMax();
-    if (model.phase === "mining")
-      return Math.round(max * (1 - miningProgress()));
-    if (model.phase === "ready_to_collect") return 0;
-    return max;
+    if (model.phase === "ready") return max;
+    const energy = Number(model.energy);
+    if (!Number.isFinite(energy)) return 0;
+    if (model.phase !== "mining") return Math.max(0, Math.min(max, energy));
+    const drain = Number(model.energy_per_hour) || 100;
+    const elapsed = Math.max(
+      0,
+      (serverNow() - model.server_now * 1000) / 3600000,
+    );
+    return Math.max(0, Math.min(max, energy - drain * elapsed));
+  }
+
+  function percent() {
+    if (!model) return 0;
+    if (model.phase === "ready_to_collect") return 100;
+    if (model.phase !== "mining") return 0;
+    return Math.min(99.9, Math.max(0, miningProgress() * 100));
+  }
+
+  function paintMiningHint() {
+    if (!model) return;
+    const energy = energyValue();
+    const base = Number(model.base_rate) || 0;
+    const rate = energy > 0 ? base : base / 10;
+    $("hint").textContent =
+      `Энергия ${Math.round(energy)} / ${energyMax()} · ${coin(rate)} Coin/ч · ` +
+      "после нуля 10%";
   }
 
   function clock(ms) {
@@ -128,6 +158,18 @@
     $("energy-track").setAttribute("aria-valuenow", String(rounded));
   }
 
+  function paintMeter() {
+    const meter = $("mine-meter");
+    if (!meter) return;
+    const active =
+      model?.phase === "mining" || model?.phase === "ready_to_collect";
+    meter.hidden = !active;
+    if (!active) return;
+    const value = percent();
+    $("mine-bar").style.width = `${value}%`;
+    $("mine-percent").textContent = `${value.toFixed(1)}%`;
+  }
+
   function paintAction(icon, label, sub, timer = false, disabled = true) {
     const button = $("action");
     const labelNode = $("action-label");
@@ -137,10 +179,7 @@
     labelNode.classList.toggle("is-timer", timer);
     $("orb-sub").textContent = sub;
     button.disabled = disabled;
-    button.setAttribute(
-      "aria-label",
-      timer ? `${label}. ${sub}` : `${label}. ${sub}`,
-    );
+    button.setAttribute("aria-label", `${label}. ${sub}`);
   }
 
   function render() {
@@ -157,8 +196,12 @@
     const balance = initData() ? coin(model?.balance) : "—";
     $("balance").textContent = balance;
     $("profile-balance").textContent = initData() ? `${balance} Coin` : "—";
-    $("profile-reward").textContent = `${model?.reward ?? 120} Coin`;
+    $("profile-reward").textContent = `${coin(model?.reward)} Coin`;
+    $("profile-rate").textContent = `${coin(model?.base_rate)} Coin / ч`;
+    $("profile-energy").textContent = coin(model?.energy_max);
+    $("profile-auto").textContent = model?.auto_collect ? "ВКЛ" : "ВЫКЛ";
     paintEnergy(energyValue());
+    paintMeter();
 
     const status = $("status");
     const hint = $("hint");
@@ -167,6 +210,7 @@
       paintAction("lock", "ОТКРОЙ ЧЕРЕЗ /DOJO", "ТОЛЬКО TELEGRAM", false, true);
       $("energy").textContent = "— / —";
       renderTasks("ОТКРОЙ ЧЕРЕЗ /DOJO");
+      renderUpgrades("ОТКРОЙ ЧЕРЕЗ /DOJO");
       status.textContent = "ТОЛЬКО В TELEGRAM";
       hint.textContent =
         "Вне Telegram майнер не начисляет SenseiCoin и не запускает цикл.";
@@ -196,21 +240,20 @@
 
     if (current === "phase-mining") {
       paintAction("pickaxe", clock(remaining()), "ДО КОНЦА ЦИКЛА", true, true);
-      status.textContent = "МАЙНИНГ ИДЁТ";
-      hint.textContent =
-        "Цикл идёт на сервере · приложение можно закрыть · 8 часов";
+      status.textContent = `МАЙНИНГ ИДЁТ · ${percent().toFixed(1)}%`;
+      paintMiningHint();
       return;
     }
 
     if (current === "phase-done") {
       paintAction(
         "coin",
-        `ЗАБРАТЬ ${model.reward}`,
+        `ЗАБРАТЬ ${coin(model.reward)}`,
         "SENSEICOIN",
         false,
         false,
       );
-      status.textContent = "ЦИКЛ ЗАВЕРШЁН";
+      status.textContent = "ЦИКЛ ЗАВЕРШЁН · 100%";
       hint.textContent =
         "Награда из SenseiBank ждёт тебя. Забери и начни снова.";
       return;
@@ -219,12 +262,14 @@
     paintAction(
       "pickaxe",
       "НАЧАТЬ МАЙНИНГ",
-      "8 ЧАСОВ · 120 COIN",
+      `8 ЧАСОВ · ${coin(model.next_reward)} COIN`,
       false,
       false,
     );
     status.textContent = "СЕНСЕЙ ГОТОВ";
-    hint.textContent = "Один цикл — 8 часов · 120 SenseiCoin из SenseiBank";
+    hint.textContent =
+      `Кирка ${coin(model.base_rate)} Coin/ч · энергия ${energyMax()} · ` +
+      `${energyMax() / 100} ч полной мощности`;
   }
 
   function tick() {
@@ -234,6 +279,9 @@
     label.textContent = clock(left);
     label.classList.add("is-timer");
     paintEnergy(energyValue());
+    paintMeter();
+    $("status").textContent = `МАЙНИНГ ИДЁТ · ${percent().toFixed(1)}%`;
+    paintMiningHint();
     if (left <= 0 && Date.now() >= endRetryAt) {
       endRetryAt = Date.now() + 4000;
       refresh(true);
@@ -350,7 +398,7 @@
       coinChip.textContent = `${coin(task.reward_coins)} Coin`;
       const energyChip = document.createElement("span");
       energyChip.className = "task-chip";
-      energyChip.textContent = `+${task.energy_bonus}% энергии`;
+      energyChip.textContent = `+${task.energy_bonus} энергии`;
       chips.append(coinChip, energyChip);
 
       card.append(top, chips);
@@ -422,7 +470,7 @@
         item.slug === slug ? { ...item, ...updated, claimed: true } : item,
       );
       showToast(
-        `+${coin(data.reward_coins)} SenseiCoin · +${data.energy_bonus}% энергии`,
+        `+${coin(data.reward_coins)} SenseiCoin · +${data.energy_bonus} энергии`,
       );
     } catch (error) {
       showToast(error.message, true);
@@ -432,8 +480,177 @@
     }
   }
 
+  function upgradeCard(icon, title, level, copy, stats, button, disabled) {
+    const card = document.createElement("article");
+    card.className = "upgrade-card";
+    const top = document.createElement("div");
+    top.className = "upgrade-top";
+    const avatar = document.createElement("span");
+    avatar.className = "upgrade-icon";
+    avatar.innerHTML = ICONS[icon];
+    const head = document.createElement("div");
+    head.className = "upgrade-head";
+    const name = document.createElement("b");
+    name.textContent = title;
+    const lvl = document.createElement("span");
+    lvl.textContent = level;
+    head.append(name, lvl);
+    top.append(avatar, head);
+    const text = document.createElement("p");
+    text.className = "upgrade-copy";
+    text.textContent = copy;
+    const stat = document.createElement("p");
+    stat.className = "upgrade-stats";
+    stat.textContent = stats;
+    const buy = document.createElement("button");
+    buy.className = "upgrade-buy";
+    buy.textContent = button;
+    buy.disabled = disabled;
+    card.append(top, text, stat, buy);
+    return card;
+  }
+
+  function renderUpgrades(emptyText = "УЛУЧШЕНИЯ НЕДОСТУПНЫ") {
+    const list = $("upgrades-list");
+    if (!list) return;
+    list.replaceChildren();
+    if (!upgrades) {
+      const empty = document.createElement("p");
+      empty.className = "task-empty";
+      empty.textContent = emptyText;
+      list.appendChild(empty);
+      return;
+    }
+    const pickaxe = upgradeCard(
+      "pickaxe",
+      "КИРКА",
+      `LVL ${upgrades.pickaxe_level} / ${upgrades.pickaxe_max}`,
+      "Каждый уровень: +10 SenseiCoin в час. Действует со следующего цикла.",
+      `${coin(upgrades.pickaxe_rate)} Coin/ч · следующий ${coin(upgrades.pickaxe_next_rate)} Coin/ч`,
+      upgradeBusy === "pickaxe"
+        ? "СЧЁТ…"
+        : upgrades.pickaxe_level >= upgrades.pickaxe_max
+          ? "МАКСИМУМ"
+          : `${upgrades.pickaxe_stars} ⭐ · УЛУЧШИТЬ`,
+      upgradeBusy === "pickaxe" ||
+        upgrades.pickaxe_level >= upgrades.pickaxe_max,
+    );
+    const energy = upgradeCard(
+      "bolt",
+      "ЭНЕРГИЯ",
+      `+${upgrades.energy_bonus}`,
+      "Навсегда +100 к запасу. 100 энергии — час полной мощности, потом 10%; со следующего цикла.",
+      `Покупок: ${upgrades.energy_purchases} / ${upgrades.energy_max_purchases} · база ${upgrades.base_energy}`,
+      upgradeBusy === "energy"
+        ? "СЧЁТ…"
+        : `${upgrades.energy_stars} ⭐ · +100 ЭНЕРГИИ`,
+      upgradeBusy === "energy" ||
+        upgrades.energy_purchases >= upgrades.energy_max_purchases,
+    );
+    const auto = upgradeCard(
+      "clock",
+      "АВТОСБОР",
+      upgrades.auto_collect ? "АКТИВЕН" : "ВЫКЛ",
+      "Сам собирает награду и запускает новый цикл каждые 8 часов. Участие не нужно.",
+      "Один раз · работает всегда",
+      upgrades.auto_collect
+        ? "УЖЕ ВКЛЮЧЁН"
+        : upgradeBusy === "auto"
+          ? "СЧЁТ…"
+          : `${upgrades.auto_stars} ⭐ · ВКЛЮЧИТЬ`,
+      upgradeBusy === "auto" || upgrades.auto_collect,
+    );
+    const buttons = [
+      pickaxe.querySelector(".upgrade-buy"),
+      energy.querySelector(".upgrade-buy"),
+      auto.querySelector(".upgrade-buy"),
+    ];
+    buttons[0].addEventListener("click", () => buyUpgrade("pickaxe"));
+    buttons[1].addEventListener("click", () => buyUpgrade("energy"));
+    buttons[2].addEventListener("click", () => buyUpgrade("auto"));
+    list.append(pickaxe, energy, auto);
+  }
+
+  async function loadUpgrades(force = false) {
+    if (!initData()) {
+      upgrades = null;
+      renderUpgrades("ОТКРОЙ ЧЕРЕЗ /DOJO");
+      return;
+    }
+    if (upgradesLoaded && !force) return;
+    try {
+      const data = await api("upgrades");
+      upgrades = data.upgrades || null;
+      upgradesLoaded = true;
+      renderUpgrades();
+    } catch (error) {
+      upgradesLoaded = false;
+      upgrades = null;
+      renderUpgrades("НЕ УДАЛОСЬ ЗАГРУЗИТЬ УЛУЧШЕНИЯ");
+      showToast(error.message, true);
+    }
+  }
+
+  async function buyUpgrade(kind) {
+    if (!initData() || upgradeBusy) return;
+    upgradeBusy = kind;
+    renderUpgrades();
+    try {
+      const data = await api("buy", { kind });
+      if (!tg?.openInvoice) {
+        upgradeBusy = null;
+        renderUpgrades();
+        showToast("Счёт Stars создан. Открой его в Telegram.", true);
+        return;
+      }
+      tg.openInvoice(data.invoice_url, (status) => {
+        upgradeBusy = null;
+        renderUpgrades();
+        if (status === "paid") {
+          showToast("Оплата получена · включаем улучшение");
+          setTimeout(() => {
+            loadUpgrades(true);
+            refresh(true);
+          }, 1200);
+          setTimeout(() => {
+            loadUpgrades(true);
+            refresh(true);
+          }, 4500);
+        } else if (status === "cancelled") {
+          showToast("Оплата отменена", true);
+        } else if (status === "failed") {
+          showToast("Оплата не прошла", true);
+        }
+      });
+    } catch (error) {
+      upgradeBusy = null;
+      renderUpgrades();
+      showToast(error.message, true);
+    }
+  }
+
+  function renderBank() {
+    if (!bank) return;
+    $("bank-supply").textContent = `${coin(bank.total_supply)} Coin`;
+    $("bank-balance").textContent = `${coin(bank.bank_balance)} Coin`;
+    $("bank-circulation").textContent = `${coin(bank.circulation)} Coin`;
+    $("bank-users").textContent = coin(bank.users);
+  }
+
+  async function loadBank(force = false) {
+    if (!initData()) return;
+    if (bank && !force) return;
+    try {
+      bank = await api("bank");
+      renderBank();
+    } catch (error) {
+      showToast(error.message, true);
+    }
+  }
+
   function setTab(name) {
-    if (!["mining", "tasks", "upgrades", "profile"].includes(name)) return;
+    const tabs = ["mining", "tasks", "upgrades", "bank", "profile"];
+    if (!tabs.includes(name)) return;
     activeTab = name;
     document.querySelectorAll(".tab").forEach((tab) => {
       const active = tab.dataset.tab === name;
@@ -441,16 +658,17 @@
       if (active) tab.setAttribute("aria-current", "page");
       else tab.removeAttribute("aria-current");
     });
-    ["mining", "tasks", "upgrades", "profile"].forEach((key) => {
+    tabs.forEach((key) => {
       $(`view-${key}`).hidden = key !== name;
     });
     if (name === "tasks") loadTasks();
+    if (name === "upgrades") loadUpgrades();
+    if (name === "bank") loadBank(true);
     closeSheet();
   }
 
   function openSheet() {
-    const sheet = $("sheet");
-    sheet.hidden = false;
+    $("sheet").hidden = false;
   }
 
   function closeSheet() {
@@ -470,6 +688,8 @@
     if (activeTab !== "mining") setTab("mining");
     openSheet();
   });
+
+  $("bank-refresh").addEventListener("click", () => loadBank(true));
 
   document.querySelectorAll("[data-close='sheet']").forEach((node) => {
     node.addEventListener("click", closeSheet);
@@ -491,7 +711,10 @@
   if (initData()) {
     refresh();
     loadTasks();
+    loadUpgrades();
+    loadBank();
   } else {
     renderTasks("ОТКРОЙ ЧЕРЕЗ /DOJO");
+    renderUpgrades("ОТКРОЙ ЧЕРЕЗ /DOJO");
   }
 })();

@@ -36,7 +36,7 @@ const { chromium } = require("playwright-core");
     }
     if (action === "collect") {
       phase = "ready";
-      balance += 120;
+      balance += 26;
     }
     if (action === "task") {
       balance += 10000;
@@ -50,6 +50,38 @@ const { chromium } = require("playwright-core");
         : phase === "ready_to_collect"
           ? 1
           : 0;
+    if (action === "upgrades") {
+      await route.fulfill({
+        json: {
+          upgrades: {
+            pickaxe_level: 0,
+            pickaxe_max: 100,
+            pickaxe_rate: 15,
+            pickaxe_next_rate: 25,
+            pickaxe_stars: 10,
+            energy_purchases: 0,
+            energy_max_purchases: 100,
+            energy_bonus: 0,
+            energy_stars: 50,
+            base_energy: 100,
+            auto_collect: false,
+            auto_stars: 1000,
+          },
+        },
+      });
+      return;
+    }
+    if (action === "bank") {
+      await route.fulfill({
+        json: {
+          bank_balance: 900000,
+          circulation: 100000,
+          total_supply: 1000000,
+          users: 42,
+        },
+      });
+      return;
+    }
     if (action === "tasks") {
       await route.fulfill({
         json: {
@@ -72,14 +104,30 @@ const { chromium } = require("playwright-core");
       phase,
       server_now: now,
       balance,
-      reward: 120,
+      reward: 26,
+      next_reward: 26,
+      energy:
+        phase === "ready"
+          ? energyMax
+          : Math.max(
+              0,
+              energyMax -
+                100 * Math.max(0, (Math.min(now, finish) - started) / 3600),
+            ),
       energy_max: energyMax,
+      energy_start: energyMax,
+      energy_per_hour: 100,
+      base_rate: 15,
+      current_rate: 15,
+      pickaxe_level: 0,
+      energy_purchases: 0,
+      auto_collect: false,
       cycle_seconds: 28800,
       started_at: started || null,
       finish_at: finish || null,
       remaining_ms: phase === "mining" ? Math.max(0, (finish - now) * 1000) : 0,
       progress,
-      mined: 120,
+      mined: 26,
     };
     if (action === "task") {
       Object.assign(state, {
@@ -130,14 +178,26 @@ const { chromium } = require("playwright-core");
       document.querySelector("#action-label").textContent.includes("ЗАБРАТЬ"),
     { timeout: 12000 },
   );
-  assert.equal(await page.locator("#status").textContent(), "ЦИКЛ ЗАВЕРШЁН");
+  assert.equal(
+    await page.locator("#status").textContent(),
+    "ЦИКЛ ЗАВЕРШЁН · 100%",
+  );
   assert.equal(await page.locator("#energy").textContent(), "0 / 100");
   await page.screenshot({ path: ".cache/miner2-done.png" });
 
   await page.click(".tab[data-tab='upgrades']");
   assert.equal(await page.locator("#view-upgrades").isVisible(), true);
   assert.equal(await page.locator("#view-mining").isVisible(), false);
+  assert.equal(await page.locator(".upgrade-card").count(), 3);
+  assert.match(
+    await page.locator(".upgrade-card").first().textContent(),
+    /10 ⭐/,
+  );
   await page.screenshot({ path: ".cache/miner2-upgrades.png" });
+  await page.click(".tab[data-tab='bank']");
+  assert.equal(await page.locator("#view-bank").isVisible(), true);
+  assert.match(await page.locator("#bank-supply").textContent(), /1\s000\s000/);
+  await page.screenshot({ path: ".cache/miner2-bank.png" });
   await page.click(".tab[data-tab='profile']");
   assert.equal(await page.locator("#view-profile").isVisible(), true);
   assert.match(
@@ -150,10 +210,7 @@ const { chromium } = require("playwright-core");
   assert.equal(await page.locator("#view-tasks").isVisible(), true);
   assert.equal(await page.locator(".task-card").count(), 1);
   assert.match(await page.locator(".task-card").textContent(), /10\s000 Coin/);
-  assert.match(
-    await page.locator(".task-card").textContent(),
-    /\+100% энергии/,
-  );
+  assert.match(await page.locator(".task-card").textContent(), /\+100 энергии/);
   await page.screenshot({ path: ".cache/miner2-tasks.png" });
   await page.click(".task-claim");
   await page.waitForFunction(() =>
@@ -179,10 +236,10 @@ const { chromium } = require("playwright-core");
 
   await page.click("#action");
   await page.waitForFunction(() =>
-    /^22\s960$/.test(document.querySelector("#balance").textContent),
+    /^22\s866$/.test(document.querySelector("#balance").textContent),
   );
   assert.equal(await page.locator("#energy").textContent(), "200 / 200");
-  assert.match(await page.locator("#toast").textContent(), /\+120 SenseiCoin/);
+  assert.match(await page.locator("#toast").textContent(), /\+26 SenseiCoin/);
   await page.waitForFunction(
     () =>
       document.querySelector("#action-label").textContent === "НАЧАТЬ МАЙНИНГ",
@@ -190,7 +247,10 @@ const { chromium } = require("playwright-core");
   assert.deepEqual(errors, []);
   assert.deepEqual(
     calls
-      .filter((action) => action !== "tasks" && action !== "task")
+      .filter(
+        (action) =>
+          !["tasks", "task", "upgrades", "bank", "buy"].includes(action),
+      )
       .slice(0, 3),
     ["state", "start", "state"],
   );

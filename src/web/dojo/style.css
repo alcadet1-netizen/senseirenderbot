@@ -347,6 +347,52 @@ button {
   padding-top: 2vh;
 }
 
+.mine-meter {
+  width: 100%;
+  flex: 0 0 auto;
+  padding: 9px 12px 10px;
+  margin-bottom: 6px;
+  border: 1px solid rgba(92, 255, 166, 0.16);
+  border-radius: 12px;
+  background: rgba(2, 14, 8, 0.72);
+}
+
+.mine-meter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+  color: #8fbda2;
+  font-size: 8px;
+  letter-spacing: 1.6px;
+}
+
+.mine-meter-head b {
+  color: #bfffd9;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.4px;
+}
+
+.mine-track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #030d07;
+  box-shadow: inset 0 1px 3px #000;
+}
+
+#mine-bar {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #13a960, #8affbe);
+  box-shadow: 0 0 10px rgba(92, 255, 166, 0.55);
+  transition: width 0.35s linear;
+}
+
 .orb {
   position: relative;
   display: grid;
@@ -740,6 +786,119 @@ button {
   text-align: center;
 }
 
+.upgrade-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.upgrade-card {
+  padding: 12px;
+  border: 1px solid rgba(92, 255, 166, 0.16);
+  border-radius: 14px;
+  background: rgba(2, 16, 9, 0.72);
+  text-align: left;
+}
+
+.upgrade-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.upgrade-icon {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(92, 255, 166, 0.32);
+  border-radius: 10px;
+  background: radial-gradient(
+    circle at 40% 30%,
+    rgba(27, 105, 61, 0.7),
+    rgba(3, 18, 10, 0.9)
+  );
+  color: var(--green-bright);
+}
+
+.upgrade-icon .icon {
+  width: 19px;
+  height: 19px;
+}
+
+.upgrade-head {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.upgrade-head b {
+  color: #ecfff5;
+  font-size: 12px;
+  letter-spacing: 1.2px;
+}
+
+.upgrade-head span {
+  color: #8affbe;
+  font-size: 9px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.upgrade-copy {
+  margin: 9px 0 0;
+  color: #93aa9d;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.upgrade-stats {
+  margin: 6px 0 0;
+  color: #bfffd8;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
+}
+
+.upgrade-buy {
+  width: 100%;
+  margin-top: 9px;
+  padding: 9px 8px;
+  border: 1px solid rgba(116, 255, 184, 0.5);
+  border-radius: 9px;
+  background: linear-gradient(180deg, #1d7048, #0b3a23);
+  color: #edfff5;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.upgrade-buy:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.bank-refresh {
+  width: 100%;
+  margin-top: 12px;
+  padding: 11px;
+  border: 1px solid rgba(92, 255, 166, 0.3);
+  border-radius: 11px;
+  background: rgba(4, 26, 14, 0.7);
+  color: #9defbe;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  cursor: pointer;
+}
+
 .view-eyebrow {
   margin: 0 0 8px;
   color: #74c795;
@@ -835,8 +994,8 @@ button {
   z-index: 5;
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  padding: 7px 6px max(10px, env(safe-area-inset-bottom));
+  grid-template-columns: repeat(5, 1fr);
+  padding: 7px 4px max(10px, env(safe-area-inset-bottom));
   border-top: 1px solid rgba(92, 255, 166, 0.14);
   background: linear-gradient(
     180deg,
@@ -856,16 +1015,16 @@ button {
   border: 0;
   background: none;
   color: #6f877a;
-  font-size: 9.5px;
-  letter-spacing: 0.2px;
+  font-size: 8.5px;
+  letter-spacing: 0;
   cursor: pointer;
   transition: color 0.2s ease;
   white-space: nowrap;
 }
 
 .tab .icon {
-  width: 23px;
-  height: 23px;
+  width: 21px;
+  height: 21px;
   stroke-width: 1.9;
 }
 
@@ -1101,6 +1260,11 @@ button:focus-visible {
 
   .orb {
     width: min(62vw, 240px);
+  }
+
+  .phase-mining .orb,
+  .phase-done .orb {
+    width: min(52vw, 200px);
   }
 
   .orb-icon {
