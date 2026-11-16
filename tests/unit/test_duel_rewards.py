@@ -145,6 +145,8 @@ async def test_duel_winner_gets_xp_and_katana_and_loser_loses_katana():
     # Katana length should increase by 0.01 if they had katana
     assert winner_user["katana_length"] == round(winner_start_katana + 0.01, 2)
     assert winner_user["wins"] == 1
+    # Escrow pays the winner exactly once: both bets, no extra mint.
+    assert winner_user["coins"] == float(duel.bet * 2)
 
     # Verify loser
     loser_user = stored_users[loser_id]
@@ -183,6 +185,7 @@ async def test_duel_winner_gets_xp_and_katana_and_loser_loses_katana():
             loser_loss_tx = tx
 
     assert winner_xp_tx is not None, "Winner XP transaction not found"
+    assert winner_xp_tx.get("coins_change") == 0.0
     assert bet_payout_tx is not None, "Bet payout transaction not found"
     assert loser_loss_tx is not None, "Loser loss transaction not found"
 

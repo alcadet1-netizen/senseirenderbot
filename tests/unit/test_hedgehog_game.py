@@ -324,7 +324,11 @@ async def test_native_queries_survive_real_aiogram_dispatch_and_pay_once(roll):
     bot.session = AsyncMock(return_value=True)
     def update(action, number):
         return Update.model_validate({'update_id': number, 'widget_query': {
-            'id': str(number), 'from': {'id': 7}, 'chat': {'id': -1001234, 'type': 'supergroup'},
+            'id': str(number),
+            'from': {'id': 7, 'is_bot': False, 'first_name': 'Tester'},
+            'chat_instance': 'ci',
+            'type': {'type': 'data'},
+            'chat': {'id': -1001234, 'type': 'supergroup'},
             'message_id': 3, 'data': f'hg:{action}:{token}'}})
     try:
         with patch('src.services.hedgehog_service.secrets.randbelow', return_value=roll), \
@@ -356,8 +360,14 @@ async def test_native_queries_reject_untrusted_actions(kind):
     db, daily, game = services()
     token = (await game.issue(7))['token']
     container = SimpleNamespace(settings=SimpleNamespace(maintenance_mode=kind == 'maintenance'), hedgehog_service=game)
-    query = {'id': 'q', 'from': {'id': 8 if kind == 'other_owner' else 7}, 'chat': {'id': 7},
+    query = {'id': 'q',
+             'from': {'id': 8 if kind == 'other_owner' else 7,
+                      'is_bot': False, 'first_name': 'Tester'},
+             'chat_instance': 'ci', 'type': {'type': 'data'},
+             'chat': {'id': 7, 'type': 'private'},
              'message_id': 1, 'data': 'broken' if kind == 'malformed' else f'hg:s:{token}'}
+    if kind == 'copy':
+        query['widget_id'] = 'w1'
     if kind == 'banned':
         db.users.docs[7]['is_banned'] = True
     key = 'shared_widget_query' if kind == 'copy' else 'widget_query'
@@ -481,7 +491,10 @@ async def test_native_tap_action_uses_signed_owner_and_server_counter():
     handler = AsyncMock()
     def update(action, owner=7):
         return Update.model_validate({'update_id': 1, 'widget_query': {
-            'id': 'query', 'from': {'id': owner}, 'chat': {'id': 7}, 'message_id': 1,
+            'id': 'query',
+            'from': {'id': owner, 'is_bot': False, 'first_name': 'Tester'},
+            'chat_instance': 'ci', 'type': {'type': 'data'},
+            'chat': {'id': 7, 'type': 'private'}, 'message_id': 1,
             'data': f'hg:{action}:{token}'}})
     middleware = HedgehogWidgetMiddleware(container)
     with patch('src.services.hedgehog_service.time.time', return_value=100):

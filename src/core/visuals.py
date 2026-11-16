@@ -8,7 +8,7 @@ import random
 import hashlib
 from typing import List, Dict, Any, Tuple, Sequence, Optional
 
-from src.core.constants import EXCHANGE_COINS_TO_TICKET, EXCHANGE_TICKET_TO_COINS
+from src.core.constants import EXCHANGE_COINS_TO_TICKET, EXCHANGE_TICKET_TO_COINS, TOTAL_EMISSION_CAP
 
 
 def _clamp_int(n: int, lo: int, hi: int) -> int:
@@ -654,7 +654,7 @@ class Visuals:
             f"👤 {name_line}",
             f"🔥 XP: {int(xp)}/{int(xp_next)}",
             f"{xp_bar}",
-            f"💰{int(coins)}  🎫{tickets}  💬{messages}",
+            f"💰 {cls._fmt_coins(coins)} Coin  🎫 {tickets}  💬 {messages}",
             f"💱 ≈ {coins * 0.0002:,.2f} USDT",
         ])
         
@@ -719,6 +719,9 @@ class Visuals:
 
         balance = bank.get("balance", 0)
         total_supply = bank.get("total_supply", balance + circulation)
+        emitted = bank.get("total_emitted", total_supply)
+        cap = bank.get("emission_cap", TOTAL_EMISSION_CAP)
+        remaining = bank.get("emission_remaining", max(0, cap - emitted))
         collected = bank.get("total_collected", 0)
         distributed = bank.get("total_distributed", 0)
         
@@ -730,9 +733,12 @@ class Visuals:
             cls.frame_top_left(w),
             cls.frame_line_left("🏦 SENSEI BANK", w, "center"),
             cls.frame_separator_left(w),
-            cls.frame_line_left(f"💰 Баланс: {balance:,.0f}", w),
-            cls.frame_line_left(f"🪙 В обороте: {circulation:,.0f}", w),
-            cls.frame_line_left(f"📈 Эмиссия: {total_supply:,.0f}", w),
+            cls.frame_line_left(f"💰 Баланс: {cls._fmt_coins(balance)}", w),
+            cls.frame_line_left(f"🪙 В обороте: {cls._fmt_coins(circulation)}", w),
+            cls.frame_line_left(f"📈 В системе: {cls._fmt_coins(total_supply)}", w),
+            cls.frame_line_left(f"🏭 Выпущено: {cls._fmt_coins(emitted)}", w),
+            cls.frame_line_left(f"🎚 Лимит: {cls._fmt_coins(cap)}", w),
+            cls.frame_line_left(f"🟢 Осталось: {cls._fmt_coins(remaining)}", w),
             cls.frame_separator_left(w),
             cls.frame_line_left("📊 Статистика:", w),
             cls.frame_line_left(f"📥 Собрано: {collected:,.0f}", w),

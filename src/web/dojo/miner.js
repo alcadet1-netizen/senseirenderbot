@@ -385,6 +385,7 @@
     try {
       const data = await api("collect");
       apply(data);
+      if (bank) loadBank(true);
       celebrate(data.mined || 0);
       showToast(
         `+${coin(data.mined)} SenseiCoin · баланс ${coin(data.balance)}`,
@@ -517,6 +518,7 @@
     try {
       const data = await api("task", { slug });
       apply(data);
+      if (bank) loadBank(true);
       const updated = data.task || { ...task, claimed: true };
       tasks = tasks.map((item) =>
         item.slug === slug ? { ...item, ...updated, claimed: true } : item,
@@ -683,10 +685,29 @@
 
   function renderBank() {
     if (!bank) return;
+    const emitted = Number(bank.total_emitted) || 0;
+    const cap = Number(bank.emission_cap) || 0;
+    const percent = Math.max(
+      0,
+      Math.min(100, Number(bank.emission_percent) || 0),
+    );
+    $("bank-emitted").textContent = `${coin(emitted)} Coin`;
+    $("bank-cap").textContent = `${coin(cap)} Coin`;
+    $("bank-remaining").textContent = `${coin(bank.emission_remaining)} Coin`;
     $("bank-supply").textContent = `${coin(bank.total_supply)} Coin`;
     $("bank-balance").textContent = `${coin(bank.bank_balance)} Coin`;
     $("bank-circulation").textContent = `${coin(bank.circulation)} Coin`;
     $("bank-users").textContent = coin(bank.users);
+    const bar = $("bank-progress");
+    if (bar) bar.style.width = `${percent}%`;
+    const track = $("bank-progress-track");
+    if (track) {
+      track.setAttribute("aria-valuenow", percent.toFixed(1));
+      track.setAttribute(
+        "aria-valuetext",
+        `${coin(emitted)} из ${coin(cap)} Coin`,
+      );
+    }
   }
 
   async function loadBank(force = false) {
@@ -716,6 +737,9 @@
     if (name === "tasks") loadTasks();
     if (name === "upgrades") loadUpgrades();
     if (name === "bank") loadBank(true);
+    // Chat games/mining change users.coins outside this WebView; re-read the
+    // authoritative server balance whenever the player returns to a view.
+    if (name === "mining" || name === "profile") refresh(true);
     closeSheet();
   }
 

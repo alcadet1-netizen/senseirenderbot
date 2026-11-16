@@ -52,6 +52,8 @@ async def setup_bot_commands(bot: Bot) -> None:
         BotCommand(command="senseihelp", description="📋 Помощь"),
         BotCommand(command="senseiwidget", description="🧩 Карточки профиля и рейтинга"),
         BotCommand(command="mysensei", description="👤 Мой профиль"),
+        BotCommand(command="balance", description="💰 Баланс (общий с майнером)"),
+        BotCommand(command="dojo", description="⛏ Майнер SenseiCoin"),
         BotCommand(command="senseitop", description="🏆 Топ игроков"),
         BotCommand(command="senseidaily", description="🎁 Ежедневный бонус"),
         BotCommand(command="senseiobmen", description="💱 Обмен валют"),
@@ -69,6 +71,9 @@ async def on_startup(bot: Bot, container: Container) -> None:
     logger.info("✅ MongoDB connected")
 
     await container.hedgehog_service.ensure_indexes()
+
+    # Reconcile the one global emission counter before any coins can be minted.
+    await container.emission_service.bootstrap()
 
     # Заполняем достижения
     count = await container.achievement_service.seed_achievements()

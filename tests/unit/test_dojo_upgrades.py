@@ -243,7 +243,14 @@ async def test_bank_summary_uses_the_cached_admin_snapshot():
                  'initial_coins': 1_000_000_000.0},
     })
     data = await stats.get_bank_summary()
-    assert data == {'bank_balance': 1000, 'circulation': 450,
-                    'total_supply': 1450, 'initial_coins': 1_000_000_000.0,
-                    'users': 3}
+    assert data['bank_balance'] == 1000
+    assert data['single_balance'] == 1000
+    assert data['legacy_balance'] == 0
+    assert data['circulation'] == 450
+    assert data['total_supply'] == 1450
+    assert data['total_emitted'] == 1450
+    assert data['emission_cap'] == 10_000_000_000.0
+    assert data['emission_remaining'] == 10_000_000_000.0 - 1450
+    assert data['initial_coins'] == 1_000_000_000.0
+    assert data['users'] == 3
     stats.get_admin_stats.assert_awaited_once()

@@ -7,6 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from src.core.exceptions import UserNotFoundError
 from src.infra.mongo.client import MongoClient
 from src.services.level_service import LevelService
+from src.services.emission_service import EmissionService
 from src.core.constants import STARTER_XP, STARTER_COINS, STARTER_KATANA_LENGTH
 import logging
 from datetime import datetime, timezone
@@ -21,6 +22,7 @@ class UserService:
         self.mongo_client = mongo_client
         self.db: AsyncIOMotorDatabase = mongo_client.database
         self.level_service = LevelService()
+        self.emission = EmissionService(mongo_client)
         # Collections
         self.users = self.db.users
         self.tickets = self.db.tickets
@@ -102,7 +104,14 @@ class UserService:
                     user.update(update_data)
                 return {"user": user, "created": False}
             else:
-                # Create new user
+                # Starter coins are new emission: reserve them under the
+                # global cap before creating the profile. If the cap is already
+                # exhausted the player is registered with zero balance.
+                try:
+                    starter = await self.emission.reserve_starter(user_id, STARTER_COINS)
+                except Exception:
+                    logger.exception("Starter emission unavailable for user=%s", user_id)
+                    starter = 0.0
                 new_user = {
                     "id": user_id,
                     "username": username,
@@ -110,7 +119,7 @@ class UserService:
                     "last_name": last_name,
                     "is_bot": is_bot,
                     "xp": STARTER_XP,
-                    "coins": STARTER_COINS,
+                    "coins": starter,
                     "messages_count": 0,
                     "wins": 0,
                     "losses": 0,
@@ -128,7 +137,12 @@ class UserService:
                     "can_receive_broadcast": True,
                     "created_at": datetime.now(timezone.utc),
                 }
-                await self.users.insert_one(new_user)
+                try:
+                    await self.users.insert_one(new_user)
+                except Exception:
+                    if starter:
+                        await self.emission.release(starter, f"starter:{user_id}")
+                    raise
                 return {"user": new_user, "created": True}
         except Exception as e:
             logger.error(f"Error in get_or_create for user {user_id}: {e}")

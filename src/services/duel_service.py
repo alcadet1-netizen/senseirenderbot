@@ -774,17 +774,15 @@ class DuelService:
                         duel.log_lines.append(f"✨ Пользователь {winner_id} получает +50 XP (документ не найден).")
 
                     if coins_reward > 0:
-                        await self.users.update_one(
-                            {"id": winner_id},
-                            {"$inc": {"coins": coins_reward}}
-                        )
                         duel.log_lines.append(f"💰 Победитель получает {int(coins_reward)} монет!")
 
-                        # Create transaction for winner's winnings
+                        # The bet payout is credited exactly once below from the
+                        # escrow.  This record is the XP/win journal only; an
+                        # extra $inc here minted a second copy of every bet.
                         tx_doc = {
                             "user_id": winner_id,
                             "tx_type": "duel_win",
-                            "coins_change": coins_reward,
+                            "coins_change": 0.0,
                             "xp_change": 50,
                             "description": f"Победа в дуэли #{duel.id} против {loser_id}",
                             "created_at": datetime.now(timezone.utc),
@@ -1049,15 +1047,25 @@ class DuelService:
             )
             return False
 
-        # Deduct bets from both users
-        await self.users.update_one(
-            {"id": cid},
-            {"$inc": {"coins": -float(bet)}}
+        # Deduct bets from both users. Conditional so a concurrent spend
+        # cannot make only one side of the escrow succeed; if the opponent's
+        # debit fails, the challenger's bet is returned immediately.
+        first = await self.users.update_one(
+            {"id": cid, "coins": {"$gte": float(bet)}},
+            {"$inc": {"coins": -float(bet)}},
         )
-        await self.users.update_one(
-            {"id": oid},
-            {"$inc": {"coins": -float(bet)}}
+        if getattr(first, "matched_count", 1) != 1:
+            return False
+        second = await self.users.update_one(
+            {"id": oid, "coins": {"$gte": float(bet)}},
+            {"$inc": {"coins": -float(bet)}},
         )
+        if getattr(second, "matched_count", 1) != 1:
+            await self.users.update_one(
+                {"id": cid},
+                {"$inc": {"coins": float(bet)}},
+            )
+            return False
 
         # Create transaction records for the escrow
         for uid in (cid, oid):

@@ -2,7 +2,7 @@
 
 ## Архитектура и область изменений
 
-Python/aiogram 3, Motor/MongoDB, существующие `users.id`, `users.coins`, `transactions`. Новая параллельная валюта/баланс не создаётся. Используется существующий `UserService.get_or_create`, включая обычные стартовые условия регистрации. Награды кампании выдаются **из SenseiBank** (`bank/_id=single`, поле `coins`), того же банка, который показывает `/senseibank`. Автопополнения и эмиссии нет. В журнале `tx_type=comment_campaign_reward`, `xp_change=0`.
+Python/aiogram 3, Motor/MongoDB, существующие `users.id`, `users.coins`, `transactions`. Новая параллельная валюта/баланс не создаётся. Используется существующий `UserService.get_or_create`, включая обычные стартовые условия регистрации. Награды кампании выдаются **из SenseiBank** (`bank/_id=single`, поле `coins`), того же банка, который показывает `/senseibank`. Автопополнения и эмиссии нет: кампания только переводит уже существующие монеты из банка, а глобальный выпуск ограничен `TOTAL_EMISSION_CAP = 10 000 000 000`. В журнале `tx_type=comment_campaign_reward`, `xp_change=0`.
 
 Планировщик — MongoDB-backed job queue (`due_at`, lease, фазы), без Redis/Celery. Входящие Telegram-события и известные удаления также хранятся в MongoDB. SQLite, локальный файл очереди и Render Persistent Disk не используются.
 

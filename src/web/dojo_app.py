@@ -76,6 +76,10 @@ def setup_dojo(app, container=None):
                 result['task'] = claim['task']
                 result['reward_coins'] = claim['reward_coins']
                 result['energy_bonus'] = claim['energy_bonus']
+                stats = getattr(container, 'stats_service', None)
+                invalidate = getattr(stats, 'invalidate', None)
+                if invalidate is not None:
+                    invalidate()
             elif action == 'upgrades':
                 result = {'upgrades': await container.dojo_upgrade_service.snapshot(
                     user['id'])}
@@ -109,6 +113,12 @@ def setup_dojo(app, container=None):
                 result = await container.stats_service.get_bank_summary()
             else:
                 result = await service.collect(user['id'])
+                # The bank/emission tab must not show a snapshot older than the
+                # collect that just moved coins from the bank to this player.
+                stats = getattr(container, 'stats_service', None)
+                invalidate = getattr(stats, 'invalidate', None)
+                if invalidate is not None:
+                    invalidate()
             return web.json_response(result, headers=headers)
         except GameError as exc:
             return web.json_response({'error': str(exc)}, status=409, headers=headers)

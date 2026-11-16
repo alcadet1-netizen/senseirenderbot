@@ -35,6 +35,7 @@ class Container:
     _broadcast_service: Optional["BroadcastService"] = field(default=None, init=False, repr=False)
     _crypto_service: Optional["CryptoService"] = field(default=None, init=False, repr=False)
     _stats_service: Optional["StatsService"] = field(default=None, init=False, repr=False)
+    _emission_service: Optional["EmissionService"] = field(default=None, init=False, repr=False)
     _quiz_service: Optional["QuizService"] = field(default=None, init=False, repr=False)
     _trade_service: Optional["TradeService"] = field(default=None, init=False, repr=False)
     _slots_service: Optional["SlotsService"] = field(default=None, init=False, repr=False)
@@ -196,6 +197,13 @@ class Container:
             from src.services.crypto_service import CryptoService
             self._crypto_service = CryptoService(self.settings)
         return self._crypto_service
+
+    @property
+    def emission_service(self):
+        if self._emission_service is None:
+            from src.services.emission_service import EmissionService
+            self._emission_service = EmissionService(self.mongo_client)
+        return self._emission_service
 
     @property
     def stats_service(self):

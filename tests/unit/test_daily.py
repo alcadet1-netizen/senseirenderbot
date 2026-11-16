@@ -128,8 +128,11 @@ async def test_claim_daily_success(daily_service, mock_mongo_client):
     # Verify user was created
     mock_mongo_client.database.users.insert_one.assert_called_once()
 
-    # Verify bank was updated (coins deducted)
-    mock_mongo_client.database.bank.update_one.assert_called_once()
+    # Verify bank was updated (coins deducted). Emission bootstrap may also
+    # write the canonical counter, so assert on the legacy bank debit itself.
+    assert any(call.args and call.args[0].get("_id") == "main"
+               and call.args[1].get("$inc", {}).get("balance") == -result["total_coins"]
+               for call in mock_mongo_client.database.bank.update_one.call_args_list)
 
     # Verify user was updated (xp, coins, last_daily, streak)
     mock_mongo_client.database.users.update_one.assert_called_once()

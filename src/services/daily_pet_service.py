@@ -10,6 +10,7 @@ from pymongo import ReturnDocument
 
 from src.core.exceptions import DailyAlreadyClaimedError
 from src.services.hedgehog_service import GameError, utc_day
+from src.services.bank_ledger import BankLedger
 
 
 class PetRateLimit(GameError):
@@ -23,6 +24,7 @@ class DailyPetService:
         self.bank = mongo.database.bank
         self.transactions = mongo.database.transactions
         self.daily = daily
+        self.ledger = BankLedger(mongo)
         self._locks = defaultdict(asyncio.Lock)
 
     async def claim(self, user_id):
@@ -153,10 +155,14 @@ class DailyPetService:
                 slot = int(accepted_at * 10) if received_at is not None and rate_limit else None
                 if slot is not None and slot in session.get('web_slots', []):
                     raise PetRateLimit('Тапы слишком частые: не более одного за 100 мс. Эффекты работают на каждом касании.')
-                bank = await self.bank.find_one({'_id': 'main'})
+                bank_balance = max(0, int(await self.ledger.balance()))
                 desired = session['base_coins'] * (session['taps'] + 1) // 10
                 # Each tap adds ten percent of the original coin award, not compound interest.
-                delta = min(max(0, desired - session['extra_coins']), max(0, int((bank or {}).get('balance', 0))))
+                delta = min(max(0, desired - session['extra_coins']), bank_balance)
+                # Debit first: a concurrent tap may consume the last coins, in
+                # which case this tap gives no extra coins instead of minting.
+                if delta and not await self.ledger.try_withdraw(delta):
+                    delta = 0
                 updated = copy.deepcopy(session)
                 updated['taps'] += 1
                 updated['extra_coins'] += delta
@@ -170,13 +176,10 @@ class DailyPetService:
                     {'$set': {'daily_pet': updated}, '$inc': {'coins': delta}},
                     return_document=ReturnDocument.AFTER)
                 if not committed:
+                    if delta:
+                        await self.ledger.refund(delta, 'daily_pet_cas_race')
                     continue
                 try:
-                    if delta:
-                        debit = await self.bank.update_one({'_id': 'main', 'balance': {'$gte': delta}},
-                                                   {'$inc': {'balance': -delta}})
-                        if debit is None or getattr(debit, 'matched_count', None) == 0:
-                            raise RuntimeError('Bank debit did not match after user credit; reconciliation required')
                     await self.transactions.update_one(
                         {'_id': f"daily_pet:{user_id}:{session['day']}:{updated['taps']}"},
                         {'$setOnInsert': {'user_id': user_id, 'tx_type': 'daily_pet_bonus',

@@ -56,7 +56,11 @@ LEVEL_NAMES: Dict[int, str] = {
 XP_PER_MESSAGE: int = 10
 COINS_PER_MESSAGE: float = 9.0
 MESSAGES_PER_TICKET: int = 300
-MAX_BANK_SUPPLY: float = 1_000_000_000.0
+# Hard lifetime ceiling for every SenseiCoin ever created (bank fill +
+# registration starter kits). Transfers inside the economy never change it.
+TOTAL_EMISSION_CAP: float = 10_000_000_000.0
+# The bank is only one part of the supply; the global cap is authoritative.
+MAX_BANK_SUPPLY: float = TOTAL_EMISSION_CAP
 
 # ХАЛВИНГ
 HALVING_THRESHOLDS: List[int] = [

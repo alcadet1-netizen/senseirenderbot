@@ -29,6 +29,8 @@ from src.core.exceptions import (
 )
 from src.infra.mongo.client import MongoClient
 from src.services.level_service import LevelService
+from src.services.emission_service import EmissionService
+from src.services.bank_ledger import BankLedger
 import logging
 from datetime import datetime, timezone, timedelta
 
@@ -47,6 +49,8 @@ class EconomyService:
         self.transactions = self.db.transactions
         self.bank = self.db.bank  # Stores a single document with balance
         self.tickets = self.db.tickets
+        self.emission = EmissionService(mongo_client)
+        self.ledger = BankLedger(mongo_client)
         # Locks for simulating distributed locks (since we are single instance)
         self._locks = {}
         # We'll use a simple dictionary of asyncio locks
@@ -81,67 +85,48 @@ class EconomyService:
         return max(multiplier, 0.001)
 
     async def _get_bank_balance(self) -> float:
-        """Получить текущий баланс банка."""
-        doc = await self.bank.find_one({"_id": "single"})
-        if doc:
-            balance = doc.get("coins", 0.0)
-            if balance == 0.0:
-                # Reset bank to initial balance if empty
-                initial_balance = settings.bank_initial_coins
-                await self._set_bank_balance(initial_balance)
-                logger.info(f"[BANK] Bank balance was zero, reset to {initial_balance}")
-                return initial_balance
-            logger.info(f"[BANK] Found bank document with balance {balance}")
-            return balance
-        else:
-            # Initialize bank with initial coins from settings
-            initial_balance = settings.bank_initial_coins
-            await self.bank.insert_one({"_id": "single", "coins": initial_balance})
-            logger.info(f"[BANK] Initialized bank with balance {initial_balance}")
-            return initial_balance
+        """Read the canonical bank balance.
+
+        Never refills an empty bank: minting new coins as a side effect of a
+        read is how the old economy exceeded every supply limit.  The bank is
+        filled once by :class:`EmissionService` and afterwards only moves coins
+        that already exist.
+        """
+        return await self.ledger.balance()
 
     async def _set_bank_balance(self, balance: float) -> None:
-        """Установить баланс банка."""
+        """Explicit bank rewrite (season reset/migration only).
+
+        Reward paths must use :meth:`_withdraw_from_bank`; this setter is kept
+        for compatibility with administrative code and deliberately does not
+        invent a fresh emission counter.
+        """
         await self.bank.update_one(
             {"_id": "single"},
-            {"$set": {"coins": balance}},
-            upsert=True
+            {"$set": {"coins": float(balance)}},
+            upsert=True,
         )
-        logger.info(f"[BANK] Balance set to {balance:,.2f}")
+        logger.warning("[BANK] Balance rewritten explicitly to %s", balance)
 
     async def _withdraw_from_bank(self, amount: float) -> bool:
-        """Снять amount с банка. Возвращает True если успешно."""
-        # Bank read-modify-write must be atomic: concurrent payouts (bomb winners,
-        # boss rewards) must not interleave and corrupt the balance.
-        async with self._get_lock("bank"):
-            doc = await self.bank.find_one({"_id": "single"})
-            if not doc:
-                # Initialize if not exists
-                await self._set_bank_balance(settings.bank_initial_coins)
-                doc = await self.bank.find_one({"_id": "single"})
-            current_balance = doc.get("coins", 0.0)
-            if current_balance < amount:
-                # Реинициализируем пустой банк вместо «липкого» False, чтобы
-                # повторные bombas / награды не ломались на пустом банке.
-                await self._set_bank_balance(settings.bank_initial_coins)
-                doc = await self.bank.find_one({"_id": "single"})
-                current_balance = doc.get("coins", 0.0)
-                if current_balance < amount:
-                    return False
-            new_balance = current_balance - amount
-            await self._set_bank_balance(new_balance)
-            return True
+        """Atomically debit the bank; False means the bank did not cover it.
+
+        The guard and the ``$inc`` are one Mongo update, so two processes can
+        never both spend the final coins.
+        """
+        return await self.ledger.try_withdraw(amount)
 
     async def _deposit_to_bank(self, amount: float) -> None:
-        """Положить amount в банк."""
-        async with self._get_lock("bank"):
-            doc = await self.bank.find_one({"_id": "single"})
-            if not doc:
-                await self._set_bank_balance(settings.bank_initial_coins)
-                doc = await self.bank.find_one({"_id": "single"})
-            current_balance = doc.get("coins", 0.0)
-            new_balance = current_balance + amount
-            await self._set_bank_balance(new_balance)
+        """Return coins that already belong to players back to the bank."""
+        await self.ledger.deposit(amount)
+
+    async def _grant_starter(self, user_id: int) -> float:
+        """Reserve a registration starter kit under the global emission cap."""
+        try:
+            return await self.emission.reserve_starter(user_id, STARTER_COINS)
+        except Exception:
+            logger.exception("Starter emission unavailable for user=%s", user_id)
+            return 0.0
 
     async def process_message_reward(
         self,
@@ -166,7 +151,9 @@ class EconomyService:
             # Get or create user
             user = await self.users.find_one({"id": user_id})
             if user is None:
-                # Create new user with starter bonuses
+                # Create new user with starter bonuses, but only after the
+                # starter amount has been atomically reserved under the cap.
+                starter = await self._grant_starter(user_id)
                 user = {
                     "id": user_id,
                     "username": username,
@@ -174,7 +161,7 @@ class EconomyService:
                     "last_name": last_name,
                     "is_bot": is_bot,
                     "xp": STARTER_XP,
-                    "coins": STARTER_COINS,
+                    "coins": starter,
                     "messages_count": 0,
                     "wins": 0,
                     "losses": 0,
@@ -192,10 +179,15 @@ class EconomyService:
                     "can_receive_broadcast": True,
                     "created_at": datetime.now(timezone.utc),
                 }
-                await self.users.insert_one(user)
+                try:
+                    await self.users.insert_one(user)
+                except Exception:
+                    if starter:
+                        await self.emission.release(starter, f"starter:{user_id}")
+                    raise
                 # Refresh the user document
                 user = await self.users.find_one({"id": user_id})
-                logger.info(f"[ECONOMY] Created new user {user_id} with starter bonuses: {STARTER_XP} XP, {STARTER_COINS} coins, {STARTER_KATANA_LENGTH}cm katana")
+                logger.info(f"[ECONOMY] Created new user {user_id} with starter bonuses: {STARTER_XP} XP, {starter} coins, {STARTER_KATANA_LENGTH}cm katana")
             else:
                 # Update if needed
                 update_data = {}
@@ -243,17 +235,15 @@ class EconomyService:
                 coins_reward = wave_coins if wave_coins is not None else COINS_PER_MESSAGE * multiplier
                 logger.info(f"[ECONOMY] User {user_id} xp_reward={xp_reward}, coins_reward={coins_reward}")
 
-                # Check bank balance and withdraw if possible
+                # Never mint to cover a message reward: if the bank is low,
+                # pay only what the atomic debit actually covers.
                 bank_balance = await self._get_bank_balance()
                 logger.info(f"[ECONOMY] Bank balance={bank_balance}, coins_reward={coins_reward}")
-                if bank_balance < coins_reward:
-                    # If bank doesn't have enough, reset it to initial balance to ensure we can continue
-                    initial_balance = settings.bank_initial_coins
-                    await self._set_bank_balance(initial_balance)
-                    logger.info(f"[ECONOMY] Bank balance was insufficient ({bank_balance}), reset to {initial_balance}")
-                    bank_balance = initial_balance
-                # Now we should have enough
-                await self._withdraw_from_bank(coins_reward)
+                if coins_reward > bank_balance:
+                    coins_reward = max(0.0, bank_balance)
+                if coins_reward > 0 and not await self._withdraw_from_bank(coins_reward):
+                    logger.warning("[ECONOMY] Bank debit raced for message reward user=%s", user_id)
+                    coins_reward = 0.0
                 logger.info(f"[ECONOMY] Withdrew {coins_reward} from bank")
 
                 # Update user XP and coins
@@ -610,8 +600,10 @@ class EconomyService:
         reward_per_user = total_reward / len(participant_ids)
         processed_count = 0
 
-        # Withdraw total reward from bank
-        await self._withdraw_from_bank(total_reward)
+        # Withdraw total reward from bank; do not credit players if the debit
+        # raced away.
+        if not await self._withdraw_from_bank(total_reward):
+            return {"success": False, "count": 0, "reason": "insufficient_bank"}
 
         # Distribute to participants
         for user_id in participant_ids:
@@ -686,7 +678,8 @@ class EconomyService:
             # Get or create user
             user = await self.users.find_one({"id": user_id})
             if user is None:
-                # Create new user with starter bonuses
+                # Create new user with starter bonuses, capped like any mint.
+                starter = await self._grant_starter(user_id)
                 user = {
                     "id": user_id,
                     "username": None,
@@ -694,7 +687,7 @@ class EconomyService:
                     "last_name": None,
                     "is_bot": False,
                     "xp": STARTER_XP,
-                    "coins": STARTER_COINS,
+                    "coins": starter,
                     "messages_count": 0,
                     "wins": 0,
                     "losses": 0,
@@ -712,10 +705,15 @@ class EconomyService:
                     "can_receive_broadcast": True,
                     "created_at": datetime.now(timezone.utc),
                 }
-                await self.users.insert_one(user)
+                try:
+                    await self.users.insert_one(user)
+                except Exception:
+                    if starter:
+                        await self.emission.release(starter, f"starter:{user_id}")
+                    raise
                 # Refresh the user document
                 user = await self.users.find_one({"id": user_id})
-                logger.info(f"[ECONOMY] Created new user {user_id} with starter bonuses: {STARTER_XP} XP, {STARTER_COINS} coins, {STARTER_KATANA_LENGTH}cm katana")
+                logger.info(f"[ECONOMY] Created new user {user_id} with starter bonuses: {STARTER_XP} XP, {starter} coins, {STARTER_KATANA_LENGTH}cm katana")
             else:
                 # Update if needed - but for game win we don't typically update username/name
                 pass
@@ -727,17 +725,17 @@ class EconomyService:
             # Apply rewards
             logger.info(f"[ECONOMY] Applying game win reward for user {user_id}: coins={coins}, xp={xp}")
 
-            # Check bank balance and withdraw if possible
+            # A game win is a transfer from the bank. If the bank cannot cover
+            # the whole amount, fail instead of minting the difference.
+            coins = max(0.0, float(coins))
             bank_balance = await self._get_bank_balance()
             logger.info(f"[ECONOMY] Bank balance={bank_balance}, coins_reward={coins}")
-            if bank_balance < coins:
-                # If bank doesn't have enough, reset it to initial balance to ensure we can continue
-                initial_balance = settings.bank_initial_coins
-                await self._set_bank_balance(initial_balance)
-                logger.info(f"[ECONOMY] Bank balance was insufficient ({bank_balance}), reset to {initial_balance}")
-                bank_balance = initial_balance
-            # Now we should have enough
-            await self._withdraw_from_bank(coins)
+            if coins > bank_balance:
+                return {"success": False, "reason": "insufficient_bank",
+                        "bank_balance": bank_balance, "required": coins}
+            if coins > 0 and not await self._withdraw_from_bank(coins):
+                return {"success": False, "reason": "insufficient_bank",
+                        "bank_balance": await self._get_bank_balance(), "required": coins}
             logger.info(f"[ECONOMY] Withdrew {coins} from bank")
 
             # Update user XP and coins
@@ -827,11 +825,15 @@ class EconomyService:
                         "reason": "insufficient_funds",
                         "balance": sender_balance
                     }
-                # Deduct from sender
-                await self.users.update_one(
-                    {"id": sender_id},
-                    {"$inc": {"coins": -amount}}
+                # Deduct from sender atomically. A read-then-write race could
+                # otherwise let one balance fund two drops, and the second set
+                # of recipients would be new coins.
+                debited = await self.users.update_one(
+                    {"id": sender_id, "coins": {"$gte": amount}},
+                    {"$inc": {"coins": -amount}},
                 )
+                if getattr(debited, "matched_count", 1) != 1:
+                    return {"success": False, "reason": "insufficient_funds"}
                 # Create transaction for sender deduction
                 tx_doc = {
                     "user_id": sender_id,

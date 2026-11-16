@@ -9,6 +9,7 @@ import logging
 from aiogram import Bot
 from src.core.config import settings
 from src.infra.mongo.client import MongoClient
+from src.services.bank_ledger import BankLedger
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,8 @@ class ModerationService:
         # Collections
         self.users = self.db.users
         self.transactions = self.db.transactions
-        self.bank = self.db.bank  # {_id: "main", balance: X}
+        self.bank = self.db.bank  # legacy {_id: "main", balance: X}
+        self.ledger = BankLedger(mongo_client)
         self.muted_users = self.db.muted_users  # For muted users
         # Cache for quick mute checks: user_id -> muted_until (None for permanent)
         self._muted_cache: dict[int, Optional[datetime]] = {}
@@ -62,27 +64,27 @@ class ModerationService:
         if confiscate_coins:
             user_coins = user.get("coins", 0)
             if user_coins > 0:
-                confiscated = user_coins
-                # Set user coins to 0
-                await self.users.update_one(
-                    {"id": user_id},
-                    {"$set": {"coins": 0}}
+                # Compare-and-set: only the request that actually zeroed the
+                # old balance may put those coins back into the bank.  A
+                # read-then-write race could otherwise deposit the same coins
+                # twice and mint them.
+                cleared = await self.users.update_one(
+                    {"id": user_id, "coins": user_coins},
+                    {"$set": {"coins": 0}},
                 )
-                # Deposit to bank
-                await self.bank.update_one(
-                    {"_id": "main"},
-                    {"$inc": {"balance": confiscated}},
-                    upsert=True
-                )
-                # Create transaction record
-                tx_doc = {
-                    "user_id": user_id,
-                    "tx_type": "ban_confiscation",
-                    "coins_change": -confiscated,
-                    "description": f"Ban confiscation: {reason}",
-                    "created_at": datetime.now(timezone.utc),
-                }
-                await self.transactions.insert_one(tx_doc)
+                if getattr(cleared, "matched_count", 1) == 1:
+                    confiscated = user_coins
+                    # Deposit to the canonical/legacy bank pool.
+                    await self.ledger.deposit(confiscated)
+                    # Create transaction record
+                    tx_doc = {
+                        "user_id": user_id,
+                        "tx_type": "ban_confiscation",
+                        "coins_change": -confiscated,
+                        "description": f"Ban confiscation: {reason}",
+                        "created_at": datetime.now(timezone.utc),
+                    }
+                    await self.transactions.insert_one(tx_doc)
 
         # Ban user
         await self.users.update_one(
