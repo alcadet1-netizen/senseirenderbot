@@ -47,6 +47,8 @@ async def test_miner_assets_and_csp():
             assert response.status == 200, path
             assert "connect-src 'self'" in response.headers['Content-Security-Policy']
             assert 'https://telegram.org' in response.headers['Content-Security-Policy']
+        webp = await client.get('/miniapp/dojo/assets/kick.webp')
+        assert webp.headers['Content-Type'] == 'image/webp'
         assert (await client.get('/miniapp/dojo/game.js')).status == 404
         assert (await client.get('/miniapp/dojo/renderer.js')).status == 404
         assert (await client.get('/miniapp/dojo/assets/kick.png')).status == 404

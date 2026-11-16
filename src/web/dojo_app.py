@@ -32,6 +32,8 @@ def setup_dojo(app, container=None):
         if name not in ASSETS:
             raise web.HTTPNotFound()
         response = web.FileResponse(ROOT / name, headers=headers)
+        if name.endswith('.webp'):
+            response.headers['Content-Type'] = 'image/webp'
         response.headers['Content-Security-Policy'] = (
             "default-src 'none'; script-src 'self' https://telegram.org; style-src 'self'; "
             "img-src 'self' data:; connect-src 'self'; base-uri 'none'; "
