@@ -35,7 +35,7 @@ def setup_dojo(app, container=None):
         response.headers['Content-Security-Policy'] = (
             "default-src 'none'; script-src 'self' https://telegram.org; style-src 'self'; "
             "img-src 'self' data:; connect-src 'self'; base-uri 'none'; "
-            "form-action 'none'; frame-ancestors https://web.telegram.org https://*.telegram.org"
+            "form-action 'none'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org"
         )
         return response
 
