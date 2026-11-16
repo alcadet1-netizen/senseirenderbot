@@ -231,6 +231,11 @@ async def cmd_upkatana(message: Message, container: Container):
 
     try:
         result = await container.economy_service.upgrade_katana(message.from_user.id)
+        # The upgrade returns the bank share immediately; drop the 60 s
+        # /senseibank and Mini App bank cache so the receipt matches the bank.
+        stats = getattr(container, "stats_service", None)
+        if stats is not None:
+            stats.invalidate()
 
         if container.settings.widgets_enabled:
             await send_katana_upgrade(

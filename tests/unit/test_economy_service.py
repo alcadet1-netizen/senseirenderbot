@@ -71,6 +71,8 @@ async def test_buy_katana_success(economy_service, mock_mongo_client):
                 if "$set" in update_dict:
                     stored_user.update(update_dict["$set"])
             elif collection_name == "bank" and query.get("_id") == "single":
+                if "$inc" in update_dict and "coins" in update_dict["$inc"]:
+                    stored_bank_balance += update_dict["$inc"]["coins"]
                 if "$set" in update_dict and "balance" in update_dict["$set"]:
                     stored_bank_balance = update_dict["$set"]["balance"]
             # Return a mock result object
@@ -211,6 +213,8 @@ async def test_upgrade_katana_success(economy_service, mock_mongo_client):
                 if "$set" in update_dict:
                     stored_user.update(update_dict["$set"])
             elif collection_name == "bank" and query.get("_id") == "single":
+                if "$inc" in update_dict and "coins" in update_dict["$inc"]:
+                    stored_bank_balance += update_dict["$inc"]["coins"]
                 if "$set" in update_dict and "balance" in update_dict["$set"]:
                     stored_bank_balance = update_dict["$set"]["balance"]
             # Return a mock result object
@@ -249,6 +253,8 @@ async def test_upgrade_katana_success(economy_service, mock_mongo_client):
             {"id": 126, "coins": {"$gte": 150.0}}, update_calls[0].args[1], session=None
         )
         mock_mongo_client.database.bank.update_one.assert_called()  # Deposit to bank
+        # With no referrers the whole upgrade price returns to SenseiBank.
+        assert stored_bank_balance == 5150.0
         # Should have two update calls: one for coins, one for katana_length and timestamp
         update_calls = mock_mongo_client.database.users.update_one.call_args_list
         assert len(update_calls) == 1
