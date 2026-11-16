@@ -62,6 +62,27 @@ async def test_miner_assets_and_csp():
 
 
 @pytest.mark.asyncio
+async def test_miner_has_language_switch_and_scrollable_stage():
+    app = web.Application()
+    setup_dojo(app)
+    async with TestClient(TestServer(app)) as client:
+        html = await (await client.get('/miniapp/dojo')).text()
+        assert 'data-lang="en"' in html and 'data-lang="ru"' in html
+        assert 'data-i18n="ТВОИ ОЧКИ"' in html
+        assert 'data-i18n="Майнинг"' in html
+        assert 'data-i18n-aria="Разделы майнера"' in html
+        css = await (await client.get('/miniapp/dojo/style.css')).text()
+        assert '.lang-switch' in css
+        assert '#app.tabs-open .stage' in css
+        assert 'overflow-y: auto' in css
+        assert 'max-height: none' in css
+        js = await (await client.get('/miniapp/dojo/miner.js')).text()
+        assert 'const EN =' in js
+        assert 'Майнинг: "Mining"' in js
+        assert 'applyTranslations' in js
+
+
+@pytest.mark.asyncio
 async def test_api_requires_signature_and_dispatches_actions():
     state = AsyncMock(return_value={'phase': 'ready', 'reward': 26, 'balance': 1000})
     start = AsyncMock(return_value={'phase': 'mining', 'reward': 26})
