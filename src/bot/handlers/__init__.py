@@ -3,6 +3,7 @@
 """
 
 from aiogram import Router
+from src.bot.handlers.dojo import router as dojo_router
 from src.bot.handlers.fly import router as fly_router
 
 from src.bot.handlers.paid_hedgehog import router as paid_hedgehog_router
@@ -42,6 +43,7 @@ def setup_routers() -> Router:
     """Настройка и объединение всех роутеров."""
     main_router = Router(name="main")
 
+    main_router.include_router(dojo_router)
     main_router.include_router(fly_router)
     main_router.include_router(paid_hedgehog_router)
     main_router.include_router(donate_router)

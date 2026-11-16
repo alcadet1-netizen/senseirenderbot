@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#17151e" />
+    <title>Додзё — Последний рубеж</title>
+    <link rel="stylesheet" href="/miniapp/dojo/style.css" />
+  </head>
+  <body>
+    <main id="frame">
+      <canvas
+        id="game"
+        width="540"
+        height="960"
+        aria-label="Поле битвы"
+      ></canvas>
+      <header id="hud">
+        <button id="pause" aria-label="Пауза">Ⅱ</button
+        ><span id="hearts">♥ 3</span>
+        <div class="wave">
+          <div class="track"><i id="bar"></i></div>
+          <strong id="wave">Волна 1/5</strong>
+        </div>
+        <span id="coins">◉ 0</span>
+      </header>
+      <div id="army"></div>
+      <div id="toast" role="status"></div>
+      <section id="overlay"></section>
+      <footer>ДВИГАЙТЕСЬ ВЛЕВО И ВПРАВО · ОТРЯД АТАКУЕТ САМ</footer>
+    </main>
+    <script src="/miniapp/dojo/game.js"></script>
+  </body>
+</html>

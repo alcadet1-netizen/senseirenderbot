@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     mini_app_url: str = Field(default="", alias="MINI_APP_URL")
 
 
+    # Новая одиночная игра «Последний рубеж».
+    dojo_app_url: str = Field(default="", alias="DOJO_APP_URL")
+
     # BANK
     bank_initial_coins: float = Field(default=1_000_000_000.0, alias="BANK_INITIAL_COINS")
 
