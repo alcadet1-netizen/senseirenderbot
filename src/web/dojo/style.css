@@ -234,3 +234,92 @@ p {
   pointer-events: none;
   text-shadow: 0 1px 6px #000;
 }
+
+#bossname {
+  position: absolute;
+  top: 17%;
+  width: 100%;
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: #f5b4d4;
+  text-shadow: 0 2px 4px #000;
+  pointer-events: none;
+}
+#toast {
+  top: 22%;
+}
+
+/* Светлая арена: интерфейс остаётся контрастным на воде и бетоне. */
+html,
+body {
+  background: #b5e7f1;
+}
+#frame {
+  background: #7fd9ec;
+  box-shadow: 0 0 70px #478fa14d;
+}
+#army {
+  color: #193b53;
+  text-shadow: 0 1px 2px #fff9;
+  font-weight: 800;
+}
+#bossname {
+  color: #8b2454;
+  text-shadow: 0 1px 3px white;
+  font-weight: 900;
+}
+#combo {
+  color: #8d540a;
+  text-shadow: 0 1px 3px white;
+}
+#toast {
+  color: #183d61;
+  text-shadow: 0 1px 5px #fffffff2;
+}
+footer {
+  color: #274662;
+  background: #ffffff88;
+  padding: 3px;
+}
+#overlay {
+  background: linear-gradient(#e0f7ffdd, #f6fafff5);
+  color: #183651;
+}
+h1 {
+  color: #193e62;
+}
+h1 em {
+  color: #0698c9;
+}
+p {
+  color: #557084;
+}
+.eyebrow {
+  color: #3d8ca7;
+}
+.hint {
+  color: #5e7a8c;
+}
+.seal {
+  color: #069ed0;
+  filter: drop-shadow(0 3px 10px #70d6ee);
+}
+.primary {
+  background: linear-gradient(#3bd8f3, #149bcf);
+  border-color: #0985b5;
+  color: white;
+}
+.secondary {
+  color: #526a84;
+}
+.shop button {
+  background: #e5f5fb;
+  color: #183c59;
+  border-color: #8ac8de;
+}
+.shop small {
+  color: #87601a;
+}
+
+#hud,#army,#combo,#bossname,#toast,footer{z-index:2}#controls{z-index:3}#overlay{z-index:5}
