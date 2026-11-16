@@ -28,6 +28,7 @@ from aiogram.exceptions import TelegramBadRequest
 from src.core.config import settings
 from src.core.container import Container
 from src.core.visuals import Visuals
+from src.services.wave_activity import active_waves as _active_waves
 
 router = Router(name="wave")
 logger = logging.getLogger(__name__)
@@ -114,7 +115,6 @@ COMBO_MESSAGES = [
 ]
 
 # Хранилища
-_active_waves: Dict[int, dict] = {}
 _wave_streaks: Dict[int, int] = {}
 _wave_cooldowns: Dict[int, float] = {}
 _starting_waves: Set[int] = set()
@@ -243,6 +243,8 @@ def _build_wave_start_message(
     ])
 
     return (
+        "💬 <b>Пока идёт волна: 30 SenseiCoin за сообщение!</b>\n"
+        "После завершения вернутся обычные награды.\n\n"
         f"{upper_row}{upper_row}{upper_row}\n"
         f"  {lightning} <b>ВОЛНА АКТИВА</b> {lightning}\n"
         f"{lower_row}{lower_row}{lower_row}\n\n"
@@ -445,7 +447,8 @@ def _build_victory_message(
         f"💰 Остальные: <b>+{regular_reward:,}</b> каждому"
         f"{streak_block}"
         f"{army_achievement}\n\n"
-        f"🎁 <b>Все участники награждены!</b>"
+        f"🎁 <b>Все участники награждены!</b>\n"
+        f"💬 Бонус волны завершён — обычные награды за сообщения восстановлены."
     )
 
 
@@ -501,7 +504,8 @@ def _build_timeout_message(
         f"👥 Бойцов: <b>{len(participants)}</b>"
         f"{tried_text}\n"
         f"🔄 <i>Серия сброшена до 0</i>\n\n"
-        f"💪 <b>В следующий раз победим!</b>"
+        f"💪 <b>В следующий раз победим!</b>\n"
+        f"💬 Бонус волны завершён — обычные награды за сообщения восстановлены."
     )
 
 
