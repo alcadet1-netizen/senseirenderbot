@@ -1,9 +1,12 @@
-"""Запуск одиночной выживалки с ограниченной наградой SenseiCoin."""
+"""Запуск восьмичасового майнера SenseiCoin."""
 import os
 from urllib.parse import urlsplit
+
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+
+from src.services.dojo_miner_service import CYCLE_SECONDS, MINING_REWARD
 
 router = Router(name='dojo')
 
@@ -26,16 +29,18 @@ def dojo_url(settings):
 @router.message(Command('dojo'))
 async def cmd_dojo(message, container):
     if message.chat.type != 'private':
-        await message.answer('🥋 Открой личку бота и отправь /dojo — твой отряд ждёт!', parse_mode=None)
+        await message.answer('🥋 Открой личку бота и отправь /dojo — майнер скучает!', parse_mode=None)
         return
     url = dojo_url(container.settings)
     if not url:
-        await message.answer('Игра ещё не опубликована. Администратору нужно настроить DOJO_APP_URL или RENDER_EXTERNAL_URL.', parse_mode=None)
+        await message.answer('Майнер ещё не опубликован. Администратору нужно настроить DOJO_APP_URL или RENDER_EXTERNAL_URL.', parse_mode=None)
         return
+    hours = CYCLE_SECONDS // 3600
     await message.answer(
-        '🥋 Додзё: Последний рубеж\n\n'
-        'Отряд стражей против пяти волн чудовищ: пауки, скелеты, големы и маги. '
-        'Победи разрушителя-они и архилича, уходи от их атак, собирай бонусы и усиливай отряд в кузнице.\n\n'
-        'За забег можно добыть до 14 SenseiCoin в баланс бота: только за волны, минимум 45 секунд боя и не больше 30 Coin в сутки. Фарм намеренно жестокий.',
+        '🥋 Додзё: Майнер SenseiCoin\n\n'
+        f'Раз в {hours} часов пни Пашу Дурова — и запустится майнинг из SenseiBank. '
+        f'Через {hours} часов вернись и забери {MINING_REWARD} SenseiCoin.\n\n'
+        'Пока майнинг идёт, пнуть снова нельзя. Следующий цикл открывается сразу после сбора. '
+        'Монеты начисляются только внутри Telegram и только с сервера.',
         parse_mode=None, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text='⚔ Защитить додзё', web_app=WebAppInfo(url=url))]]))
+            InlineKeyboardButton(text='👟 Пнуть Пашу', web_app=WebAppInfo(url=url))]]))

@@ -23,6 +23,7 @@ class Container:
     _user_service: Optional["UserService"] = field(default=None, init=False, repr=False)
     _economy_service: Optional["EconomyService"] = field(default=None, init=False, repr=False)
     _daily_service: Optional["DailyService"] = field(default=None, init=False, repr=False)
+    _dojo_miner_service: Optional["DojoMinerService"] = field(default=None, init=False, repr=False)
     _exchange_service: Optional["ExchangeService"] = field(default=None, init=False, repr=False)
     _achievement_service: Optional["AchievementService"] = field(default=None, init=False, repr=False)
     _level_service: Optional["LevelService"] = field(default=None, init=False, repr=False)
@@ -68,11 +69,11 @@ class Container:
         return self._daily_pet_service
 
     @property
-    def dojo_service(self):
-        if self._dojo_service is None:
-            from src.services.dojo_reward_service import DojoRewardService
-            self._dojo_service = DojoRewardService(self.mongo_client, self.economy_service)
-        return self._dojo_service
+    def dojo_miner_service(self):
+        if self._dojo_miner_service is None:
+            from src.services.dojo_miner_service import DojoMinerService
+            self._dojo_miner_service = DojoMinerService(self.mongo_client, self.economy_service)
+        return self._dojo_miner_service
 
     @property
     def hedgehog_service(self):
