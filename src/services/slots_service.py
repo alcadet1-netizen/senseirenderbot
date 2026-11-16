@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from src.core.config import settings
 from src.infra.mongo.client import MongoClient
+from src.services.bank_ledger import BankLedger
 import logging
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,8 @@ class SlotsService:
         # Collections
         self.users = self.db.users
         self.transactions = self.db.transactions
-        self.bank = self.db.bank  # {_id: "main", balance: X}
+        self.bank = self.db.bank  # legacy {_id: "main", balance: X}
+        self.ledger = BankLedger(mongo_client)
         # For rate limiting, we'll use a simple in-memory cache with timestamps
         self._slots_timestamps = {}  # user_id -> last_slots_time
         self._throttle_lock = asyncio.Lock()  # Lock for managing the timestamps dict
@@ -64,11 +66,14 @@ class SlotsService:
             if user_coins < bet_amount:
                 return {"success": False, "reason": "Недостаточно монет!", "balance": user_coins}
 
-            # 1. Deduct bet from user
-            await self.users.update_one(
-                {"id": user_id},
-                {"$inc": {"coins": -bet_amount}}
+            # 1. Deduct bet from user. Conditional so two concurrent spins
+            # cannot both spend the same coins and drive the balance negative.
+            debited = await self.users.update_one(
+                {"id": user_id, "coins": {"$gte": bet_amount}},
+                {"$inc": {"coins": -bet_amount}},
             )
+            if getattr(debited, "matched_count", 1) != 1:
+                return {"success": False, "reason": "Недостаточно монет!"}
 
             # Log bet transaction (deduction)
             bet_tx = {
@@ -84,11 +89,7 @@ class SlotsService:
             fee = int(bet_amount * 0.05)
             base = bet_amount - fee  # Not actually used in payout calculation but kept for clarity
 
-            await self.bank.update_one(
-                {"_id": "main"},
-                {"$inc": {"balance": bet_amount}},
-                upsert=True
-            )
+            await self.ledger.deposit(bet_amount)
 
             # 3. Determine outcome
             symbols = ["🍒", "🍋", "🍊", "💎", "⭐", "7️⃣"]
@@ -129,36 +130,29 @@ class SlotsService:
                 is_win = False
                 prize = 0
 
-            # 4. Award winnings if won
+            # 4. Award winnings if won.  The bank debit is the admission
+            # ticket: credit the player only after the prize was actually
+            # reserved, otherwise two races could mint unfunded coins.
             if is_win:
-                # Check bank balance before paying out
-                bank_doc = await self.bank.find_one({"_id": "main"})
-                bank_balance = bank_doc.get("balance", 0) if bank_doc else 0
-                if bank_balance < prize:
-                    # Not enough in bank - refund the bet and return error
-                    await self.users.update_one(
-                        {"id": user_id},
-                        {"$inc": {"coins": bet_amount}}  # Refund the bet
-                    )
-                    # Also reverse the bank deposit
-                    await self.bank.update_one(
-                        {"_id": "main"},
-                        {"$inc": {"balance": -bet_amount}}
-                    )
-                    # Reverse the bet transaction (simplified - in reality we'd need to handle this better)
-                    # For now, just return error without perfect rollback
+                covered = (await self.ledger.balance()) >= prize
+                if not covered or not await self.ledger.try_withdraw(prize):
+                    # Return the original bet from the bank to the player.
+                    if await self.ledger.try_withdraw(bet_amount):
+                        await self.users.update_one(
+                            {"id": user_id},
+                            {"$inc": {"coins": bet_amount}},
+                        )
                     return {"success": False, "reason": "Банк пуст! Попробуйте позже."}
 
-                # Pay out winnings
-                await self.users.update_one(
-                    {"id": user_id},
-                    {"$inc": {"coins": prize}}
-                )
-
-                await self.bank.update_one(
-                    {"_id": "main"},
-                    {"$inc": {"balance": -prize}}
-                )
+                try:
+                    await self.users.update_one(
+                        {"id": user_id},
+                        {"$inc": {"coins": prize}},
+                    )
+                except Exception:
+                    # The player was not credited; put the reserved prize back.
+                    await self.ledger.refund(prize, "slots_user_credit_failed")
+                    raise
 
                 # Log win transaction
                 win_tx = {

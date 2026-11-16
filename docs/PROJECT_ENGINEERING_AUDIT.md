@@ -57,7 +57,7 @@
 
 ## Приоритеты — не исправлено в этой ветке
 ### P0: деньги и доступ
-- **Эмиссия в economy_service**: `_get_bank_balance`, `_withdraw_from_bank`, process_message_reward и другие reward-пути сбрасывают пустой/недостаточный банк к bank_initial_coins. Новый lock чтения НЕ устраняет это. Удаление reset без аудита всех callers может приводить к частичным выдачам: нужен отдельный transactional payout слой и тесты conservation/rollback. Не выполнять reset production.
+- **Эмиссия (закрыто):** `_get_bank_balance`, `_withdraw_from_bank`, `process_message_reward` и reward-пути больше не сбрасывают пустой/недостаточный банк к `bank_initial_coins`. Выплата либо проходит атомарным условным списанием, либо не начисляется (`insufficient_bank`). Глобальный лимит 10 000 000 000 Coin и счётчик `total_emitted` ведутся в `EmissionService`; стартовые наборы тоже резервируются, а legacy `main.balance` при старте сворачивается в `single.coins`. Остаётся отдельный риск multi-document перевода банк → игрок без Mongo-транзакции (см. `docs/ECONOMY_AUDIT.md`).
 - **Подписка**: subscription.py трактует первый успешный throttle=True как «подписка уже подтверждена», не проверив Telegram. Затем делает повторные Telegram запросы на cache hit. Нужен отдельный Mongo-кэш фактического membership (включая restricted.is_member), а не limiter. Также callback check_sub проверяет restricted без is_member.
 - **Рассылка**: BroadcastService._pending один на все чаты/админов. Права уже закрыты, межадминская гонка и потеря draft при рестарте остаются.
 - **Quiz**: /addquestion и FSM административного добавления не ограничены ролью. Закрыть точечно, не root-gate весь игровой роутер.

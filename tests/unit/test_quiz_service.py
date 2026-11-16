@@ -123,9 +123,8 @@ async def test_check_answer_correct(quiz_service, mock_mongo_client):
     # 1. Bank update (withdraw 100)
     mock_mongo_client.database.bank.update_one.assert_called_once()
     bank_update_args = mock_mongo_client.database.bank.update_one.call_args
-    assert bank_update_args[0][0] == {"_id": "main"}
-    assert "$set" in bank_update_args[0][1]
-    assert bank_update_args[0][1]["$set"]["balance"] == 900.0  # 1000 - 100
+    assert bank_update_args[0][0] == {"_id": "main", "balance": {"$gte": 100.0}}
+    assert bank_update_args[0][1]["$inc"]["balance"] == -100.0  # 1000 - 100
 
     # 2. User update (deposit 100)
     mock_mongo_client.database.users.update_one.assert_called_once()
@@ -246,10 +245,10 @@ async def test_check_answer_insufficient_funds(quiz_service, mock_mongo_client):
     update_data = quiz_state_update_args[0][1]["$set"]
     assert update_data["status"] == "answered"
     assert update_data["stats"]["total_questions"] == 1
-    assert update_data["stats"]["total_coins"] == 100.0  # Still counted in stats
+    assert update_data["stats"]["total_coins"] == 0  # no coins were paid
     assert str(user_id) in update_data["stats"]["winners"]
     assert update_data["stats"]["winners"][str(user_id)]["wins"] == 1
-    assert update_data["stats"]["winners"][str(user_id)]["coins"] == 100.0
+    assert update_data["stats"]["winners"][str(user_id)]["coins"] == 0.0
 
 
 @pytest.mark.asyncio

@@ -17,6 +17,8 @@ from src.core.constants import (
 )
 from src.core.exceptions import DailyAlreadyClaimedError
 from src.infra.mongo.client import MongoClient
+from src.services.emission_service import EmissionService
+from src.services.bank_ledger import BankLedger
 import logging
 
 logger = logging.getLogger(__name__)
@@ -32,6 +34,8 @@ class DailyService:
         self.users = self.db.users
         self.daily_claims = self.db.daily_claims
         self.transactions = self.db.transactions
+        self.emission = EmissionService(mongo_client)
+        self.ledger = BankLedger(mongo_client)
         # For bank balance, we'll use a single document in a collection or store in settings
         # For simplicity, we'll use a document in bot_stats or similar
         self.bank = self.db.bank  # Will store {_id: "main", balance: X}
@@ -61,14 +65,20 @@ class DailyService:
             # Get or create user
             user = await self.users.find_one({"id": user_id})
             if not user:
-                # Create user if doesn't exist
+                # Create user if doesn't exist. The starter kit is emission and
+                # must be reserved under the global ceiling first.
+                try:
+                    starter = await self.emission.reserve_starter(user_id, STARTER_COINS)
+                except Exception:
+                    logger.exception("Starter emission unavailable for user=%s", user_id)
+                    starter = 0.0
                 user_doc = {
                     "id": user_id,
                     "username": username or "",
                     "first_name": first_name,
                     "is_bot": is_bot,
                     "is_banned": False,
-                    "coins": STARTER_COINS,
+                    "coins": starter,
                     "xp": STARTER_XP,
                     "level": 1,
                     "messages_count": 0,
@@ -83,7 +93,12 @@ class DailyService:
                     "created_at": datetime.now(timezone.utc),
                     "updated_at": datetime.now(timezone.utc),
                 }
-                await self.users.insert_one(user_doc)
+                try:
+                    await self.users.insert_one(user_doc)
+                except Exception:
+                    if starter:
+                        await self.emission.release(starter, f"starter:{user_id}")
+                    raise
                 user = user_doc
 
             if user.get("is_banned"):
@@ -144,23 +159,19 @@ class DailyService:
             total_xp = xp_reward + bonus_xp
             total_coins = coins_reward + bonus_coins
 
-            # Check bank balance
-            bank_doc = await self.bank.find_one({"_id": "main"})
-            bank_balance = max(0, int((bank_doc or {}).get("balance", 0)))
-
-            if bank_balance < total_coins:
-                total_coins = min(total_coins, int(bank_balance))
-
-            # Update bank if we're giving coins
+            # Pay only from an atomic bank debit.  The old path read the bank,
+            # credited the player first and mutated the bank afterwards, which
+            # could create coins when two requests raced.
+            total_coins = max(0, int(total_coins))
+            bank_balance = max(0, int(await self.ledger.balance()))
+            total_coins = min(total_coins, bank_balance)
+            debited = False
             if total_coins > 0:
-                await self.bank.update_one(
-                    {"_id": "main"},
-                    {"$inc": {"balance": -total_coins}},
-                    upsert=True
-                )
+                debited = await self.ledger.try_withdraw(total_coins)
+                if not debited:
+                    total_coins = 0
 
-            # Update user
-            await self.users.update_one(
+            result = await self.users.update_one(
                 {"id": user_id},
                 {
                     "$inc": {
@@ -174,6 +185,9 @@ class DailyService:
                     }
                 }
             )
+            if debited and getattr(result, "matched_count", 1) == 0:
+                await self.ledger.refund(total_coins, "daily_user_missing")
+                total_coins = 0
 
             # Create transaction record
             tx_doc = {
@@ -266,14 +280,29 @@ class DailyService:
                     if streak >= days:
                         bonus_xp, bonus_coins = bonus
             total_xp = DAILY_BASE_XP + bonus_xp if won else 0
-            bank = await self.bank.find_one({'_id': 'main'}) if won else None
             base_coins = DAILY_BASE_COINS + bonus_coins if won else 0
             bounded_taps = max(0, min(5, int(tap_count))) if won else 0
-            available_coins = max(0, int((bank or {}).get('balance', 0)))
-            standard_coins = min(base_coins, available_coins)
             desired_extra = base_coins * bounded_taps // 10
-            total_coins = min(base_coins + desired_extra, available_coins)
-            extra_coins = max(0, total_coins - standard_coins)
+            total_coins = 0
+            standard_coins = 0
+            extra_coins = 0
+            debited = 0
+            if won:
+                # Debit first, then credit the user.  Under a race the atomic
+                # debit fails, so the second player cannot mint an unfunded
+                # reward; a failed user CAS refunds the reservation.
+                for _ in range(4):
+                    available_coins = max(0, int(await self.ledger.balance()))
+                    if available_coins <= 0:
+                        break
+                    candidate = min(base_coins + desired_extra, available_coins)
+                    if candidate <= 0:
+                        break
+                    if await self.ledger.try_withdraw(candidate):
+                        total_coins, debited = candidate, candidate
+                        standard_coins = min(base_coins, candidate)
+                        extra_coins = max(0, candidate - standard_coins)
+                        break
             result = {
                 'success': won, 'streak': streak, 'ordinary_daily': ordinary,
                 'xp': DAILY_BASE_XP if won else 0, 'coins': DAILY_BASE_COINS if won else 0,
@@ -294,20 +323,17 @@ class DailyService:
                 changes, return_document=ReturnDocument.AFTER,
             )
             if committed is None:
+                # The reservation was not delivered to this request; return it
+                # to the bank instead of leaving a one-sided debit.
+                if debited:
+                    await self.ledger.refund(debited, 'daily_receipt_race')
                 cached = await self.users.find_one({'id': user_id, 'hedgehog_day': day})
                 if cached:
                     return cached['hedgehog_result']
                 raise GameError('Не удалось записать результат. Попробуйте ещё раз.')
-            # The user receipt is authoritative. Bank accounting and journal
-            # writes below are best-effort, not a multi-document transaction.
+            # The user receipt is authoritative. Journal writes below are
+            # best-effort; the bank was already debited before the credit.
             try:
-                if total_coins:
-                    debit = await self.bank.update_one(
-                        {'_id': 'main', 'balance': {'$gte': total_coins}},
-                        {'$inc': {'balance': -total_coins}},
-                    )
-                    if debit is None or getattr(debit, 'matched_count', None) == 0:
-                        raise RuntimeError('Bank debit did not match after user credit; reconciliation required')
                 key = f'hedgehog:{user_id}:{day}'
                 await self.daily_claims.update_one({'_id': key}, {'$setOnInsert': {
                     'user_id': user_id, 'claim_date': claim_date, 'xp_received': total_xp,

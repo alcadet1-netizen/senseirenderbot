@@ -17,6 +17,7 @@ from src.core.constants import (
 from src.core.exceptions import BankInsufficientFundsError
 from src.core.visuals import Visuals
 from src.infra.mongo.client import MongoClient
+from src.services.bank_ledger import BankLedger
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,8 @@ class QuizService:
         self.questions = self.db.quiz_questions  # Stores quiz questions
         self.users = self.db.users
         self.transactions = self.db.transactions
-        self.bank = self.db.bank  # Will store {_id: "main", balance: X}
+        self.bank = self.db.bank  # legacy/useful bank collection
+        self.ledger = BankLedger(mongo_client)
         self.tickets = self.db.tickets  # For ticket tracking
         # Locks for concurrency control - we'll use asyncio.Lock per chat for simplicity
         self._chat_locks = {}
@@ -295,36 +297,20 @@ class QuizService:
             if not user:
                 return None
 
-            # Try to withdraw from bank
-            bank_doc = await self.bank.find_one({"_id": "main"})
-            if not bank_doc:
-                # Initialize bank if not exists
-                bank_doc = {"_id": "main", "balance": 0.0}
-                await self.bank.insert_one(bank_doc)
-
-            bank_balance = bank_doc.get("balance", 0.0)
             reward_amount = self.QUIZ_REWARD
-
-            # Check if bank has sufficient funds
-            if bank_balance < reward_amount:
-                # Insufficient funds in bank - still count as correct answer but don't transfer
-                pass
-            else:
-                # Sufficient funds, process the transfer
-                new_bank_balance = bank_balance - reward_amount
-                new_user_balance = user.get("coins", 0.0) + reward_amount
-
-                # Update bank balance
-                await self.bank.update_one(
-                    {"_id": "main"},
-                    {"$set": {"balance": new_bank_balance}}
-                )
-
-                # Update user balance
-                await self.users.update_one(
-                    {"id": user_id},
-                    {"$inc": {"coins": reward_amount}}
-                )
+            # Atomic debit before the user credit: a concurrent payout cannot
+            # make this answer mint an unfunded reward.
+            paid = (await self.ledger.balance()) >= reward_amount
+            paid = paid and await self.ledger.try_withdraw(reward_amount)
+            if paid:
+                try:
+                    await self.users.update_one(
+                        {"id": user_id},
+                        {"$inc": {"coins": reward_amount}}
+                    )
+                except Exception:
+                    await self.ledger.refund(reward_amount, "quiz_user_credit_failed")
+                    raise
 
                 # Record transaction
                 transaction_doc = {
@@ -361,7 +347,7 @@ class QuizService:
                 "winners": {}
             })
             stats["total_questions"] = stats.get("total_questions", 0) + 1
-            stats["total_coins"] = stats.get("total_coins", 0) + reward_amount
+            stats["total_coins"] = stats.get("total_coins", 0) + (reward_amount if paid else 0)
 
             # Update winners
             winners = stats.get("winners", {})
@@ -369,7 +355,7 @@ class QuizService:
             if winner_key not in winners:
                 winners[winner_key] = {"name": user_name, "wins": 0, "coins": 0.0}
             winners[winner_key]["wins"] = winners[winner_key].get("wins", 0) + 1
-            winners[winner_key]["coins"] = winners[winner_key].get("coins", 0.0) + reward_amount
+            winners[winner_key]["coins"] = winners[winner_key].get("coins", 0.0) + (reward_amount if paid else 0)
             stats["winners"] = winners
 
             # Update quiz state
@@ -387,7 +373,7 @@ class QuizService:
             return {
                 "user_id": user_id,
                 "reward": reward_amount,
-                "balance": user.get("coins", 0.0) + (reward_amount if bank_doc.get("balance", 0.0) >= reward_amount else 0.0)
+                "balance": user.get("coins", 0.0) + (reward_amount if paid else 0.0)
             }
 
     async def generate_summary(self, chat_id: int) -> str:

@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from src.core.config import settings
 from src.core.exceptions import BankInsufficientFundsError
 from src.infra.mongo.client import MongoClient
+from src.services.bank_ledger import BankLedger
 import logging
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,8 @@ class TradeService:
         # Collections
         self.users = self.db.users
         self.transactions = self.db.transactions
-        self.bank = self.db.bank  # {_id: "main", balance: X}
+        self.bank = self.db.bank  # legacy {_id: "main", balance: X}
+        self.ledger = BankLedger(mongo_client)
         # For rate limiting, we'll use a simple in-memory cache with timestamps
         # In production, you might want to use Redis or MongoDB TTL indexes
         self._trade_timestamps = {}  # user_id -> last_trade_time
@@ -82,11 +84,14 @@ class TradeService:
                     "balance": user_coins
                 }
 
-            # Deduct bet from user
-            await self.users.update_one(
-                {"id": user_id},
-                {"$inc": {"coins": -bet_amount}}
+            # Deduct bet from user. Conditional so concurrent trades cannot
+            # spend the same coins twice.
+            debited = await self.users.update_one(
+                {"id": user_id, "coins": {"$gte": bet_amount}},
+                {"$inc": {"coins": -bet_amount}},
             )
+            if getattr(debited, "matched_count", 1) != 1:
+                return {"success": False, "error": "Недостаточно монет!"}
 
             # Log purchase transaction (bet deduction)
             purchase_tx = {
@@ -106,11 +111,7 @@ class TradeService:
 
             # Pay fee to Bank - Deposit FULL bet to bank (Closed Loop Economy)
             # The fee is implicitly retained because payout = (bet - fee) * 2
-            await self.bank.update_one(
-                {"_id": "main"},
-                {"$inc": {"balance": bet_amount}},
-                upsert=True
-            )
+            await self.ledger.deposit(bet_amount)
 
             payout = 0
             profit = -bet_amount
@@ -119,34 +120,24 @@ class TradeService:
                 payout = base * 2
                 profit = payout - bet_amount
 
-                # Check bank balance before withdrawing
-                bank_doc = await self.bank.find_one({"_id": "main"})
-                bank_balance = bank_doc.get("balance", 0) if bank_doc else 0
-                if bank_balance < payout:
-                    # Not enough in bank - refund the bet to user and return error
-                    await self.users.update_one(
-                        {"id": user_id},
-                        {"$inc": {"coins": bet_amount}}  # Refund the bet
-                    )
-                    # Also need to reverse the bank deposit
-                    await self.bank.update_one(
-                        {"_id": "main"},
-                        {"$inc": {"balance": -bet_amount}}
-                    )
-                    # Reverse the purchase transaction (this is getting complex)
-                    # For simplicity, we'll just return the error without perfect rollback
+                # Debit the prize first; only then credit the player.
+                covered = (await self.ledger.balance()) >= payout
+                if not covered or not await self.ledger.try_withdraw(payout):
+                    if await self.ledger.try_withdraw(bet_amount):
+                        await self.users.update_one(
+                            {"id": user_id},
+                            {"$inc": {"coins": bet_amount}},
+                        )
                     return {"success": False, "error": "Банк пуст! Попробуйте позже."}
 
-                # Pay out winnings
-                await self.users.update_one(
-                    {"id": user_id},
-                    {"$inc": {"coins": payout}}
-                )
-
-                await self.bank.update_one(
-                    {"_id": "main"},
-                    {"$inc": {"balance": -payout}}
-                )
+                try:
+                    await self.users.update_one(
+                        {"id": user_id},
+                        {"$inc": {"coins": payout}}
+                    )
+                except Exception:
+                    await self.ledger.refund(payout, "trade_user_credit_failed")
+                    raise
 
                 # Log win transaction
                 win_tx = {

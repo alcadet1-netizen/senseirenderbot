@@ -144,12 +144,31 @@
           <p class="view-eyebrow">SENSEIBANK</p>
           <h2>ЭМИССИЯ</h2>
           <p class="view-copy">
-            Общая эмиссия — всё, что есть в банке и на руках у игроков. Как в
-            /senseibank, только наглядно.
+            Жёсткий лимит — 10 000 000 000 Coin на всю жизнь экономики. Новые
+            монеты резервируются атомарно; переводы банк ↔ игрок лимит не
+            меняют.
           </p>
+          <div
+            class="emission-track"
+            id="bank-progress-track"
+            role="progressbar"
+            aria-label="Использование лимита эмиссии"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+          >
+            <span id="bank-progress"></span>
+          </div>
           <div id="bank-stats" class="stat-list">
             <div class="stat-row">
-              <span>Общая эмиссия</span><b id="bank-supply">—</b>
+              <span>Выпущено</span><b id="bank-emitted">—</b>
+            </div>
+            <div class="stat-row"><span>Лимит</span><b id="bank-cap">—</b></div>
+            <div class="stat-row">
+              <span>Осталось</span><b id="bank-remaining">—</b>
+            </div>
+            <div class="stat-row">
+              <span>В системе</span><b id="bank-supply">—</b>
             </div>
             <div class="stat-row">
               <span>Баланс банка</span><b id="bank-balance">—</b>
@@ -165,7 +184,8 @@
             ОБНОВИТЬ ДАННЫЕ
           </button>
           <p class="task-note">
-            Данные /senseibank обновляются с задержкой до минуты.
+            Баланс игрока один и тот же здесь и в чате (/balance). Данные
+            /senseibank обновляются с задержкой до минуты.
           </p>
         </section>
 
@@ -174,7 +194,7 @@
           <h2>СЕНСЕЙ-МАЙНЕР</h2>
           <div class="stat-list profile-list">
             <div class="stat-row">
-              <span>Баланс</span><b id="profile-balance">—</b>
+              <span>Баланс (как в чате)</span><b id="profile-balance">—</b>
             </div>
             <div class="stat-row">
               <span>Добыча</span><b id="profile-rate">15 Coin / ч</b>

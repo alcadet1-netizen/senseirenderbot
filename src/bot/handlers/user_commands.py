@@ -10,13 +10,14 @@ import logging
 import html
 from aiogram import Router, F
 from aiogram.filters import Command, CommandStart, CommandObject
-from aiogram.types import Message, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.exceptions import TelegramBadRequest
 
 from src.bot.filters import AdminFilter, PrivateChatFilter
 from src.core.config import settings
 from src.core.container import Container
 from src.core.visuals import Visuals
+from src.bot.handlers.dojo import dojo_url
 from src.bot.presenters.hedgehog_presenter import launch_hedgehog
 from src.bot.presenters.katana_presenter import send_katana_upgrade, send_current_katana
 from src.texts.donate_prompts import katana_insufficient_text
@@ -96,7 +97,10 @@ async def show_profile(message: Message, container: Container, user, is_edit: bo
         role=profile.get("role"),
     )
 
-    markup = get_profile_keyboard(user_id=user.id, has_katana=profile["has_katana"])
+    miner_url = dojo_url(container.settings) if message.chat.type == "private" else None
+    markup = get_profile_keyboard(
+        user_id=user.id, has_katana=profile["has_katana"], dojo_url=miner_url,
+    )
 
     text = f"{mention}\n\n{card}"
 
@@ -359,10 +363,10 @@ async def cmd_profile(message: Message, container: Container) -> None:
     await show_profile(message, container, message.from_user)
 
 
-@router.message(Command("mycoin"))
+@router.message(Command("mycoin", "balance"))
 @router.message(F.text.lower() == "мой балик")
 async def cmd_mycoin(message: Message, container: Container) -> None:
-    """Команда /mycoin и 'Мой балик'."""
+    """Команда /mycoin, /balance и 'Мой балик' — тот же баланс, что в майнере."""
     logger.info(f"👉 [CMD] cmd_mycoin triggered by {message.from_user.id}")
     if not message.from_user:
         return
@@ -381,11 +385,18 @@ async def cmd_mycoin(message: Message, container: Container) -> None:
 
     text = (
         f"{mention}\n\n"
-        f"💰 <b>Твой баланс:</b> {int(coins):,} COIN\n"
-        f"💱 <b>Оценка:</b> ≈ {usdt_value:,.2f} USDT"
+        f"💰 <b>Твой баланс:</b> {Visuals._fmt_coins(coins)} COIN\n"
+        f"💱 <b>Оценка:</b> ≈ {usdt_value:,.2f} USDT\n"
+        f"⛏ Это тот же баланс, что в майнере /dojo."
     ).replace(",", " ")
 
-    await message.answer(text, parse_mode="HTML")
+    markup = None
+    miner_url = dojo_url(container.settings) if message.chat.type == "private" else None
+    if miner_url:
+        markup = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="⛏ Открыть майнер", web_app=WebAppInfo(url=miner_url)),
+        ]])
+    await message.answer(text, parse_mode="HTML", reply_markup=markup)
 
 
 @router.message(Command("senseitop", "топ", "top", "рейтинг"))

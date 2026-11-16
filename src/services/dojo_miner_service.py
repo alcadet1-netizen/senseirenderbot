@@ -191,6 +191,8 @@ class DojoMinerService:
                 raise GameError('Майнер не смог выплатить награду. Попробуй ещё раз.')
             if not isinstance(result, dict) or not result.get('success'):
                 await self._rollback(user_id, version + 1)
+                if isinstance(result, dict) and result.get('reason') == 'insufficient_bank':
+                    raise GameError('SenseiBank не может выплатить награду. Попробуй позже.')
                 raise GameError('Награда недоступна для этого профиля.')
             state = await self.state(user_id)
             state['mined'] = amount

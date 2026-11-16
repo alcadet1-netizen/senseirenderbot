@@ -210,6 +210,8 @@ class DojoTaskService:
             raise GameError('Не удалось начислить награду. Попробуй ещё раз.')
         if not isinstance(payout, dict) or not payout.get('success'):
             await self.claims.delete_one({'_id': claim_id})
+            if isinstance(payout, dict) and payout.get('reason') == 'insufficient_bank':
+                raise GameError('SenseiBank не может выплатить награду. Попробуй позже.')
             raise GameError('Награда недоступна для этого профиля.')
         public = self._public(task, claimed=True)
         return {

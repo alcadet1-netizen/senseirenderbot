@@ -43,10 +43,13 @@ async def test_admin_32_concurrent_requests_one_refresh_four_database_operations
     assert results[0]['users']=={'total':3} and results[0]['circulation']==450
     assert results[0]['messages']=={'total':29} and results[0]['tickets']=={'active':4}
     assert users.aggregate.call_count==transactions.aggregate.call_count==1
-    assert bank.find_one.await_count==tickets.count_documents.await_count==1
+    # one canonical + one legacy bank snapshot per refresh (the two schemas
+    # are both shown until the legacy document is migrated)
+    assert bank.find_one.await_count==2 and tickets.count_documents.await_count==1
     svc._cache_timestamp=0
     await svc.get_admin_stats()
     assert users.aggregate.call_count==2
+    assert bank.find_one.await_count==4
 
 
 @pytest.mark.asyncio

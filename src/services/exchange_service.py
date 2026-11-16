@@ -9,6 +9,7 @@ from src.core.config import settings
 from src.core.constants import EXCHANGE_COINS_TO_TICKET, EXCHANGE_TICKET_TO_COINS
 from src.core.exceptions import InsufficientFundsError, InsufficientTicketsError
 from src.infra.mongo.client import MongoClient
+from src.services.bank_ledger import BankLedger
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,8 @@ class ExchangeService:
         # Collections
         self.users = self.db.users
         self.transactions = self.db.transactions
-        self.bank = self.db.bank  # {_id: "main", balance: X}
+        self.bank = self.db.bank  # legacy {_id: "main", balance: X}
+        self.ledger = BankLedger(mongo_client)
         self.tickets = self.db.tickets  # For ticket tracking
 
     async def coins_to_ticket(self, user_id: int) -> dict:
@@ -39,18 +41,16 @@ class ExchangeService:
 
         # Perform exchange in a logical transaction (individual operations)
         try:
-            # Deduct coins from user
-            await self.users.update_one(
-                {"id": user_id},
+            # Deduct coins atomically; a concurrent spend cannot go negative.
+            debit = await self.users.update_one(
+                {"id": user_id, "coins": {"$gte": EXCHANGE_COINS_TO_TICKET}},
                 {"$inc": {"coins": -EXCHANGE_COINS_TO_TICKET}}
             )
+            if getattr(debit, "matched_count", 1) == 0:
+                raise InsufficientFundsError(EXCHANGE_COINS_TO_TICKET, user_coins)
 
             # Deposit coins to bank
-            await self.bank.update_one(
-                {"_id": "main"},
-                {"$inc": {"balance": EXCHANGE_COINS_TO_TICKET}},
-                upsert=True
-            )
+            await self.ledger.deposit(EXCHANGE_COINS_TO_TICKET)
 
             # Create ticket — MongoDB assigns _id (ObjectId) automatically.
             # Code is generated from a timestamp to stay unique without relying on _id.
@@ -100,10 +100,9 @@ class ExchangeService:
         if user_tickets < 1:
             raise InsufficientTicketsError(1, user_tickets)
 
-        # Check bank balance
-        bank_doc = await self.bank.find_one({"_id": "main"})
-        bank_balance = bank_doc.get("balance", 0) if bank_doc else 0
-        if bank_balance < EXCHANGE_TICKET_TO_COINS:
+        # Reserve bank coins before burning the ticket; if the bank races away,
+        # nothing is burned and no coins are minted.
+        if not await self.ledger.try_withdraw(EXCHANGE_TICKET_TO_COINS):
             return {"success": False, "error": "Банк временно пуст"}
 
         try:
@@ -124,13 +123,8 @@ class ExchangeService:
             )
 
             if not ticket:
+                await self.ledger.refund(EXCHANGE_TICKET_TO_COINS, "exchange_no_ticket")
                 return {"success": False, "error": "Не удалось сжечь билет"}
-
-            # Withdraw coins from bank
-            await self.bank.update_one(
-                {"_id": "main"},
-                {"$inc": {"balance": -EXCHANGE_TICKET_TO_COINS}}
-            )
 
             # Add coins to user
             await self.users.update_one(

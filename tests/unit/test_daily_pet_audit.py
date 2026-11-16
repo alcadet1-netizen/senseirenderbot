@@ -56,7 +56,6 @@ async def test_independent_workers_cas_and_query_replay_conserve_money():
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason='Known: user credit and shared-bank debit are not one Mongo transaction; see docs/ECONOMY_AUDIT.md')
 async def test_shared_bank_race_must_not_mint_unfunded_bonus():
     db, service, _, mongo = setup()
     db.users.docs[8] = {**copy.deepcopy(db.users.docs[7]), 'id': 8}
@@ -97,13 +96,14 @@ async def test_failed_bank_debit_is_visible_and_retry_cannot_duplicate_user_cred
          patch('src.services.daily_pet_service.time.time', return_value=105):
         await service.tap(token,7,'unmatched-bank')
         await service.tap(token,7,'unmatched-bank')
-    assert db.users.docs[7]['coins']-before == db.users.docs[7]['daily_pet']['base_coins']//10
+    # The bank debit is the admission ticket for a bonus: if it does not match,
+    # no coins are credited and a retry cannot duplicate anything.
+    assert db.users.docs[7]['coins']-before == 0
     assert db.users.docs[7]['daily_pet']['taps'] == 1
-    assert 'ledger needs reconciliation' in caplog.text
+    assert 'Bank debit missed' in caplog.text
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason='Known: base daily user receipt and shared-bank debit are not atomic; see docs/ECONOMY_AUDIT.md')
 async def test_shared_bank_race_must_not_mint_unfunded_base_daily():
     from src.services.daily_service import DailyService
     from src.services.hedgehog_service import utc_day
