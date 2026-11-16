@@ -9,13 +9,16 @@ from src.services.level_service import LevelService
 from src.widgets.katana_models import katana_name, model_caption, model_index
 
 
-def test_starter_kit_is_level_one_ten_cm_and_ten_thousand_coin():
+def test_starter_kit_is_level_one_ten_cm_and_three_thousand_coin():
     assert LevelService().get_level(STARTER_XP) == 1
-    assert STARTER_COINS == 10000
+    assert STARTER_COINS == 3000
     assert STARTER_KATANA_LENGTH == 10
     text = Visuals.welcome_bonus_message('Newcomer')
-    assert 'Уровень 1' in text and '10 см' in text and '10 000' in text
-    assert '2200' not in text and '20 см' not in text
+    assert 'Уровень 1' in text and '10 см' in text and '3 000' in text
+    assert '10 000' not in text and '2200' not in text and '20 см' not in text
+    # The starter notice must stay compact in Telegram's preformatted block.
+    lines = text.removeprefix('<pre>\n').removesuffix('\n</pre>').splitlines()
+    assert max(len(line) for line in lines) <= 23
 
 
 @pytest.mark.parametrize('length,name', [

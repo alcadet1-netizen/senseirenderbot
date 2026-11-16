@@ -990,18 +990,18 @@ class Visuals:
 
     @classmethod
     def welcome_bonus_message(cls, name: str) -> str:
-        """Сообщение о стартовых бонусах для новичка."""
-        w = cls.FRAME_W_PROFILE
+        """Компактное уведомление о стартовом наборе для новичка."""
+        w = 22
 
         lines = [
             cls.frame_top_left(w),
             cls.frame_line_left("🎁 СТАРТОВЫЙ НАБОР", w, "center"),
             cls.frame_separator_left(w),
             cls.frame_line_left("🥋 Уровень 1", w),
-            cls.frame_line_left("💰 +10 000 монет", w),
+            cls.frame_line_left("💰 +3 000 монет", w),
             cls.frame_line_left("🗡 Катана 10 см", w),
             cls.frame_separator_left(w),
-            cls.frame_line_left("Удачи на пути, новичок!", w, "center"),
+            cls.frame_line_left("Удачи, новичок!", w, "center"),
             cls.frame_bottom_left(w),
         ]
         return "<pre>\n" + "\n".join(lines) + "\n</pre>"
