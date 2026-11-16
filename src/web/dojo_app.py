@@ -1,4 +1,4 @@
-"""SenseiCoin miner Mini App: one kick starts an eight-hour bank-funded cycle."""
+"""SenseiCoin miner Mini App: one start runs an eight-hour bank-funded cycle."""
 import logging
 from pathlib import Path
 
@@ -13,8 +13,7 @@ ASSETS = {
     'index.html',
     'style.css',
     'miner.js',
-    'assets/kick.webp',
-    'assets/mining.webp',
+    'assets/sensei.webp',
 }
 
 
@@ -62,8 +61,8 @@ def setup_dojo(app, container=None):
             service = container.dojo_miner_service
             if action == 'state':
                 result = await service.state(user['id'])
-            elif action == 'kick':
-                result = await service.kick(user['id'])
+            elif action == 'start':
+                result = await service.start(user['id'])
             else:
                 result = await service.collect(user['id'])
             return web.json_response(result, headers=headers)
@@ -81,5 +80,5 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/{asset:style\\.css|miner\\.js}', page)
     app.router.add_get(
-        '/miniapp/dojo/assets/{asset:kick\\.webp|mining\\.webp}', page)
-    app.router.add_post('/miniapp/dojo/api/{action:state|kick|collect}', api)
+        '/miniapp/dojo/assets/{asset:sensei\\.webp}', page)
+    app.router.add_post('/miniapp/dojo/api/{action:state|start|collect}', api)
