@@ -21,6 +21,8 @@ const { chromium } = require("playwright-core");
   let started = 0;
   let finish = 0;
   let balance = 12840;
+  let energyMax = 100;
+  let claimed = false;
   const calls = [];
 
   await page.route("**/miniapp/dojo/api/**", async (route) => {
@@ -36,6 +38,11 @@ const { chromium } = require("playwright-core");
       phase = "ready";
       balance += 120;
     }
+    if (action === "task") {
+      balance += 10000;
+      energyMax = 200;
+      claimed = true;
+    }
     if (phase === "mining" && now >= finish) phase = "ready_to_collect";
     const progress =
       phase === "mining"
@@ -43,21 +50,53 @@ const { chromium } = require("playwright-core");
         : phase === "ready_to_collect"
           ? 1
           : 0;
-    await route.fulfill({
-      json: {
-        phase,
-        server_now: now,
-        balance,
-        reward: 120,
-        cycle_seconds: 28800,
-        started_at: started || null,
-        finish_at: finish || null,
-        remaining_ms:
-          phase === "mining" ? Math.max(0, (finish - now) * 1000) : 0,
-        progress,
-        mined: 120,
-      },
-    });
+    if (action === "tasks") {
+      await route.fulfill({
+        json: {
+          tasks: [
+            {
+              slug: "senseidurova",
+              username: "SenseiDurova",
+              title: "SenseiDurova",
+              url: "https://t.me/SenseiDurova",
+              reward_coins: 10000,
+              energy_bonus: 100,
+              claimed,
+            },
+          ],
+        },
+      });
+      return;
+    }
+    const state = {
+      phase,
+      server_now: now,
+      balance,
+      reward: 120,
+      energy_max: energyMax,
+      cycle_seconds: 28800,
+      started_at: started || null,
+      finish_at: finish || null,
+      remaining_ms: phase === "mining" ? Math.max(0, (finish - now) * 1000) : 0,
+      progress,
+      mined: 120,
+    };
+    if (action === "task") {
+      Object.assign(state, {
+        task: {
+          slug: "senseidurova",
+          username: "SenseiDurova",
+          title: "SenseiDurova",
+          url: "https://t.me/SenseiDurova",
+          reward_coins: 10000,
+          energy_bonus: 100,
+          claimed: true,
+        },
+        reward_coins: 10000,
+        energy_bonus: 100,
+      });
+    }
+    await route.fulfill({ json: state });
   });
 
   await page.goto(process.env.DOJO_URL || "http://127.0.0.1:8080/miniapp/dojo");
@@ -106,6 +145,29 @@ const { chromium } = require("playwright-core");
     /^12\s840 Coin$/,
   );
   await page.screenshot({ path: ".cache/miner2-profile.png" });
+
+  await page.click(".tab[data-tab='tasks']");
+  assert.equal(await page.locator("#view-tasks").isVisible(), true);
+  assert.equal(await page.locator(".task-card").count(), 1);
+  assert.match(await page.locator(".task-card").textContent(), /10\s000 Coin/);
+  assert.match(
+    await page.locator(".task-card").textContent(),
+    /\+100% энергии/,
+  );
+  await page.screenshot({ path: ".cache/miner2-tasks.png" });
+  await page.click(".task-claim");
+  await page.waitForFunction(() =>
+    document.querySelector(".task-card").classList.contains("claimed"),
+  );
+  assert.match(
+    await page.locator(".task-card").textContent(),
+    /Награда получена/,
+  );
+  assert.equal(await page.locator("#energy").textContent(), "0 / 200");
+  await page.waitForFunction(() =>
+    /^22\s840$/.test(document.querySelector("#balance").textContent),
+  );
+  await page.screenshot({ path: ".cache/miner2-tasks-claimed.png" });
   await page.click(".tab[data-tab='mining']");
 
   await page.click("#info");
@@ -117,15 +179,21 @@ const { chromium } = require("playwright-core");
 
   await page.click("#action");
   await page.waitForFunction(() =>
-    /^12\s960$/.test(document.querySelector("#balance").textContent),
+    /^22\s960$/.test(document.querySelector("#balance").textContent),
   );
+  assert.equal(await page.locator("#energy").textContent(), "200 / 200");
   assert.match(await page.locator("#toast").textContent(), /\+120 SenseiCoin/);
   await page.waitForFunction(
     () =>
       document.querySelector("#action-label").textContent === "НАЧАТЬ МАЙНИНГ",
   );
   assert.deepEqual(errors, []);
-  assert.deepEqual(calls.slice(0, 3), ["state", "start", "state"]);
+  assert.deepEqual(
+    calls
+      .filter((action) => action !== "tasks" && action !== "task")
+      .slice(0, 3),
+    ["state", "start", "state"],
+  );
   console.log(
     "Miner checks passed: energy, start, 8h countdown, tabs, rules, collect and balance.",
   );

@@ -24,6 +24,8 @@
     lock: `<svg class="icon" viewBox="0 0 48 48" aria-hidden="true">
       <rect x="12" y="21" width="24" height="18" rx="4"/>
       <path d="M17 21v-4a7 7 0 0 1 14 0v4"/></svg>`,
+    telegram: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>`,
   };
 
   let model = null;
@@ -32,6 +34,9 @@
   let toastTimer = 0;
   let endRetryAt = 0;
   let activeTab = "mining";
+  let tasks = [];
+  let tasksLoaded = false;
+  let taskBusy = null;
 
   try {
     tg?.ready?.();
@@ -40,12 +45,12 @@
     tg?.setBackgroundColor?.("#010503");
   } catch {}
 
-  async function api(action) {
+  async function api(action, extra = {}) {
     const response = await fetch(`/miniapp/dojo/api/${action}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ initData: initData() }),
+      body: JSON.stringify({ initData: initData(), ...extra }),
     });
     let data = {};
     try {
@@ -91,13 +96,19 @@
     );
   }
 
+  function energyMax() {
+    const max = Number(model?.energy_max);
+    return Number.isFinite(max) && max > 0 ? max : 100;
+  }
+
   function energyValue() {
     if (!initData()) return 0;
     if (!model) return 0;
+    const max = energyMax();
     if (model.phase === "mining")
-      return Math.round(100 * (1 - miningProgress()));
+      return Math.round(max * (1 - miningProgress()));
     if (model.phase === "ready_to_collect") return 0;
-    return 100;
+    return max;
   }
 
   function clock(ms) {
@@ -109,9 +120,11 @@
   }
 
   function paintEnergy(value) {
-    const rounded = Math.max(0, Math.min(100, Math.round(value)));
-    $("energy").textContent = `${rounded} / 100`;
-    $("energy-bar").style.width = `${rounded}%`;
+    const max = energyMax();
+    const rounded = Math.max(0, Math.min(max, Math.round(value)));
+    $("energy").textContent = `${rounded} / ${max}`;
+    $("energy-bar").style.width = `${(rounded / max) * 100}%`;
+    $("energy-track").setAttribute("aria-valuemax", String(max));
     $("energy-track").setAttribute("aria-valuenow", String(rounded));
   }
 
@@ -152,7 +165,8 @@
 
     if (current === "phase-offline") {
       paintAction("lock", "ОТКРОЙ ЧЕРЕЗ /DOJO", "ТОЛЬКО TELEGRAM", false, true);
-      $("energy").textContent = "— / 100";
+      $("energy").textContent = "— / —";
+      renderTasks("ОТКРОЙ ЧЕРЕЗ /DOJO");
       status.textContent = "ТОЛЬКО В TELEGRAM";
       hint.textContent =
         "Вне Telegram майнер не начисляет SenseiCoin и не запускает цикл.";
@@ -300,8 +314,126 @@
     }
   }
 
+  function renderTasks(emptyText = "ПОКА НЕТ ЗАДАНИЙ") {
+    const list = $("tasks-list");
+    if (!list) return;
+    list.replaceChildren();
+    if (!tasks.length) {
+      const empty = document.createElement("p");
+      empty.className = "task-empty";
+      empty.textContent = emptyText;
+      list.appendChild(empty);
+      return;
+    }
+    tasks.forEach((task) => {
+      const card = document.createElement("article");
+      card.className = `task-card${task.claimed ? " claimed" : ""}`;
+
+      const top = document.createElement("div");
+      top.className = "task-top";
+      const avatar = document.createElement("span");
+      avatar.className = "task-avatar";
+      avatar.innerHTML = ICONS.telegram;
+      const name = document.createElement("span");
+      name.className = "task-name";
+      const title = document.createElement("b");
+      title.textContent = task.title || `@${task.username}`;
+      const handle = document.createElement("span");
+      handle.textContent = `@${task.username} · подписка на канал`;
+      name.append(title, handle);
+      top.append(avatar, name);
+
+      const chips = document.createElement("div");
+      chips.className = "task-chips";
+      const coinChip = document.createElement("span");
+      coinChip.className = "task-chip";
+      coinChip.textContent = `${coin(task.reward_coins)} Coin`;
+      const energyChip = document.createElement("span");
+      energyChip.className = "task-chip";
+      energyChip.textContent = `+${task.energy_bonus}% энергии`;
+      chips.append(coinChip, energyChip);
+
+      card.append(top, chips);
+
+      if (task.claimed) {
+        const done = document.createElement("div");
+        done.className = "task-claimed";
+        done.textContent = "✓ Награда получена";
+        card.appendChild(done);
+      } else {
+        const actions = document.createElement("div");
+        actions.className = "task-actions";
+        const open = document.createElement("a");
+        open.className = "task-link";
+        open.href = task.url;
+        open.target = "_blank";
+        open.rel = "noopener noreferrer";
+        open.textContent = "Подписаться";
+        open.addEventListener("click", (event) => {
+          if (tg?.openTelegramLink) {
+            event.preventDefault();
+            tg.openTelegramLink(task.url);
+          }
+        });
+        const claim = document.createElement("button");
+        claim.className = "task-claim";
+        claim.textContent = taskBusy === task.slug ? "Проверяем…" : "Проверить";
+        claim.disabled = Boolean(taskBusy);
+        claim.addEventListener("click", () => claimTask(task.slug));
+        actions.append(open, claim);
+        card.appendChild(actions);
+      }
+
+      list.appendChild(card);
+    });
+  }
+
+  async function loadTasks(force = false) {
+    if (!initData()) {
+      tasks = [];
+      renderTasks("ОТКРОЙ ЧЕРЕЗ /DOJO");
+      return;
+    }
+    if (tasksLoaded && !force) return;
+    try {
+      const data = await api("tasks");
+      tasks = Array.isArray(data.tasks) ? data.tasks : [];
+      tasksLoaded = true;
+      renderTasks();
+    } catch (error) {
+      tasksLoaded = false;
+      tasks = [];
+      renderTasks("НЕ УДАЛОСЬ ЗАГРУЗИТЬ ЗАДАНИЯ");
+      showToast(error.message, true);
+    }
+  }
+
+  async function claimTask(slug) {
+    if (!initData() || pending || taskBusy) return;
+    const task = tasks.find((item) => item.slug === slug);
+    if (!task || task.claimed) return;
+    taskBusy = slug;
+    renderTasks();
+    try {
+      const data = await api("task", { slug });
+      apply(data);
+      const updated = data.task || { ...task, claimed: true };
+      tasks = tasks.map((item) =>
+        item.slug === slug ? { ...item, ...updated, claimed: true } : item,
+      );
+      showToast(
+        `+${coin(data.reward_coins)} SenseiCoin · +${data.energy_bonus}% энергии`,
+      );
+    } catch (error) {
+      showToast(error.message, true);
+    } finally {
+      taskBusy = null;
+      renderTasks();
+    }
+  }
+
   function setTab(name) {
-    if (!["mining", "upgrades", "profile"].includes(name)) return;
+    if (!["mining", "tasks", "upgrades", "profile"].includes(name)) return;
     activeTab = name;
     document.querySelectorAll(".tab").forEach((tab) => {
       const active = tab.dataset.tab === name;
@@ -309,9 +441,10 @@
       if (active) tab.setAttribute("aria-current", "page");
       else tab.removeAttribute("aria-current");
     });
-    ["mining", "upgrades", "profile"].forEach((key) => {
+    ["mining", "tasks", "upgrades", "profile"].forEach((key) => {
       $(`view-${key}`).hidden = key !== name;
     });
+    if (name === "tasks") loadTasks();
     closeSheet();
   }
 
@@ -355,5 +488,10 @@
   }, 30000);
 
   render();
-  if (initData()) refresh();
+  if (initData()) {
+    refresh();
+    loadTasks();
+  } else {
+    renderTasks("ОТКРОЙ ЧЕРЕЗ /DOJO");
+  }
 })();

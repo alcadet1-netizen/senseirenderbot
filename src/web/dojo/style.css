@@ -572,6 +572,172 @@ button {
   box-shadow: var(--shadow);
   backdrop-filter: blur(12px);
   text-align: center;
+  max-height: min(56vh, 470px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.tab-view::-webkit-scrollbar {
+  display: none;
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.task-card {
+  padding: 12px;
+  border: 1px solid rgba(92, 255, 166, 0.16);
+  border-radius: 14px;
+  background: rgba(2, 16, 9, 0.72);
+  text-align: left;
+}
+
+.task-card.claimed {
+  border-color: rgba(92, 255, 166, 0.34);
+  background: rgba(5, 30, 17, 0.6);
+}
+
+.task-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.task-avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(92, 255, 166, 0.32);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 40% 35%,
+    rgba(27, 105, 61, 0.7),
+    rgba(3, 18, 10, 0.9)
+  );
+  color: var(--green-bright);
+}
+
+.task-avatar .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.task-name {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.task-name b {
+  overflow: hidden;
+  color: #ecfff5;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-name span {
+  overflow: hidden;
+  color: #7f9d8d;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.task-chip {
+  padding: 4px 8px;
+  border: 1px solid rgba(92, 255, 166, 0.18);
+  border-radius: 99px;
+  background: rgba(9, 45, 26, 0.55);
+  color: #bfffd8;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.task-actions {
+  display: flex;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.task-link,
+.task-claim {
+  flex: 1;
+  padding: 9px 6px;
+  border-radius: 9px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.1px;
+  text-align: center;
+  text-decoration: none;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.task-link {
+  border: 1px solid rgba(92, 255, 166, 0.3);
+  background: rgba(4, 26, 14, 0.7);
+  color: #9defbe;
+}
+
+.task-claim {
+  border: 1px solid rgba(116, 255, 184, 0.5);
+  background: linear-gradient(180deg, #1d7048, #0b3a23);
+  color: #edfff5;
+}
+
+.task-claim:disabled {
+  opacity: 0.52;
+  cursor: default;
+}
+
+.task-claimed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 8px;
+  border: 1px solid rgba(92, 255, 166, 0.22);
+  border-radius: 9px;
+  color: #8affbe;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+}
+
+.task-empty {
+  margin: 6px 0;
+  padding: 18px 8px;
+  color: #8ca699;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.task-note {
+  margin: 12px 0 0;
+  color: #688174;
+  font-size: 9px;
+  line-height: 1.4;
+  text-align: center;
 }
 
 .view-eyebrow {
@@ -669,8 +835,8 @@ button {
   z-index: 5;
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  padding: 7px 10px max(10px, env(safe-area-inset-bottom));
+  grid-template-columns: repeat(4, 1fr);
+  padding: 7px 6px max(10px, env(safe-area-inset-bottom));
   border-top: 1px solid rgba(92, 255, 166, 0.14);
   background: linear-gradient(
     180deg,
@@ -690,10 +856,11 @@ button {
   border: 0;
   background: none;
   color: #6f877a;
-  font-size: 10px;
-  letter-spacing: 0.4px;
+  font-size: 9.5px;
+  letter-spacing: 0.2px;
   cursor: pointer;
   transition: color 0.2s ease;
+  white-space: nowrap;
 }
 
 .tab .icon {

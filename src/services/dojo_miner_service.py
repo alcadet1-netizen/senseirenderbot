@@ -11,12 +11,14 @@ from src.services.hedgehog_service import GameError
 
 CYCLE_SECONDS = 8 * 60 * 60
 MINING_REWARD = 120
+BASE_ENERGY = 100
 
 
 class DojoMinerService:
-    def __init__(self, mongo, economy):
+    def __init__(self, mongo, economy, tasks=None):
         self.mongo = mongo
         self.economy = economy
+        self.tasks = tasks
         self.miners = mongo.database.dojo_miners
         self.users = mongo.database.users
         self._locks = defaultdict(asyncio.Lock)
@@ -34,6 +36,12 @@ class DojoMinerService:
             phase = 'ready_to_collect' if now >= finish else 'mining'
         else:
             phase = 'ready'
+        energy_bonus = 0
+        if self.tasks is not None:
+            try:
+                energy_bonus = await self.tasks.energy_bonus_total(user_id)
+            except Exception:
+                energy_bonus = 0
         remaining = max(0.0, (finish or now) - now) if phase == 'mining' else 0.0
         progress = 1.0
         if phase == 'mining' and finish and started and finish > started:
@@ -43,6 +51,7 @@ class DojoMinerService:
             'server_now': now,
             'balance': balance,
             'reward': int(doc.get('amount', MINING_REWARD)) if phase != 'ready' else MINING_REWARD,
+            'energy_max': BASE_ENERGY + energy_bonus,
             'cycle_seconds': CYCLE_SECONDS,
             'started_at': started,
             'finish_at': finish,

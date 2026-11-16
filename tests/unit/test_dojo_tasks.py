@@ -1,0 +1,212 @@
+"""Задания подписки /dojo: дефолтный канал, проверка, выплата и админ-команды."""
+import copy
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+
+from src.bot.handlers.dojo_tasks_admin import (
+    cmd_task_add,
+    parse_add_args,
+)
+from src.services.dojo_miner_service import DojoMinerService
+from src.services.dojo_task_service import (
+    DEFAULT_ENERGY,
+    DEFAULT_REWARD,
+    DojoTaskService,
+    normalize_username,
+)
+from src.services.hedgehog_service import GameError
+from tests.unit.test_hedgehog_game import Collection
+
+
+class Cursor:
+    def __init__(self, items):
+        self.items = list(items)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if not self.items:
+            raise StopAsyncIteration
+        return self.items.pop(0)
+
+
+class Tasks(Collection):
+    def find(self, query):
+        return Cursor(
+            copy.deepcopy(doc)
+            for doc in self.docs.values()
+            if self.matches(doc, query)
+        )
+
+    async def insert_one(self, doc):
+        if doc['_id'] in self.docs:
+            raise RuntimeError('duplicate')
+        self.docs[doc['_id']] = copy.deepcopy(doc)
+
+    async def delete_one(self, query):
+        for key, doc in list(self.docs.items()):
+            if self.matches(doc, query):
+                del self.docs[key]
+                return
+
+
+
+def service(status='member', payout=None):
+    db = SimpleNamespace(dojo_tasks=Tasks(), dojo_task_claims=Tasks())
+    economy = SimpleNamespace(
+        process_game_win=AsyncMock(
+            return_value=payout if payout is not None else {
+                'success': True, 'new_coins': 20_000,
+            }
+        )
+    )
+    bot = SimpleNamespace(
+        get_chat_member=AsyncMock(return_value=SimpleNamespace(status=status)),
+    )
+    container = SimpleNamespace(
+        mongo_client=SimpleNamespace(database=db),
+        economy_service=economy,
+        bot=bot,
+    )
+    return container, DojoTaskService(container), economy, bot
+
+
+def test_normalize_username_accepts_links_and_handles():
+    assert normalize_username('@SenseiDurova') == 'SenseiDurova'
+    assert normalize_username('https://t.me/SenseiDurova/') == 'SenseiDurova'
+    assert normalize_username('t.me/SenseiDurova') == 'SenseiDurova'
+    assert normalize_username('bad name') == ''
+    assert normalize_username('@1bad') == ''
+
+
+@pytest.mark.asyncio
+async def test_default_senseidurova_task_has_requested_reward():
+    _, tasks, _, _ = service()
+    items = await tasks.list_tasks(7)
+    assert len(items) == 1
+    assert items[0]['username'] == 'SenseiDurova'
+    assert items[0]['reward_coins'] == DEFAULT_REWARD == 10_000
+    assert items[0]['energy_bonus'] == DEFAULT_ENERGY == 100
+    assert items[0]['claimed'] is False
+
+
+@pytest.mark.asyncio
+async def test_claim_checks_subscription_pays_once_and_adds_energy():
+    _, tasks, economy, bot = service()
+    result = await tasks.claim(7, 'senseidurova')
+    assert result['reward_coins'] == 10_000
+    assert result['energy_bonus'] == 100
+    assert result['new_coins'] == 20_000
+    economy.process_game_win.assert_awaited_once()
+    assert economy.process_game_win.await_args.kwargs['coins'] == 10_000
+    assert 'SenseiDurova' in economy.process_game_win.await_args.kwargs['description']
+    bot.get_chat_member.assert_awaited_once_with('@SenseiDurova', 7)
+    assert await tasks.energy_bonus_total(7) == 100
+    with pytest.raises(GameError, match='уже получена'):
+        await tasks.claim(7, 'senseidurova')
+    items = await tasks.list_tasks(7)
+    assert items[0]['claimed'] is True
+    assert economy.process_game_win.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_unsubscribed_user_cannot_claim():
+    _, tasks, economy, _ = service(status='left')
+    with pytest.raises(GameError, match='подпишись'):
+        await tasks.claim(7, 'senseidurova')
+    economy.process_game_win.assert_not_awaited()
+    assert await tasks.energy_bonus_total(7) == 0
+
+
+@pytest.mark.asyncio
+async def test_failed_payout_rolls_back_claim():
+    _, tasks, economy, _ = service(payout={'success': False})
+    with pytest.raises(GameError, match='недоступна'):
+        await tasks.claim(7, 'senseidurova')
+    assert await tasks.energy_bonus_total(7) == 0
+    items = await tasks.list_tasks(7)
+    assert items[0]['claimed'] is False
+
+
+@pytest.mark.asyncio
+async def test_admin_can_add_and_disable_channels():
+    _, tasks, _, _ = service()
+    added = await tasks.add_task(
+        '@MyChannel', 'Мой канал', -100123, 5_000, 50, created_by=1)
+    assert added['slug'] == 'mychannel'
+    assert added['username'] == 'MyChannel'
+    items = await tasks.list_tasks(7)
+    assert [item['username'] for item in items] == ['SenseiDurova', 'MyChannel']
+    assert items[1]['reward_coins'] == 5_000
+    assert items[1]['energy_bonus'] == 50
+    assert await tasks.remove_task('@MyChannel') is True
+    items = await tasks.list_tasks(7)
+    assert [item['username'] for item in items] == ['SenseiDurova']
+    all_tasks = await tasks.all_tasks()
+    assert any(not item['active'] for item in all_tasks if item['slug'] == 'mychannel')
+
+
+@pytest.mark.asyncio
+async def test_disabled_default_stays_disabled():
+    _, tasks, _, _ = service()
+    await tasks.remove_task('senseidurova')
+    assert await tasks.list_tasks(7) == []
+
+
+def test_admin_parser_defaults_and_limits():
+    assert parse_add_args('/task_add @SenseiDurova') == ('SenseiDurova', 10_000, 100)
+    assert parse_add_args('/task_add https://t.me/MyChannel 5000 50') == (
+        'MyChannel', 5000, 50)
+    with pytest.raises(ValueError):
+        parse_add_args('/task_add')
+    with pytest.raises(ValueError):
+        parse_add_args('/task_add @channel -1')
+    with pytest.raises(ValueError):
+        parse_add_args('/task_add @channel 1000 5000')
+
+
+@pytest.mark.asyncio
+async def test_admin_command_adds_channel_with_reward():
+    message = SimpleNamespace(
+        text='/task_add @MyChannel 5000 50',
+        bot=SimpleNamespace(
+            id=99,
+            get_chat=AsyncMock(return_value=SimpleNamespace(
+                id=-100123, title='Мой канал', type='channel')),
+            get_chat_member=AsyncMock(return_value=SimpleNamespace(status='administrator')),
+        ),
+        from_user=SimpleNamespace(id=1),
+        answer=AsyncMock(),
+    )
+    service_mock = SimpleNamespace(add_task=AsyncMock(return_value={
+        'username': 'MyChannel', 'title': 'Мой канал',
+        'reward_coins': 5000, 'energy_bonus': 50,
+        'url': 'https://t.me/MyChannel',
+    }))
+    await cmd_task_add(message, SimpleNamespace(dojo_task_service=service_mock))
+    kwargs = service_mock.add_task.await_args.kwargs
+    assert kwargs['username'] == 'MyChannel'
+    assert kwargs['channel_id'] == -100123
+    assert kwargs['reward_coins'] == 5000
+    assert kwargs['energy_bonus'] == 50
+    assert '5 000' in message.answer.await_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_miner_state_includes_energy_from_tasks():
+    db = SimpleNamespace(
+        dojo_miners=Tasks(),
+        users=Collection([{'id': 7, 'coins': 500}]),
+    )
+    task_service = SimpleNamespace(energy_bonus_total=AsyncMock(return_value=100))
+    miner = DojoMinerService(
+        SimpleNamespace(database=db),
+        SimpleNamespace(process_game_win=AsyncMock()),
+        task_service,
+    )
+    state = await miner.state(7)
+    assert state['energy_max'] == 200
+    task_service.energy_bonus_total.assert_awaited_once_with(7)

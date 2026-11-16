@@ -165,6 +165,7 @@ async def main() -> None:
     container.start_time = time.time()
     # Attach container to bot for access in handlers
     bot.container = container
+    container.bot = bot
 
     # Start web server for health checks
     app = web.Application(client_max_size=16 * 1024)

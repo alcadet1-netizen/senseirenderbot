@@ -41,6 +41,7 @@ async def cmd_dojo(message, container):
         f'Запусти майнинг на {hours} часов — Сенсей добудет '
         f'{MINING_REWARD} SenseiCoin из SenseiBank.\n\n'
         f'Пока цикл идёт, новый не запустить. Вернись через {hours} часов, забери награду '
-        'и запускай следующий. Монеты начисляются только внутри Telegram и только с сервера.',
+        'и запускай следующий. Монеты начисляются только внутри Telegram и только с сервера.\n\n'
+        'Внутри — вкладка «Задания»: подписка на канал даёт разовую награду и бонус к энергии.',
         parse_mode=None, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text='⛏ Начать майнинг', web_app=WebAppInfo(url=url))]]))

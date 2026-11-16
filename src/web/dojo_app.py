@@ -63,6 +63,17 @@ def setup_dojo(app, container=None):
                 result = await service.state(user['id'])
             elif action == 'start':
                 result = await service.start(user['id'])
+            elif action == 'tasks':
+                tasks = await container.dojo_task_service.list_tasks(user['id'])
+                result = {'tasks': tasks}
+            elif action == 'task':
+                claim = await container.dojo_task_service.claim(
+                    user['id'], payload.get('slug'))
+                result = await service.state(user['id'])
+                result['balance'] = claim.get('new_coins', result.get('balance', 0))
+                result['task'] = claim['task']
+                result['reward_coins'] = claim['reward_coins']
+                result['energy_bonus'] = claim['energy_bonus']
             else:
                 result = await service.collect(user['id'])
             return web.json_response(result, headers=headers)
@@ -81,4 +92,5 @@ def setup_dojo(app, container=None):
         '/miniapp/dojo/{asset:style\\.css|miner\\.js}', page)
     app.router.add_get(
         '/miniapp/dojo/assets/{asset:sensei\\.webp}', page)
-    app.router.add_post('/miniapp/dojo/api/{action:state|start|collect}', api)
+    app.router.add_post(
+        '/miniapp/dojo/api/{action:state|start|collect|tasks|task}', api)
