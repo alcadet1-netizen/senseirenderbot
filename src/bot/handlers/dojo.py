@@ -37,10 +37,10 @@ async def cmd_dojo(message, container):
         return
     hours = CYCLE_SECONDS // 3600
     await message.answer(
-        '🥋 Додзё: Майнер SenseiCoin\n\n'
-        f'Раз в {hours} часов пни Пашу Дурова — и запустится майнинг из SenseiBank. '
-        f'Через {hours} часов вернись и забери {MINING_REWARD} SenseiCoin.\n\n'
-        'Пока майнинг идёт, пнуть снова нельзя. Следующий цикл открывается сразу после сбора. '
-        'Монеты начисляются только внутри Telegram и только с сервера.',
+        '⛏ Додзё: Майнер SenseiCoin\n\n'
+        f'Запусти майнинг на {hours} часов — Сенсей добудет '
+        f'{MINING_REWARD} SenseiCoin из SenseiBank.\n\n'
+        f'Пока цикл идёт, новый не запустить. Вернись через {hours} часов, забери награду '
+        'и запускай следующий. Монеты начисляются только внутри Telegram и только с сервера.',
         parse_mode=None, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text='👟 Пнуть Пашу', web_app=WebAppInfo(url=url))]]))
+            InlineKeyboardButton(text='⛏ Начать майнинг', web_app=WebAppInfo(url=url))]]))
