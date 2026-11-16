@@ -1,4 +1,4 @@
-// Проверка трёх фаз майнера с подменой API; нужен локальный сервер.
+// Проверка майнера с подменой API: энергия, старт, таймер, сбор и вкладки.
 const assert = require("node:assert/strict");
 const { chromium } = require("playwright-core");
 
@@ -20,14 +20,14 @@ const { chromium } = require("playwright-core");
   let phase = "ready";
   let started = 0;
   let finish = 0;
-  let balance = 1000;
-  let calls = [];
+  let balance = 12840;
+  const calls = [];
+
   await page.route("**/miniapp/dojo/api/**", async (route) => {
-    const url = route.request().url();
-    const action = url.split("/").pop();
+    const action = route.request().url().split("/").pop();
     calls.push(action);
     const now = Date.now() / 1000;
-    if (action === "kick") {
+    if (action === "start") {
       phase = "mining";
       started = now;
       finish = now + 5;
@@ -37,6 +37,12 @@ const { chromium } = require("playwright-core");
       balance += 120;
     }
     if (phase === "mining" && now >= finish) phase = "ready_to_collect";
+    const progress =
+      phase === "mining"
+        ? Math.max(0, Math.min(1, (now - started) / (finish - started)))
+        : phase === "ready_to_collect"
+          ? 1
+          : 0;
     await route.fulfill({
       json: {
         phase,
@@ -48,61 +54,80 @@ const { chromium } = require("playwright-core");
         finish_at: finish || null,
         remaining_ms:
           phase === "mining" ? Math.max(0, (finish - now) * 1000) : 0,
-        progress:
-          phase === "mining"
-            ? Math.max(0, Math.min(1, (now - started) / (finish - started)))
-            : phase === "ready_to_collect"
-              ? 1
-              : 0,
+        progress,
         mined: 120,
       },
     });
   });
 
   await page.goto(process.env.DOJO_URL || "http://127.0.0.1:8080/miniapp/dojo");
-  await page.waitForFunction(() =>
-    document.querySelector("#action").textContent.includes("ПНУТЬ"),
+  await page.waitForFunction(
+    () =>
+      document.querySelector("#action-label").textContent === "НАЧАТЬ МАЙНИНГ",
   );
-  assert.match(await page.locator("#balance").textContent(), /^1\s000$/);
-  assert.equal(
-    await page.locator("#action").getAttribute("class"),
-    "primary kick",
+  assert.match(await page.locator("#balance").textContent(), /^12\s840$/);
+  assert.equal(await page.locator("#energy").textContent(), "100 / 100");
+  assert.equal(await page.locator("#status").textContent(), "СЕНСЕЙ ГОТОВ");
+  assert.ok(
+    await page
+      .locator("#app")
+      .evaluate((n) => n.classList.contains("phase-ready")),
   );
-  await page.screenshot({ path: ".cache/miner-ready.png" });
+  await page.screenshot({ path: ".cache/miner2-ready.png" });
 
   await page.click("#action");
   await page.waitForFunction(
-    () => document.querySelector("#frame").classList.contains("mode-kicking"),
-    { timeout: 4000 },
+    () => document.querySelector("#app").classList.contains("phase-mining"),
+    { timeout: 5000 },
   );
-  await page.screenshot({ path: ".cache/miner-kick.png" });
-  await page.waitForFunction(
-    () => document.querySelector("#frame").classList.contains("mode-mining"),
-    { timeout: 8000 },
+  assert.match(
+    await page.locator("#action-label").textContent(),
+    /^\d\d:\d\d:\d\d$/,
   );
-  await page.screenshot({ path: ".cache/miner-mining.png" });
+  await page.screenshot({ path: ".cache/miner2-mining.png" });
 
   await page.waitForFunction(
-    () => document.querySelector("#action").textContent.includes("ЗАБРАТЬ"),
-    { timeout: 10000 },
+    () =>
+      document.querySelector("#action-label").textContent.includes("ЗАБРАТЬ"),
+    { timeout: 12000 },
   );
-  assert.equal(await page.locator("#timer").textContent(), "00:00:00");
-  await page.screenshot({ path: ".cache/miner-done.png" });
+  assert.equal(await page.locator("#status").textContent(), "ЦИКЛ ЗАВЕРШЁН");
+  assert.equal(await page.locator("#energy").textContent(), "0 / 100");
+  await page.screenshot({ path: ".cache/miner2-done.png" });
+
+  await page.click(".tab[data-tab='upgrades']");
+  assert.equal(await page.locator("#view-upgrades").isVisible(), true);
+  assert.equal(await page.locator("#view-mining").isVisible(), false);
+  await page.screenshot({ path: ".cache/miner2-upgrades.png" });
+  await page.click(".tab[data-tab='profile']");
+  assert.equal(await page.locator("#view-profile").isVisible(), true);
+  assert.match(
+    await page.locator("#profile-balance").textContent(),
+    /^12\s840 Coin$/,
+  );
+  await page.screenshot({ path: ".cache/miner2-profile.png" });
+  await page.click(".tab[data-tab='mining']");
+
+  await page.click("#info");
+  assert.equal(await page.locator("#sheet").isVisible(), true);
+  await page.waitForTimeout(450);
+  await page.screenshot({ path: ".cache/miner2-rules.png" });
+  await page.click(".sheet-done");
+  assert.equal(await page.locator("#sheet").isVisible(), false);
 
   await page.click("#action");
   await page.waitForFunction(() =>
-    /^1\s120$/.test(document.querySelector("#balance").textContent),
+    /^12\s960$/.test(document.querySelector("#balance").textContent),
   );
   assert.match(await page.locator("#toast").textContent(), /\+120 SenseiCoin/);
-  await page.waitForTimeout(1800);
-  assert.equal(
-    await page.locator("#action").getAttribute("class"),
-    "primary kick",
+  await page.waitForFunction(
+    () =>
+      document.querySelector("#action-label").textContent === "НАЧАТЬ МАЙНИНГ",
   );
   assert.deepEqual(errors, []);
-  assert.deepEqual(calls.slice(0, 3), ["state", "kick", "state"]);
+  assert.deepEqual(calls.slice(0, 3), ["state", "start", "state"]);
   console.log(
-    "Miner checks passed: ready, kick animation, 8h countdown, collect, balance and all three visuals.",
+    "Miner checks passed: energy, start, 8h countdown, tabs, rules, collect and balance.",
   );
   await browser.close();
 })().catch((error) => {

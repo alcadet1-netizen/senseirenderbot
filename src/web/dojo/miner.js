@@ -1,8 +1,9 @@
-// Сервер хранит 8-часовой цикл; интерфейс только показывает таймер и просит пинок/сбор.
+// Сервер хранит 8-часовой цикл; интерфейс показывает таймер, энергию и сбор.
 (() => {
   "use strict";
+
   const $ = (id) => document.getElementById(id);
-  const frame = $("frame");
+  const app = $("app");
   const tg = window.Telegram?.WebApp;
   const initData = () => tg?.initData || "";
   const coin = (value) =>
@@ -10,19 +11,33 @@
       ? Math.floor(Number(value)).toLocaleString("ru-RU")
       : "—";
 
+  const ICONS = {
+    pickaxe: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3L11 9.999"/>
+      <path d="M15.973 4.027A13 13 0 0 0 5.902 2.373c-1.398.342-1.092 2.158.277 2.601a19.9 19.9 0 0 1 5.822 3.024"/>
+      <path d="M16.001 11.999a19.9 19.9 0 0 1 3.024 5.824c.444 1.369 2.26 1.676 2.603.278A13 13 0 0 0 20 8.069"/>
+      <path d="M18.352 3.352a1.205 1.205 0 0 0-1.704 0l-5.296 5.296a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l5.296-5.296a1.205 1.205 0 0 0 0-1.704z"/>
+      </svg>`,
+    coin: `<svg class="icon" viewBox="0 0 48 48" aria-hidden="true">
+      <circle cx="24" cy="24" r="17"/><path d="M15 19h18M18 19v4M30 19v4M17 23h14"/>
+      <path d="M20 23v10M28 23v10"/></svg>`,
+    lock: `<svg class="icon" viewBox="0 0 48 48" aria-hidden="true">
+      <rect x="12" y="21" width="24" height="18" rx="4"/>
+      <path d="M17 21v-4a7 7 0 0 1 14 0v4"/></svg>`,
+  };
+
   let model = null;
   let skew = 0;
-  let busy = false;
-  let kicking = false;
-  let celebrating = false;
-  let endRetryAt = 0;
+  let pending = null;
   let toastTimer = 0;
+  let endRetryAt = 0;
+  let activeTab = "mining";
 
   try {
     tg?.ready?.();
     tg?.expand?.();
-    tg?.setHeaderColor?.("#0b2b52");
-    tg?.setBackgroundColor?.("#050d19");
+    tg?.setHeaderColor?.("#020806");
+    tg?.setBackgroundColor?.("#010503");
   } catch {}
 
   async function api(action) {
@@ -48,18 +63,16 @@
   function apply(data) {
     model = data;
     skew = Date.now() - data.server_now * 1000;
-    $("balance").textContent = coin(data.balance);
     render();
     tick();
   }
 
-  function visualMode() {
-    if (kicking) return "mode-kicking";
-    if (celebrating) return "mode-done";
-    if (!model) return "mode-ready";
-    if (model.phase === "mining") return "mode-mining";
-    if (model.phase === "ready_to_collect") return "mode-done";
-    return "mode-ready";
+  function phase() {
+    if (!initData()) return "phase-offline";
+    if (!model) return "phase-loading";
+    if (model.phase === "mining") return "phase-mining";
+    if (model.phase === "ready_to_collect") return "phase-done";
+    return "phase-ready";
   }
 
   function remaining() {
@@ -67,17 +80,24 @@
     return Math.max(0, (model.finish_at || 0) * 1000 - serverNow());
   }
 
-  function progress() {
-    if (!model) return 0;
-    if (model.phase === "ready_to_collect") return 1;
-    if (model.phase !== "mining" || !model.finish_at || !model.started_at)
-      return 0;
+  function miningProgress() {
+    if (!model || model.phase !== "mining") return 0;
+    if (!model.started_at || !model.finish_at) return 0;
     const span = (model.finish_at - model.started_at) * 1000;
     if (span <= 0) return 0;
     return Math.max(
       0,
       Math.min(1, (serverNow() - model.started_at * 1000) / span),
     );
+  }
+
+  function energyValue() {
+    if (!initData()) return 0;
+    if (!model) return 0;
+    if (model.phase === "mining")
+      return Math.round(100 * (1 - miningProgress()));
+    if (model.phase === "ready_to_collect") return 0;
+    return 100;
   }
 
   function clock(ms) {
@@ -88,113 +108,118 @@
     return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
   }
 
-  function render() {
-    frame.classList.remove(
-      "mode-ready",
-      "mode-kicking",
-      "mode-mining",
-      "mode-done",
+  function paintEnergy(value) {
+    const rounded = Math.max(0, Math.min(100, Math.round(value)));
+    $("energy").textContent = `${rounded} / 100`;
+    $("energy-bar").style.width = `${rounded}%`;
+    $("energy-track").setAttribute("aria-valuenow", String(rounded));
+  }
+
+  function paintAction(icon, label, sub, timer = false, disabled = true) {
+    const button = $("action");
+    const labelNode = $("action-label");
+    $("orb-icon").innerHTML = ICONS[icon] || ICONS.pickaxe;
+    $("orb-icon").hidden = timer;
+    labelNode.textContent = label;
+    labelNode.classList.toggle("is-timer", timer);
+    $("orb-sub").textContent = sub;
+    button.disabled = disabled;
+    button.setAttribute(
+      "aria-label",
+      timer ? `${label}. ${sub}` : `${label}. ${sub}`,
     );
-    frame.classList.add(visualMode());
-    const phase = model?.phase;
-    const action = $("action");
+  }
+
+  function render() {
+    const current = phase();
+    app.classList.remove(
+      "phase-ready",
+      "phase-mining",
+      "phase-done",
+      "phase-offline",
+      "phase-loading",
+    );
+    app.classList.add(current);
+
+    const balance = initData() ? coin(model?.balance) : "—";
+    $("balance").textContent = balance;
+    $("profile-balance").textContent = initData() ? `${balance} Coin` : "—";
+    $("profile-reward").textContent = `${model?.reward ?? 120} Coin`;
+    paintEnergy(energyValue());
+
     const status = $("status");
-    const note = $("note");
-    const rate = $("rate");
-    const subtitle = $("subtitle");
-    const title = $("title");
+    const hint = $("hint");
 
-    if (kicking) title.innerHTML = "ПНИ<br><em>ПАШУ ДУРОВА</em>";
-    else if (phase === "mining") title.innerHTML = "ПАША<br><em>ЛЕТИТ!</em>";
-    else if (phase === "ready_to_collect")
-      title.innerHTML = "МАЙНИНГ<br><em>ГОТОВ!</em>";
-    else title.innerHTML = "ПНИ<br><em>ПАШУ ДУРОВА</em>";
-
-    if (!initData()) {
-      $("balance").textContent = "—";
+    if (current === "phase-offline") {
+      paintAction("lock", "ОТКРОЙ ЧЕРЕЗ /DOJO", "ТОЛЬКО TELEGRAM", false, true);
+      $("energy").textContent = "— / 100";
       status.textContent = "ТОЛЬКО В TELEGRAM";
-      rate.textContent = "+120 ◉ / 8 Ч";
-      subtitle.textContent =
-        "Майнер открывается из /dojo внутри Telegram: там подпись и баланс.";
-      $("timer").textContent = "—:—";
-      $("timer-hint").textContent = "нет доступа";
-      action.textContent = "ОТКРОЙ ЧЕРЕЗ /DOJO";
-      action.className = "primary";
-      action.disabled = true;
-      note.textContent =
+      hint.textContent =
         "Вне Telegram майнер не начисляет SenseiCoin и не запускает цикл.";
-      updateProgress(0);
       return;
     }
 
-    if (kicking) {
-      status.textContent = "ПАША В ПОЛЁТЕ";
-      action.textContent = "ПНЁС!";
-      action.className = "primary";
-      action.disabled = true;
-      note.textContent =
-        "Пинок принят. Майнер запускается на сервере — таймер не зависит от телефона.";
-    } else if (!model) {
-      status.textContent = "ЗАГРУЖАЕМ МАЙНЕР";
-      action.textContent = "ПОДКЛЮЧЕНИЕ…";
-      action.className = "primary";
-      action.disabled = true;
-      note.textContent = "Проверяем состояние цикла.";
-    } else if (phase === "mining") {
-      status.textContent = "ПАША ЛЕТИТ · МАЙНИНГ ИДЁТ";
-      rate.textContent = `+${model.reward} ◉ / 8 Ч`;
-      action.textContent = "МАЙНИНГ ИДЁТ";
-      action.className = "primary";
-      action.disabled = true;
-      note.innerHTML =
-        "Можно закрыть приложение: таймер идёт на сервере. Вернись, когда <b>08:00:00</b> закончится.";
-      subtitle.textContent =
-        "Майнинг растёт! 15 SenseiCoin в час прямо из SenseiBank.";
-    } else if (phase === "ready_to_collect") {
-      status.textContent = "МАЙНИНГ ЗАВЕРШЁН";
-      rate.textContent = `+${model.reward} ◉ НАМАЙНЕНО`;
-      action.textContent = `ЗАБРАТЬ ${model.reward} ◉`;
-      action.className = "primary collect";
-      action.disabled = busy;
-      note.innerHTML = `Майнер отдал <b>${model.reward} SenseiCoin</b>. Забери их, чтобы открыть следующий пинок.`;
-      subtitle.textContent = `Восемь часов прошли. Забирай ${model.reward} SenseiCoin.`;
-    } else {
-      status.textContent = "ПАША ЖДЁТ ПИНКА";
-      rate.textContent = `+${model.reward} ◉ / 8 Ч`;
-      action.textContent = "ПНУТЬ ПАШУ";
-      action.className = "primary kick";
-      action.disabled = busy || celebrating;
-      note.innerHTML =
-        "Один пинок запускает <b>8 часов майнинга</b> из SenseiBank. Следующий пинок — после сбора.";
-      subtitle.textContent =
-        "Один пинок запускает майнинг из SenseiBank на 8 часов.";
+    if (current === "phase-loading") {
+      paintAction("pickaxe", "ПОДКЛЮЧЕНИЕ", "SENSEIBANK", false, true);
+      status.textContent = "СЕНСЕЙ ПРОСЫПАЕТСЯ";
+      hint.textContent = "Проверяем состояние цикла на сервере.";
+      return;
     }
-    if (phase === "mining" && !kicking)
-      $("timer").textContent = clock(remaining());
-    else if (phase === "ready_to_collect") $("timer").textContent = "00:00:00";
-    else if (phase === "ready") $("timer").textContent = "08:00:00";
-    else if (!model) $("timer").textContent = "—:—";
-    if (!initData()) $("timer").textContent = "—:—";
-    updateProgress(progress() * 100);
-  }
 
-  function updateProgress(percent) {
-    const value = Math.max(0, Math.min(100, percent));
-    $("bar").style.width = `${value}%`;
-    $("progress").setAttribute("aria-valuenow", String(Math.round(value)));
-    const hint = $("timer-hint");
-    if (!initData()) hint.textContent = "нет доступа";
-    else if (model?.phase === "mining") hint.textContent = "до конца майнинга";
-    else if (model?.phase === "ready_to_collect")
-      hint.textContent = "готово к сбору";
-    else hint.textContent = "8 часов майнинга";
+    if (pending === "collect") {
+      paintAction("coin", "ЗАБИРАЕМ…", "SENSEIBANK", false, true);
+      status.textContent = "НАГРАДА В ПУТИ";
+      hint.textContent = "Сервер начисляет SenseiCoin из банка.";
+      return;
+    }
+
+    if (pending === "start") {
+      paintAction("pickaxe", "ЗАПУСК…", "8 ЧАСОВ", false, true);
+      status.textContent = "СЕНСЕЙ УХОДИТ В МАЙНИНГ";
+      hint.textContent = "Создаём восьмичасовой цикл на сервере.";
+      return;
+    }
+
+    if (current === "phase-mining") {
+      paintAction("pickaxe", clock(remaining()), "ДО КОНЦА ЦИКЛА", true, true);
+      status.textContent = "МАЙНИНГ ИДЁТ";
+      hint.textContent =
+        "Цикл идёт на сервере · приложение можно закрыть · 8 часов";
+      return;
+    }
+
+    if (current === "phase-done") {
+      paintAction(
+        "coin",
+        `ЗАБРАТЬ ${model.reward}`,
+        "SENSEICOIN",
+        false,
+        false,
+      );
+      status.textContent = "ЦИКЛ ЗАВЕРШЁН";
+      hint.textContent =
+        "Награда из SenseiBank ждёт тебя. Забери и начни снова.";
+      return;
+    }
+
+    paintAction(
+      "pickaxe",
+      "НАЧАТЬ МАЙНИНГ",
+      "8 ЧАСОВ · 120 COIN",
+      false,
+      false,
+    );
+    status.textContent = "СЕНСЕЙ ГОТОВ";
+    hint.textContent = "Один цикл — 8 часов · 120 SenseiCoin из SenseiBank";
   }
 
   function tick() {
-    if (!model || model.phase !== "mining") return;
+    if (!model || model.phase !== "mining" || pending) return;
     const left = remaining();
-    $("timer").textContent = clock(left);
-    updateProgress(progress() * 100);
+    const label = $("action-label");
+    label.textContent = clock(left);
+    label.classList.add("is-timer");
+    paintEnergy(energyValue());
     if (left <= 0 && Date.now() >= endRetryAt) {
       endRetryAt = Date.now() + 4000;
       refresh(true);
@@ -207,11 +232,11 @@
     toast.classList.toggle("error", error);
     toast.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.classList.remove("show"), 2600);
+    toastTimer = setTimeout(() => toast.classList.remove("show"), 2800);
   }
 
   async function refresh(silent = false) {
-    if (!initData() || busy) return;
+    if (!initData() || pending) return;
     try {
       apply(await api("state"));
     } catch (error) {
@@ -219,74 +244,106 @@
     }
   }
 
-  async function kick() {
-    if (busy || celebrating || !model || model.phase !== "ready" || !initData())
-      return;
-    busy = true;
+  async function start() {
+    if (pending || !model || model.phase !== "ready" || !initData()) return;
+    pending = "start";
     render();
+    let failed = false;
     try {
-      const data = await api("kick");
+      const data = await api("start");
       apply(data);
-      kicking = true;
-      render();
-      setTimeout(() => {
-        kicking = false;
-        render();
-      }, 1500);
+      showToast("Майнинг запущен · Сенсей ушёл на 8 часов");
     } catch (error) {
+      failed = true;
       showToast(error.message, true);
-      await refresh(true);
     } finally {
-      busy = false;
+      pending = null;
       render();
     }
+    if (failed) refresh(true);
   }
 
   async function collect() {
-    if (busy || model?.phase !== "ready_to_collect" || !initData()) return;
-    busy = true;
+    if (pending || model?.phase !== "ready_to_collect" || !initData()) return;
+    pending = "collect";
     render();
+    let failed = false;
     try {
       const data = await api("collect");
       apply(data);
-      celebrating = true;
-      render();
       celebrate(data.mined || 0);
       showToast(
         `+${coin(data.mined)} SenseiCoin · баланс ${coin(data.balance)}`,
       );
-      setTimeout(() => {
-        celebrating = false;
-        render();
-      }, 1600);
     } catch (error) {
+      failed = true;
       showToast(error.message, true);
-      await refresh(true);
     } finally {
-      busy = false;
+      pending = null;
       render();
     }
+    if (failed) refresh(true);
   }
 
   function celebrate(amount) {
     if (!amount) return;
     const layer = $("coins");
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 18; i++) {
       const node = document.createElement("span");
       node.className = "coin-fly";
       node.textContent = "◉";
       node.style.left = `${8 + Math.random() * 84}%`;
-      node.style.setProperty("--dx", `${(Math.random() - 0.5) * 160}px`);
-      node.style.animationDelay = `${Math.random() * 0.18}s`;
+      node.style.setProperty("--dx", `${(Math.random() - 0.5) * 170}px`);
+      node.style.animationDelay = `${Math.random() * 0.2}s`;
       layer.appendChild(node);
-      setTimeout(() => node.remove(), 1700);
+      setTimeout(() => node.remove(), 1900);
     }
   }
 
+  function setTab(name) {
+    if (!["mining", "upgrades", "profile"].includes(name)) return;
+    activeTab = name;
+    document.querySelectorAll(".tab").forEach((tab) => {
+      const active = tab.dataset.tab === name;
+      tab.classList.toggle("active", active);
+      if (active) tab.setAttribute("aria-current", "page");
+      else tab.removeAttribute("aria-current");
+    });
+    ["mining", "upgrades", "profile"].forEach((key) => {
+      $(`view-${key}`).hidden = key !== name;
+    });
+    closeSheet();
+  }
+
+  function openSheet() {
+    const sheet = $("sheet");
+    sheet.hidden = false;
+  }
+
+  function closeSheet() {
+    $("sheet").hidden = true;
+  }
+
   $("action").addEventListener("click", () => {
-    if (visualMode() === "mode-done" || model?.phase === "ready_to_collect")
-      collect();
-    else kick();
+    if (model?.phase === "ready_to_collect") collect();
+    else start();
+  });
+
+  document.querySelectorAll(".tab").forEach((tab) => {
+    tab.addEventListener("click", () => setTab(tab.dataset.tab));
+  });
+
+  $("info").addEventListener("click", () => {
+    if (activeTab !== "mining") setTab("mining");
+    openSheet();
+  });
+
+  document.querySelectorAll("[data-close='sheet']").forEach((node) => {
+    node.addEventListener("click", closeSheet);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeSheet();
   });
 
   document.addEventListener("visibilitychange", () => {
@@ -297,6 +354,6 @@
     if (!document.hidden) refresh(true);
   }, 30000);
 
-  if (!initData()) render();
-  else refresh();
+  render();
+  if (initData()) refresh();
 })();
