@@ -393,6 +393,97 @@ button {
   transition: width 0.35s linear;
 }
 
+.ambient {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sakura-layer,
+.matrix-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.sakura-layer {
+  opacity: 0.62;
+  transition: opacity 0.8s ease;
+}
+
+.phase-mining .sakura-layer {
+  opacity: 0.9;
+}
+
+.sakura-leaf {
+  position: absolute;
+  top: -12vh;
+  left: var(--x);
+  width: var(--size);
+  height: calc(var(--size) * 0.72);
+  border-radius: 72% 12% 68% 18% / 64% 18% 72% 26%;
+  background: linear-gradient(135deg, #ffe0ea 0%, #ffa8c7 48%, #d45d89 100%);
+  box-shadow:
+    0 1px 7px rgba(255, 120, 170, 0.26),
+    inset 0 0 5px rgba(255, 255, 255, 0.28);
+  opacity: 0;
+  transform-origin: 50% 50%;
+  animation: leaf-fall var(--duration) linear var(--delay) infinite;
+  will-change: transform, opacity;
+}
+
+.sakura-leaf::after {
+  content: "";
+  position: absolute;
+  top: 8%;
+  left: 18%;
+  width: 1px;
+  height: 70%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), transparent);
+  opacity: 0.55;
+  transform: rotate(22deg);
+}
+
+.sakura-leaf:nth-child(3n) {
+  filter: hue-rotate(-10deg) brightness(0.88);
+}
+
+.matrix-layer {
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+
+.phase-mining .matrix-layer {
+  opacity: 1;
+}
+
+.matrix-col {
+  position: absolute;
+  top: -30%;
+  left: var(--x);
+  color: rgba(111, 255, 174, var(--opacity));
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: var(--size);
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  line-height: 1.32;
+  text-orientation: upright;
+  text-shadow: 0 0 8px rgba(35, 255, 124, 0.38);
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  animation: matrix-fall var(--duration) linear var(--delay) infinite;
+  will-change: transform, opacity;
+}
+
+.matrix-col::first-letter {
+  color: #c8ffe0;
+  text-shadow:
+    0 0 8px rgba(88, 255, 158, 0.9),
+    0 0 18px rgba(45, 255, 136, 0.55);
+}
+
 .orb {
   position: relative;
   display: grid;
@@ -400,6 +491,17 @@ button {
   width: min(64vw, 250px);
   aspect-ratio: 1;
   flex: 0 0 auto;
+}
+
+.orb::after {
+  content: "";
+  position: absolute;
+  inset: 2%;
+  z-index: 0;
+  border: 1px solid rgba(120, 255, 185, 0.46);
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .orb-halo {
@@ -440,6 +542,7 @@ button {
 
 .orb-button {
   position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -568,6 +671,11 @@ button {
     0 0 0 8px rgba(51, 255, 143, 0.045),
     0 0 58px rgba(47, 255, 142, 0.34),
     inset 0 0 64px rgba(44, 255, 139, 0.18);
+  animation: core-pulse 2.6s ease-in-out infinite;
+}
+
+.phase-mining .orb::after {
+  animation: ring-pulse 2.6s ease-out infinite;
 }
 
 .phase-mining .status {
@@ -1180,6 +1288,76 @@ button:focus-visible {
   }
 }
 
+@keyframes core-pulse {
+  0%,
+  100% {
+    border-color: rgba(117, 255, 181, 0.55);
+    box-shadow:
+      0 0 0 8px rgba(51, 255, 143, 0.04),
+      0 0 46px rgba(47, 255, 142, 0.3),
+      inset 0 0 58px rgba(44, 255, 139, 0.16);
+  }
+  50% {
+    border-color: rgba(198, 255, 225, 0.94);
+    box-shadow:
+      0 0 0 14px rgba(51, 255, 143, 0.075),
+      0 0 98px rgba(47, 255, 142, 0.62),
+      inset 0 0 94px rgba(44, 255, 139, 0.34);
+  }
+}
+
+@keyframes ring-pulse {
+  0% {
+    opacity: 0.58;
+    transform: scale(0.9);
+  }
+  72%,
+  100% {
+    opacity: 0;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes leaf-fall {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -10vh, 0) rotate(var(--start));
+  }
+  9% {
+    opacity: var(--opacity);
+  }
+  46% {
+    opacity: var(--opacity);
+    transform: translate3d(var(--sway), 46vh, 0)
+      rotate(calc(var(--start) + 165deg));
+  }
+  82% {
+    opacity: var(--opacity);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(var(--sway) * -0.55), 112vh, 0)
+      rotate(calc(var(--start) + 390deg));
+  }
+}
+
+@keyframes matrix-fall {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -22vh, 0);
+  }
+  10% {
+    opacity: 1;
+  }
+  84% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, 112vh, 0);
+  }
+}
+
 @keyframes coin-fly {
   0% {
     opacity: 0;
@@ -1305,6 +1483,10 @@ button:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .ambient {
+    display: none;
+  }
+
   *,
   *::before,
   *::after {

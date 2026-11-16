@@ -153,6 +153,8 @@ const { chromium } = require("playwright-core");
       document.querySelector("#action-label").textContent === "НАЧАТЬ МАЙНИНГ",
   );
   assert.match(await page.locator("#balance").textContent(), /^12\s840$/);
+  assert.ok((await page.locator(".sakura-leaf").count()) >= 9);
+  assert.ok((await page.locator(".matrix-col").count()) >= 9);
   assert.equal(await page.locator("#energy").textContent(), "100 / 100");
   assert.equal(await page.locator("#status").textContent(), "СЕНСЕЙ ГОТОВ");
   assert.ok(

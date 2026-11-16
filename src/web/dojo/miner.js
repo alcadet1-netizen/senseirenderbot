@@ -32,6 +32,58 @@
       <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`,
   };
 
+  const motionQuery = window.matchMedia
+    ? window.matchMedia("(prefers-reduced-motion: reduce)")
+    : null;
+  const reduceMotion = Boolean(motionQuery?.matches);
+  const MATRIX_GLYPHS =
+    "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789";
+
+  const rnd = (min, max) => min + Math.random() * (max - min);
+  const matrixText = () =>
+    Array.from(
+      { length: Math.round(rnd(7, 13)) },
+      () => MATRIX_GLYPHS[Math.floor(Math.random() * MATRIX_GLYPHS.length)],
+    ).join("");
+
+  function seedAmbient() {
+    const sakura = $("sakura");
+    const matrix = $("matrix");
+    if (!sakura || !matrix || reduceMotion) return;
+    const narrow = window.innerWidth < 420;
+    const leaves = narrow ? 9 : 13;
+    const columns = narrow ? 9 : 13;
+    for (let i = 0; i < leaves; i++) {
+      const leaf = document.createElement("i");
+      leaf.className = "sakura-leaf";
+      leaf.style.setProperty("--x", `${rnd(1, 98)}%`);
+      leaf.style.setProperty("--size", `${rnd(7, 14)}px`);
+      leaf.style.setProperty("--duration", `${rnd(9, 17)}s`);
+      leaf.style.setProperty("--delay", `${-rnd(0, 17)}s`);
+      leaf.style.setProperty("--sway", `${rnd(18, 72)}px`);
+      leaf.style.setProperty("--start", `${rnd(-45, 45)}deg`);
+      leaf.style.setProperty("--opacity", rnd(0.38, 0.75).toFixed(2));
+      sakura.appendChild(leaf);
+    }
+    for (let i = 0; i < columns; i++) {
+      const column = document.createElement("span");
+      column.className = "matrix-col";
+      column.style.setProperty("--x", `${rnd(3, 96)}%`);
+      column.style.setProperty("--size", `${rnd(8, 13)}px`);
+      column.style.setProperty("--duration", `${rnd(8, 15)}s`);
+      column.style.setProperty("--delay", `${-rnd(0, 15)}s`);
+      column.style.setProperty("--opacity", rnd(0.12, 0.34).toFixed(2));
+      column.textContent = matrixText();
+      matrix.appendChild(column);
+    }
+    setInterval(() => {
+      if (document.hidden || !matrix.childElementCount) return;
+      const column =
+        matrix.children[Math.floor(Math.random() * matrix.childElementCount)];
+      if (column) column.textContent = matrixText();
+    }, 3200);
+  }
+
   let model = null;
   let skew = 0;
   let pending = null;
@@ -707,6 +759,7 @@
     if (!document.hidden) refresh(true);
   }, 30000);
 
+  seedAmbient();
   render();
   if (initData()) {
     refresh();
