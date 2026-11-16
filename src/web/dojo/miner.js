@@ -4,16 +4,293 @@
 
   const $ = (id) => document.getElementById(id);
   const app = $("app");
+  const stageEl = document.querySelector(".stage");
   const tg = window.Telegram?.WebApp;
   const initData = () => tg?.initData || "";
+
+  const LANG_KEY = "sensei_dojo_language";
+  const SUPPORTED_LANGS = ["ru", "en"];
+  const EN = {
+    "SenseiCoin · Майнер": "SenseiCoin · Miner",
+    "Сенсей в тёмном кибер-додзё перед зелёным энсо":
+      "Sensei in a dark cyber-dojo before a green enso",
+    "Язык интерфейса": "Interface language",
+    "Правила майнинга": "Mining rules",
+    "Баланс SenseiCoin": "SenseiCoin balance",
+    "ТВОИ ОЧКИ": "YOUR POINTS",
+    "Энергия майнера": "Miner energy",
+    ЭНЕРГИЯ: "ENERGY",
+    "Энергия майнинга": "Mining energy",
+    "ПРОГРЕСС ЦИКЛА": "CYCLE PROGRESS",
+    ЗАДАНИЯ: "TASKS",
+    ПОДПИСКИ: "SUBSCRIPTIONS",
+    "Подпишись на канал и забери SenseiCoin и энергию. Награда за каждый канал — один раз.":
+      "Subscribe to the channel and claim SenseiCoin and energy. Each channel reward can be claimed once.",
+    "ЗАГРУЖАЕМ ЗАДАНИЯ…": "LOADING TASKS…",
+    "Подписку проверяет сервер через Telegram.":
+      "The server verifies the subscription via Telegram.",
+    УЛУЧШЕНИЯ: "UPGRADES",
+    ПРОКАЧКА: "UPGRADES",
+    "Постоянные улучшения за Telegram Stars. Кирка повышает добычу, энергия держит полную мощность дольше, автосбор работает без тебя.":
+      "Permanent upgrades for Telegram Stars. The pickaxe boosts mining, energy keeps full power longer, and auto-collect works without you.",
+    "ЗАГРУЖАЕМ УЛУЧШЕНИЯ…": "LOADING UPGRADES…",
+    "Оплата Stars · улучшения не сгорают":
+      "Stars payment · upgrades never expire",
+    ЭМИССИЯ: "EMISSION",
+    "Всего в экономике может быть 10 000 000 000 Coin — жёсткий лимит. Монеты выпускаются в SenseiBank, добыча переводит их из банка игроку; переводы лимит не меняют.":
+      "The economy can hold at most 10,000,000,000 Coin. Coins are emitted into SenseiBank, and mining transfers them from the bank to the player; transfers do not change the cap.",
+    "Использование лимита эмиссии": "Emission cap usage",
+    Выпущено: "Emitted",
+    Лимит: "Cap",
+    Осталось: "Remaining",
+    "Всего в экономике": "Total in economy",
+    "Баланс банка": "Bank balance",
+    "В обороте": "In circulation",
+    Игроков: "Players",
+    "ОБНОВИТЬ ДАННЫЕ": "REFRESH DATA",
+    "Баланс игрока один и тот же здесь и в чате (/balance). Данные /senseibank обновляются с задержкой до минуты.":
+      "The player balance is the same here and in chat (/balance). /senseibank data may be up to a minute old.",
+    "ДОДЗЁ ПРИГЛАШЕНИЙ": "REFERRAL DOJO",
+    РЕФЕРАЛЫ: "REFERRALS",
+    "Те же цифры, что в /senseireferal: твоя сеть, доход и бонус за активацию учеников.":
+      "The same numbers as /senseireferal: your network, income and student activation bonus.",
+    "Прогресс до следующего звания": "Progress to the next rank",
+    Заработано: "Earned",
+    "I уровень": "Level I",
+    "II уровень": "Level II",
+    "III уровень": "Level III",
+    "Уровень сети": "Network level",
+    "ЗАГРУЖАЕМ УЧЕНИКОВ…": "LOADING STUDENTS…",
+    "СКОПИРОВАТЬ ССЫЛКУ": "COPY LINK",
+    ПОДЕЛИТЬСЯ: "SHARE",
+    "🎁 Бонус за ученика": "🎁 Referral bonus",
+    "10% / 1% / 0,1% с каждого платного апа катаны по трём уровням. Остаток уходит в SenseiBank.":
+      "10% / 1% / 0.1% from every paid katana upgrade across three levels. The remainder goes to SenseiBank.",
+    ПРОФИЛЬ: "PROFILE",
+    "СЕНСЕЙ-МАЙНЕР": "SENSEI MINER",
+    "Баланс (как в чате)": "Balance (same as chat)",
+    Добыча: "Mining rate",
+    Энергия: "Energy",
+    Цикл: "Cycle",
+    "8 часов": "8 hours",
+    Награда: "Reward",
+    Автосбор: "Auto-collect",
+    ВКЛ: "ON",
+    ВЫКЛ: "OFF",
+    Банк: "Bank",
+    "Разделы майнера": "Miner sections",
+    Майнинг: "Mining",
+    Задания: "Tasks",
+    Улучшения: "Upgrades",
+    Рефералы: "Referrals",
+    Профиль: "Profile",
+    Закрыть: "Close",
+    ПРАВИЛА: "RULES",
+    "КАК РАБОТАЕТ МАЙНЕР": "HOW THE MINER WORKS",
+    "<b>Запусти цикл.</b> Сенсей уходит в майнинг ровно на 8 часов.":
+      "<b>Start a cycle.</b> Sensei goes mining for exactly 8 hours.",
+    "<b>Следи за энергией.</b> 100 энергии хватает на час полной мощности; потом кирка добывает 10% от базовой скорости.":
+      "<b>Watch your energy.</b> 100 energy lasts one hour at full power; after that the pickaxe mines at 10% of its base rate.",
+    "<b>Забери награду.</b> Она приходит из SenseiBank только после конца цикла. Процент прогресса виден на экране.":
+      "<b>Collect the reward.</b> It comes from SenseiBank only after the cycle ends. The progress percentage is shown on screen.",
+    "<b>Начни снова.</b> Следующий цикл открывается сразу после сбора.":
+      "<b>Start again.</b> The next cycle opens right after collection.",
+    "<b>Улучшай кирку.</b> За Stars: +10 Coin/ч за уровень, +100 энергии или автосбор, который запускает циклы без тебя.":
+      "<b>Upgrade your pickaxe.</b> For Stars: +10 Coin/h per level, +100 energy, or auto-collect that starts cycles without you.",
+    ПОНЯТНО: "GOT IT",
+    "Coin / ч": "Coin / h",
+    "Coin/ч": "Coin/h",
+    "ОТКРОЙ ЧЕРЕЗ /DOJO": "OPEN VIA /DOJO",
+    "ТОЛЬКО TELEGRAM": "TELEGRAM ONLY",
+    "ТОЛЬКО В TELEGRAM": "TELEGRAM ONLY",
+    "Вне Telegram майнер не начисляет SenseiCoin и не запускает цикл.":
+      "Outside Telegram the miner does not credit SenseiCoin or start cycles.",
+    ПОДКЛЮЧЕНИЕ: "CONNECTING",
+    "СЕНСЕЙ ПРОСЫПАЕТСЯ": "SENSEI IS WAKING UP",
+    "Проверяем состояние цикла на сервере.":
+      "Checking the cycle state on the server.",
+    "ЗАБИРАЕМ…": "COLLECTING…",
+    "НАГРАДА В ПУТИ": "REWARD IN TRANSIT",
+    "Сервер начисляет SenseiCoin из банка.":
+      "The server credits SenseiCoin from the bank.",
+    "ЗАПУСК…": "STARTING…",
+    "8 ЧАСОВ": "8 HOURS",
+    "СЕНСЕЙ УХОДИТ В МАЙНИНГ": "SENSEI GOES MINING",
+    "Создаём восьмичасовой цикл на сервере.":
+      "Creating an eight-hour cycle on the server.",
+    "ДО КОНЦА ЦИКЛА": "UNTIL THE CYCLE ENDS",
+    "МАЙНИНГ ИДЁТ · {percent}%": "MINING · {percent}%",
+    "ЗАБРАТЬ {amount}": "COLLECT {amount}",
+    "ЦИКЛ ЗАВЕРШЁН · 100%": "CYCLE COMPLETE · 100%",
+    "Награда из SenseiBank ждёт тебя. Забери и начни снова.":
+      "Your SenseiBank reward is waiting. Collect it and start again.",
+    "НАЧАТЬ МАЙНИНГ": "START MINING",
+    "8 ЧАСОВ · {amount} COIN": "8 HOURS · {amount} COIN",
+    "СЕНСЕЙ ГОТОВ": "SENSEI IS READY",
+    "Кирка {rate} Coin/ч · энергия {energy} · {hours} ч полной мощности":
+      "Pickaxe {rate} Coin/h · energy {energy} · {hours} h at full power",
+    "Энергия {energy} / {max} · {rate} Coin/ч · после нуля 10%":
+      "Energy {energy} / {max} · {rate} Coin/h · 10% after zero",
+    "Майнинг запущен · Сенсей ушёл на 8 часов":
+      "Mining started · Sensei left for 8 hours",
+    "+{amount} SenseiCoin · баланс {balance}":
+      "+{amount} SenseiCoin · balance {balance}",
+    "ПОКА НЕТ ЗАДАНИЙ": "NO TASKS YET",
+    "@{username} · подписка на канал": "@{username} · channel subscription",
+    "+{amount} энергии": "+{amount} energy",
+    "✓ Награда получена": "✓ Reward claimed",
+    Подписаться: "Subscribe",
+    "Проверяем…": "Checking…",
+    Проверить: "Check",
+    "НЕ УДАЛОСЬ ЗАГРУЗИТЬ ЗАДАНИЯ": "COULD NOT LOAD TASKS",
+    "+{amount} SenseiCoin · +{energy} энергии":
+      "+{amount} SenseiCoin · +{energy} energy",
+    "УЛУЧШЕНИЯ НЕДОСТУПНЫ": "UPGRADES UNAVAILABLE",
+    КИРКА: "PICKAXE",
+    "Каждый уровень: +10 SenseiCoin в час. Действует со следующего цикла.":
+      "Each level: +10 SenseiCoin per hour. Applies from the next cycle.",
+    "{rate} Coin/ч · следующий {next} Coin/ч":
+      "{rate} Coin/h · next {next} Coin/h",
+    "СЧЁТ…": "INVOICE…",
+    МАКСИМУМ: "MAXIMUM",
+    "{stars} ⭐ · УЛУЧШИТЬ": "{stars} ⭐ · UPGRADE",
+    "Навсегда +100 к запасу. 100 энергии — час полной мощности, потом 10%; со следующего цикла.":
+      "Permanent +100 to the reserve. 100 energy is one hour at full power, then 10%; applies from the next cycle.",
+    "Покупок: {bought} / {max} · база {base}":
+      "Purchases: {bought} / {max} · base {base}",
+    "{stars} ⭐ · +100 ЭНЕРГИИ": "{stars} ⭐ · +100 ENERGY",
+    АВТОСБОР: "AUTO-COLLECT",
+    АКТИВЕН: "ACTIVE",
+    "Сам собирает награду и запускает новый цикл каждые 8 часов. Участие не нужно.":
+      "Collects the reward and starts a new cycle every 8 hours. No action needed.",
+    "Один раз · работает всегда": "One-time · always active",
+    "УЖЕ ВКЛЮЧЁН": "ALREADY ON",
+    "{stars} ⭐ · ВКЛЮЧИТЬ": "{stars} ⭐ · ENABLE",
+    "НЕ УДАЛОСЬ ЗАГРУЗИТЬ УЛУЧШЕНИЯ": "COULD NOT LOAD UPGRADES",
+    "Счёт Stars создан. Открой его в Telegram.":
+      "Stars invoice created. Open it in Telegram.",
+    "Оплата получена · включаем улучшение":
+      "Payment received · enabling the upgrade",
+    "Оплата отменена": "Payment cancelled",
+    "Оплата не прошла": "Payment failed",
+    "МАКСИМАЛЬНОЕ ЗВАНИЕ": "MAXIMUM RANK",
+    "ДО {rank} · {required}": "TO {rank} · {required}",
+    "✅ Получено 50 Coin за активацию ученика.":
+      "✅ 50 Coin received for student activation.",
+    "Твой аккаунт не участвует в бонусной программе активации. Комиссии 10% / 1% / 0,1% продолжают начисляться.":
+      "Your account is not part of the activation bonus program. Commissions of 10% / 1% / 0.1% still apply.",
+    "Дни активности: {days}/3 · платный ап: {upgrade}. Выплата при наличии средств SenseiBank.":
+      "Activity days: {days}/3 · paid upgrade: {upgrade}. Paid when SenseiBank has funds.",
+    "ПОКА НЕТ УЧЕНИКОВ": "NO STUDENTS YET",
+    "НЕ УДАЛОСЬ ЗАГРУЗИТЬ РЕФЕРАЛОВ": "COULD NOT LOAD REFERRALS",
+    Ученик: "Student",
+    "Ссылка недоступна. Открой майнер через /dojo.":
+      "Link unavailable. Open the miner via /dojo.",
+    "{percent}% до звания {rank}": "{percent}% to {rank}",
+    "{emitted} из {cap} Coin": "{emitted} of {cap} Coin",
+    "Максимальное звание": "Maximum rank",
+    "Ссылка приглашения скопирована": "Invite link copied",
+    "Заходи в додзё Сенсея — вместе майним SenseiCoin 🥷":
+      "Join Sensei's dojo — let's mine SenseiCoin together 🥷",
+    "Майнер не ответил. Попробуй ещё раз.":
+      "The miner did not respond. Try again.",
+    "Майнер недоступен.": "The miner is unavailable.",
+    "Сенсей на техобслуживании. Попробуйте позже.":
+      "Sensei is under maintenance. Try again later.",
+    "Откройте майнер внутри Telegram.": "Open the miner inside Telegram.",
+    "Майнинг уже идёт. Дождись конца цикла.":
+      "Mining is already running. Wait for the cycle to end.",
+    "Сначала забери намайненное и запусти новый цикл.":
+      "Collect the mined coins first, then start a new cycle.",
+    "Майнер уже запущен. Обнови экран.":
+      "The miner is already running. Refresh the screen.",
+    "Намайненного пока нет. Сначала запусти майнинг.":
+      "Nothing has been mined yet. Start mining first.",
+    "Награда уже получена. Запусти новый цикл.":
+      "The reward has already been collected. Start a new cycle.",
+    "Награда уже получена. Обнови экран.":
+      "The reward has already been collected. Refresh the screen.",
+    "Майнинг ещё не завершён.": "Mining has not finished yet.",
+    "Майнер не смог выплатить награду. Попробуй ещё раз.":
+      "The miner could not pay the reward. Try again.",
+    "SenseiBank не может выплатить награду. Попробуй позже.":
+      "SenseiBank cannot pay the reward. Try again later.",
+    "Награда недоступна для этого профиля.":
+      "The reward is unavailable for this profile.",
+    "Оплата временно недоступна.": "Payment is temporarily unavailable.",
+    "Не удалось создать счёт. Попробуй позже.":
+      "Could not create the invoice. Try again later.",
+    "Некорректный @username канала.": "Invalid channel @username.",
+    "Укажи @username канала.": "Enter the channel @username.",
+    "Задание не найдено.": "Task not found.",
+    "Задание не найдено или уже отключено.":
+      "The task was not found or has been disabled.",
+    "Награда за это задание уже получена.":
+      "The reward for this task has already been claimed.",
+    "Не удалось зафиксировать награду. Попробуй ещё раз.":
+      "Could not record the reward. Try again.",
+    "Не удалось начислить награду. Попробуй ещё раз.":
+      "Could not credit the reward. Try again.",
+    "Проверка подписки временно недоступна. Попробуй позже.":
+      "Subscription checks are temporarily unavailable. Try again later.",
+    "Не удалось проверить подписку. Попробуй ещё раз.":
+      "Could not verify the subscription. Try again.",
+    "Неизвестное улучшение.": "Unknown upgrade.",
+    "Профиль недоступен. Сначала открой /start.":
+      "Profile unavailable. Open /start first.",
+    "Неверный счёт улучшения. Открой «Улучшения» заново.":
+      'Invalid upgrade invoice. Reopen "Upgrades".',
+    "Счёт уже использован или устарел.":
+      "The invoice has already been used or has expired.",
+    "Профиль недоступен.": "Profile unavailable.",
+    "Неверный платёж улучшения.": "Invalid upgrade payment.",
+    "Счёт улучшения не найден. Не оплачивайте повторно.":
+      "Upgrade invoice not found. Do not pay again.",
+    "Кирка уже прокачана до 100 уровня.":
+      "The pickaxe is already at level 100.",
+    "Достигнут максимум покупок энергии.":
+      "The maximum number of energy purchases has been reached.",
+    "Автосбор уже включён навсегда.":
+      "Auto-collect is already permanently enabled.",
+  };
+  const RANK_TITLES_EN = {
+    Новичок: "Novice",
+    Ученик: "Student",
+    Подмастерье: "Apprentice",
+    Адепт: "Adept",
+    Мастер: "Master",
+    Сенсей: "Sensei",
+    Легенда: "Legend",
+    Император: "Emperor",
+    "Бог Рефералов": "Referral God",
+  };
+  const rankTitle = (rank) =>
+    lang === "en" ? RANK_TITLES_EN[rank?.title] || rank?.title : rank?.title;
+
+  const storedLanguage = () => {
+    try {
+      const saved = window.localStorage.getItem(LANG_KEY);
+      return SUPPORTED_LANGS.includes(saved) ? saved : "ru";
+    } catch {
+      return "ru";
+    }
+  };
+  let lang = storedLanguage();
+  const t = (ru, vars = {}) => {
+    const template = lang === "en" ? EN[ru] || ru : ru;
+    return template.replace(/\{(\w+)\}/g, (match, key) =>
+      Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : match,
+    );
+  };
+  const locale = () => (lang === "en" ? "en-US" : "ru-RU");
   const coin = (value) =>
     Number.isFinite(Number(value))
-      ? Math.floor(Number(value)).toLocaleString("ru-RU")
+      ? Math.floor(Number(value)).toLocaleString(locale())
       : "—";
   // Referral commissions include fractions of a coin (10% / 1% / 0,1%).
   const coinExact = (value) =>
     Number.isFinite(Number(value))
-      ? Number(value).toLocaleString("ru-RU", { maximumFractionDigits: 3 })
+      ? Number(value).toLocaleString(locale(), { maximumFractionDigits: 3 })
       : "—";
 
   const ICONS = {
@@ -127,7 +404,7 @@
       data = await response.json();
     } catch {}
     if (!response.ok)
-      throw Error(data.error || "Майнер не ответил. Попробуй ещё раз.");
+      throw Error(data.error || t("Майнер не ответил. Попробуй ещё раз."));
     return data;
   }
 
@@ -198,9 +475,10 @@
     const energy = energyValue();
     const base = Number(model.base_rate) || 0;
     const rate = energy > 0 ? base : base / 10;
-    $("hint").textContent =
-      `Энергия ${Math.round(energy)} / ${energyMax()} · ${coin(rate)} Coin/ч · ` +
-      "после нуля 10%";
+    $("hint").textContent = t(
+      "Энергия {energy} / {max} · {rate} Coin/ч · после нуля 10%",
+      { energy: Math.round(energy), max: energyMax(), rate: coin(rate) },
+    );
   }
 
   function clock(ms) {
@@ -259,9 +537,10 @@
     $("balance").textContent = balance;
     $("profile-balance").textContent = initData() ? `${balance} Coin` : "—";
     $("profile-reward").textContent = `${coin(model?.reward)} Coin`;
-    $("profile-rate").textContent = `${coin(model?.base_rate)} Coin / ч`;
+    $("profile-rate").textContent =
+      `${coin(model?.base_rate)} ${t("Coin / ч")}`;
     $("profile-energy").textContent = coin(model?.energy_max);
-    $("profile-auto").textContent = model?.auto_collect ? "ВКЛ" : "ВЫКЛ";
+    $("profile-auto").textContent = model?.auto_collect ? t("ВКЛ") : t("ВЫКЛ");
     paintEnergy(energyValue());
     paintMeter();
 
@@ -269,40 +548,55 @@
     const hint = $("hint");
 
     if (current === "phase-offline") {
-      paintAction("lock", "ОТКРОЙ ЧЕРЕЗ /DOJO", "ТОЛЬКО TELEGRAM", false, true);
+      paintAction(
+        "lock",
+        t("ОТКРОЙ ЧЕРЕЗ /DOJO"),
+        t("ТОЛЬКО TELEGRAM"),
+        false,
+        true,
+      );
       $("energy").textContent = "— / —";
-      renderTasks("ОТКРОЙ ЧЕРЕЗ /DOJO");
-      renderUpgrades("ОТКРОЙ ЧЕРЕЗ /DOJO");
-      status.textContent = "ТОЛЬКО В TELEGRAM";
-      hint.textContent =
-        "Вне Telegram майнер не начисляет SenseiCoin и не запускает цикл.";
+      renderTasks(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
+      renderUpgrades(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
+      status.textContent = t("ТОЛЬКО В TELEGRAM");
+      hint.textContent = t(
+        "Вне Telegram майнер не начисляет SenseiCoin и не запускает цикл.",
+      );
       return;
     }
 
     if (current === "phase-loading") {
-      paintAction("pickaxe", "ПОДКЛЮЧЕНИЕ", "SENSEIBANK", false, true);
-      status.textContent = "СЕНСЕЙ ПРОСЫПАЕТСЯ";
-      hint.textContent = "Проверяем состояние цикла на сервере.";
+      paintAction("pickaxe", t("ПОДКЛЮЧЕНИЕ"), "SENSEIBANK", false, true);
+      status.textContent = t("СЕНСЕЙ ПРОСЫПАЕТСЯ");
+      hint.textContent = t("Проверяем состояние цикла на сервере.");
       return;
     }
 
     if (pending === "collect") {
-      paintAction("coin", "ЗАБИРАЕМ…", "SENSEIBANK", false, true);
-      status.textContent = "НАГРАДА В ПУТИ";
-      hint.textContent = "Сервер начисляет SenseiCoin из банка.";
+      paintAction("coin", t("ЗАБИРАЕМ…"), "SENSEIBANK", false, true);
+      status.textContent = t("НАГРАДА В ПУТИ");
+      hint.textContent = t("Сервер начисляет SenseiCoin из банка.");
       return;
     }
 
     if (pending === "start") {
-      paintAction("pickaxe", "ЗАПУСК…", "8 ЧАСОВ", false, true);
-      status.textContent = "СЕНСЕЙ УХОДИТ В МАЙНИНГ";
-      hint.textContent = "Создаём восьмичасовой цикл на сервере.";
+      paintAction("pickaxe", t("ЗАПУСК…"), t("8 ЧАСОВ"), false, true);
+      status.textContent = t("СЕНСЕЙ УХОДИТ В МАЙНИНГ");
+      hint.textContent = t("Создаём восьмичасовой цикл на сервере.");
       return;
     }
 
     if (current === "phase-mining") {
-      paintAction("pickaxe", clock(remaining()), "ДО КОНЦА ЦИКЛА", true, true);
-      status.textContent = `МАЙНИНГ ИДЁТ · ${percent().toFixed(1)}%`;
+      paintAction(
+        "pickaxe",
+        clock(remaining()),
+        t("ДО КОНЦА ЦИКЛА"),
+        true,
+        true,
+      );
+      status.textContent = t("МАЙНИНГ ИДЁТ · {percent}%", {
+        percent: percent().toFixed(1),
+      });
       paintMiningHint();
       return;
     }
@@ -310,28 +604,34 @@
     if (current === "phase-done") {
       paintAction(
         "coin",
-        `ЗАБРАТЬ ${coin(model.reward)}`,
+        t("ЗАБРАТЬ {amount}", { amount: coin(model.reward) }),
         "SENSEICOIN",
         false,
         false,
       );
-      status.textContent = "ЦИКЛ ЗАВЕРШЁН · 100%";
-      hint.textContent =
-        "Награда из SenseiBank ждёт тебя. Забери и начни снова.";
+      status.textContent = t("ЦИКЛ ЗАВЕРШЁН · 100%");
+      hint.textContent = t(
+        "Награда из SenseiBank ждёт тебя. Забери и начни снова.",
+      );
       return;
     }
 
     paintAction(
       "pickaxe",
-      "НАЧАТЬ МАЙНИНГ",
-      `8 ЧАСОВ · ${coin(model.next_reward)} COIN`,
+      t("НАЧАТЬ МАЙНИНГ"),
+      t("8 ЧАСОВ · {amount} COIN", { amount: coin(model.next_reward) }),
       false,
       false,
     );
-    status.textContent = "СЕНСЕЙ ГОТОВ";
-    hint.textContent =
-      `Кирка ${coin(model.base_rate)} Coin/ч · энергия ${energyMax()} · ` +
-      `${energyMax() / 100} ч полной мощности`;
+    status.textContent = t("СЕНСЕЙ ГОТОВ");
+    hint.textContent = t(
+      "Кирка {rate} Coin/ч · энергия {energy} · {hours} ч полной мощности",
+      {
+        rate: coin(model.base_rate),
+        energy: energyMax(),
+        hours: energyMax() / 100,
+      },
+    );
   }
 
   function tick() {
@@ -342,7 +642,9 @@
     label.classList.add("is-timer");
     paintEnergy(energyValue());
     paintMeter();
-    $("status").textContent = `МАЙНИНГ ИДЁТ · ${percent().toFixed(1)}%`;
+    $("status").textContent = t("МАЙНИНГ ИДЁТ · {percent}%", {
+      percent: percent().toFixed(1),
+    });
     paintMiningHint();
     if (left <= 0 && Date.now() >= endRetryAt) {
       endRetryAt = Date.now() + 4000;
@@ -352,11 +654,52 @@
 
   function showToast(text, error = false) {
     const toast = $("toast");
-    toast.textContent = text;
+    toast.textContent = error && lang === "en" ? EN[text] || text : text;
     toast.classList.toggle("error", error);
     toast.classList.add("show");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toast.classList.remove("show"), 2800);
+  }
+
+  function applyTranslations() {
+    document.documentElement.lang = lang;
+    document.querySelectorAll("[data-i18n]").forEach((node) => {
+      node.textContent = t(node.dataset.i18n);
+    });
+    document.querySelectorAll("[data-i18n-html]").forEach((node) => {
+      node.innerHTML = t(node.dataset.i18nHtml);
+    });
+    document.querySelectorAll("[data-i18n-aria]").forEach((node) => {
+      node.setAttribute("aria-label", t(node.dataset.i18nAria));
+    });
+    document.querySelectorAll("[data-i18n-alt]").forEach((node) => {
+      node.setAttribute("alt", t(node.dataset.i18nAlt));
+    });
+    document.querySelectorAll("[data-lang]").forEach((button) => {
+      const active = button.dataset.lang === lang;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+  }
+
+  function setLanguage(next) {
+    if (!SUPPORTED_LANGS.includes(next) || next === lang) return;
+    lang = next;
+    try {
+      window.localStorage.setItem(LANG_KEY, lang);
+    } catch {}
+    applyTranslations();
+    render();
+    if (!initData()) {
+      renderTasks(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
+      renderUpgrades(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
+      renderReferrals(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
+    } else {
+      renderTasks(tasksLoaded ? undefined : t("ЗАГРУЖАЕМ ЗАДАНИЯ…"));
+      renderUpgrades(upgradesLoaded ? undefined : t("ЗАГРУЖАЕМ УЛУЧШЕНИЯ…"));
+      renderReferrals(referralsLoaded ? undefined : t("ЗАГРУЖАЕМ УЧЕНИКОВ…"));
+    }
+    renderBank();
   }
 
   async function refresh(silent = false) {
@@ -376,7 +719,7 @@
     try {
       const data = await api("start");
       apply(data);
-      showToast("Майнинг запущен · Сенсей ушёл на 8 часов");
+      showToast(t("Майнинг запущен · Сенсей ушёл на 8 часов"));
     } catch (error) {
       failed = true;
       showToast(error.message, true);
@@ -398,7 +741,10 @@
       if (bank) loadBank(true);
       celebrate(data.mined || 0);
       showToast(
-        `+${coin(data.mined)} SenseiCoin · баланс ${coin(data.balance)}`,
+        t("+{amount} SenseiCoin · баланс {balance}", {
+          amount: coin(data.mined),
+          balance: coin(data.balance),
+        }),
       );
     } catch (error) {
       failed = true;
@@ -425,7 +771,7 @@
     }
   }
 
-  function renderTasks(emptyText = "ПОКА НЕТ ЗАДАНИЙ") {
+  function renderTasks(emptyText = t("ПОКА НЕТ ЗАДАНИЙ")) {
     const list = $("tasks-list");
     if (!list) return;
     list.replaceChildren();
@@ -450,7 +796,9 @@
       const title = document.createElement("b");
       title.textContent = task.title || `@${task.username}`;
       const handle = document.createElement("span");
-      handle.textContent = `@${task.username} · подписка на канал`;
+      handle.textContent = t("@{username} · подписка на канал", {
+        username: task.username,
+      });
       name.append(title, handle);
       top.append(avatar, name);
 
@@ -461,7 +809,9 @@
       coinChip.textContent = `${coin(task.reward_coins)} Coin`;
       const energyChip = document.createElement("span");
       energyChip.className = "task-chip";
-      energyChip.textContent = `+${task.energy_bonus} энергии`;
+      energyChip.textContent = t("+{amount} энергии", {
+        amount: task.energy_bonus,
+      });
       chips.append(coinChip, energyChip);
 
       card.append(top, chips);
@@ -469,7 +819,7 @@
       if (task.claimed) {
         const done = document.createElement("div");
         done.className = "task-claimed";
-        done.textContent = "✓ Награда получена";
+        done.textContent = t("✓ Награда получена");
         card.appendChild(done);
       } else {
         const actions = document.createElement("div");
@@ -479,7 +829,7 @@
         open.href = task.url;
         open.target = "_blank";
         open.rel = "noopener noreferrer";
-        open.textContent = "Подписаться";
+        open.textContent = t("Подписаться");
         open.addEventListener("click", (event) => {
           if (tg?.openTelegramLink) {
             event.preventDefault();
@@ -488,7 +838,8 @@
         });
         const claim = document.createElement("button");
         claim.className = "task-claim";
-        claim.textContent = taskBusy === task.slug ? "Проверяем…" : "Проверить";
+        claim.textContent =
+          taskBusy === task.slug ? t("Проверяем…") : t("Проверить");
         claim.disabled = Boolean(taskBusy);
         claim.addEventListener("click", () => claimTask(task.slug));
         actions.append(open, claim);
@@ -502,7 +853,7 @@
   async function loadTasks(force = false) {
     if (!initData()) {
       tasks = [];
-      renderTasks("ОТКРОЙ ЧЕРЕЗ /DOJO");
+      renderTasks(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
       return;
     }
     if (tasksLoaded && !force) return;
@@ -514,7 +865,7 @@
     } catch (error) {
       tasksLoaded = false;
       tasks = [];
-      renderTasks("НЕ УДАЛОСЬ ЗАГРУЗИТЬ ЗАДАНИЯ");
+      renderTasks(t("НЕ УДАЛОСЬ ЗАГРУЗИТЬ ЗАДАНИЯ"));
       showToast(error.message, true);
     }
   }
@@ -534,7 +885,10 @@
         item.slug === slug ? { ...item, ...updated, claimed: true } : item,
       );
       showToast(
-        `+${coin(data.reward_coins)} SenseiCoin · +${data.energy_bonus} энергии`,
+        t("+{amount} SenseiCoin · +{energy} энергии", {
+          amount: coin(data.reward_coins),
+          energy: data.energy_bonus,
+        }),
       );
     } catch (error) {
       showToast(error.message, true);
@@ -574,7 +928,7 @@
     return card;
   }
 
-  function renderUpgrades(emptyText = "УЛУЧШЕНИЯ НЕДОСТУПНЫ") {
+  function renderUpgrades(emptyText = t("УЛУЧШЕНИЯ НЕДОСТУПНЫ")) {
     const list = $("upgrades-list");
     if (!list) return;
     list.replaceChildren();
@@ -587,41 +941,52 @@
     }
     const pickaxe = upgradeCard(
       "pickaxe",
-      "КИРКА",
+      t("КИРКА"),
       `LVL ${upgrades.pickaxe_level} / ${upgrades.pickaxe_max}`,
-      "Каждый уровень: +10 SenseiCoin в час. Действует со следующего цикла.",
-      `${coin(upgrades.pickaxe_rate)} Coin/ч · следующий ${coin(upgrades.pickaxe_next_rate)} Coin/ч`,
+      t("Каждый уровень: +10 SenseiCoin в час. Действует со следующего цикла."),
+      t("{rate} Coin/ч · следующий {next} Coin/ч", {
+        rate: coin(upgrades.pickaxe_rate),
+        next: coin(upgrades.pickaxe_next_rate),
+      }),
       upgradeBusy === "pickaxe"
-        ? "СЧЁТ…"
+        ? t("СЧЁТ…")
         : upgrades.pickaxe_level >= upgrades.pickaxe_max
-          ? "МАКСИМУМ"
-          : `${upgrades.pickaxe_stars} ⭐ · УЛУЧШИТЬ`,
+          ? t("МАКСИМУМ")
+          : t("{stars} ⭐ · УЛУЧШИТЬ", { stars: upgrades.pickaxe_stars }),
       upgradeBusy === "pickaxe" ||
         upgrades.pickaxe_level >= upgrades.pickaxe_max,
     );
     const energy = upgradeCard(
       "bolt",
-      "ЭНЕРГИЯ",
+      t("ЭНЕРГИЯ"),
       `+${upgrades.energy_bonus}`,
-      "Навсегда +100 к запасу. 100 энергии — час полной мощности, потом 10%; со следующего цикла.",
-      `Покупок: ${upgrades.energy_purchases} / ${upgrades.energy_max_purchases} · база ${upgrades.base_energy}`,
+      t(
+        "Навсегда +100 к запасу. 100 энергии — час полной мощности, потом 10%; со следующего цикла.",
+      ),
+      t("Покупок: {bought} / {max} · база {base}", {
+        bought: upgrades.energy_purchases,
+        max: upgrades.energy_max_purchases,
+        base: upgrades.base_energy,
+      }),
       upgradeBusy === "energy"
-        ? "СЧЁТ…"
-        : `${upgrades.energy_stars} ⭐ · +100 ЭНЕРГИИ`,
+        ? t("СЧЁТ…")
+        : t("{stars} ⭐ · +100 ЭНЕРГИИ", { stars: upgrades.energy_stars }),
       upgradeBusy === "energy" ||
         upgrades.energy_purchases >= upgrades.energy_max_purchases,
     );
     const auto = upgradeCard(
       "clock",
-      "АВТОСБОР",
-      upgrades.auto_collect ? "АКТИВЕН" : "ВЫКЛ",
-      "Сам собирает награду и запускает новый цикл каждые 8 часов. Участие не нужно.",
-      "Один раз · работает всегда",
+      t("АВТОСБОР"),
+      upgrades.auto_collect ? t("АКТИВЕН") : t("ВЫКЛ"),
+      t(
+        "Сам собирает награду и запускает новый цикл каждые 8 часов. Участие не нужно.",
+      ),
+      t("Один раз · работает всегда"),
       upgrades.auto_collect
-        ? "УЖЕ ВКЛЮЧЁН"
+        ? t("УЖЕ ВКЛЮЧЁН")
         : upgradeBusy === "auto"
-          ? "СЧЁТ…"
-          : `${upgrades.auto_stars} ⭐ · ВКЛЮЧИТЬ`,
+          ? t("СЧЁТ…")
+          : t("{stars} ⭐ · ВКЛЮЧИТЬ", { stars: upgrades.auto_stars }),
       upgradeBusy === "auto" || upgrades.auto_collect,
     );
     const buttons = [
@@ -638,7 +1003,7 @@
   async function loadUpgrades(force = false) {
     if (!initData()) {
       upgrades = null;
-      renderUpgrades("ОТКРОЙ ЧЕРЕЗ /DOJO");
+      renderUpgrades(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
       return;
     }
     if (upgradesLoaded && !force) return;
@@ -650,7 +1015,7 @@
     } catch (error) {
       upgradesLoaded = false;
       upgrades = null;
-      renderUpgrades("НЕ УДАЛОСЬ ЗАГРУЗИТЬ УЛУЧШЕНИЯ");
+      renderUpgrades(t("НЕ УДАЛОСЬ ЗАГРУЗИТЬ УЛУЧШЕНИЯ"));
       showToast(error.message, true);
     }
   }
@@ -664,14 +1029,14 @@
       if (!tg?.openInvoice) {
         upgradeBusy = null;
         renderUpgrades();
-        showToast("Счёт Stars создан. Открой его в Telegram.", true);
+        showToast(t("Счёт Stars создан. Открой его в Telegram."), true);
         return;
       }
       tg.openInvoice(data.invoice_url, (status) => {
         upgradeBusy = null;
         renderUpgrades();
         if (status === "paid") {
-          showToast("Оплата получена · включаем улучшение");
+          showToast(t("Оплата получена · включаем улучшение"));
           setTimeout(() => {
             loadUpgrades(true);
             refresh(true);
@@ -681,9 +1046,9 @@
             refresh(true);
           }, 4500);
         } else if (status === "cancelled") {
-          showToast("Оплата отменена", true);
+          showToast(t("Оплата отменена"), true);
         } else if (status === "failed") {
-          showToast("Оплата не прошла", true);
+          showToast(t("Оплата не прошла"), true);
         }
       });
     } catch (error) {
@@ -715,7 +1080,10 @@
       track.setAttribute("aria-valuenow", percent.toFixed(1));
       track.setAttribute(
         "aria-valuetext",
-        `${coin(emitted)} из ${coin(cap)} Coin`,
+        t("{emitted} из {cap} Coin", {
+          emitted: coin(emitted),
+          cap: coin(cap),
+        }),
       );
     }
   }
@@ -731,7 +1099,7 @@
     }
   }
 
-  function renderReferrals(emptyText = "ПОКА НЕТ УЧЕНИКОВ") {
+  function renderReferrals(emptyText = t("ПОКА НЕТ УЧЕНИКОВ")) {
     const members = $("ref-members");
     const bonusText = $("ref-bonus-text");
     if (!referrals) {
@@ -742,10 +1110,13 @@
 
     const rank = referrals.rank || {};
     $("ref-rank").textContent =
-      rank.emoji && rank.title ? `${rank.emoji} ${rank.title}` : "—";
+      rank.emoji && rank.title ? `${rank.emoji} ${rankTitle(rank)}` : "—";
     $("ref-rank-next").textContent = rank.next
-      ? `ДО ${rank.next.title.toUpperCase()} · ${coin(rank.next.required)}`
-      : "МАКСИМАЛЬНОЕ ЗВАНИЕ";
+      ? t("ДО {rank} · {required}", {
+          rank: rankTitle(rank.next).toUpperCase(),
+          required: coin(rank.next.required),
+        })
+      : t("МАКСИМАЛЬНОЕ ЗВАНИЕ");
 
     const progress = Math.max(0, Math.min(100, Number(rank.progress) || 0));
     const bar = $("ref-progress");
@@ -756,8 +1127,11 @@
       track.setAttribute(
         "aria-valuetext",
         rank.next
-          ? `${progress.toFixed(1)}% до звания ${rank.next.title}`
-          : "Максимальное звание",
+          ? t("{percent}% до звания {rank}", {
+              percent: progress.toFixed(1),
+              rank: rankTitle(rank.next),
+            })
+          : t("Максимальное звание"),
       );
     }
 
@@ -778,15 +1152,17 @@
 
     const bonus = referrals.bonus || {};
     if (!bonus.eligible) {
-      bonusText.textContent =
-        "Твой аккаунт не участвует в бонусной программе активации. Комиссии 10% / 1% / 0,1% продолжают начисляться.";
+      bonusText.textContent = t(
+        "Твой аккаунт не участвует в бонусной программе активации. Комиссии 10% / 1% / 0,1% продолжают начисляться.",
+      );
     } else if (bonus.paid) {
-      bonusText.textContent = "✅ Получено 50 Coin за активацию ученика.";
+      bonusText.textContent = t("✅ Получено 50 Coin за активацию ученика.");
     } else {
       const days = Math.min(3, Math.max(0, Number(bonus.activity_days) || 0));
-      bonusText.textContent = `Дни активности: ${days}/3 · платный ап: ${
-        bonus.paid_upgrade ? "✅" : "○"
-      }. Выплата при наличии средств SenseiBank.`;
+      bonusText.textContent = t(
+        "Дни активности: {days}/3 · платный ап: {upgrade}. Выплата при наличии средств SenseiBank.",
+        { days, upgrade: bonus.paid_upgrade ? "✅" : "○" },
+      );
     }
 
     if (!members) return;
@@ -806,7 +1182,7 @@
       name.className = "ref-member-name";
       name.textContent = member.username
         ? `@${member.username}`
-        : member.name || "Ученик";
+        : member.name || t("Ученик");
       row.append(status, name);
       list.appendChild(row);
     });
@@ -817,7 +1193,7 @@
     if (!initData()) {
       referrals = null;
       referralsLoaded = false;
-      renderReferrals("ОТКРОЙ ЧЕРЕЗ /DOJO");
+      renderReferrals(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
       return;
     }
     if (referralBusy) {
@@ -837,7 +1213,7 @@
       renderReferrals();
     } catch (error) {
       referralsLoaded = false;
-      renderReferrals("НЕ УДАЛОСЬ ЗАГРУЗИТЬ РЕФЕРАЛОВ");
+      renderReferrals(t("НЕ УДАЛОСЬ ЗАГРУЗИТЬ РЕФЕРАЛОВ"));
       showToast(error.message, true);
     } finally {
       referralBusy = false;
@@ -851,7 +1227,7 @@
   async function copyReferralLink() {
     const link = referrals?.link;
     if (!link) {
-      showToast("Ссылка недоступна. Открой майнер через /dojo.", true);
+      showToast(t("Ссылка недоступна. Открой майнер через /dojo."), true);
       return;
     }
     try {
@@ -868,7 +1244,7 @@
         document.execCommand("copy");
         field.remove();
       }
-      showToast("Ссылка приглашения скопирована");
+      showToast(t("Ссылка приглашения скопирована"));
     } catch {
       showToast(link);
     }
@@ -877,10 +1253,10 @@
   function shareReferralLink() {
     const link = referrals?.link;
     if (!link) {
-      showToast("Ссылка недоступна. Открой майнер через /dojo.", true);
+      showToast(t("Ссылка недоступна. Открой майнер через /dojo."), true);
       return;
     }
-    const text = "Заходи в додзё Сенсея — вместе майним SenseiCoin 🥷";
+    const text = t("Заходи в додзё Сенсея — вместе майним SenseiCoin 🥷");
     const url = `https://t.me/share/url?url=${encodeURIComponent(
       link,
     )}&text=${encodeURIComponent(text)}`;
@@ -903,6 +1279,8 @@
     ];
     if (!tabs.includes(name)) return;
     activeTab = name;
+    app.classList.toggle("tabs-open", name !== "mining");
+    if (stageEl) stageEl.scrollTop = 0;
     document.querySelectorAll(".tab").forEach((tab) => {
       const active = tab.dataset.tab === name;
       tab.classList.toggle("active", active);
@@ -946,6 +1324,10 @@
 
   $("bank-refresh").addEventListener("click", () => loadBank(true));
 
+  document.querySelectorAll("[data-lang]").forEach((button) => {
+    button.addEventListener("click", () => setLanguage(button.dataset.lang));
+  });
+
   document.querySelectorAll("[data-ref-level]").forEach((button) => {
     button.addEventListener("click", () => {
       const level = Number(button.dataset.refLevel);
@@ -959,7 +1341,9 @@
       });
       const members = $("ref-members");
       if (members)
-        members.innerHTML = '<p class="task-empty">ЗАГРУЖАЕМ УЧЕНИКОВ…</p>';
+        members.innerHTML = `<p class="task-empty">${t(
+          "ЗАГРУЖАЕМ УЧЕНИКОВ…",
+        )}</p>`;
       loadReferrals(true);
     });
   });
@@ -987,6 +1371,7 @@
   }, 30000);
 
   seedAmbient();
+  applyTranslations();
   render();
   if (initData()) {
     refresh();
@@ -994,8 +1379,8 @@
     loadUpgrades();
     loadBank();
   } else {
-    renderTasks("ОТКРОЙ ЧЕРЕЗ /DOJO");
-    renderUpgrades("ОТКРОЙ ЧЕРЕЗ /DOJO");
-    renderReferrals("ОТКРОЙ ЧЕРЕЗ /DOJO");
+    renderTasks(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
+    renderUpgrades(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
+    renderReferrals(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
   }
 })();

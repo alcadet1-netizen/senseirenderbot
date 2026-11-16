@@ -131,11 +131,55 @@ button {
   position: relative;
   z-index: 4;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   padding: max(18px, env(safe-area-inset-top)) 20px 0;
   flex: 0 0 auto;
+}
+
+.lang-switch {
+  grid-column: 1;
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 3px;
+  border: 1px solid rgba(92, 255, 166, 0.22);
+  border-radius: 999px;
+  background: rgba(2, 13, 7, 0.68);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(10px);
+}
+
+.lang-option {
+  min-width: 30px;
+  padding: 5px 4px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: #7f9a8b;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.7px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
+}
+
+.lang-option.active {
+  background: #6dffab;
+  color: #04130a;
+  box-shadow: 0 0 12px rgba(64, 255, 150, 0.35);
+}
+
+.lang-sep {
+  color: #456653;
+  font-size: 8px;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .logo {
@@ -192,7 +236,72 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 24vh 18px 0;
+  justify-content: flex-start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: clamp(56px, 18vh, 180px) 18px max(18px, env(safe-area-inset-bottom));
+}
+
+.stage::-webkit-scrollbar {
+  display: none;
+}
+
+/* Tab content starts under the header and gets the whole stage to scroll. */
+#app.tabs-open .stage {
+  padding-top: max(14px, env(safe-area-inset-top));
+}
+
+#app.tabs-open .balance {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+}
+
+#app.tabs-open .balance-label,
+#app.tabs-open .balance-sub {
+  display: none;
+}
+
+#app.tabs-open .points {
+  gap: 8px;
+}
+
+#app.tabs-open #balance {
+  font-size: 31px;
+  line-height: 1;
+}
+
+#app.tabs-open .point-coin {
+  width: 31px;
+  height: 31px;
+}
+
+#app.tabs-open .point-coin .icon {
+  width: 19px;
+  height: 19px;
+}
+
+#app.tabs-open .energy {
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px 13px 11px;
+}
+
+#app.tabs-open .energy-head {
+  margin-bottom: 7px;
+  font-size: 9px;
+}
+
+#app.tabs-open .view {
+  padding-top: 8px;
+}
+
+#app.tabs-open .tab-view {
+  margin-top: 8px;
 }
 
 .balance {
@@ -339,7 +448,7 @@ button {
 .view {
   width: 100%;
   min-height: 0;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -487,7 +596,7 @@ button {
   position: relative;
   display: grid;
   place-items: center;
-  width: min(64vw, 250px);
+  width: min(58vw, 230px);
   aspect-ratio: 1;
   flex: 0 0 auto;
 }
@@ -725,9 +834,8 @@ button {
   box-shadow: var(--shadow);
   backdrop-filter: blur(12px);
   text-align: center;
-  max-height: min(56vh, 470px);
-  overflow-y: auto;
-  scrollbar-width: none;
+  max-height: none;
+  overflow: visible;
 }
 
 .tab-view::-webkit-scrollbar {
@@ -1549,7 +1657,7 @@ button:focus-visible {
   }
 
   .stage {
-    padding-top: 10vh;
+    padding-top: 7vh;
   }
 
   .balance-label {
@@ -1586,12 +1694,12 @@ button:focus-visible {
   }
 
   .orb {
-    width: min(62vw, 240px);
+    width: min(54vw, 220px);
   }
 
   .phase-mining .orb,
   .phase-done .orb {
-    width: min(52vw, 200px);
+    width: min(48vw, 190px);
   }
 
   .orb-icon {
@@ -1628,6 +1736,39 @@ button:focus-visible {
 
   .stat-row {
     padding: 11px 14px;
+  }
+}
+
+@media (max-width: 380px) {
+  .top {
+    gap: 6px;
+    padding-inline: 12px;
+  }
+
+  .logo {
+    gap: 7px;
+    font-size: 10px;
+    letter-spacing: 2.5px;
+  }
+
+  .logo .torii {
+    width: 24px;
+  }
+
+  .lang-switch {
+    padding: 2px;
+  }
+
+  .lang-option {
+    min-width: 27px;
+    padding: 4px;
+    font-size: 7px;
+  }
+
+  .info {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
   }
 }
 
