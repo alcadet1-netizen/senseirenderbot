@@ -15,9 +15,11 @@ const assert = require("node:assert/strict");
     });
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
+    if(process.env.DOJO_CANVAS) await page.route("**/renderer.js", route => route.abort());
     await page.goto(
       process.env.DOJO_URL || "http://127.0.0.1:8080/miniapp/dojo",
     );
+    if(!process.env.DOJO_CANVAS) await page.waitForFunction(() => !!window.dojoRenderer);
     await page.click("#play");
     assert.equal(await page.evaluate(() => game.state), "game");
     await page.keyboard.down("ArrowRight");
@@ -38,7 +40,7 @@ const assert = require("node:assert/strict");
       }
       if (
         game.player.army !== 7 ||
-        game.player.damage !== 11 ||
+        game.player.damage !== CONFIG.damage + 2 ||
         !game.player.shuriken ||
         game.slow <= 0
       )
@@ -48,6 +50,7 @@ const assert = require("node:assert/strict");
       await page.evaluate(() => {
         const w = game.waves;
         w.spawned = w.spec.count;
+        w.crateSpawned = true;
         if (w.spec.boss) {
           w.bossSpawned = true;
           const b = new Boss(w.spec);
@@ -63,7 +66,7 @@ const assert = require("node:assert/strict");
           game.shopWait = 0;
           game.showShop();
         });
-        await page.click('[data-buy="hedgehog"]');
+        await page.click('[data-buy="warrior"]');
         await page.click('[data-buy="damage"]');
         await page.click('[data-buy="speed"]');
         assert.equal(await page.evaluate(() => game.coins), 300);
@@ -147,6 +150,88 @@ const assert = require("node:assert/strict");
         );
       game.state = "pause";
     });
+    await page.evaluate(() => {
+      if (project(400, 100).scale >= project(400, 750).scale)
+        throw Error("missing depth scale");
+      if (
+        Math.abs(project(400, 100).x - 270) >=
+        Math.abs(project(400, 750).x - 270)
+      )
+        throw Error("missing vanishing point");
+      game.start();
+      const caster = new Enemy(CONFIG.waves[1], "shaman");
+      caster.y = 350;
+      caster.castTimer = 0;
+      caster.update(0.01, game);
+      if (caster.castWarning <= 0) throw Error("shaman telegraph");
+      caster.castWarning = 0.001;
+      caster.update(0.01, game);
+      if (game.hazards.length !== 1) throw Error("shaman projectile");
+      const l = new Boss(CONFIG.waves[4]);
+      l.y = 400;
+      l.warning = 0.001;
+      l.attackX = 270;
+      l.summonTimer = 0;
+      l.update(0.01, game);
+      if (
+        l.kind !== "lich" ||
+        game.hazards.length !== 4 ||
+        game.enemies.filter((e) => e.type === "skeleton").length !== 2
+      )
+        throw Error("distinct lich attacks");
+      const count = game.player.army;
+      const bolt = new EnemyBolt(
+        game.player.x,
+        game.player.y - 1,
+        game.player.x,
+      );
+      bolt.update(3, game);
+      if (game.player.army !== count - 1) throw Error("enemy spell damage");
+      game.start();
+      game.ui.hide();
+    });
+    const rect = await page.locator("#game").boundingBox();
+    const projected = await page.evaluate(() => project(400, CONFIG.playerY));
+    await page.mouse.click(
+      rect.x + (projected.x / 540) * rect.width,
+      rect.y + (projected.y / 960) * rect.height,
+    );
+    assert.ok(
+      Math.abs((await page.evaluate(() => game.player.target)) - 400) < 2,
+      "inverse perspective pointer",
+    );
+    await page.evaluate(() => {
+      game.start();
+      const before = game.player.army;
+      const gate = new RecruitGate(game.player.x, CONFIG.playerY, 1);
+      gate.update(0.01, game);
+      if (!gate.dead || game.player.army !== before + 1)
+        throw Error("gate recruitment");
+      gate.update(0.01, game);
+      if (game.player.army !== before + 1) throw Error("gate collected twice");
+      game.player.army = CONFIG.maxArmy;
+      const capped = new RecruitGate(game.player.x, CONFIG.playerY, 3);
+      capped.update(0.01, game);
+      if (game.player.army !== CONFIG.maxArmy) throw Error("gate cap");
+      const missed = new RecruitGate(110, CONFIG.playerY, 1);
+      game.player.x = 430;
+      missed.update(2, game);
+      if (!missed.dead) throw Error("missed gate lifetime");
+      const crate = new SupplyCrate(CONFIG.waves[0]),
+        coins = game.coins,
+        damage = game.player.damage;
+      crate.hit(CONFIG.crateHp - 1, game);
+      if (crate.dead || crate.hp !== 1) throw Error("crate HP");
+      crate.hit(1, game);
+      crate.hit(999, game);
+      if (
+        !crate.dead ||
+        game.coins !== coins + 25 ||
+        game.player.damage !== damage + 1
+      )
+        throw Error("crate reward once");
+      game.start();
+    });
     for (const size of [
       { width: 320, height: 568 },
       { width: 390, height: 844 },
@@ -160,9 +245,22 @@ const assert = require("node:assert/strict");
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => {
       game.start();
-      game.enemies = [new Enemy(CONFIG.waves[2]), new Boss(CONFIG.waves[2])];
-      game.enemies[0].y = 390;
-      game.enemies[1].y = 190;
+      game.enemies = [];
+      const types = ["normal", "skeleton", "armored", "fast", "shaman"];
+      for (let i = 0; i < 32; i++) {
+        const foe = new Enemy(CONFIG.waves[2], types[i % 5]);
+        foe.x = 120 + (i % 6) * 60;
+        foe.y = 40 + Math.floor(i / 6) * 85;
+        game.enemies.push(foe);
+      }
+      const boss = new Boss(CONFIG.waves[4]);
+      boss.x = 270;
+      boss.y = 270;
+      game.enemies.push(boss);
+      const crate=new SupplyCrate(CONFIG.waves[4]);crate.x=420;crate.y=540;game.enemies.push(crate);
+      game.gates=[];for(let i=0;i<7;i++)game.gates.push(new RecruitGate(110,80+i*93,1));
+      game.waves.index = 4;
+      game.ui.toastTime = 0;
       game.pickups = Object.keys(PICKUPS).map(
         (t, i) =>
           new Pickup(120 + (i % 3) * 145, 400 + Math.floor(i / 3) * 140, t),

@@ -8,7 +8,7 @@ ROOT = Path(__file__).parent / 'dojo'
 def setup_dojo(app):
     async def page(request):
         name = request.match_info.get('asset', 'index.html')
-        if name not in {'index.html', 'style.css', 'game.js'}:
+        if name not in {'index.html', 'style.css', 'game.js', 'renderer.js', 'vendor/three.module.js', 'vendor/three.core.js'}:
             raise web.HTTPNotFound()
         return web.FileResponse(ROOT / name, headers={
             'Cache-Control': 'no-store',
@@ -20,4 +20,4 @@ def setup_dojo(app):
         })
     app.router.add_get('/miniapp/dojo', page)
     app.router.add_get('/miniapp/dojo/', page)
-    app.router.add_get('/miniapp/dojo/{asset:game\\.js|style\\.css}', page)
+    app.router.add_get('/miniapp/dojo/{asset:game\\.js|renderer\\.js|style\\.css|vendor/three\\.(?:module|core)\\.js}', page)

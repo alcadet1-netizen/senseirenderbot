@@ -2,15 +2,19 @@
 // Все игровые величины заданы в логических координатах 540 × 960.
 const CONFIG = {
   width: 540,
+  maxArmy: 24,
+  gatePeriod: 2.4,
+  gateSpeed: 82,
+  crateHp: 138,
   height: 960,
   road: [90, 450],
   playerY: 755,
   lives: 3,
   army: 6,
-  damage: 9,
-  attackPeriod: 0.65,
-  range: 300,
-  enemySpeed: 38,
+  damage: 5,
+  attackPeriod: 0.34,
+  range: 380,
+  enemySpeed: 46,
   shotSpeed: 640,
   dashCooldown: 4,
   dashDistance: 120,
@@ -20,13 +24,13 @@ const CONFIG = {
   dropChance: 0.37,
   slowSeconds: 5,
   shopSeconds: 4,
-  cost: { hedgehog: 50, damage: 75, speed: 75 },
+  cost: { warrior: 50, damage: 75, speed: 75 },
   waves: [
-    { count: 10, hp: 20, speed: 1 },
-    { count: 15, hp: 26, speed: 1.13 },
-    { count: 18, hp: 30, speed: 1.2, boss: 650 },
-    { count: 23, hp: 38, speed: 1.36 },
-    { count: 25, hp: 44, speed: 1.48, boss: 1100 },
+    { count: 18, hp: 20, speed: 1 },
+    { count: 26, hp: 24, speed: 1.13 },
+    { count: 32, hp: 28, speed: 1.2, boss: 650, bossKind: "oni" },
+    { count: 40, hp: 32, speed: 1.3 },
+    { count: 48, hp: 36, speed: 1.4, boss: 1100, bossKind: "lich" },
   ],
 };
 const canvas = document.querySelector("#game"),
@@ -34,6 +38,38 @@ const canvas = document.querySelector("#game"),
 const $ = (s) => document.querySelector(s),
   clamp = (x, a, b) => Math.max(a, Math.min(b, x)),
   rand = (a, b) => a + Math.random() * (b - a);
+// Единая перспективная проекция. Бой остаётся в координатах мира;
+// дальность, снаряды, телеграфы и указатель используют одну геометрию.
+function project(x, y) {
+  if(window.dojoRenderer)return window.dojoRenderer.project(x,y);
+  const depth = clamp((y + 60) / 960, 0, 1.2),
+    scale = 0.28 + 0.82 * depth;
+  return {
+    x: 270 + (x - 270) * scale,
+    y: 108 + 800 * Math.pow(depth, 1.45),
+    scale,
+  };
+}
+function worldDraw(x, y, draw) {
+  const p = project(x, y);
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.scale(p.scale, p.scale);
+  ctx.translate(-x, -y);
+  draw();
+  ctx.restore();
+}
+function lanePath(x, width, from, to) {
+  const pts = [
+    project(x - width, from),
+    project(x + width, from),
+    project(x + width, to),
+    project(x - width, to),
+  ];
+  ctx.beginPath();
+  pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+  ctx.closePath();
+}
 class Sound {
   constructor() {
     this.on = true;
@@ -112,7 +148,9 @@ class Player {
           (e) =>
             !e.dead && Math.hypot(e.x - this.x, e.y - this.y) < CONFIG.range,
         )
-        .sort((a, b) => b.y - a.y);
+        .sort(
+          (a, b) => (a.type === "crate") - (b.type === "crate") || b.y - a.y,
+        );
       if (targets.length) {
         this.cooldown = this.period;
         for (let i = 0; i < this.army; i++) {
@@ -137,23 +175,24 @@ class Player {
     for (const trail of this.trails) {
       ctx.save();
       ctx.globalAlpha = trail.life * 0.9;
-      samurai(trail.x, this.y);
+      worldDraw(trail.x, this.y, () => samurai(trail.x, this.y));
       ctx.restore();
     }
     if (this.invulnerable > 0) {
+      const p = project(this.x, this.y);
       ctx.strokeStyle = "#9fe8ff";
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.ellipse(this.x, this.y + 14, 36, 46, 0, 0, 7);
+      ctx.ellipse(p.x, p.y + 14 * p.scale, 36 * p.scale, 46 * p.scale, 0, 0, 7);
       ctx.stroke();
     }
     for (let i = this.army - 1; i >= 0; i--) {
       const row = Math.floor(i / 6),
         x = this.x + ((i % 6) - 2.5) * 22,
         y = this.y + 45 + row * 23;
-      hedgehog(x, y, Math.sin(t * 6 + i) * 1.5);
+      worldDraw(x, y, () => warrior(x, y, Math.sin(t * 6 + i) * 1.5));
     }
-    samurai(this.x, this.y);
+    worldDraw(this.x, this.y, () => samurai(this.x, this.y));
   }
 }
 // Снаряд наносит урон при попадании, а не при запуске.
@@ -193,8 +232,8 @@ class Projectile {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.star ? t * 23 : this.angle);
-    ctx.shadowColor = this.star ? "#75d7ff" : "#ffd37a";
-    ctx.shadowBlur = 7;
+    ctx.shadowColor = this.star ? "#75d7ff" : "#ffff90";
+    ctx.shadowBlur = 12;
     if (this.star) {
       ctx.fillStyle = "#b4ecff";
       ctx.beginPath();
@@ -207,11 +246,11 @@ class Projectile {
       }
       ctx.fill();
     } else {
-      ctx.strokeStyle = "#ffe9c1";
+      ctx.strokeStyle = "#fff9a6";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(-12, 0);
-      ctx.lineTo(5, 0);
+      ctx.moveTo(-23, 0);
+      ctx.lineTo(7, 0);
       ctx.stroke();
     }
     ctx.restore();
@@ -220,10 +259,22 @@ class Projectile {
 class Enemy {
   constructor(wave, type = "normal") {
     this.type = type;
+    this.castTimer = rand(3, 5);
+    this.castWarning = 0;
+    this.castX = 270;
     this.x = rand(110, 430);
     this.y = -45;
     this.maxHp =
-      wave.hp * (type === "armored" ? 3 : type === "fast" ? 0.55 : 1);
+      wave.hp *
+      (type === "armored"
+        ? 2.8
+        : type === "fast"
+          ? 0.55
+          : type === "skeleton"
+            ? 0.8
+            : type === "shaman"
+              ? 1.2
+              : 1);
     this.hp = this.maxHp;
     this.speed =
       CONFIG.enemySpeed *
@@ -264,6 +315,21 @@ class Enemy {
       );
     this.y += this.speed * dt * (g.slow > 0 ? 0.42 : 1);
     this.flash = Math.max(0, this.flash - dt);
+    if (this.type === "shaman" && this.y > 220 && this.y < 640) {
+      this.castTimer -= dt;
+      if (this.castTimer <= 0 && this.castWarning <= 0) {
+        this.castWarning = 1.1;
+        this.castX = g.player.x;
+      }
+      if (this.castWarning > 0) {
+        this.castWarning -= dt;
+        if (this.castWarning <= 0) {
+          this.castTimer = 5;
+          g.hazards.push(new EnemyBolt(this.x, this.y, this.castX));
+        }
+      }
+    }
+
     if (this.y > CONFIG.playerY + 12) {
       this.dead = true;
       if (g.player.invulnerable <= 0) g.player.lives--;
@@ -275,7 +341,7 @@ class Enemy {
     }
   }
   draw(t) {
-    boar(
+    drawMonster(
       this.x,
       this.y + Math.sin(t * 5 + this.phase) * 3,
       this.r,
@@ -299,8 +365,14 @@ class Boss extends Enemy {
   constructor(w) {
     super(w, "boss");
     this.x = 270;
+    this.kind = w.bossKind || "oni";
+    this.name =
+      this.kind === "lich"
+        ? "АРХИЛИЧ · ПОВЕЛИТЕЛЬ ПЕПЛА"
+        : "ОНИ · РАЗРУШИТЕЛЬ ВРАТ";
+    this.summonTimer = 8;
     this.maxHp = this.hp = w.boss;
-    this.r = 48;
+    this.r = 65;
     this.speed = 16 * w.speed;
     this.charge = 4;
     this.enraged = false;
@@ -318,17 +390,45 @@ class Boss extends Enemy {
     }
     // Вождь сначала должен появиться на поле, а не бить из-за экрана.
     if (this.y < 180) return;
+    if (this.kind === "lich") {
+      this.summonTimer -= dt;
+      if (this.summonTimer <= 0) {
+        this.summonTimer = this.enraged ? 6 : 9;
+        for (const offset of [-40, 40]) {
+          const minion = new Enemy({ hp: 20, speed: 1.2 }, "skeleton");
+          minion.x = clamp(this.x + offset, 110, 430);
+          minion.y = this.y + 20;
+          g.enemies.push(minion);
+        }
+        g.ui.toast("АРХИЛИЧ ПРИЗЫВАЕТ СКЕЛЕТОВ!");
+      }
+    }
     this.charge -= dt;
     if (this.charge <= 0 && this.warning <= 0) {
       this.warning = 1.25;
       this.attackX = g.player.x;
-      g.ui.toast("⚠ Вождь замахивается — уходи с красной линии!");
+      g.ui.toast(
+        this.kind === "lich"
+          ? "⚠ Веер заклинаний — ищи просвет!"
+          : "⚠ Вождь замахивается — уходи с красной линии!",
+      );
     }
     if (this.warning > 0) {
       this.warning -= dt;
       if (this.warning <= 0) {
         this.charge = this.enraged ? 2.7 : 4;
+        if (this.kind === "lich") {
+          for (const offset of [-85, 0, 85])
+            g.hazards.push(
+              new EnemyBolt(
+                this.x,
+                this.y,
+                clamp(this.attackX + offset, 90, 450),
+              ),
+            );
+        }
         if (
+          this.kind !== "lich" &&
           Math.abs(g.player.x - this.attackX) < 62 &&
           g.player.invulnerable <= 0
         ) {
@@ -341,18 +441,9 @@ class Boss extends Enemy {
     }
   }
   draw(t) {
-    if (this.warning > 0) {
-      ctx.fillStyle = `rgba(255,60,75,${0.13 + 0.12 * Math.sin(t * 25)})`;
-      ctx.fillRect(
-        this.attackX - 62,
-        this.y,
-        124,
-        CONFIG.playerY - this.y + 45,
-      );
-      ctx.strokeStyle = "#ff636c";
-      ctx.strokeRect(this.attackX - 62, CONFIG.playerY - 35, 124, 80);
-    }
-    super.draw(t);
+    if (this.kind === "lich") {
+      lich(this.x, this.y + Math.sin(t * 3) * 6, this.r, this.flash > 0);
+    } else super.draw(t);
   }
 }
 const PICKUPS = {
@@ -399,7 +490,7 @@ class Pickup {
           g.slow = CONFIG.slowSeconds;
           break;
         case "army":
-          p.army = Math.min(24, p.army + 1);
+          p.army = Math.min(CONFIG.maxArmy, p.army + 1);
           break;
         case "coin":
           g.coins += 20;
@@ -411,7 +502,7 @@ class Pickup {
           star: "Быстрее атаки · сюрикены!",
           heart: "Сердце восстановлено",
           slow: "Враги замедлены на 5 секунд",
-          army: "Ёж вступил в отряд",
+          army: "Стрелок вступил в отряд",
           coin: "+20 монет",
         }[this.type],
       );
@@ -438,6 +529,99 @@ class Pickup {
     ctx.restore();
   }
 }
+// Снаряд мага летит к заранее отмеченной полосе, не преследуя игрока.
+class EnemyBolt {
+  constructor(x, y, targetX) {
+    Object.assign(this, { x, y, targetX, dead: false });
+    this.vx = (targetX - x) / 2.6;
+    this.vy = (CONFIG.playerY - y) / 2.6;
+  }
+  update(dt, g) {
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    if (this.y >= CONFIG.playerY) {
+      this.dead = true;
+      if (Math.abs(this.x - g.player.x) < 30 && g.player.invulnerable <= 0) {
+        g.player.army = Math.max(0, g.player.army - 1);
+        g.shake = 6;
+        g.sound.play("hurt");
+        g.burst(this.x, this.y, "#d9a0ff", 12);
+      }
+    }
+  }
+  draw(t) {
+    ctx.save();
+    ctx.shadowColor = "#bd66ff";
+    ctx.shadowBlur = 18;
+    ellipse(this.x, this.y, 9, 14, "#be75ff");
+    ellipse(this.x - 2, this.y - 3, 3, 6, "#f9e4ff");
+    ctx.restore();
+  }
+}
+// Ворота набора: выбирай край моста, чтобы усилить строй.
+class RecruitGate {
+  constructor(x, y, value = 1) {
+    Object.assign(this, { x, y, value, dead: false });
+  }
+  update(dt, g) {
+    if (this.dead) return;
+    this.y += CONFIG.gateSpeed * dt;
+    if (
+      this.y >= CONFIG.playerY - 30 &&
+      this.y <= CONFIG.playerY + 30 &&
+      Math.abs(g.player.x - this.x) < 45
+    ) {
+      this.dead = true;
+      const added = Math.min(this.value, CONFIG.maxArmy - g.player.army);
+      g.player.army += added;
+      g.floatText(
+        this.x,
+        this.y,
+        added ? "+" + added + " БОЕЦ" : "ОТРЯД ПОЛОН",
+        "#57f2d1",
+      );
+      g.sound.play("pick");
+      g.burst(this.x, this.y, "#7cfff1", 16);
+    }
+    if (this.y > CONFIG.playerY + 45) this.dead = true;
+  }
+  draw(t) {
+    drawRecruitGate(this.x, this.y, this.value);
+  }
+}
+// Ящик имеет собственный HP и гарантированную награду за разрушение.
+class SupplyCrate extends Enemy {
+  constructor(w) {
+    super(w, "crate");
+    this.x = 430;
+    this.y = 140;
+    this.hp = this.maxHp = CONFIG.crateHp;
+    this.r = 30;
+    this.speed = 13;
+  }
+  hit(d, g) {
+    if (this.dead) return;
+    this.hp -= d;
+    this.flash = 0.1;
+    g.floatText(this.x, this.y - 35, Math.ceil(d), "#fff5ba");
+    if (this.hp <= 0) {
+      this.dead = true;
+      g.coins += 25;
+      g.player.damage += 1;
+      g.floatText(this.x, this.y, "УРОН +1 · +25 ◉", "#ffe384");
+      g.burst(this.x, this.y, "#f9b34e", 25);
+      g.sound.play("pick");
+    }
+  }
+  update(dt, g) {
+    this.y += this.speed * dt;
+    this.flash = Math.max(0, this.flash - dt);
+    if (this.y > CONFIG.playerY + 20) this.dead = true;
+  }
+  draw() {
+    drawSupplyCrate(this.x, this.y, this.hp, this.flash);
+  }
+}
 class WaveManager {
   constructor(g) {
     this.g = g;
@@ -445,6 +629,7 @@ class WaveManager {
     this.spawned = 0;
     this.timer = 1;
     this.bossSpawned = false;
+    this.crateSpawned = false;
     this.cleared = false;
   }
   get spec() {
@@ -453,14 +638,43 @@ class WaveManager {
   update(dt) {
     if (this.cleared) return;
     const g = this.g;
+    if (
+      !this.crateSpawned &&
+      this.spawned >= Math.ceil(this.spec.count * 0.3)
+    ) {
+      this.crateSpawned = true;
+      g.enemies.push(new SupplyCrate(this.spec));
+    }
     this.timer -= dt;
     if (this.spawned < this.spec.count && this.timer <= 0) {
-      this.spawned++;
-      this.timer = Math.max(0.6, 1.55 - this.index * 0.14);
-      const n = Math.random();
-      g.enemies.push(
-        new Enemy(this.spec, n < 0.2 ? "fast" : n < 0.4 ? "armored" : "normal"),
+      // Пачки по 2–3 существа создают орду, а не длинную очередь одиночек.
+      const batch = Math.min(
+        this.spec.count - this.spawned,
+        this.index < 2 ? 2 : 3,
       );
+      this.timer = Math.max(0.85, 1.7 - this.index * 0.12);
+      for (let i = 0; i < batch; i++) {
+        const n = Math.random();
+        const type =
+          n < 0.22
+            ? "fast"
+            : n < 0.4
+              ? "skeleton"
+              : n < 0.57
+                ? "armored"
+                : n < 0.7 && this.index > 0
+                  ? "shaman"
+                  : "normal";
+        const enemy = new Enemy(this.spec, type);
+        enemy.x = clamp(
+          120 + ((this.spawned * 71) % 300) + rand(-12, 12),
+          110,
+          430,
+        );
+        enemy.y = -45 - i * 22;
+        g.enemies.push(enemy);
+        this.spawned++;
+      }
     }
     if (
       this.spec.boss &&
@@ -469,7 +683,11 @@ class WaveManager {
     ) {
       this.bossSpawned = true;
       g.enemies.push(new Boss(this.spec));
-      g.ui.toast("👹 ВОЖДЬ ОНИ ВСТУПАЕТ В БОЙ");
+      g.ui.toast(
+        this.spec.bossKind === "lich"
+          ? "АРХИЛИЧ ВОЗГЛАВИЛ ОРДУ"
+          : "ОНИ · РАЗРУШИТЕЛЬ ВРАТ ПРИБЛИЖАЕТСЯ",
+      );
     }
     if (this.spawned === this.spec.count && g.enemies.every((e) => e.dead)) {
       this.cleared = true;
@@ -482,6 +700,7 @@ class WaveManager {
     this.spawned = 0;
     this.timer = 1;
     this.bossSpawned = false;
+    this.crateSpawned = false;
     this.cleared = false;
   }
 }
@@ -517,6 +736,7 @@ class UIScene {
     $("#army").textContent =
       `ОТРЯД ${g.player.army} · УРОН ${g.player.damage} · ${g.player.period.toFixed(2)} СЕК`;
     const boss = g.enemies.find((e) => e.type === "boss" && !e.dead);
+    $("#bossname").textContent = boss ? boss.name : "";
     $("#bar").style.width =
       (boss
         ? boss.hp / boss.maxHp
@@ -546,7 +766,7 @@ class MenuScene {
   show() {
     this.g.state = "menu";
     this.g.ui.panel(
-      '<div class="eyebrow">SENSEI GAMES · 生き残れ</div><div class="seal">⚔</div><h1>Последний<br><em>рубеж</em></h1><p>Один самурай. Отряд верных ежей.<br>Пять волн, чтобы защитить додзё.</p><button class="primary" id="play">В бой →</button><div class="hint">Веди пальцем по дороге · атака автоматическая<br>Рывок — кнопка ↔ или Shift · уходи от красной зоны<br>Монеты только игровые, без выплат и ставок.</div>',
+      '<div class="eyebrow">SENSEI GAMES · BRIDGE DEFENCE</div><div class="seal">⚔</div><h1>Последний<br><em>рубеж</em></h1><p>Прорывай орду. Собирай отряд.<br>Пять волн на мосту над океаном.</p><button class="primary" id="play">В бой →</button><div class="hint">Веди пальцем по дороге · атака автоматическая<br>Голубые ворота +1 пополняют отряд<br>Рывок — кнопка ↔ или Shift<br>Монеты только игровые, без выплат и ставок.</div>',
     );
     $("#play").onclick = () => this.g.start();
   }
@@ -568,6 +788,10 @@ class GameScene {
     this.enemies = [];
     this.pickups = [];
     this.shots = [];
+    this.hazards = [];
+    this.gates = [];
+    this.gateTimer = 0.8;
+    this.gateSerial = 0;
     this.particles = [];
     this.waves = new WaveManager(this);
     this.coins = 0;
@@ -591,7 +815,9 @@ class GameScene {
       if (this.state !== "game") return;
       const r = canvas.getBoundingClientRect();
       this.player.target = clamp(
-        ((e.clientX - r.left) / r.width) * 540,
+        270 +
+          (((e.clientX - r.left) / r.width) * 540 - 270) /
+            project(270, CONFIG.playerY).scale,
         ...CONFIG.road,
       );
     };
@@ -643,6 +869,10 @@ class GameScene {
     }
   }
   shop() {
+    // Между волнами не оставляем летящих заклинаний и снарядов.
+    this.hazards = [];
+    this.shots = [];
+    this.gates = [];
     this.state = "shop";
     this.shopWait = CONFIG.shopSeconds;
     this.showShop();
@@ -650,13 +880,13 @@ class GameScene {
   showShop() {
     this.ui.panel(
       `<div class="eyebrow">ВОЛНА ${this.waves.index + 1} ПОКОРЕНА</div><div class="seal">⚒</div><h1>Привал<br><em>у кузнеца</em></h1><p>Отряд держит строй. Усиль его перед новой волной.<br>Кошелёк: <b>${this.coins} ◉</b></p><div class="shop">${[
-        ["hedgehog", "🦔 Ещё один воин"],
+        ["warrior", "⚔ Ещё один стрелок"],
         ["damage", "⚔ Урон армии +2"],
         ["speed", "✦ Скорость атак +10%"],
       ]
         .map(
           ([id, name]) =>
-            `<button data-buy="${id}" ${this.coins < CONFIG.cost[id] || (id === "hedgehog" && this.player.army >= 24) || (id === "speed" && this.player.period <= 0.16) ? "disabled" : ""}>${name}<small>${CONFIG.cost[id]} ◉</small></button>`,
+            `<button data-buy="${id}" ${this.coins < CONFIG.cost[id] || (id === "warrior" && this.player.army >= CONFIG.maxArmy) || (id === "speed" && this.player.period <= 0.16) ? "disabled" : ""}>${name}<small>${CONFIG.cost[id]} ◉</small></button>`,
         )
         .join(
           "",
@@ -677,12 +907,12 @@ class GameScene {
     const price = CONFIG.cost[type];
     if (this.state !== "shop" || this.coins < price) return;
     if (
-      (type === "hedgehog" && this.player.army >= 24) ||
+      (type === "warrior" && this.player.army >= CONFIG.maxArmy) ||
       (type === "speed" && this.player.period <= 0.16)
     )
       return;
     this.coins -= price;
-    if (type === "hedgehog") this.player.army++;
+    if (type === "warrior") this.player.army++;
     if (type === "damage") this.player.damage += 2;
     if (type === "speed")
       this.player.period = Math.max(0.16, this.player.period * 0.9);
@@ -692,7 +922,7 @@ class GameScene {
   end(win) {
     this.state = win ? "victory" : "defeat";
     this.ui.panel(
-      `<div class="eyebrow">${win ? "ПЯТЬ ВОЛН · ОДНА ЛЕГЕНДА" : "ТВОЙ ПУТЬ ЕЩЁ НЕ ОКОНЧЕН"}</div><div class="seal">${win ? "🏆" : "⚔"}</div><h1>${win ? "Додзё<br><em>выстояло</em>" : "Последний<br><em>павший лист</em>"}</h1><p>${win ? "Стихия отступила. Ежи стали легендой." : "Даже великий воин однажды падает.<br>Встань и попробуй снова."}<br>Побеждено они: ${this.kills} · Монеты: ${this.coins}</p><button class="primary" id="again">Новый поход →</button>`,
+      `<div class="eyebrow">${win ? "ПЯТЬ ВОЛН · ОДНА ЛЕГЕНДА" : "ТВОЙ ПУТЬ ЕЩЁ НЕ ОКОНЧЕН"}</div><div class="seal">${win ? "🏆" : "⚔"}</div><h1>${win ? "Додзё<br><em>выстояло</em>" : "Последний<br><em>павший лист</em>"}</h1><p>${win ? "Стихия отступила. Стражи стали легендой." : "Даже великий воин однажды падает.<br>Встань и попробуй снова."}<br>Побеждено они: ${this.kills} · Монеты: ${this.coins}</p><button class="primary" id="again">Новый поход →</button>`,
     );
     $("#again").onclick = () => this.start();
   }
@@ -720,6 +950,19 @@ class GameScene {
     }
     if (this.state !== "game") return;
     this.time += dt;
+    this.gateTimer -= dt;
+    if (this.gateTimer <= 0) {
+      this.gateTimer = CONFIG.gatePeriod;
+      this.gates.push(
+        new RecruitGate(
+          this.gateSerial++ % 2 ? 430 : 110,
+          80,
+          this.gateSerial % 5 === 0 ? 3 : 1,
+        ),
+      );
+    }
+    for (const gate of this.gates) gate.update(dt, this);
+    this.gates = this.gates.filter((g) => !g.dead);
     this.comboTime = Math.max(0, this.comboTime - dt);
     if (!this.comboTime) this.combo = 0;
     for (const l of this.labels) {
@@ -738,6 +981,8 @@ class GameScene {
     this.enemies = this.enemies.filter((e) => !e.dead);
     this.pickups = this.pickups.filter((p) => !p.dead);
     for (const shot of this.shots) shot.update(dt, this);
+    for (const bolt of this.hazards) bolt.update(dt, this);
+    this.hazards = this.hazards.filter((b) => !b.dead);
     this.shots = this.shots.filter((shot) => !shot.dead);
     this.enemies = this.enemies.filter((e) => !e.dead);
     for (const p of this.particles) {
@@ -763,14 +1008,34 @@ class GameScene {
     requestAnimationFrame((t) => this.loop(t));
   }
   draw() {
+    if(window.dojoRenderer){window.dojoRenderer.render(this);return;}
     ctx.save();
     ctx.translate(rand(-this.shake, this.shake), rand(-this.shake, this.shake));
     background(this.time);
-    for (const p of this.pickups) p.draw(this.time);
+    for (const e of this.enemies) {
+      const warning = e.type === "boss" ? e.warning : e.castWarning;
+      if (warning > 0) {
+        const x = e.type === "boss" ? e.attackX : e.castX;
+        ctx.fillStyle =
+          e.kind === "lich" || e.type === "shaman" ? "#b66bff30" : "#ff485b35";
+        lanePath(x, e.type === "boss" ? 62 : 28, e.y, CONFIG.playerY + 35);
+        ctx.fill();
+        ctx.strokeStyle =
+          e.kind === "lich" || e.type === "shaman" ? "#cd8bff" : "#ff6b72";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+    for (const gate of this.gates)
+      worldDraw(gate.x, gate.y, () => gate.draw(this.time));
+    for (const p of this.pickups) worldDraw(p.x, p.y, () => p.draw(this.time));
     for (const e of [...this.enemies].sort((a, b) => a.y - b.y))
-      e.draw(this.time);
+      worldDraw(e.x, e.y, () => e.draw(this.time));
     this.player.draw(this.time);
-    for (const shot of this.shots) shot.draw(this.time);
+    for (const bolt of this.hazards)
+      worldDraw(bolt.x, bolt.y, () => bolt.draw(this.time));
+    for (const shot of this.shots)
+      worldDraw(shot.x, shot.y, () => shot.draw(this.time));
     for (const l of this.labels) {
       ctx.save();
       ctx.globalAlpha = Math.min(1, l.life * 3);
@@ -779,13 +1044,15 @@ class GameScene {
       ctx.shadowColor = "#000";
       ctx.shadowBlur = 3;
       ctx.fillStyle = l.color;
-      ctx.fillText(l.text, l.x, l.y);
+      const pos = project(l.x, l.y);
+      ctx.fillText(l.text, pos.x, pos.y);
       ctx.restore();
     }
     for (const p of this.particles) {
       ctx.globalAlpha = p.life * 2;
       ctx.fillStyle = p.color;
-      ctx.fillRect(p.x, p.y, 3, 3);
+      const pos = project(p.x, p.y);
+      ctx.fillRect(pos.x, pos.y, 3 * pos.scale, 3 * pos.scale);
     }
     ctx.globalAlpha = 1;
     ctx.restore();
@@ -867,112 +1134,289 @@ function ellipse(x, y, rx, ry, color) {
 function samurai(x, y) {
   ctx.save();
   ctx.translate(x, y);
-  ellipse(0, 27, 28, 9, "#100b1899");
-  const coat = ctx.createLinearGradient(-16, 0, 18, 20);
-  coat.addColorStop(0, "#4b4657");
-  coat.addColorStop(0.5, "#242530");
-  coat.addColorStop(1, "#11141f");
-  ctx.fillStyle = "#181520";
-  ctx.fillRect(-13, 14, 10, 15);
-  ctx.fillRect(4, 14, 10, 15);
-  ctx.fillStyle = coat;
-  ctx.beginPath();
-  ctx.moveTo(-12, -8);
-  ctx.lineTo(11, -8);
-  ctx.lineTo(20, 21);
-  ctx.lineTo(-20, 21);
-  ctx.fill();
-  ctx.strokeStyle = "#957b72";
-  ctx.lineWidth = 1;
-  for (let y = 0; y < 19; y += 5) {
-    ctx.beginPath();
-    ctx.moveTo(-13, y);
-    ctx.lineTo(14, y);
-    ctx.stroke();
-  }
-  ctx.fillStyle = "#c84249";
-  ctx.fillRect(-17, 6, 34, 5);
-  ctx.beginPath();
-  ctx.moveTo(-12, 7);
-  ctx.lineTo(-36, 2);
-  ctx.lineTo(-28, 10);
-  ctx.lineTo(-39, 18);
-  ctx.lineTo(-12, 12);
-  ctx.fill();
-  ellipse(0, -12, 10, 12, "#181a24");
-  ctx.fillStyle = "#d8ad81";
-  ctx.fillRect(-6, -11, 12, 4);
-  ctx.fillStyle = "#fbe3b5";
-  ctx.fillRect(-5, -10, 3, 1);
-  ctx.fillRect(3, -10, 3, 1);
-  const hat = ctx.createLinearGradient(0, -37, 0, -10);
-  hat.addColorStop(0, "#f7d490");
-  hat.addColorStop(1, "#9a693f");
-  ctx.fillStyle = hat;
-  ctx.beginPath();
-  ctx.moveTo(-31, -13);
-  ctx.quadraticCurveTo(-14, -19, 0, -37);
-  ctx.quadraticCurveTo(14, -19, 31, -13);
-  ctx.quadraticCurveTo(0, -5, -31, -13);
-  ctx.fill();
-  ctx.strokeStyle = "#dfb77b";
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  for (let i = -24; i < 25; i += 6) {
-    ctx.beginPath();
-    ctx.moveTo(0, -34);
-    ctx.lineTo(i, -13);
-    ctx.stroke();
-  }
-  ctx.strokeStyle = "#4d3438";
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.moveTo(10, 15);
-  ctx.lineTo(31, -7);
-  ctx.stroke();
-  ctx.strokeStyle = "#e4edf5";
+  ctx.scale(1.2, 1.2);
+  warrior(0, 0, 0, true);
+  ctx.restore();
+}
+function warrior(x, y, bob, leader = false) {
+  ctx.save();
+  ctx.translate(x, y + bob);
+  ellipse(7, 21, 14, 5, "#33465544");
+  ctx.strokeStyle = leader ? "#d6ff8f" : "#92ff82";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(17, 8);
-  ctx.quadraticCurveTo(31, -5, 36, -18);
+  ctx.ellipse(0, 19, 12, 5, 0, 0, 7);
+  ctx.stroke();
+  ctx.fillStyle = "#354b69";
+  ctx.fillRect(-7, 7, 6, 12);
+  ctx.fillRect(2, 7, 6, 12);
+  ctx.fillStyle = "#f5f4eb";
+  ctx.fillRect(-8, 16, 7, 4);
+  ctx.fillRect(2, 16, 7, 4);
+  const jacket = ctx.createLinearGradient(-10, -5, 10, 12);
+  jacket.addColorStop(0, "#7af4f9");
+  jacket.addColorStop(0.6, "#17a4ca");
+  jacket.addColorStop(1, "#176ba2");
+  ellipse(0, 1, 10, 12, jacket);
+  ctx.fillStyle = "#ff554f";
+  ctx.fillRect(-9, 5, 18, 5);
+  ctx.fillStyle = "#fff6c5";
+  ctx.fillRect(-2, -5, 4, 12);
+  ellipse(-9, 0, 4, 6, "#efc899");
+  ellipse(9, 0, 4, 6, "#efc899");
+  ellipse(0, -14, 7, 8, "#dcae85");
+  ellipse(0, -20, 7, 6, leader ? "#f0bb3a" : "#253446");
+  ctx.fillStyle = "#172c48";
+  ctx.fillRect(-6, -15, 12, 3);
+  ctx.strokeStyle = "#dba927";
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(8, 0);
+  ctx.lineTo(9, -17);
+  ctx.stroke();
+  ctx.strokeStyle = "#fff6b2";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(9, -13);
+  ctx.lineTo(9, -23);
   ctx.stroke();
   ctx.restore();
 }
-function hedgehog(x, y, bob) {
-  y += bob;
+function drawRecruitGate(x, y, value) {
+  ellipse(x + 10, y + 12, 30, 8, "#263c5140");
+  ctx.fillStyle = "#edac39";
+  ctx.fillRect(x - 32, y - 65, 5, 77);
+  ctx.fillRect(x + 27, y - 65, 5, 77);
+  const panel = ctx.createLinearGradient(x, y - 65, x, y);
+  panel.addColorStop(0, "#46e6fd");
+  panel.addColorStop(0.6, "#15aee5");
+  panel.addColorStop(1, "#1678d2");
+  ctx.fillStyle = panel;
+  ctx.fillRect(x - 26, y - 62, 52, 60);
+  ctx.strokeStyle = "#b4ffff";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x - 26, y - 62, 52, 60);
+  ctx.font = "900 30px system-ui";
+  ctx.textAlign = "center";
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "#173e70";
+  ctx.strokeText("+" + value, x, y - 20);
+  ctx.fillStyle = "#fff";
+  ctx.fillText("+" + value, x, y - 20);
+}
+function drawSupplyCrate(x, y, hp, flash) {
+  ellipse(x + 8, y + 22, 34, 10, "#26354533");
+  ctx.fillStyle = flash ? "#fff6c2" : "#a5662c";
+  ctx.fillRect(x - 30, y - 21, 60, 42);
+  ctx.fillStyle = "#edb25d";
+  ctx.beginPath();
+  ctx.moveTo(x - 30, y - 21);
+  ctx.lineTo(x - 18, y - 34);
+  ctx.lineTo(x + 40, y - 34);
+  ctx.lineTo(x + 30, y - 21);
+  ctx.fill();
+  ctx.fillStyle = "#c38842";
+  ctx.beginPath();
+  ctx.moveTo(x + 30, y - 21);
+  ctx.lineTo(x + 40, y - 34);
+  ctx.lineTo(x + 40, y + 9);
+  ctx.lineTo(x + 30, y + 21);
+  ctx.fill();
+  ctx.strokeStyle = "#644827";
+  ctx.lineWidth = 2;
+  for (const d of [-12, 2, 15]) {
+    ctx.beginPath();
+    ctx.moveTo(x - 30, y + d);
+    ctx.lineTo(x + 30, y + d);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "#e3e7dc";
+  ctx.fillRect(x - 18, y - 23, 5, 45);
+  ctx.fillRect(x + 13, y - 23, 5, 45);
+  ctx.font = "900 27px system-ui";
+  ctx.textAlign = "center";
+  ctx.strokeStyle = "#412b25";
+  ctx.lineWidth = 4;
+  ctx.strokeText(Math.max(0, Math.ceil(hp)), x, y + 10);
+  ctx.fillStyle = "#fff";
+  ctx.fillText(Math.max(0, Math.ceil(hp)), x, y + 10);
+}
+function drawMonster(x, y, r, type, flash) {
+  if (type === "fast") {
+    spider(x, y, r, flash);
+    return;
+  }
+  if (type === "skeleton") {
+    skeleton(x, y, r, flash);
+    return;
+  }
+  if (type === "shaman") {
+    lich(x, y, r, flash);
+    return;
+  }
+  if (type === "armored") {
+    golem(x, y, r, flash);
+    return;
+  }
+  boar(x, y, r, type, flash);
+}
+function spider(x, y, r, flash) {
   ctx.save();
   ctx.translate(x, y);
-  ellipse(0, 12, 13, 5, "#0006");
-  const fur = ctx.createRadialGradient(-4, -5, 1, 0, 0, 16);
-  fur.addColorStop(0, "#c3976d");
-  fur.addColorStop(1, "#3c2831");
-  ellipse(0, 0, 14, 15, fur);
-  for (let ring = 0; ring < 3; ring++)
-    for (let i = 0; i < 10; i++) {
-      const a = i * 0.63 + ring * 0.3,
-        r = 5 + ring * 3,
-        px = Math.cos(a) * r,
-        py = Math.sin(a) * r;
-      ctx.strokeStyle = (i + ring) % 2 ? "#dfb184" : "#876451";
-      ctx.lineWidth = 1.5;
+  ctx.scale(r / 22, r / 22);
+  ellipse(0, 13, 28, 7, "#0a061b66");
+  for (const side of [-1, 1])
+    for (let i = 0; i < 4; i++) {
+      const j = i - 1.5;
+      ctx.strokeStyle = "#282637";
+      ctx.lineWidth = 5;
       ctx.beginPath();
-      ctx.moveTo(px, py);
-      ctx.lineTo(px + Math.cos(a) * 5, py - 5 + Math.sin(a) * 3);
+      ctx.moveTo(side * 8, j * 6);
+      ctx.lineTo(side * (23 + Math.abs(j) * 3), j * 13);
+      ctx.lineTo(side * 34, j * 16 + 10);
+      ctx.stroke();
+      ctx.strokeStyle = "#a778b9";
+      ctx.lineWidth = 1;
       ctx.stroke();
     }
-  ctx.fillStyle = "#b83c46";
-  ctx.fillRect(-13, 3, 26, 4);
-  ellipse(0, 9, 7, 5, "#bd926d");
-  ellipse(0, 12, 2.4, 1.8, "#241e28");
-  ctx.fillStyle = "#ffe6a3";
-  ctx.fillRect(-5, 7, 2, 2);
-  ctx.fillRect(3, 7, 2, 2);
-  ctx.strokeStyle = "#dbd9d2";
-  ctx.lineWidth = 1.5;
+  const body = ctx.createRadialGradient(-4, -6, 1, 0, 0, 21);
+  body.addColorStop(0, flash ? "#fff8d8" : "#ac5ea0");
+  body.addColorStop(1, "#30233f");
+  ellipse(0, -7, 16, 19, body);
+  ellipse(0, 9, 13, 10, "#41314e");
+  for (let i = 0; i < 4; i++) ellipse(-8 + i * 5, 8, 2, 3, "#ff8c8d");
+  ctx.strokeStyle = "#e8c0e8";
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(13, 4);
-  ctx.lineTo(17, -9);
+  ctx.moveTo(-6, 15);
+  ctx.lineTo(-9, 22);
+  ctx.moveTo(6, 15);
+  ctx.lineTo(9, 22);
   ctx.stroke();
+  ctx.restore();
+}
+function skeleton(x, y, r, flash) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(r / 22, r / 22);
+  ellipse(0, 25, 18, 5, "#0006");
+  ctx.strokeStyle = flash ? "#fff" : "#d0cbb2";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(0, -4);
+  ctx.lineTo(0, 15);
+  ctx.moveTo(-11, -1);
+  ctx.lineTo(11, -1);
+  ctx.moveTo(-9, 4);
+  ctx.lineTo(9, 4);
+  ctx.moveTo(-7, 9);
+  ctx.lineTo(7, 9);
+  ctx.moveTo(0, 14);
+  ctx.lineTo(-8, 25);
+  ctx.moveTo(0, 14);
+  ctx.lineTo(9, 25);
+  ctx.moveTo(-10, 0);
+  ctx.lineTo(-17, 13);
+  ctx.moveTo(10, 0);
+  ctx.lineTo(19, -10);
+  ctx.stroke();
+  ellipse(0, -15, 12, 13, flash ? "#fff9e1" : "#d3cdb7");
+  ellipse(-5, -17, 3, 4, "#302a3a");
+  ellipse(5, -17, 3, 4, "#302a3a");
+  ctx.fillStyle = "#75dfb6";
+  ctx.fillRect(-6, -18, 2, 2);
+  ctx.fillRect(4, -18, 2, 2);
+  ctx.fillStyle = "#9c4850";
+  ctx.fillRect(-11, -27, 22, 5);
+  ctx.strokeStyle = "#eff5f4";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(17, -3);
+  ctx.lineTo(23, -30);
+  ctx.stroke();
+  ctx.restore();
+}
+function golem(x, y, r, flash) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(r / 26, r / 26);
+  ellipse(0, 27, 31, 9, "#0006");
+  const stone = ctx.createLinearGradient(-25, -20, 25, 20);
+  stone.addColorStop(0, flash ? "#fff5df" : "#a3a4ae");
+  stone.addColorStop(0.4, "#606c7d");
+  stone.addColorStop(1, "#30374d");
+  for (const [x, y, w, h] of [
+    [-23, 12, 16, 21],
+    [8, 12, 16, 21],
+    [-23, -18, 46, 39],
+    [-40, -13, 17, 30],
+    [24, -13, 17, 30],
+    [-14, -37, 28, 25],
+  ]) {
+    ctx.fillStyle = stone;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = "#282b43";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+    ctx.strokeStyle = "#b6bec577";
+    ctx.beginPath();
+    ctx.moveTo(x + 2, y + 2);
+    ctx.lineTo(x + w - 3, y + 2);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "#9bf1d5";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-4, -13);
+  ctx.lineTo(6, -2);
+  ctx.lineTo(-2, 5);
+  ctx.lineTo(4, 15);
+  ctx.stroke();
+  ctx.fillStyle = "#b5ffe6";
+  ctx.fillRect(-10, -28, 7, 3);
+  ctx.fillRect(3, -28, 7, 3);
+  ctx.restore();
+}
+function lich(x, y, r, flash) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(r / 30, r / 30);
+  ellipse(0, 29, 27, 7, "#09061c66");
+  const robe = ctx.createLinearGradient(-24, -10, 28, 35);
+  robe.addColorStop(0, flash ? "#f9e8ff" : "#b47edc");
+  robe.addColorStop(0.5, "#57447e");
+  robe.addColorStop(1, "#201f3f");
+  ctx.fillStyle = robe;
+  ctx.beginPath();
+  ctx.moveTo(-12, -16);
+  ctx.lineTo(12, -16);
+  ctx.lineTo(29, 28);
+  ctx.lineTo(10, 23);
+  ctx.lineTo(0, 32);
+  ctx.lineTo(-11, 25);
+  ctx.lineTo(-29, 29);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#bba2d0";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ellipse(0, -21, 16, 18, robe);
+  ellipse(0, -20, 10, 11, "#20182f");
+  ctx.fillStyle = "#f0d9bd";
+  ctx.fillRect(-8, -19, 16, 9);
+  ctx.fillStyle = "#d184ff";
+  ctx.fillRect(-7, -20, 4, 3);
+  ctx.fillRect(3, -20, 4, 3);
+  ctx.strokeStyle = "#8573a1";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(27, 28);
+  ctx.lineTo(30, -39);
+  ctx.stroke();
+  ctx.shadowColor = "#b565ff";
+  ctx.shadowBlur = 16;
+  ellipse(30, -42, 8, 11, "#ba83f5");
+  ellipse(28, -45, 3, 4, "#fff1ff");
   ctx.restore();
 }
 function boar(x, y, r, type, flash) {
@@ -1105,107 +1549,120 @@ scenery.width = 540;
 scenery.height = 960;
 function makeScenery() {
   const c = scenery.getContext("2d");
-  c.fillStyle = "#302835";
+  const ocean = c.createLinearGradient(0, 0, 0, 960);
+  ocean.addColorStop(0, "#a1e5f5");
+  ocean.addColorStop(0.5, "#52cbe6");
+  ocean.addColorStop(1, "#1daccf");
+  c.fillStyle = ocean;
   c.fillRect(0, 0, 540, 960);
-  for (let row = 0; row < 30; row++)
-    for (let col = 0; col < 12; col++) {
-      const x = 64 + col * 35 + (row % 2) * -17,
-        y = row * 34;
-      c.fillStyle = ["#59505e", "#635665", "#514957", "#71616b"][
-        (row * 17 + col * 7) % 4
-      ];
-      c.fillRect(x + 1, y + 1, 33, 31);
-      c.strokeStyle = "#b99a8b22";
-      c.strokeRect(x + 2, y + 2, 31, 28);
-      c.fillStyle = "#c9aaa51a";
-      c.fillRect(x + 3, y + 3, 24, 2);
-      c.strokeStyle = "#211d2838";
-      c.beginPath();
-      c.moveTo(x + 7, y + 31);
-      c.lineTo(x + 13, y + 24);
-      c.lineTo(x + 11, y + 20);
+  const quad = (pts, color, stroke) => {
+    c.beginPath();
+    pts.forEach((p, i) => (i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
+    c.closePath();
+    c.fillStyle = color;
+    c.fill();
+    if (stroke) {
+      c.strokeStyle = stroke;
       c.stroke();
     }
-  for (const side of [0, 1]) {
-    const x = side ? 481 : 0;
-    c.fillStyle = "#251f2b";
-    c.fillRect(x, 0, 59, 960);
-    for (let y = 0; y < 960; y += 18) {
-      c.fillStyle = "#61413e";
-      c.fillRect(x + 8, y, 43, 4);
+  };
+  // Световые блики на воде заранее рисуются в статический слой.
+  for (let i = 0; i < 650; i++) {
+    const x = (i * 127.7) % 540,
+      y = (i * 71.3) % 960;
+    c.fillStyle = i % 3 ? "#d4ffff66" : "#fff9";
+    c.fillRect(x, y, 3 + (i % 9), 1);
+  }
+  for (const side of [-1, 1]) {
+    const edge = side < 0 ? 55 : 485;
+    quad(
+      [
+        project(edge, -60),
+        project(edge + side * 17, -60),
+        project(edge + side * 17, 960),
+        project(edge, 960),
+      ],
+      "#539aae",
+    );
+    for (let y = 0; y < 960; y += 150) {
+      const p = project(edge + side * 15, y);
+      c.fillStyle = "#266f8755";
+      c.fillRect(p.x, p.y, 12 * p.scale, 90 * p.scale);
     }
-    for (let y = 120; y < 930; y += 180) {
-      const lx = side ? 477 : 63;
-      const glow = c.createRadialGradient(lx, y, 1, lx, y, 80);
-      glow.addColorStop(0, "#ff9a3b55");
-      glow.addColorStop(1, "transparent");
-      c.fillStyle = glow;
-      c.fillRect(lx - 80, y - 80, 160, 160);
-      c.fillStyle = "#2b202b";
-      c.fillRect(lx - 13, y - 20, 26, 42);
-      c.fillStyle = "#ffb35a";
-      c.fillRect(lx - 8, y - 15, 16, 25);
-      c.fillStyle = "#ffe4a1";
-      c.fillRect(lx - 3, y - 12, 6, 22);
-    }
-    for (let i = 0; i < 95; i++) {
-      const y = (i * 71) % 960,
-        bx = (i * 37) % 66;
-      const sx = side ? 540 - bx : bx;
-      c.fillStyle = ["#a74c79", "#e98cb5", "#f7b2ce", "#69334e"][i % 4];
+  }
+  const floor = c.createLinearGradient(0, 100, 0, 960);
+  floor.addColorStop(0, "#b6b9c4");
+  floor.addColorStop(0.4, "#d9d5dc");
+  floor.addColorStop(1, "#e9e2e2");
+  quad(
+    [project(65, -60), project(475, -60), project(475, 960), project(65, 960)],
+    floor,
+  );
+  // Дорожная разметка и поперечные стыки подчёркивают глубину.
+  for (let y = -40; y < 960; y += 75) {
+    quad(
+      [
+        project(267, y),
+        project(273, y),
+        project(273, y + 37),
+        project(267, y + 37),
+      ],
+      "#ffffffaa",
+    );
+    const a = project(65, y),
+      b = project(475, y);
+    c.strokeStyle = "#a3a2b02b";
+    c.beginPath();
+    c.moveTo(a.x, a.y);
+    c.lineTo(b.x, b.y);
+    c.stroke();
+  }
+  for (const side of [-1, 1]) {
+    const x = side < 0 ? 65 : 475;
+    quad(
+      [
+        project(x, -60),
+        project(x - side * 9, -60),
+        project(x - side * 9, 960),
+        project(x, 960),
+      ],
+      "#fafbff",
+    );
+    quad(
+      [
+        project(x, -60),
+        project(x, 960),
+        { x: project(x, 960).x, y: project(x, 960).y - 22 },
+        { x: project(x, -60).x, y: project(x, -60).y - 5 },
+      ],
+      "#90a9ba",
+      "#e8f9ff",
+    );
+    for (let y = -30; y < 950; y += 65) {
+      const p = project(x, y);
+      c.strokeStyle = "#627c93";
+      c.lineWidth = 3 * p.scale;
       c.beginPath();
-      c.arc(sx, y, 7 + (i % 7), 0, 7);
-      c.fill();
-      for (let k = 0; k < 4; k++) {
-        const fx = sx + Math.sin(i * 3 + k) * 12,
-          fy = y + Math.cos(i + k) * 10;
-        c.fillStyle = ["#f3b0cd", "#d97da8", "#ffc5d9"][k % 3];
-        c.beginPath();
-        c.ellipse(fx, fy, 3, 5, k, 0, 7);
-        c.fill();
-        c.fillStyle = "#ffdab8";
-        c.fillRect(fx, fy, 1.5, 1.5);
-      }
+      c.moveTo(p.x, p.y);
+      c.lineTo(p.x, p.y - 24 * p.scale);
+      c.stroke();
     }
-  } // Ворота находятся позади позиции игрока, не закрывая поле боя.
-  c.fillStyle = "#603b32";
-  c.fillRect(83, 850, 25, 110);
-  c.fillRect(432, 850, 25, 110);
-  c.fillStyle = "#211f2a";
-  c.beginPath();
-  c.moveTo(62, 839);
-  c.quadraticCurveTo(270, 875, 478, 839);
-  c.lineTo(459, 878);
-  c.quadraticCurveTo(270, 905, 81, 878);
-  c.fill();
-  c.strokeStyle = "#be9563";
-  c.lineWidth = 3;
-  c.stroke();
-  c.fillStyle = "#c4a27b";
-  c.fillRect(234, 872, 72, 36);
-  c.fillStyle = "#26212b";
-  c.font = "bold 17px Georgia";
-  c.textAlign = "center";
-  c.fillText("DOJO", 270, 896);
+  }
 }
 makeScenery();
 function background(t) {
   ctx.drawImage(scenery, 0, 0);
-  const shade = ctx.createLinearGradient(0, 0, 0, 960);
-  shade.addColorStop(0, "#16121d99");
-  shade.addColorStop(0.5, "transparent");
-  shade.addColorStop(1, "#110d1833");
-  ctx.fillStyle = shade;
-  ctx.fillRect(0, 0, 540, 960);
-  ctx.fillStyle = "#f1a4caaa";
-  for (let i = 0; i < 30; i++) {
-    const x = (i * 97 + Math.sin(t * 0.5 + i) * 55 + t * 7) % 540,
-      y = (i * 137 + t * (15 + (i % 4))) % 960;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(t + i);
-    ctx.fillRect(0, 0, 5, 2);
-    ctx.restore();
+  // Небольшие бегущие блики, без тяжёлых шейдеров и внешних текстур.
+  ctx.strokeStyle = "#ddffff77";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 45; i++) {
+    const side = i % 2 ? 1 : -1,
+      x = 270 + side * (185 + ((i * 29) % 130)),
+      y = (i * 47 + t * 14) % 960;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + 10 + Math.sin(t + i) * 6, y);
+    ctx.stroke();
   }
 }
 const game = new GameScene();
