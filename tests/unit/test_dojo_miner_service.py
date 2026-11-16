@@ -35,6 +35,8 @@ def test_container_has_lazy_miner_service_slot():
 
 def test_cycle_constants_are_eight_hours_and_small():
     assert miner.CYCLE_SECONDS == 8 * 60 * 60
+    assert miner.BASE_RATE == 15
+    assert miner.PICKAXE_STEP == 10
     assert miner.MINING_REWARD == 120
 
 
@@ -44,8 +46,12 @@ async def test_ready_state_has_balance_and_reward():
     with patch.object(miner.time, 'time', return_value=1000):
         state = await dojo.state(7)
     assert state['phase'] == 'ready'
-    assert state['reward'] == 120
+    assert state['reward'] == 26
+    assert state['next_reward'] == 26
     assert state['balance'] == 500
+    assert state['energy_max'] == 100
+    assert state['base_rate'] == 15
+    assert state['progress_percent'] == 0
     assert state['cycle_seconds'] == 28800
 
 
@@ -62,6 +68,8 @@ async def test_start_runs_only_one_eight_hour_cycle():
             await dojo.start(7)
         state = await dojo.state(7)
     assert state['phase'] == 'mining' and state['progress'] == pytest.approx(1000 / 28800)
+    assert state['energy'] == 72
+    assert state['energy_max'] == 100
     economy.process_game_win.assert_not_awaited()
 
 
@@ -83,11 +91,11 @@ async def test_collect_pays_once_from_bank_and_reopens_cycle():
         await dojo.start(7)
     with patch.object(miner.time, 'time', return_value=29800):
         result = await dojo.collect(7)
-    assert result['mined'] == 120
+    assert result['mined'] == 26
     assert result['balance'] == 620
     assert result['phase'] == 'ready'
     economy.process_game_win.assert_awaited_once()
-    assert economy.process_game_win.await_args.kwargs['coins'] == 120
+    assert economy.process_game_win.await_args.kwargs['coins'] == 26
     assert '8h' in economy.process_game_win.await_args.kwargs['description']
     with patch.object(miner.time, 'time', return_value=30000):
         with pytest.raises(GameError, match='уже получена'):

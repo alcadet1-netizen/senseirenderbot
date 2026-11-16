@@ -19,6 +19,11 @@
       />
       <div class="shade" aria-hidden="true"></div>
 
+      <div class="ambient" aria-hidden="true">
+        <div id="sakura" class="sakura-layer"></div>
+        <div id="matrix" class="matrix-layer"></div>
+      </div>
+
       <header class="top">
         <div class="logo">
           <svg class="icon torii" viewBox="0 0 40 32" aria-hidden="true">
@@ -73,6 +78,15 @@
         </section>
 
         <section id="view-mining" class="view view-mining">
+          <div id="mine-meter" class="mine-meter" hidden>
+            <div class="mine-meter-head">
+              <span>ПРОГРЕСС ЦИКЛА</span>
+              <b id="mine-percent">0%</b>
+            </div>
+            <div class="mine-track" aria-hidden="true">
+              <i id="mine-bar"></i>
+            </div>
+          </div>
           <div class="orb">
             <span class="orb-halo" aria-hidden="true"></span>
             <span class="orb-spark" aria-hidden="true"></span>
@@ -96,7 +110,7 @@
             </button>
           </div>
           <p id="status" class="status">ПОДКЛЮЧЕНИЕ</p>
-          <p id="hint" class="hint">8 часов · 120 SenseiCoin из SenseiBank</p>
+          <p id="hint" class="hint">8 часов · 15 Coin/ч базово · энергия 100</p>
           <div id="coins" class="coins" aria-hidden="true"></div>
         </section>
 
@@ -115,22 +129,44 @@
 
         <section id="view-upgrades" class="view tab-view" hidden>
           <p class="view-eyebrow">УЛУЧШЕНИЯ</p>
-          <h2>СКОРО</h2>
+          <h2>ПРОКАЧКА</h2>
           <p class="view-copy">
-            Улучшения кирки, энергии и автосбора появятся в следующем
-            обновлении. Сейчас доход фиксированный и честный.
+            Постоянные улучшения за Telegram Stars. Кирка повышает добычу,
+            энергия держит полную мощность дольше, автосбор работает без тебя.
           </p>
-          <div class="stat-list">
+          <div id="upgrades-list" class="upgrade-list">
+            <p class="task-empty">ЗАГРУЖАЕМ УЛУЧШЕНИЯ…</p>
+          </div>
+          <p class="task-note">Оплата Stars · улучшения не сгорают</p>
+        </section>
+
+        <section id="view-bank" class="view tab-view" hidden>
+          <p class="view-eyebrow">SENSEIBANK</p>
+          <h2>ЭМИССИЯ</h2>
+          <p class="view-copy">
+            Общая эмиссия — всё, что есть в банке и на руках у игроков. Как в
+            /senseibank, только наглядно.
+          </p>
+          <div id="bank-stats" class="stat-list">
             <div class="stat-row">
-              <span>Кирка</span><b class="soon">В РАЗРАБОТКЕ</b>
+              <span>Общая эмиссия</span><b id="bank-supply">—</b>
             </div>
             <div class="stat-row">
-              <span>Энергия</span><b class="soon">В РАЗРАБОТКЕ</b>
+              <span>Баланс банка</span><b id="bank-balance">—</b>
             </div>
             <div class="stat-row">
-              <span>Автосбор</span><b class="soon">В РАЗРАБОТКЕ</b>
+              <span>В обороте</span><b id="bank-circulation">—</b>
+            </div>
+            <div class="stat-row">
+              <span>Игроков</span><b id="bank-users">—</b>
             </div>
           </div>
+          <button id="bank-refresh" class="bank-refresh" type="button">
+            ОБНОВИТЬ ДАННЫЕ
+          </button>
+          <p class="task-note">
+            Данные /senseibank обновляются с задержкой до минуты.
+          </p>
         </section>
 
         <section id="view-profile" class="view tab-view" hidden>
@@ -140,10 +176,18 @@
             <div class="stat-row">
               <span>Баланс</span><b id="profile-balance">—</b>
             </div>
-            <div class="stat-row"><span>Доход</span><b>15 Coin / ч</b></div>
+            <div class="stat-row">
+              <span>Добыча</span><b id="profile-rate">15 Coin / ч</b>
+            </div>
+            <div class="stat-row">
+              <span>Энергия</span><b id="profile-energy">100</b>
+            </div>
             <div class="stat-row"><span>Цикл</span><b>8 часов</b></div>
             <div class="stat-row">
-              <span>Награда</span><b id="profile-reward">120 Coin</b>
+              <span>Награда</span><b id="profile-reward">26 Coin</b>
+            </div>
+            <div class="stat-row">
+              <span>Автосбор</span><b id="profile-auto">ВЫКЛ</b>
             </div>
             <div class="stat-row"><span>Банк</span><b>SenseiBank</b></div>
           </div>
@@ -182,6 +226,14 @@
           </svg>
           <span>Улучшения</span>
         </button>
+        <button class="tab" data-tab="bank">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M3 10h18M5 10V7l7-4 7 4v3M6 10v8M10 10v8M14 10v8M18 10v8M4 21h16"
+            />
+          </svg>
+          <span>Банк</span>
+        </button>
         <button class="tab" data-tab="profile">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="8" r="3.4" />
@@ -211,15 +263,19 @@
               <b>Запусти цикл.</b> Сенсей уходит в майнинг ровно на 8 часов.
             </li>
             <li>
-              <b>Подожди.</b> Таймер идёт на сервере: приложение можно
-              закрывать.
+              <b>Следи за энергией.</b> 100 энергии хватает на час полной
+              мощности; потом кирка добывает 10% от базовой скорости.
             </li>
             <li>
-              <b>Забери 120 SenseiCoin.</b> Награда приходит из SenseiBank
-              только после конца цикла.
+              <b>Забери награду.</b> Она приходит из SenseiBank только после
+              конца цикла. Процент прогресса виден на экране.
             </li>
             <li>
               <b>Начни снова.</b> Следующий цикл открывается сразу после сбора.
+            </li>
+            <li>
+              <b>Улучшай кирку.</b> За Stars: +10 Coin/ч за уровень, +100
+              энергии или автосбор, который запускает циклы без тебя.
             </li>
           </ol>
           <button class="sheet-done" data-close="sheet">ПОНЯТНО</button>

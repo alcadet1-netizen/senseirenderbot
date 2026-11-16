@@ -225,8 +225,11 @@ async def main() -> None:
     dp.include_router(main_router)
 
     # Startup failures must also close the health server and DB resources.
+    auto_task = None
     try:
         await on_startup(bot, container)
+        await container.dojo_miner_service.ensure_indexes()
+        auto_task = asyncio.create_task(container.dojo_miner_service.auto_loop())
         await container.popugai_service.ensure_indexes()
         await container.throttle_service.ensure_indexes()
         await container.referral_service.ensure_indexes()
@@ -246,6 +249,12 @@ async def main() -> None:
             close_bot_session=True,
         )
     finally:
+        if auto_task is not None:
+            auto_task.cancel()
+            try:
+                await auto_task
+            except asyncio.CancelledError:
+                pass
         try:
             if container.native_widget_transport is not None:
                 await container.native_widget_transport.close()

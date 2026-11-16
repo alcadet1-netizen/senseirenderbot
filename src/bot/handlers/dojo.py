@@ -6,7 +6,7 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
-from src.services.dojo_miner_service import CYCLE_SECONDS, MINING_REWARD
+from src.services.dojo_miner_service import BASE_RATE, CYCLE_SECONDS
 
 router = Router(name='dojo')
 
@@ -38,10 +38,10 @@ async def cmd_dojo(message, container):
     hours = CYCLE_SECONDS // 3600
     await message.answer(
         '⛏ Додзё: Майнер SenseiCoin\n\n'
-        f'Запусти майнинг на {hours} часов — Сенсей добудет '
-        f'{MINING_REWARD} SenseiCoin из SenseiBank.\n\n'
+        f'Запусти майнинг на {hours} часов: кирка добывает от {int(BASE_RATE)} Coin/ч. '
+        '100 энергии — час полной мощности, потом 10% скорости.\n\n'
         f'Пока цикл идёт, новый не запустить. Вернись через {hours} часов, забери награду '
         'и запускай следующий. Монеты начисляются только внутри Telegram и только с сервера.\n\n'
-        'Внутри — вкладка «Задания»: подписка на канал даёт разовую награду и бонус к энергии.',
+        'Внутри — «Задания», «Улучшения» за Stars и общая эмиссия SenseiBank.',
         parse_mode=None, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text='⛏ Начать майнинг', web_app=WebAppInfo(url=url))]]))

@@ -25,6 +25,7 @@ class Container:
     _economy_service: Optional["EconomyService"] = field(default=None, init=False, repr=False)
     _daily_service: Optional["DailyService"] = field(default=None, init=False, repr=False)
     _dojo_task_service: Optional["DojoTaskService"] = field(default=None, init=False, repr=False)
+    _dojo_upgrade_service: Optional["DojoUpgradeService"] = field(default=None, init=False, repr=False)
     _dojo_miner_service: Optional["DojoMinerService"] = field(default=None, init=False, repr=False)
     _exchange_service: Optional["ExchangeService"] = field(default=None, init=False, repr=False)
     _achievement_service: Optional["AchievementService"] = field(default=None, init=False, repr=False)
@@ -76,6 +77,13 @@ class Container:
             from src.services.dojo_task_service import DojoTaskService
             self._dojo_task_service = DojoTaskService(self)
         return self._dojo_task_service
+
+    @property
+    def dojo_upgrade_service(self):
+        if self._dojo_upgrade_service is None:
+            from src.services.dojo_upgrade_service import DojoUpgradeService
+            self._dojo_upgrade_service = DojoUpgradeService(self)
+        return self._dojo_upgrade_service
 
     @property
     def dojo_miner_service(self):

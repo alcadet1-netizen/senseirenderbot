@@ -32,8 +32,8 @@ async def test_launcher():
     assert button.web_app.url.endswith('/miniapp/dojo')
     assert 'Начать майнинг' in button.text
     text = msg.answer.call_args.args[0]
-    assert '8 часов' in text and 'SenseiCoin' in text and '120' in text
-    assert 'SenseiBank' in text and 'Задания' in text
+    assert '8 часов' in text and 'SenseiCoin' in text and '15 Coin/ч' in text
+    assert 'SenseiBank' in text and 'Задания' in text and 'Улучшения' in text
 
 
 @pytest.mark.asyncio
@@ -59,18 +59,29 @@ async def test_miner_assets_and_csp():
 
 @pytest.mark.asyncio
 async def test_api_requires_signature_and_dispatches_actions():
-    state = AsyncMock(return_value={'phase': 'ready', 'reward': 120, 'balance': 1000})
-    start = AsyncMock(return_value={'phase': 'mining', 'reward': 120})
+    state = AsyncMock(return_value={'phase': 'ready', 'reward': 26, 'balance': 1000})
+    start = AsyncMock(return_value={'phase': 'mining', 'reward': 26})
     collect = AsyncMock(return_value={'phase': 'ready', 'mined': 120, 'balance': 1000})
     list_tasks = AsyncMock(return_value=[{'slug': 'senseidurova', 'claimed': False}])
     claim = AsyncMock(return_value={
         'task': {'slug': 'senseidurova', 'claimed': True},
         'reward_coins': 10_000, 'energy_bonus': 100, 'new_coins': 20_000,
     })
+    upgrades = AsyncMock(return_value={'pickaxe_level': 0, 'pickaxe_max': 100})
+    prepare = AsyncMock(return_value={
+        'kind': 'pickaxe', 'stars': 10, 'payload': 'dojobuy:v1:7:pickaxe:10:abc',
+        'title': 'Кирка +10 Coin/ч', 'description': 'Постоянный бонус.',
+    })
+    create_invoice = AsyncMock(return_value='https://t.me/invoice/1')
+    bank = AsyncMock(return_value={
+        'bank_balance': 900, 'circulation': 100, 'total_supply': 1000, 'users': 2})
     container = SimpleNamespace(
         settings=SimpleNamespace(bot_token='test-token', maintenance_mode=False),
         dojo_miner_service=SimpleNamespace(state=state, start=start, collect=collect),
-        dojo_task_service=SimpleNamespace(list_tasks=list_tasks, claim=claim))
+        dojo_task_service=SimpleNamespace(list_tasks=list_tasks, claim=claim),
+        dojo_upgrade_service=SimpleNamespace(snapshot=upgrades, prepare=prepare),
+        stats_service=SimpleNamespace(get_bank_summary=bank),
+        bot=SimpleNamespace(create_invoice_link=create_invoice))
     app = web.Application()
     setup_dojo(app, container)
     async with TestClient(TestServer(app)) as client:
@@ -98,5 +109,18 @@ async def test_api_requires_signature_and_dispatches_actions():
         assert data['reward_coins'] == 10_000 and data['energy_bonus'] == 100
         assert data['balance'] == 20_000 and data['task']['claimed'] is True
         claim.assert_awaited_once_with(7, 'senseidurova')
+        response = await client.post('/miniapp/dojo/api/upgrades', json={'initData': auth})
+        assert response.status == 200
+        assert (await response.json())['upgrades']['pickaxe_max'] == 100
+        upgrades.assert_awaited_once_with(7)
+        response = await client.post('/miniapp/dojo/api/buy', json={
+            'initData': auth, 'kind': 'pickaxe'})
+        assert response.status == 200
+        assert (await response.json())['invoice_url'] == 'https://t.me/invoice/1'
+        prepare.assert_awaited_once_with(7, 'pickaxe')
+        create_invoice.assert_awaited_once()
+        response = await client.post('/miniapp/dojo/api/bank', json={'initData': auth})
+        assert response.status == 200 and (await response.json())['total_supply'] == 1000
+        bank.assert_awaited_once()
         assert (await client.post('/miniapp/dojo/api/kick', json={'initData': auth})).status == 404
         assert (await client.post('/miniapp/dojo/api/nope', json={'initData': auth})).status == 404

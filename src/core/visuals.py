@@ -718,6 +718,7 @@ class Visuals:
         circulation = stats.get("circulation", 0)
 
         balance = bank.get("balance", 0)
+        total_supply = bank.get("total_supply", balance + circulation)
         collected = bank.get("total_collected", 0)
         distributed = bank.get("total_distributed", 0)
         
@@ -731,6 +732,7 @@ class Visuals:
             cls.frame_separator_left(w),
             cls.frame_line_left(f"💰 Баланс: {balance:,.0f}", w),
             cls.frame_line_left(f"🪙 В обороте: {circulation:,.0f}", w),
+            cls.frame_line_left(f"📈 Эмиссия: {total_supply:,.0f}", w),
             cls.frame_separator_left(w),
             cls.frame_line_left("📊 Статистика:", w),
             cls.frame_line_left(f"📥 Собрано: {collected:,.0f}", w),
