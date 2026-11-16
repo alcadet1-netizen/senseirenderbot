@@ -45,6 +45,6 @@ BOT_TOKEN=123456:TEST .venv/bin/python -m pytest -q --disable-warnings
 BOT_TOKEN=123456:TEST .venv/bin/python -m scripts.check_widgets
 ```
 
-- Полный `tests/unit`: **1008 passed**, 18 failed — только известные падения aiogram widget API (`from.is_bot`, `chat_instance`, `type`), не связанные с экономикой. Отдельно: `test_emission_service.py` 7, `test_bank_ledger.py` 3, `test_economy_emission.py` 3.
+- Полный `tests/unit`: **1026 passed**, 0 failed. Заодно обновлены widget-тесты и `MtprotoWidgets` под обязательные поля aiogram 3.32 (`from.is_bot`, `from.first_name`, `chat_instance`, `type`). Отдельно: `test_emission_service.py` 7, `test_bank_ledger.py` 3, `test_economy_emission.py` 3.
 - **18** официальных strict sandbox сценариев проходят.
 - Нужны отдельные integration/fault-injection проверки на реальном MongoDB перед утверждением полной финансовой целостности.

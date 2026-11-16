@@ -123,12 +123,20 @@ async def test_real_bridge_personal_only_no_group_inline_or_shared_taps():
     middleware = HedgehogWidgetMiddleware(container)
     bot = AsyncMock()
     for i, (kind, owner) in enumerate([('supergroup', 7), ('private', 8), ('inline', 7), ('shared', 7), ('private', 7)]):
-        query = {'id': str(i), 'from': {'id': owner}, 'data': f'dp:p:{token}'}
+        query = {
+            'id': str(i),
+            'from': {'id': owner, 'is_bot': False, 'first_name': 'Tester'},
+            'chat_instance': f'ci{i}',
+            'type': {'type': 'data'},
+            'data': f'dp:p:{token}',
+        }
         if kind == 'inline':
             query['inline_message_id'] = 'opaque'
         else:
             query['chat'] = {'id': owner if kind == 'private' else -100, 'type': kind}
             query['message_id'] = 1
+        if kind == 'shared':
+            query['widget_id'] = 'w1'
         event = Update.model_validate({'update_id': i, 'shared_widget_query' if kind == 'shared' else 'widget_query': query})
         with patch('src.services.daily_pet_service.time.time', return_value=101):
             await middleware(AsyncMock(), event, {'bot': bot})

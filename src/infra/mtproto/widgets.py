@@ -320,7 +320,16 @@ class MtprotoWidgets:
                 value = ''
             # All identity/message coordinates come from authenticated MTProto
             # updates. The HTML supplies only the untrusted 64-byte action.
-            query = {'id': str(update.query_id), 'from': {'id': update.user_id}, 'data': value}
+            # aiogram 3.32 widget models require a complete User, chat_instance
+            # and a typed query payload; MTProto does not carry a display name.
+            query = {
+                'id': str(update.query_id),
+                'from': {'id': update.user_id, 'is_bot': False,
+                         'first_name': 'Telegram user'},
+                'chat_instance': str(getattr(update, 'chat_instance', '') or update.query_id),
+                'type': {'type': 'data'},
+                'data': value,
+            }
             if isinstance(update, self.types.UpdateInlineBotWidgetQuery):
                 # Opaque authenticated coordinates, NOT an invented chat/message ID.
                 query['inline_message_id'] = bytes(update.inline_message_id).hex()
