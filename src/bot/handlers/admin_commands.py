@@ -580,6 +580,13 @@ async def cmd_ban(message: Message, container: Container):
         reason=reason,
         confiscate_coins=True
     )
+    if result.get('success'):
+        # Confiscated coins are part of the bank dashboard; do not keep a
+        # pre-ban snapshot for up to a minute.
+        stats = getattr(container, 'stats_service', None)
+        invalidate = getattr(stats, 'invalidate', None)
+        if invalidate is not None:
+            invalidate()
 
     # Try to ban in Telegram chat
     tg_ban_status = ""

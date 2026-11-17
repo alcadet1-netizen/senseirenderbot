@@ -151,3 +151,74 @@ async def test_invalid_user_rejected():
     for bad in (0, -1, '7', True):
         with pytest.raises(GameError):
             await dojo.state(bad)
+
+
+@pytest.mark.asyncio
+async def test_task_energy_is_spent_once_and_never_raises_the_cap():
+    _, dojo, _ = service()
+    with patch.object(miner.time, 'time', return_value=1000):
+        started = await dojo.start(7)
+        assert started['reward'] == 20
+        assert await dojo.apply_task_energy(7, 100, 'claim-1') is True
+        state = await dojo.state(7)
+    assert state['energy_max'] == 100
+    assert state['energy'] == 200
+    assert state['reward'] == 34  # one extra full-power hour (15 -> 33.5)
+    assert state['task_energy_pending'] == 0
+    with patch.object(miner.time, 'time', return_value=1000):
+        assert await dojo.apply_task_energy(7, 100, 'claim-1') is True
+        assert (await dojo.state(7))['reward'] == 34
+
+
+@pytest.mark.asyncio
+async def test_speed_boost_repeats_add_hours_but_never_the_percentage():
+    _, dojo, _ = service()
+    dojo.users.docs[7]['coins'] = 500
+    with patch.object(miner.time, 'time', return_value=1000):
+        started = await dojo.start(7)
+        assert started['reward'] == 20
+        assert await dojo.apply_speed_boost(7, 'charge-boost-1') is True
+        boosted = await dojo.state(7)
+        assert boosted['reward'] == 35  # +15 for two boosted hours
+        assert boosted['boost_percent'] == 50
+        assert boosted['boost_seconds_left'] == 7200
+        assert boosted['current_rate'] == 22.5
+        assert await dojo.apply_speed_boost(7, 'charge-boost-2') is True
+        extended = await dojo.state(7)
+    assert extended['boost_seconds_left'] == 14400
+    assert extended['reward'] == 50  # the remaining two hours, not +100%
+    assert extended['boost_percent'] == 50
+    assert extended['current_rate'] == 22.5
+
+
+@pytest.mark.asyncio
+async def test_task_energy_waits_for_the_next_cycle_and_is_consumed_once():
+    _, dojo, _ = service()
+    with patch.object(miner.time, 'time', return_value=1000):
+        assert await dojo.apply_task_energy(7, 100, 'claim-ready') is True
+        ready = await dojo.state(7)
+        assert ready['phase'] == 'ready'
+        assert ready['energy'] == 200 and ready['energy_max'] == 100
+        assert ready['task_energy_pending'] == 100
+        started = await dojo.start(7)
+    assert started['energy_start'] == 200 and started['energy_max'] == 100
+    assert started['task_energy_pending'] == 0
+    with patch.object(miner.time, 'time', return_value=1001):
+        after = await dojo.state(7)
+    assert after['energy_max'] == 100
+    assert after['energy'] < 200
+
+
+@pytest.mark.asyncio
+async def test_boost_bought_before_start_is_in_the_ready_reward():
+    _, dojo, _ = service()
+    with patch.object(miner.time, 'time', return_value=1000):
+        assert await dojo.apply_speed_boost(7, 'charge-ready-boost') is True
+        ready = await dojo.state(7)
+        assert ready['phase'] == 'ready'
+        assert ready['boost_active'] is True
+        assert ready['reward'] == 35
+        assert ready['next_reward'] == 35
+        started = await dojo.start(7)
+    assert started['reward'] == 35
+    assert started['boost_seconds_left'] == 7200

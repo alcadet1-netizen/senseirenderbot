@@ -24,15 +24,15 @@
     "ПРОГРЕСС ЦИКЛА": "CYCLE PROGRESS",
     ЗАДАНИЯ: "TASKS",
     ПОДПИСКИ: "SUBSCRIPTIONS",
-    "Подпишись на канал и забери SenseiCoin и энергию. Награда за каждый канал — один раз.":
-      "Subscribe to the channel and claim SenseiCoin and energy. Each channel reward can be claimed once.",
+    "Подпишись на канал и забери SenseiCoin и разовый заряд энергии. Награда за каждый канал — один раз; базовый лимит энергии не растёт.":
+      "Subscribe to the channel and claim SenseiCoin plus a one-cycle energy charge. Each channel reward can be claimed once; the base energy cap does not grow.",
     "ЗАГРУЖАЕМ ЗАДАНИЯ…": "LOADING TASKS…",
     "Подписку проверяет сервер через Telegram.":
       "The server verifies the subscription via Telegram.",
     УЛУЧШЕНИЯ: "UPGRADES",
     ПРОКАЧКА: "UPGRADES",
-    "Постоянные улучшения за Telegram Stars. Кирка повышает добычу, энергия держит полную мощность дольше, автосбор работает без тебя.":
-      "Permanent upgrades for Telegram Stars. The pickaxe boosts mining, energy keeps full power longer, and auto-collect works without you.",
+    "Улучшения за Telegram Stars. Кирка повышает добычу, энергия держит полную мощность дольше, буст ускоряет фарм на 2 часа, автосбор работает без тебя.":
+      "Telegram Stars upgrades. The pickaxe boosts mining, energy keeps full power longer, a boost speeds up farming for 2 hours, and auto-collect works without you.",
     "ЗАГРУЖАЕМ УЛУЧШЕНИЯ…": "LOADING UPGRADES…",
     "Оплата Stars · улучшения не сгорают":
       "Stars payment · upgrades never expire",
@@ -86,7 +86,7 @@
       "10% / 1% / 0.1% from every paid katana upgrade across three levels. The remainder goes to SenseiBank.",
     ПРОФИЛЬ: "PROFILE",
     "СЕНСЕЙ-МАЙНЕР": "SENSEI MINER",
-    "Баланс (как в чате)": "Balance (same as chat)",
+    Баланс: "Balance",
     Добыча: "Mining rate",
     Энергия: "Energy",
     Цикл: "Cycle",
@@ -124,6 +124,8 @@
     "Вне Telegram майнер не начисляет SenseiCoin и не запускает цикл.":
       "Outside Telegram the miner does not credit SenseiCoin or start cycles.",
     ПОДКЛЮЧЕНИЕ: "CONNECTING",
+    "ЗАГРУЗКА…": "LOADING…",
+    "Загрузка SenseiCoin": "Loading SenseiCoin",
     "СЕНСЕЙ ПРОСЫПАЕТСЯ": "SENSEI IS WAKING UP",
     "Проверяем состояние цикла на сервере.":
       "Checking the cycle state on the server.",
@@ -149,6 +151,12 @@
       "Pickaxe {rate} Coin/h · energy {energy} · {hours} h at full power",
     "Энергия {energy} / {max} · {rate} Coin/ч · после нуля 10%":
       "Energy {energy} / {max} · {rate} Coin/h · 10% after zero",
+    "10 ⭐ · ПОПОЛНИТЬ": "10 ⭐ · REFILL",
+    "Пополнить энергию за 10 ⭐": "Refill energy for 10 ⭐",
+    "Пополняем энергию": "Refilling energy",
+    "Энергия пополнена": "Energy refilled",
+    "Пополнить можно только при нулевой энергии.":
+      "You can refill only at zero energy.",
     "Майнинг запущен · Сенсей ушёл на 4 часа":
       "Mining started · Sensei left for 4 hours",
     "+{amount} SenseiCoin · баланс {balance}":
@@ -163,6 +171,8 @@
     "НЕ УДАЛОСЬ ЗАГРУЗИТЬ ЗАДАНИЯ": "COULD NOT LOAD TASKS",
     "+{amount} SenseiCoin · +{energy} энергии":
       "+{amount} SenseiCoin · +{energy} energy",
+    "+{amount} SenseiCoin · +{energy} энергии на цикл":
+      "+{amount} SenseiCoin · +{energy} energy for one cycle",
     "УЛУЧШЕНИЯ НЕДОСТУПНЫ": "UPGRADES UNAVAILABLE",
     КИРКА: "PICKAXE",
     "Каждый уровень: +10 SenseiCoin в час. Действует со следующего цикла.":
@@ -271,6 +281,67 @@
       "The maximum number of energy purchases has been reached.",
     "Автосбор уже включён навсегда.":
       "Auto-collect is already permanently enabled.",
+    "+50% СКОРОСТЬ": "+50% SPEED",
+    "СКОРОСТЬ +50%": "SPEED +50%",
+    "2 ЧАСА": "2 HOURS",
+    "АКТИВЕН · {time}": "ACTIVE · {time}",
+    "Ускоряет добычу на 50% на два часа. Повторная покупка добавляет только часы — процент не растёт.":
+      "Boosts mining by 50% for two hours. A repeat purchase adds hours only — the percentage never stacks.",
+    "1 ⭐ · +2 ЧАСА · МАКСИМУМ +50%": "1 ⭐ · +2 HOURS · MAX +50%",
+    "{stars} ⭐ · УСКОРИТЬ": "{stars} ⭐ · SPEED UP",
+    "Скорость +50% · осталось {time}": "Speed +50% · {time} left",
+    "Сожжено {amount} Coin. Эмиссия уменьшена навсегда.":
+      "Burned {amount} Coin. Emission is permanently reduced.",
+    "Скорость +50% активирована": "Speed +50% activated",
+    "СЖИГАЕМ…": "BURNING…",
+    "СЖЕЧЬ НАВСЕГДА": "BURN FOREVER",
+    "Сжечь SenseiCoin": "Burn SenseiCoin",
+    "СЖЕЧЬ ЭМИССИЮ": "BURN EMISSION",
+    "Это добровольное и необратимое сжигание твоих Coin. Монеты исчезают навсегда: вернуть их нельзя, отменить операцию после подтверждения тоже.":
+      "This is a voluntary and irreversible burn of your own Coin. The coins disappear forever: they cannot be returned and the operation cannot be cancelled after confirmation.",
+    "Твой баланс": "Your balance",
+    "Сколько Coin сжечь": "How much Coin to burn",
+    "Быстрый выбор суммы": "Quick amount selection",
+    ВСЁ: "ALL",
+    Сгорит: "Burns",
+    "Coin · останется": "Coin · left",
+    "Всего сожжено сообществом": "Burned by the community",
+    ОТМЕНА: "CANCEL",
+    "Каждый сожжённый Coin навсегда уменьшает эмиссию SenseiCoin. Меньше предложения — чище токеномика и сильнее история дефицита к TGE. Это твой добровольный вклад в проект, а не инвестиция и не обещание цены или листинга.":
+      "Every burned Coin permanently reduces SenseiCoin emission. Less supply means cleaner tokenomics and a stronger scarcity story ahead of the TGE. This is your voluntary contribution to the project, not an investment or a promise of price or listing.",
+    "Открой майнер через /dojo.": "Open the miner via /dojo.",
+    "Укажи целое количество Coin больше нуля.":
+      "Enter a whole Coin amount greater than zero.",
+    "Недостаточно Coin для сжигания.": "Not enough Coin to burn.",
+    "Баланс изменился. Обнови экран и попробуй снова.":
+      "The balance changed. Refresh the screen and try again.",
+    "Не удалось сжечь Coin. Попробуй позже.":
+      "Could not burn Coin. Try again later.",
+    "Эмиссия уже не может быть уменьшена.":
+      "Emission cannot be reduced any further.",
+    "Сжигание недоступно для этого профиля.":
+      "Burning is unavailable for this profile.",
+    "Неверный запрос сжигания. Открой окно заново.":
+      "Invalid burn request. Reopen the window and try again.",
+    "Сжигание уже обрабатывается. Подожди и обнови экран.":
+      "The burn is already being processed. Wait and refresh the screen.",
+    НАМАЙНЕНО: "MINED",
+    "ЭМИССИИ ВЫПУЩЕНО": "OF EMISSION RELEASED",
+    "ОСТАЛОСЬ ДО КОНЦА МАЙНИНГА": "LEFT UNTIL MINING ENDS",
+    Намайнено: "Mined",
+    "Осталось до конца майнинга": "Left until mining ends",
+    "Сожжено навсегда": "Burned forever",
+    "Вернулось из автобана": "Returned from autoban",
+    "Coin забаненных и автобаненных игроков возвращаются в SenseiBank. Сжигание уменьшает эмиссию навсегда и не пополняет банк.":
+      "Coins from banned and autobanned players return to SenseiBank. Burning permanently reduces emission and never refills the bank.",
+    "Жёсткий лимит: 10 000 000 000 Coin. Награды списываются из SenseiBank, а не печатаются сверх лимита. Пустой банк останавливает начисления.":
+      "Hard cap: 10,000,000,000 Coin. Rewards are debited from SenseiBank, never printed above the cap. An empty bank stops payouts.",
+    ВЫПУЩЕНО: "RELEASED",
+    ЛИМИТ: "CAP",
+    ОСТАЛОСТЬ: "LEFT",
+    ОСТАЛОСЬ: "LEFT",
+    "Автобан возвращает Coin в SenseiBank. Сжигание уменьшает эмиссию навсегда и не пополняет банк.":
+      "Autoban returns Coin to SenseiBank. Burning permanently reduces emission and never refills the bank.",
   };
   const RANK_TITLES_EN = {
     Новичок: "Novice",
@@ -411,6 +482,8 @@
   let upgrades = null;
   let upgradesLoaded = false;
   let upgradeBusy = null;
+  let burnBusy = false;
+  let burnRequest = "";
   let bank = null;
   let referrals = null;
   let referralsLoaded = false;
@@ -449,6 +522,7 @@
   function apply(data) {
     model = data;
     skew = Date.now() - data.server_now * 1000;
+    bootFirstModel();
     render();
     tick();
   }
@@ -485,16 +559,21 @@
   function energyValue() {
     if (!initData() || !model) return 0;
     const max = energyMax();
-    if (model.phase === "ready") return max;
+    if (model.phase === "ready") {
+      const readyEnergy = Number(model.energy);
+      return Number.isFinite(readyEnergy) ? Math.max(0, readyEnergy) : max;
+    }
     const energy = Number(model.energy);
     if (!Number.isFinite(energy)) return 0;
-    if (model.phase !== "mining") return Math.max(0, Math.min(max, energy));
+    if (model.phase !== "mining") return Math.max(0, energy);
     const drain = Number(model.energy_per_hour) || 100;
     const elapsed = Math.max(
       0,
       (serverNow() - model.server_now * 1000) / 3600000,
     );
-    return Math.max(0, Math.min(max, energy - drain * elapsed));
+    // Task and refill energy may sit above the permanent cap; it must remain
+    // visible as 200 / 100 rather than being clipped to the cap.
+    return Math.max(0, energy - drain * elapsed);
   }
 
   function percent() {
@@ -504,11 +583,38 @@
     return Math.min(99.9, Math.max(0, miningProgress() * 100));
   }
 
+  function paintBoost() {
+    const pill = $("boost-pill");
+    const timer = $("boost-timer");
+    if (!pill || !timer || !model) return;
+    const until = Number(model.boost_until) * 1000;
+    const left = Math.max(0, until - serverNow());
+    const active = Boolean(initData() && until > serverNow());
+    const cardTimer = document.querySelector("[data-boost-timer]");
+    if (cardTimer) {
+      cardTimer.textContent = left
+        ? t("АКТИВЕН · {time}", { time: clock(left) })
+        : t("2 ЧАСА");
+    }
+    pill.hidden = !active;
+    if (!active) return;
+    timer.textContent = clock(left);
+    pill.setAttribute(
+      "aria-label",
+      t("Скорость +50% · осталось {time}", { time: clock(left) }),
+    );
+  }
+
   function paintMiningHint() {
     if (!model) return;
     const energy = energyValue();
     const base = Number(model.base_rate) || 0;
-    const rate = energy > 0 ? base : base / 10;
+    const boostActive =
+      Number(model.boost_until) * 1000 > serverNow() && energy > 0;
+    const boost = boostActive
+      ? 1 + (Number(model.boost_percent) || 50) / 100
+      : 1;
+    const rate = energy > 0 ? base * boost : base / 10;
     $("hint").textContent = t(
       "Энергия {energy} / {max} · {rate} Coin/ч · после нуля 10%",
       { energy: Math.round(energy), max: energyMax(), rate: coin(rate) },
@@ -525,11 +631,26 @@
 
   function paintEnergy(value) {
     const max = energyMax();
-    const rounded = Math.max(0, Math.min(max, Math.round(value)));
+    const rounded = Math.max(0, Math.floor(value));
     $("energy").textContent = `${rounded} / ${max}`;
-    $("energy-bar").style.width = `${(rounded / max) * 100}%`;
+    $("energy-bar").style.width = `${Math.min(100, (rounded / max) * 100)}%`;
     $("energy-track").setAttribute("aria-valuemax", String(max));
-    $("energy-track").setAttribute("aria-valuenow", String(rounded));
+    $("energy-track").setAttribute(
+      "aria-valuenow",
+      String(Math.min(max, rounded)),
+    );
+    $("energy-track").setAttribute("aria-valuetext", `${rounded} / ${max}`);
+    const card = $("energy-card");
+    if (card) {
+      const empty = model?.phase === "mining" && rounded <= 0 && initData();
+      card.classList.toggle("is-empty", Boolean(empty));
+      card.setAttribute("aria-disabled", empty ? "false" : "true");
+      card.setAttribute(
+        "aria-label",
+        empty ? t("Пополнить энергию за 10 ⭐") : t("Энергия майнера"),
+      );
+      card.tabIndex = empty ? 0 : -1;
+    }
   }
 
   function paintMeter() {
@@ -640,6 +761,8 @@
     $("profile-energy").textContent = coin(model?.energy_max);
     $("profile-auto").textContent = model?.auto_collect ? t("ВКЛ") : t("ВЫКЛ");
     paintEnergy(energyValue());
+    paintBoost();
+    paintBurn();
     paintMeter();
     paintChain();
 
@@ -734,12 +857,16 @@
   }
 
   function tick() {
-    if (!model || model.phase !== "mining" || pending) return;
+    if (!model) return;
+    // The boost pill must keep counting down even while a cycle is ready.
+    paintBoost();
+    if (model.phase !== "mining" || pending) return;
     const left = remaining();
     const label = $("action-label");
     label.textContent = clock(left);
     label.classList.add("is-timer");
     paintEnergy(energyValue());
+    paintBurn();
     paintMeter();
     $("status").textContent = t("МАЙНИНГ ИДЁТ · {percent}%", {
       percent: percent().toFixed(1),
@@ -758,6 +885,109 @@
     toast.classList.add("show");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toast.classList.remove("show"), 2800);
+  }
+
+  const bootEl = $("boot");
+  const bootBar = $("boot-bar");
+  const bootPercentEl = $("boot-percent");
+  const bootTrack = $("boot-track");
+  const bootStatusEl = $("boot-status");
+  const BOOT_MIN_MS = 1600;
+  const bootStartedAt = performance.now();
+  let bootProgress = 0;
+  let bootGoal = 0;
+  let bootFinished = false;
+  let bootPulseTimer = null;
+
+  function paintBoot() {
+    if (!bootBar) return;
+    const value = Math.max(0, Math.min(100, bootProgress));
+    bootBar.style.width = `${value}%`;
+    if (bootPercentEl) bootPercentEl.textContent = `${Math.round(value)}%`;
+    if (bootTrack) {
+      bootTrack.setAttribute("aria-valuenow", String(Math.round(value)));
+    }
+  }
+
+  function bootSetGoal(goal, status) {
+    if (bootFinished) return;
+    bootGoal = Math.max(bootGoal, Math.min(100, goal));
+    if (status && bootStatusEl) bootStatusEl.textContent = status;
+  }
+
+  function seedBoot() {
+    const smoke = $("boot-smoke");
+    const sparks = $("boot-sparks");
+    if (!smoke || !sparks) return;
+    for (let i = 0; i < 9; i++) {
+      const puff = document.createElement("i");
+      puff.className = "boot-puff";
+      puff.style.setProperty("--x", `${rnd(-18, 86)}%`);
+      puff.style.setProperty("--y", `${rnd(18, 88)}%`);
+      puff.style.setProperty("--size", `${rnd(130, 290)}px`);
+      puff.style.setProperty("--opacity", String(rnd(0.16, 0.38)));
+      puff.style.setProperty("--dx", `${rnd(-50, 50)}px`);
+      puff.style.setProperty("--dy", `${rnd(-90, -24)}px`);
+      puff.style.setProperty("--duration", `${rnd(7, 14)}s`);
+      puff.style.setProperty("--delay", `${rnd(-12, 0)}s`);
+      smoke.append(puff);
+    }
+    for (let i = 0; i < 20; i++) {
+      const spark = document.createElement("i");
+      spark.className = "boot-spark";
+      spark.style.setProperty("--x", `${rnd(4, 96)}%`);
+      spark.style.setProperty("--y", `${rnd(4, 46)}%`);
+      spark.style.setProperty("--size", `${rnd(1.5, 3.6)}px`);
+      spark.style.setProperty("--drift", `${rnd(-34, 34)}px`);
+      spark.style.setProperty("--duration", `${rnd(5, 11)}s`);
+      spark.style.setProperty("--delay", `${rnd(-10, 2)}s`);
+      sparks.append(spark);
+    }
+    paintBoot();
+    bootSetGoal(8);
+    bootPulseTimer = window.setInterval(() => {
+      if (bootFinished) return;
+      // Fill up to the current milestone, then keep the bar alive with a
+      // very slow drift while the server is still answering. Real milestones
+      // (26/58/94/100) always jump back ahead, so this never races to 100.
+      if (bootGoal < 88) bootGoal += 0.06;
+      bootProgress = Math.min(
+        bootGoal,
+        bootProgress + Math.max(0.18, (bootGoal - bootProgress) * 0.07),
+      );
+      paintBoot();
+    }, 90);
+  }
+
+  function bootFirstModel() {
+    if (bootFinished) return;
+    // The app is already interactive under the fading splash: a player can
+    // tap the orb even while the last smoke animation finishes.
+    if (bootEl) bootEl.classList.add("is-ready");
+    bootSetGoal(58, t("ЗАГРУЗКА…"));
+  }
+
+  function finishBoot() {
+    if (bootFinished || !bootEl) return;
+    bootFinished = true;
+    bootProgress = 100;
+    paintBoot();
+    bootEl.classList.add("is-ready");
+    if (bootPulseTimer) window.clearInterval(bootPulseTimer);
+    window.setTimeout(() => {
+      bootEl.classList.add("is-done");
+      window.setTimeout(() => {
+        bootEl.hidden = true;
+      }, 650);
+    }, 320);
+  }
+
+  function completeBoot(status) {
+    if (bootFinished) return;
+    if (status && bootStatusEl) bootStatusEl.textContent = status;
+    bootSetGoal(94);
+    const elapsed = performance.now() - bootStartedAt;
+    window.setTimeout(finishBoot, Math.max(0, BOOT_MIN_MS - elapsed));
   }
 
   function applyTranslations() {
@@ -985,7 +1215,7 @@
         item.slug === slug ? { ...item, ...updated, claimed: true } : item,
       );
       showToast(
-        t("+{amount} SenseiCoin · +{energy} энергии", {
+        t("+{amount} SenseiCoin · +{energy} энергии на цикл", {
           amount: coin(data.reward_coins),
           energy: data.energy_bonus,
         }),
@@ -1074,6 +1304,23 @@
       upgradeBusy === "energy" ||
         upgrades.energy_purchases >= upgrades.energy_max_purchases,
     );
+    const boostLeft = Math.max(0, Number(upgrades.boost_seconds_left) || 0);
+    const boost = upgradeCard(
+      "bolt",
+      t("СКОРОСТЬ +50%"),
+      boostLeft > 0
+        ? t("АКТИВЕН · {time}", { time: clock(boostLeft * 1000) })
+        : t("2 ЧАСА"),
+      t(
+        "Ускоряет добычу на 50% на два часа. Повторная покупка добавляет только часы — процент не растёт.",
+      ),
+      t("1 ⭐ · +2 ЧАСА · МАКСИМУМ +50%"),
+      upgradeBusy === "boost"
+        ? t("СЧЁТ…")
+        : t("{stars} ⭐ · УСКОРИТЬ", { stars: upgrades.boost_stars }),
+      upgradeBusy === "boost",
+    );
+    boost.querySelector(".upgrade-head span").dataset.boostTimer = "1";
     const auto = upgradeCard(
       "clock",
       t("АВТОСБОР"),
@@ -1092,12 +1339,14 @@
     const buttons = [
       pickaxe.querySelector(".upgrade-buy"),
       energy.querySelector(".upgrade-buy"),
+      boost.querySelector(".upgrade-buy"),
       auto.querySelector(".upgrade-buy"),
     ];
     buttons[0].addEventListener("click", () => buyUpgrade("pickaxe"));
     buttons[1].addEventListener("click", () => buyUpgrade("energy"));
-    buttons[2].addEventListener("click", () => buyUpgrade("auto"));
-    list.append(pickaxe, energy, auto);
+    buttons[2].addEventListener("click", () => buyUpgrade("boost"));
+    buttons[3].addEventListener("click", () => buyUpgrade("auto"));
+    list.append(pickaxe, energy, boost, auto);
   }
 
   async function loadUpgrades(force = false) {
@@ -1136,7 +1385,15 @@
         upgradeBusy = null;
         renderUpgrades();
         if (status === "paid") {
-          showToast(t("Оплата получена · включаем улучшение"));
+          showToast(
+            t(
+              kind === "refill"
+                ? "Энергия пополнена"
+                : kind === "boost"
+                  ? "Скорость +50% активирована"
+                  : "Оплата получена · включаем улучшение",
+            ),
+          );
           setTimeout(() => {
             loadUpgrades(true);
             refresh(true);
@@ -1158,6 +1415,122 @@
     }
   }
 
+  async function refillEnergy() {
+    if (!initData() || upgradeBusy) return;
+    if (
+      !model ||
+      model.phase !== "mining" ||
+      Math.floor(Number(energyValue()) || 0) > 0
+    ) {
+      showToast(t("Пополнить можно только при нулевой энергии."), true);
+      return;
+    }
+    await buyUpgrade("refill");
+  }
+
+  function burnAvailable() {
+    if (!initData() || !model) return 0;
+    return Math.max(0, Math.floor(Number(model.balance) || 0));
+  }
+
+  function updateBurnPreview() {
+    const available = burnAvailable();
+    const raw = Math.floor(Number($("burn-amount")?.value) || 0);
+    const amount = Math.max(0, Math.min(available, raw));
+    $("burn-available").textContent = `${coin(available)} Coin`;
+    $("burn-preview").textContent = coin(amount);
+    $("burn-left").textContent = coin(Math.max(0, available - amount));
+    const confirm = $("burn-confirm");
+    if (confirm) {
+      confirm.disabled = burnBusy || amount <= 0;
+      confirm.textContent = burnBusy ? t("СЖИГАЕМ…") : t("СЖЕЧЬ НАВСЕГДА");
+    }
+  }
+
+  function paintBurn() {
+    const sheet = $("burn-sheet");
+    if (!sheet || sheet.hidden) return;
+    $("burn-total").textContent = `${coin(bank?.burned)} Coin`;
+    updateBurnPreview();
+  }
+
+  function newBurnRequest() {
+    try {
+      if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    } catch {}
+    return `burn-${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 12)}`;
+  }
+
+  function openBurn() {
+    if (!initData()) {
+      showToast(t("Открой майнер через /dojo."), true);
+      return;
+    }
+    closeSheet();
+    $("roadmap-sheet").hidden = true;
+    burnRequest = newBurnRequest();
+    $("burn-amount").value = "";
+    $("burn-total").textContent = `${coin(bank?.burned)} Coin`;
+    $("burn-sheet").hidden = false;
+    updateBurnPreview();
+    if (!bank) loadBank(true);
+    setTimeout(() => $("burn-amount").focus(), 80);
+  }
+
+  function closeBurn() {
+    const sheet = $("burn-sheet");
+    if (sheet) sheet.hidden = true;
+  }
+
+  function setBurnPercent(percent) {
+    const part = [25, 50, 100].includes(percent) ? percent : 25;
+    $("burn-amount").value = String(
+      Math.max(1, Math.floor((burnAvailable() * part) / 100)),
+    );
+    updateBurnPreview();
+  }
+
+  async function confirmBurn() {
+    if (burnBusy) return;
+    const available = burnAvailable();
+    const amount = Math.floor(Number($("burn-amount").value) || 0);
+    if (amount <= 0) {
+      showToast(t("Укажи целое количество Coin больше нуля."), true);
+      return;
+    }
+    if (amount > available) {
+      showToast(t("Недостаточно Coin для сжигания."), true);
+      return;
+    }
+    burnBusy = true;
+    updateBurnPreview();
+    try {
+      const data = await api("burn", {
+        amount,
+        request_id: burnRequest,
+      });
+      const burned = Number(data.burn?.amount) || amount;
+      burnRequest = "";
+      if (model) model.balance = Number(data.balance ?? data.burn?.balance);
+      closeBurn();
+      showToast(
+        t("Сожжено {amount} Coin. Эмиссия уменьшена навсегда.", {
+          amount: coin(burned),
+        }),
+      );
+      render();
+      loadBank(true);
+      refresh(true);
+    } catch (error) {
+      showToast(error.message, true);
+    } finally {
+      burnBusy = false;
+      updateBurnPreview();
+    }
+  }
+
   function renderBank() {
     if (!bank) return;
     const emitted = Number(bank.total_emitted) || 0;
@@ -1166,15 +1539,32 @@
       0,
       Math.min(100, Number(bank.emission_percent) || 0),
     );
+    const remaining = Number(bank.emission_remaining) || 0;
+    // The progress card's compact meta row omits the "Coin" suffix; the
+    // labels already say what these values are and this keeps a 10B cap on
+    // one line even on a 320px screen.
     $("bank-emitted").textContent = `${coin(emitted)} Coin`;
     $("bank-cap").textContent = `${coin(cap)} Coin`;
-    $("bank-remaining").textContent = `${coin(bank.emission_remaining)} Coin`;
+    $("bank-remaining").textContent = `${coin(remaining)} Coin`;
     $("bank-supply").textContent = `${coin(bank.total_supply)} Coin`;
     $("bank-balance").textContent = `${coin(bank.bank_balance)} Coin`;
     $("bank-circulation").textContent = `${coin(bank.circulation)} Coin`;
+    $("bank-burned").textContent = `${coin(bank.burned)} Coin`;
+    $("bank-confiscated").textContent = `${coin(bank.confiscated)} Coin`;
     $("bank-users").textContent = coin(bank.users);
+    $("bank-mined-label").textContent = `${coin(emitted)} Coin`;
+    $("bank-remaining-label").textContent = `${coin(remaining)} Coin`;
+    $("bank-progress-percent").textContent =
+      percent > 0 && percent < 0.1 ? "<0.1%" : `${percent.toFixed(1)}%`;
+    const burnTotal = $("burn-total");
+    if (burnTotal) burnTotal.textContent = `${coin(bank.burned)} Coin`;
     const bar = $("bank-progress");
-    if (bar) bar.style.width = `${percent}%`;
+    if (bar) {
+      // A 0.01% emission is mathematically correct but looks like an empty,
+      // broken bank bar. Keep a small visible ember for any mined amount.
+      bar.style.width = percent > 0 ? `${Math.max(2, percent)}%` : "0%";
+      bar.classList.toggle("is-filled", percent > 0);
+    }
     const track = $("bank-progress-track");
     if (track) {
       track.setAttribute("aria-valuenow", percent.toFixed(1));
@@ -1457,10 +1847,12 @@
     if (name === "mining" || name === "profile") refresh(true);
     closeSheet();
     $("roadmap-sheet").hidden = true;
+    closeBurn();
   }
 
   function openSheet() {
     $("roadmap-sheet").hidden = true;
+    closeBurn();
     $("sheet").hidden = false;
   }
 
@@ -1484,13 +1876,38 @@
 
   $("roadmap").addEventListener("click", () => {
     closeSheet();
+    closeBurn();
     $("roadmap-sheet").hidden = false;
+  });
+
+  $("burn").addEventListener("click", openBurn);
+  $("burn-amount").addEventListener("input", updateBurnPreview);
+  $("burn-confirm").addEventListener("click", confirmBurn);
+  document.querySelectorAll("[data-burn-percent]").forEach((node) => {
+    node.addEventListener("click", () =>
+      setBurnPercent(Number(node.dataset.burnPercent)),
+    );
   });
 
   document.querySelectorAll("[data-close='roadmap-sheet']").forEach((node) => {
     node.addEventListener("click", () => {
       $("roadmap-sheet").hidden = true;
     });
+  });
+
+  document.querySelectorAll("[data-close='burn-sheet']").forEach((node) => {
+    node.addEventListener("click", closeBurn);
+  });
+
+  $("energy-card").addEventListener("click", () => {
+    if ($("energy-card").classList.contains("is-empty")) refillEnergy();
+  });
+
+  $("energy-card").addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    if (!$("energy-card").classList.contains("is-empty")) return;
+    event.preventDefault();
+    refillEnergy();
   });
 
   $("bank-refresh").addEventListener("click", () => loadBank(true));
@@ -1529,6 +1946,7 @@
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeSheet();
+      closeBurn();
       $("roadmap-sheet").hidden = true;
     }
   });
@@ -1548,15 +1966,23 @@
   seedMiningParticles();
   setInterval(paintChain, 1000);
   applyTranslations();
+  seedBoot();
   render();
   if (initData()) {
-    refresh();
-    loadTasks();
-    loadUpgrades();
-    loadBank();
+    bootSetGoal(26, t("ЗАГРУЗКА…"));
+    Promise.allSettled([
+      refresh(),
+      loadTasks(),
+      loadUpgrades(),
+      loadBank(),
+    ]).then(() => completeBoot(t("ЗАГРУЗКА…")));
+    // A stalled request must never trap the player on the splash screen.
+    window.setTimeout(() => completeBoot(t("ЗАГРУЗКА…")), 9000);
   } else {
     renderTasks(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
     renderUpgrades(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
     renderReferrals(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
+    if (bootEl) bootEl.classList.add("is-ready");
+    completeBoot(t("ТОЛЬКО В TELEGRAM"));
   }
 })();

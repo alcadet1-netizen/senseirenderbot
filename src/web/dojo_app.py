@@ -24,6 +24,7 @@ ASSETS = {
     'style.css',
     'miner.js',
     'assets/sensei.webp',
+    'assets/loading-hero.webp',
 }
 
 
@@ -232,6 +233,21 @@ def setup_dojo(app, container=None):
                           'stars': order['stars']}
             elif action == 'bank':
                 result = await container.stats_service.get_bank_summary()
+            elif action == 'burn':
+                request_id = payload.get('request_id')
+                if request_id:
+                    burn = await container.burn_service.burn(
+                        user['id'], payload.get('amount'), request_id)
+                else:
+                    burn = await container.burn_service.burn(
+                        user['id'], payload.get('amount'))
+                result = await service.state(user['id'])
+                result['balance'] = burn['balance']
+                result['burn'] = burn
+                stats = getattr(container, 'stats_service', None)
+                invalidate = getattr(stats, 'invalidate', None)
+                if invalidate is not None:
+                    invalidate()
             elif action == 'referrals':
                 result = await _referrals_payload(container, user['id'],
                                                    payload.get('level', 1))
@@ -260,7 +276,7 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/{asset:style\\.css|miner\\.js}', page)
     app.router.add_get(
-        '/miniapp/dojo/assets/{asset:sensei\\.webp}', page)
+        '/miniapp/dojo/assets/{asset:sensei\\.webp|loading-hero\\.webp}', page)
     app.router.add_post(
-        '/miniapp/dojo/api/{action:state|start|collect|tasks|task|upgrades|buy|bank|referrals|share}',
+        '/miniapp/dojo/api/{action:state|start|collect|tasks|task|upgrades|buy|bank|burn|referrals|share}',
         api)

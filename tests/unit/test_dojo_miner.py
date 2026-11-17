@@ -43,7 +43,8 @@ async def test_miner_assets_and_csp():
     setup_dojo(app)
     async with TestClient(TestServer(app)) as client:
         for path in ('/miniapp/dojo', '/miniapp/dojo/', '/miniapp/dojo/style.css',
-                     '/miniapp/dojo/miner.js', '/miniapp/dojo/assets/sensei.webp'):
+                     '/miniapp/dojo/miner.js', '/miniapp/dojo/assets/sensei.webp',
+                     '/miniapp/dojo/assets/loading-hero.webp'):
             response = await client.get(path)
             assert response.status == 200, path
             assert "connect-src 'self'" in response.headers['Content-Security-Policy']
@@ -53,12 +54,37 @@ async def test_miner_assets_and_csp():
         assert 'data-tab="referrals"' in html and 'id="view-referrals"' in html
         webp = await client.get('/miniapp/dojo/assets/sensei.webp')
         assert webp.headers['Content-Type'] == 'image/webp'
+        hero = await client.get('/miniapp/dojo/assets/loading-hero.webp')
+        assert hero.headers['Content-Type'] == 'image/webp'
         assert (await client.get('/miniapp/dojo/game.js')).status == 404
         assert (await client.get('/miniapp/dojo/renderer.js')).status == 404
         assert (await client.get('/miniapp/dojo/assets/kick.webp')).status == 404
         assert (await client.get('/miniapp/dojo/assets/mining.webp')).status == 404
         assert (await client.get('/miniapp/dojo/ws')).status == 404
         assert (await client.post('/miniapp/dojo/api/state', json={})).status == 503
+
+
+@pytest.mark.asyncio
+async def test_miner_has_boot_screen():
+    app = web.Application()
+    setup_dojo(app)
+    async with TestClient(TestServer(app)) as client:
+        html = await (await client.get('/miniapp/dojo')).text()
+        css = await (await client.get('/miniapp/dojo/style.css')).text()
+        js = await (await client.get('/miniapp/dojo/miner.js')).text()
+    assert 'id="boot"' in html
+    assert '/miniapp/dojo/assets/loading-hero.webp' in html
+    assert 'id="boot-bar"' in html and 'id="boot-percent"' in html
+    assert 'ЗАГРУЗКА…' in html and 'SENSEI' in html and 'POINTS' in html
+    assert 'role="progressbar"' in html
+    assert '.boot-puff' in css and '.boot-spark' in css
+    assert '@keyframes boot-smoke-drift' in css
+    assert '.boot.is-done' in css
+    assert 'prefers-reduced-motion' in css
+    assert 'function seedBoot' in js
+    assert 'function bootSetGoal' in js
+    assert 'allSettled' in js and '9000' in js
+    assert '"ЗАГРУЗКА…": "LOADING…"' in js
 
 
 @pytest.mark.asyncio
@@ -74,6 +100,7 @@ async def test_miner_has_language_switch_and_scrollable_stage():
         css = await (await client.get('/miniapp/dojo/style.css')).text()
         assert '.lang-switch' in css
         assert '#app.tabs-open .stage' in css
+        assert 'overflow-y: hidden' in css
         assert 'overflow-y: auto' in css
         assert 'max-height: none' in css
         js = await (await client.get('/miniapp/dojo/miner.js')).text()
@@ -102,6 +129,7 @@ async def test_api_requires_signature_and_dispatches_actions():
         id='prep-7', expiration_date=123456))
     bank = AsyncMock(return_value={
         'bank_balance': 900, 'circulation': 100, 'total_supply': 1000, 'users': 2})
+    burn = AsyncMock(return_value={'success': True, 'amount': 100, 'balance': 900})
     referral_stats = ReferralStats(
         user_id=7, level_1_count=3, level_1_active=2, level_2_count=1,
         level_3_count=4, level_3_active=1, total_coins_earned=125.5,
@@ -115,6 +143,7 @@ async def test_api_requires_signature_and_dispatches_actions():
         dojo_task_service=SimpleNamespace(list_tasks=list_tasks, claim=claim),
         dojo_upgrade_service=SimpleNamespace(snapshot=upgrades, prepare=prepare),
         stats_service=SimpleNamespace(get_bank_summary=bank),
+        burn_service=SimpleNamespace(burn=burn),
         referral_service=SimpleNamespace(
             get_stats=referral_stats, get_level_members=referral_members),
         bot=SimpleNamespace(
@@ -163,6 +192,17 @@ async def test_api_requires_signature_and_dispatches_actions():
         response = await client.post('/miniapp/dojo/api/bank', json={'initData': auth})
         assert response.status == 200 and (await response.json())['total_supply'] == 1000
         bank.assert_awaited_once()
+        response = await client.post('/miniapp/dojo/api/burn', json={
+            'initData': auth, 'amount': 100})
+        data = await response.json()
+        assert response.status == 200
+        assert data['burn']['amount'] == 100 and data['balance'] == 900
+        burn.assert_awaited_once_with(7, 100)
+        response = await client.post('/miniapp/dojo/api/burn', json={
+            'initData': auth, 'amount': 100,
+            'request_id': 'burn-request-1234'})
+        assert response.status == 200
+        burn.assert_awaited_with(7, 100, 'burn-request-1234')
         response = await client.post('/miniapp/dojo/api/referrals', json={
             'initData': auth, 'level': 2})
         data = await response.json()
@@ -213,12 +253,19 @@ async def test_miner_keeps_action_slot_and_renders_new_layers():
     assert '.mine-meter.is-idle' in css
     assert '.orb,' in css and '.phase-mining .orb,' in css
     assert 'grid-template-rows' in css
-    # Right-side roadmap sticker, its English modal, chain footer and referral card.
+    # The central sticker is only a small ROAD MAP button; the complete
+    # English roadmap lives on its own full-screen view.
     assert 'id="roadmap"' in html and 'class="roadmap-sticker"' in html
+    assert '>ROAD MAP</b>' in html
+    assert 'id="burn"' in html and 'class="burn-sticker"' in html
+    assert 'id="burn-sheet"' in html and 'id="burn-confirm"' in html
     assert 'AIRDROP' in html and 'Q4 2026' in html
-    assert 'КОГДА ВСЕ МОНЕТЫ ДОБЫТЫ' in html
-    assert 'id="roadmap-sheet"' in html
+    assert 'id="roadmap-sheet"' in html and 'roadmap-screen' in html
     assert 'TGE · FINISH MINE' in html and 'WHEN ALL COINS ARE MINED' in html
+    assert 'id="energy-card"' in html and 'id="energy-refill"' in html
+    assert '10 ⭐ · ПОПОЛНИТЬ' in html
+    assert 'Баланс (как в чате)' not in html
+    assert 'data-i18n="Баланс"' in html
     assert 'id="chain-panel"' in html and 'id="chain-line"' in html
     assert 'id="ref-share" class="ref-share-button"' in html
     assert 'id="ref-link" class="ref-link"' in html

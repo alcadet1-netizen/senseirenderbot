@@ -21,6 +21,12 @@ ENERGY_PER_HOUR = 100.0
 LOW_POWER = 0.1
 PICKAXE_MAX_LEVEL = 100
 ENERGY_MAX_PURCHASES = 100
+ENERGY_REFILL_STARS = 10
+ENERGY_REFILL_AMOUNT = 100
+SPEED_BOOST_STARS = 1
+SPEED_BOOST_SECONDS = 2 * 60 * 60
+SPEED_BOOST_PERCENT = 50
+SPEED_BOOST_BONUS = 0.5
 MINING_REWARD = int(BASE_RATE * CYCLE_HOURS)  # legacy reference: 60/cycle
 AUTOCOLLECT_INTERVAL = 60
 
@@ -32,6 +38,18 @@ def estimate_amount(rate: float, energy: float) -> int:
     full_hours = min(CYCLE_HOURS, max(0.0, float(energy)) / ENERGY_PER_HOUR)
     low_hours = CYCLE_HOURS - full_hours
     return int(rate * full_hours + rate * LOW_POWER * low_hours + 0.5)
+
+
+def _pending_energy(doc: dict) -> int:
+    """Energy from tasks claimed while no cycle could accept it yet."""
+    return sum(max(0, int(item.get('amount', 0) or 0))
+               for item in doc.get('task_energy_pending') or [])
+
+
+def _boost_bonus(rate: float, start: float, end: float) -> int:
+    """Extra reward for the part of a cycle covered by a speed boost."""
+    seconds = max(0.0, min(float(end), float(start + CYCLE_SECONDS)) - float(start))
+    return int(float(rate) * SPEED_BOOST_BONUS * seconds / 3600 + 0.5)
 
 
 class DojoMinerService:
@@ -46,14 +64,30 @@ class DojoMinerService:
     async def ensure_indexes(self) -> None:
         await self.users.create_index('dojo_auto_collect')
 
-    async def _task_energy(self, user_id: int) -> int:
-        if self.tasks is None:
-            return 0
-        try:
-            return max(0, int(await self.tasks.energy_bonus_total(user_id)))
-        except Exception:
-            logger.warning('Dojo task energy unavailable user=%s', user_id)
-            return 0
+    @staticmethod
+    def _energy_at(doc: dict, now: float, finish: float, energy_start: int) -> int:
+        """Current energy: base drain plus paid refills and task bonuses.
+
+        Task energy is *used*, not added to the cap.  It therefore decays from
+        the moment the task is claimed and adds reward for exactly the extra
+        full-power hours it buys, once.
+        """
+        started = doc.get('started_at')
+        elapsed = max(0.0, min(now, finish) - started) if started else 0.0
+        energy = max(0, energy_start - ENERGY_PER_HOUR * elapsed / 3600)
+        for refill in doc.get('energy_refills') or []:
+            since = max(0.0, min(now, finish) - float(refill.get('at', now)))
+            energy += max(
+                0.0,
+                float(refill.get('amount', 0)) - ENERGY_PER_HOUR * since / 3600,
+            )
+        for bonus in doc.get('task_energy_bonuses') or []:
+            since = max(0.0, min(now, finish) - float(bonus.get('at', now)))
+            energy += max(
+                0.0,
+                float(bonus.get('amount', 0)) - ENERGY_PER_HOUR * since / 3600,
+            )
+        return max(0, int(energy))
 
     @staticmethod
     def _profile(user: dict) -> dict:
@@ -75,8 +109,12 @@ class DojoMinerService:
         user = await self.users.find_one({'id': user_id}) or {}
         balance = user.get('coins', 0)
         profile = self._profile(user)
-        energy_cap = (BASE_ENERGY + profile['energy_purchases'] * 100
-                      + await self._task_energy(user_id))
+        # Purchases raise the permanent cap.  Task energy is deferred energy:
+        # it is shown as energy above the cap and used once, never added to the
+        # permanent cap.
+        base_cap = BASE_ENERGY + profile['energy_purchases'] * 100
+        pending = _pending_energy(doc)
+        boost_until = float(user.get('dojo_boost_until', 0) or 0)
         started = doc.get('started_at')
         finish = doc.get('finish_at')
         if doc and not doc.get('collected') and finish:
@@ -85,38 +123,61 @@ class DojoMinerService:
             phase = 'ready'
         progress = 0.0
         remaining = 0.0
-        energy = energy_cap
-        energy_start = energy_cap
-        base_rate = profile['base_rate']
-        current_rate = base_rate
-        amount = estimate_amount(profile['base_rate'], energy_cap) if phase == 'ready' else 0
-        if phase != 'ready':
-            energy_start = max(0, int(doc.get('energy_start', energy_cap)))
+        energy_cap = base_cap
+        projected_boost = 0
+        if phase == 'ready':
+            energy = base_cap + pending
+            energy_start = energy
+            energy_cap = base_cap
+            base_rate = profile['base_rate']
+            current_rate = base_rate
+            # A boost bought before start is part of the projected reward.
+            projected_boost = _boost_bonus(
+                base_rate, now, min(boost_until, now + CYCLE_SECONDS))
+            amount = estimate_amount(base_rate, energy) + projected_boost
+        else:
+            energy_start = max(0, int(doc.get('energy_start', base_cap)))
+            energy_cap = max(0, int(doc.get('energy_max', energy_start)))
             base_rate = float(doc.get('base_rate', profile['base_rate']))
             amount = int(doc.get('amount', estimate_amount(base_rate, energy_start)))
-            elapsed = max(0.0, min(now, finish) - started) if started else 0.0
-            energy = max(0, int(energy_start - ENERGY_PER_HOUR * elapsed / 3600))
+            # A refill/task bonus adds energy at the moment it arrives, so it
+            # must not be drained retroactively by earlier hours.
+            energy = self._energy_at(doc, now, finish, energy_start)
             if phase == 'mining':
                 remaining = max(0.0, finish - now)
                 progress = min(1.0, max(0.0, (now - started) / (finish - started))) if finish > started else 0.0
             else:
                 progress = 1.0
             current_rate = base_rate * (LOW_POWER if energy <= 0 else 1.0)
+        boost_active = boost_until > now
+        if boost_active and energy > 0:
+            current_rate *= 1.0 + SPEED_BOOST_BONUS
         return {
             'phase': phase,
             'server_now': now,
             'balance': balance,
             'reward': amount,
-            'next_reward': estimate_amount(profile['base_rate'], energy_cap),
+            'next_reward': estimate_amount(profile['base_rate'], base_cap + pending)
+            + projected_boost,
             'energy': energy,
-            'energy_max': energy_start if phase != 'ready' else energy_cap,
+            'energy_max': energy_cap,
             'energy_start': energy_start,
+            'task_energy_pending': pending,
             'energy_per_hour': ENERGY_PER_HOUR,
+            'energy_refill_stars': ENERGY_REFILL_STARS,
+            'energy_refill_amount': ENERGY_REFILL_AMOUNT,
+            'energy_refill_available': phase == 'mining' and energy <= 0,
             'base_rate': base_rate,
             'current_rate': current_rate,
             'pickaxe_level': profile['pickaxe_level'],
             'energy_purchases': profile['energy_purchases'],
             'auto_collect': profile['auto_collect'],
+            'boost_until': boost_until,
+            'boost_active': boost_active,
+            'boost_seconds_left': max(0, int(boost_until - now)),
+            'boost_percent': SPEED_BOOST_PERCENT,
+            'boost_stars': SPEED_BOOST_STARS,
+            'boost_hours': SPEED_BOOST_SECONDS // 3600,
             'cycle_seconds': CYCLE_SECONDS,
             'started_at': started,
             'finish_at': finish,
@@ -135,17 +196,28 @@ class DojoMinerService:
                 raise GameError('Сначала забери намайненное и запусти новый цикл.')
             user = await self.users.find_one({'id': user_id}) or {}
             profile = self._profile(user)
-            energy_start = (BASE_ENERGY + profile['energy_purchases'] * 100
-                            + await self._task_energy(user_id))
+            base_cap = BASE_ENERGY + profile['energy_purchases'] * 100
+            pending = _pending_energy(doc or {})
+            # One task bonus is spent by exactly one cycle.  It is consumed
+            # here and never folded into the permanent cap.
+            energy_start = base_cap + pending
             base_rate = profile['base_rate']
+            finish_at = now + CYCLE_SECONDS
+            boost_until = float(user.get('dojo_boost_until', 0) or 0)
+            boost_bonus = _boost_bonus(base_rate, now, min(boost_until, finish_at))
             version = int((doc or {}).get('version', 0))
             session = {
                 'started_at': now,
-                'finish_at': now + CYCLE_SECONDS,
+                'finish_at': finish_at,
                 'collected': False,
-                'amount': estimate_amount(base_rate, energy_start),
+                'amount': estimate_amount(base_rate, energy_start) + boost_bonus,
                 'base_rate': base_rate,
                 'energy_start': energy_start,
+                'energy_max': base_cap,
+                'energy_refills': [],
+                'task_energy_pending': [],
+                'task_energy_bonuses': [],
+                'boost_bonus': boost_bonus,
                 'version': version + 1,
             }
             if doc:
@@ -198,6 +270,184 @@ class DojoMinerService:
             state['mined'] = amount
             state['balance'] = result.get('new_coins', state['balance'])
             return state
+
+    async def apply_energy_refill(self, user_id: int, charge: str) -> bool:
+        """Add purchased energy to the running cycle, once per Telegram charge."""
+        if not charge or type(user_id) is not int or user_id <= 0:
+            return False
+        async with self._locks[user_id]:
+            now = time.time()
+            doc = await self.miners.find_one({'_id': user_id})
+            if not doc or doc.get('collected') or now >= doc.get('finish_at', 0):
+                return False
+            refills = list(doc.get('energy_refills') or [])
+            if any(str(item.get('charge')) == str(charge) for item in refills):
+                return True
+            finish = float(doc.get('finish_at', now))
+            energy_start = max(0, int(doc.get('energy_start', BASE_ENERGY)))
+            if self._energy_at(doc, now, finish, energy_start) > 0:
+                return False
+            version = int(doc.get('version', 0))
+            base_rate = float(doc.get('base_rate', BASE_RATE))
+            remaining_hours = max(0.0, (finish - now) / 3600)
+            # 100 energy buys one hour at full power; the rest of the cycle
+            # would have run at 10%, so only that hour is the added reward.
+            full_hours = min(remaining_hours, ENERGY_REFILL_AMOUNT / ENERGY_PER_HOUR)
+            extra = int(base_rate * full_hours * (1.0 - LOW_POWER) + 0.5)
+            amount = int(doc.get('amount', MINING_REWARD)) + extra
+            refills.append({
+                'charge': str(charge),
+                'at': now,
+                'amount': ENERGY_REFILL_AMOUNT,
+            })
+            updated = await self.miners.find_one_and_update(
+                {'_id': user_id, 'version': version, 'collected': False},
+                {'$set': {'energy_refills': refills, 'amount': amount},
+                 '$inc': {'version': 1}},
+            )
+            if updated:
+                return True
+            current = await self.miners.find_one({'_id': user_id})
+            return bool(current and any(
+                str(item.get('charge')) == str(charge)
+                for item in current.get('energy_refills') or []))
+
+    @staticmethod
+    def _matched(result) -> bool:
+        if result is True or isinstance(result, dict):
+            return True
+        matched = getattr(result, 'matched_count', None)
+        return True if not isinstance(matched, int) else matched == 1
+
+    async def apply_task_energy(self, user_id: int, amount: int, key: str) -> bool:
+        """Apply a task's +100 energy exactly once.
+
+        While a cycle is running the energy is spent immediately and adds the
+        reward for its full-power hours.  If no cycle can accept energy, it is
+        parked as pending and folded into the next start.  The permanent cap is
+        never changed.
+        """
+        try:
+            amount = max(0, int(amount))
+        except (TypeError, ValueError):
+            return False
+        if type(user_id) is not int or user_id <= 0 or amount <= 0:
+            return False
+        key = str(key or '')
+        async with self._locks[user_id]:
+            for _ in range(4):
+                now = time.time()
+                doc = await self.miners.find_one({'_id': user_id})
+                finish = float((doc or {}).get('finish_at', 0) or 0)
+                active = bool(doc and not doc.get('collected') and finish and now < finish)
+                if active:
+                    bonuses = list(doc.get('task_energy_bonuses') or [])
+                    if any(str(item.get('key')) == key for item in bonuses):
+                        return True
+                    bonuses.append({'key': key, 'at': now, 'amount': amount})
+                    base_rate = float(doc.get('base_rate', BASE_RATE))
+                    hours = min(max(0.0, (finish - now) / 3600),
+                                amount / ENERGY_PER_HOUR)
+                    extra = int(base_rate * hours * (1.0 - LOW_POWER) + 0.5)
+                    new_amount = int(doc.get('amount', MINING_REWARD)) + extra
+                    updated = await self.miners.find_one_and_update(
+                        {'_id': user_id, 'version': int(doc.get('version', 0)),
+                         'collected': False},
+                        {'$set': {'task_energy_bonuses': bonuses,
+                                  'amount': new_amount},
+                         '$inc': {'version': 1}},
+                    )
+                    if updated:
+                        return True
+                    continue
+
+                pending = list((doc or {}).get('task_energy_pending') or [])
+                if any(str(item.get('key')) == key for item in pending):
+                    return True
+                pending.append({'key': key, 'at': now, 'amount': amount})
+                if doc:
+                    updated = await self.miners.find_one_and_update(
+                        {'_id': user_id, 'version': int(doc.get('version', 0))},
+                        {'$set': {'task_energy_pending': pending},
+                         '$inc': {'version': 1}},
+                    )
+                    if updated:
+                        return True
+                    continue
+                try:
+                    await self.miners.insert_one({
+                        '_id': user_id,
+                        'collected': True,
+                        'task_energy_pending': pending,
+                        'version': 1,
+                    })
+                    return True
+                except Exception:
+                    # A parallel claim created the document first; retry so the
+                    # new claim is appended rather than lost.
+                    continue
+        return False
+
+    async def apply_speed_boost(self, user_id: int, charge: str) -> bool:
+        """Extend a +50% speed boost by two hours, once per Telegram charge.
+
+        Repeat purchases add hours only: the multiplier stays at +50% and the
+        user document stores one absolute ``dojo_boost_until`` timestamp.
+        """
+        if not charge or type(user_id) is not int or user_id <= 0:
+            return False
+        charge = str(charge)
+        async with self._locks[user_id]:
+            for _ in range(4):
+                now = time.time()
+                user = await self.users.find_one({'id': user_id})
+                if not user or user.get('is_banned'):
+                    return False
+                receipts = list(user.get('dojo_applied_receipts') or [])
+                if charge in receipts:
+                    return True
+                old = user.get('dojo_boost_until')
+                old_until = max(0.0, float(old or 0))
+                starts_at = max(now, old_until)
+                new_until = starts_at + SPEED_BOOST_SECONDS
+                query = {
+                    'id': user_id,
+                    'is_banned': {'$ne': True},
+                    'dojo_applied_receipts': {'$ne': charge},
+                }
+                if old is None:
+                    query['dojo_boost_until'] = {'$exists': False}
+                else:
+                    query['dojo_boost_until'] = old
+                updated = await self.users.update_one(
+                    query,
+                    {'$set': {'dojo_boost_until': new_until,
+                              'dojo_boost_updated_at': now},
+                     '$addToSet': {'dojo_applied_receipts': charge}},
+                )
+                if not self._matched(updated):
+                    current = await self.users.find_one({'id': user_id}) or {}
+                    if charge in (current.get('dojo_applied_receipts') or []):
+                        return True
+                    continue
+
+                # Reward the part of the running cycle that the boost covers.
+                doc = await self.miners.find_one({'_id': user_id})
+                finish = float((doc or {}).get('finish_at', 0) or 0)
+                if doc and not doc.get('collected') and now < finish:
+                    bonus = _boost_bonus(
+                        float(doc.get('base_rate', BASE_RATE)),
+                        max(now, old_until), min(new_until, finish),
+                    )
+                    if bonus > 0:
+                        version = int(doc.get('version', 0))
+                        await self.miners.find_one_and_update(
+                            {'_id': user_id, 'version': version, 'collected': False},
+                            {'$set': {'boost_bonus': int(doc.get('boost_bonus', 0)) + bonus},
+                             '$inc': {'amount': bonus, 'version': 1}},
+                        )
+                return True
+        return False
 
     async def auto_step(self, user_id: int) -> None:
         """Collect a finished cycle and immediately start the next one."""

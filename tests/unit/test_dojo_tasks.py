@@ -113,6 +113,17 @@ async def test_claim_checks_subscription_pays_once_and_adds_energy():
 
 
 @pytest.mark.asyncio
+async def test_claim_sends_the_one_time_energy_charge_to_the_miner():
+    container, tasks, _, _ = service()
+    miner = SimpleNamespace(apply_task_energy=AsyncMock(return_value=True))
+    container.dojo_miner_service = miner
+    result = await tasks.claim(7, 'senseidurova')
+    assert result['energy_bonus'] == 100
+    miner.apply_task_energy.assert_awaited_once_with(
+        7, 100, '7:senseidurova')
+
+
+@pytest.mark.asyncio
 async def test_unsubscribed_user_cannot_claim():
     _, tasks, economy, _ = service(status='left')
     with pytest.raises(GameError, match='подпишись'):
@@ -196,17 +207,24 @@ async def test_admin_command_adds_channel_with_reward():
 
 
 @pytest.mark.asyncio
-async def test_miner_state_includes_energy_from_tasks():
+async def test_task_energy_is_pending_above_the_base_cap_not_inside_it():
     db = SimpleNamespace(
-        dojo_miners=Tasks(),
+        dojo_miners=Tasks([{
+            '_id': 7,
+            'collected': True,
+            'task_energy_pending': [{'key': '7:senseidurova', 'amount': 100}],
+            'version': 1,
+        }]),
         users=Collection([{'id': 7, 'coins': 500}]),
     )
-    task_service = SimpleNamespace(energy_bonus_total=AsyncMock(return_value=100))
     miner = DojoMinerService(
         SimpleNamespace(database=db),
         SimpleNamespace(process_game_win=AsyncMock()),
-        task_service,
     )
     state = await miner.state(7)
-    assert state['energy_max'] == 200
-    task_service.energy_bonus_total.assert_awaited_once_with(7)
+    assert state['energy_max'] == 100
+    assert state['energy'] == 200
+    assert state['energy_start'] == 200
+    assert state['task_energy_pending'] == 100
+    # Two full-power hours instead of one: 15 + 15 + 3 = 33.
+    assert state['reward'] == 33
