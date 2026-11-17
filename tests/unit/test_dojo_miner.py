@@ -272,3 +272,32 @@ async def test_miner_keeps_action_slot_and_renders_new_layers():
     assert '4 часа' in html and '8 часов' not in html
     assert '4 ЧАСА' in js and '8 ЧАСОВ' not in js
     assert 'seedMiningParticles' in js and 'paintChain' in js
+
+
+@pytest.mark.asyncio
+async def test_miner_has_centred_blade_timer_and_layered_ambient():
+    app = web.Application()
+    setup_dojo(app)
+    async with TestClient(TestServer(app)) as client:
+        html = await (await client.get('/miniapp/dojo')).text()
+        css = await (await client.get('/miniapp/dojo/style.css')).text()
+        js = await (await client.get('/miniapp/dojo/miner.js')).text()
+    # A dedicated vector face sits inside the orb instead of a text clock.
+    assert 'id="timer-face"' in html and 'id="timer-digits"' in html
+    assert 'id="timer-glyphs"' in html and 'viewBox="0 0 181 48"' in html
+    assert 'TIMER_SEGMENTS' in js and 'TIMER_DIGITS' in js and 'TIMER_LAYOUT' in js
+    assert 'function buildTimerFace' in js and 'function paintTimerFace' in js
+    assert '.orb-button.is-timer .orb-label' in css and '.timer-seg.is-on' in css
+    # HUD rails use one shared max width and the timer canvas is centred.
+    assert '--hud-max: 448px' in css and '--hud-gutter' in css
+    assert 'place-items: center' in css and 'width: min(94%, 166px)' in css
+    # The flame is an inline sibling of the caption, never behind the glyphs.
+    assert 'class="burn-flame"' in html and 'class="burn-title"' in html
+    assert '.burn-sticker' in css and '.burn-title' in css
+    assert 'align-items: center' in css
+    # Ambient depth: aura, ray, mist, dust, petals, matrix and scanline.
+    for layer in ('.ambient-aura', '.ambient-ray', '.ambient-puff',
+                  '.ambient-mote', '.sakura-leaf', '.matrix-col', '.ambient-scan'):
+        assert layer in css or layer in js
+    assert 'function seedAmbient' in js
+    assert 'prefers-reduced-motion' in css
