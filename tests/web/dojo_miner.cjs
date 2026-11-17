@@ -219,6 +219,39 @@ const { chromium } = require("playwright-core");
   });
 
   await page.goto(process.env.DOJO_URL || "http://127.0.0.1:8080/miniapp/dojo");
+  assert.equal(await page.locator("#boot").count(), 1);
+  assert.equal(await page.locator(".boot-puff").count(), 9);
+  assert.equal(await page.locator(".boot-spark").count(), 20);
+  assert.ok(
+    await page
+      .locator(".boot-art")
+      .evaluate((img) => img.complete && img.naturalWidth > 0),
+  );
+  // The live bar starts at zero and is painted by seedBoot().
+  assert.match(await page.locator("#boot-percent").textContent(), /^\d+%$/);
+  const bootStarted = Number.parseInt(
+    await page.locator("#boot-percent").textContent(),
+    10,
+  );
+  if (bootStarted < 100) {
+    await page.waitForFunction(
+      (previous) =>
+        Number.parseInt(
+          document.querySelector("#boot-percent").textContent,
+          10,
+        ) > previous,
+      bootStarted,
+      { timeout: 3000 },
+    );
+  }
+  await page.waitForFunction(
+    () => document.querySelector("#boot")?.hidden,
+    null,
+    {
+      timeout: 6000,
+    },
+  );
+  assert.equal(await page.locator("#boot").isVisible(), false);
   await page.waitForFunction(
     () =>
       document.querySelector("#action-label").textContent === "НАЧАТЬ МАЙНИНГ",
@@ -447,6 +480,23 @@ const { chromium } = require("playwright-core");
   assert.match(await page.locator("#toast").textContent(), /Сожжено/);
   assert.match(burnRequestId, /^[A-Za-z0-9_-]{8,64}$/);
   assert.deepEqual(errors, []);
+  // EN must translate the loading screen too (key parity is enforced by the
+  // RU data-i18n strings, so a missing entry would leak Russian here).
+  await page.evaluate(() => localStorage.setItem("sensei_dojo_language", "en"));
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForFunction(
+    () => document.querySelector("#boot")?.hidden,
+    null,
+    {
+      timeout: 6000,
+    },
+  );
+  assert.equal(await page.locator("#boot-status").textContent(), "LOADING…");
+  assert.equal(
+    await page.locator("#boot-track").getAttribute("aria-label"),
+    "Loading SenseiCoin",
+  );
+  assert.equal(await page.evaluate(() => document.documentElement.lang), "en");
   assert.deepEqual(
     calls
       .filter(

@@ -12,6 +12,61 @@
   </head>
   <body>
     <main id="app" class="phase-ready">
+      <div id="boot" class="boot">
+        <img
+          class="boot-art"
+          src="/miniapp/dojo/assets/loading-hero.webp"
+          alt=""
+          aria-hidden="true"
+        />
+        <span class="boot-scrim" aria-hidden="true"></span>
+        <div id="boot-smoke" class="boot-smoke" aria-hidden="true"></div>
+        <div id="boot-sparks" class="boot-sparks" aria-hidden="true"></div>
+        <div class="boot-top">
+          <svg class="boot-torii" viewBox="0 0 40 32" aria-hidden="true">
+            <path
+              d="M3 6c7 2 27 2 34 0M6 6v5M34 6v5M5 11h30M10 11v16M30 11v16M16 11v7M24 11v7"
+            />
+          </svg>
+          <span class="boot-word">SENSEICOIN</span>
+        </div>
+        <div class="boot-ui">
+          <p
+            id="boot-status"
+            class="boot-status"
+            role="status"
+            aria-live="polite"
+            data-i18n="ЗАГРУЗКА…"
+          >
+            ЗАГРУЗКА…
+          </p>
+          <div
+            id="boot-track"
+            class="boot-track"
+            role="progressbar"
+            aria-label="Загрузка SenseiCoin"
+            data-i18n-aria="Загрузка SenseiCoin"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+          >
+            <span id="boot-bar" class="boot-bar"></span>
+          </div>
+          <b id="boot-percent" class="boot-percent">0%</b>
+        </div>
+        <footer class="boot-foot" aria-hidden="true">
+          <span class="boot-rule"></span>
+          <span>SENSEI</span>
+          <svg class="boot-foot-mark" viewBox="0 0 40 32" aria-hidden="true">
+            <path
+              d="M3 6c7 2 27 2 34 0M6 6v5M34 6v5M5 11h30M10 11v16M30 11v16M16 11v7M24 11v7"
+            />
+          </svg>
+          <span>POINTS</span>
+          <span class="boot-rule"></span>
+        </footer>
+      </div>
+
       <img
         class="backdrop"
         src="/miniapp/dojo/assets/sensei.webp"

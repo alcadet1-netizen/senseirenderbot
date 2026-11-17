@@ -124,6 +124,8 @@
     "Вне Telegram майнер не начисляет SenseiCoin и не запускает цикл.":
       "Outside Telegram the miner does not credit SenseiCoin or start cycles.",
     ПОДКЛЮЧЕНИЕ: "CONNECTING",
+    "ЗАГРУЗКА…": "LOADING…",
+    "Загрузка SenseiCoin": "Loading SenseiCoin",
     "СЕНСЕЙ ПРОСЫПАЕТСЯ": "SENSEI IS WAKING UP",
     "Проверяем состояние цикла на сервере.":
       "Checking the cycle state on the server.",
@@ -520,6 +522,7 @@
   function apply(data) {
     model = data;
     skew = Date.now() - data.server_now * 1000;
+    bootFirstModel();
     render();
     tick();
   }
@@ -882,6 +885,109 @@
     toast.classList.add("show");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toast.classList.remove("show"), 2800);
+  }
+
+  const bootEl = $("boot");
+  const bootBar = $("boot-bar");
+  const bootPercentEl = $("boot-percent");
+  const bootTrack = $("boot-track");
+  const bootStatusEl = $("boot-status");
+  const BOOT_MIN_MS = 1600;
+  const bootStartedAt = performance.now();
+  let bootProgress = 0;
+  let bootGoal = 0;
+  let bootFinished = false;
+  let bootPulseTimer = null;
+
+  function paintBoot() {
+    if (!bootBar) return;
+    const value = Math.max(0, Math.min(100, bootProgress));
+    bootBar.style.width = `${value}%`;
+    if (bootPercentEl) bootPercentEl.textContent = `${Math.round(value)}%`;
+    if (bootTrack) {
+      bootTrack.setAttribute("aria-valuenow", String(Math.round(value)));
+    }
+  }
+
+  function bootSetGoal(goal, status) {
+    if (bootFinished) return;
+    bootGoal = Math.max(bootGoal, Math.min(100, goal));
+    if (status && bootStatusEl) bootStatusEl.textContent = status;
+  }
+
+  function seedBoot() {
+    const smoke = $("boot-smoke");
+    const sparks = $("boot-sparks");
+    if (!smoke || !sparks) return;
+    for (let i = 0; i < 9; i++) {
+      const puff = document.createElement("i");
+      puff.className = "boot-puff";
+      puff.style.setProperty("--x", `${rnd(-18, 86)}%`);
+      puff.style.setProperty("--y", `${rnd(18, 88)}%`);
+      puff.style.setProperty("--size", `${rnd(130, 290)}px`);
+      puff.style.setProperty("--opacity", String(rnd(0.16, 0.38)));
+      puff.style.setProperty("--dx", `${rnd(-50, 50)}px`);
+      puff.style.setProperty("--dy", `${rnd(-90, -24)}px`);
+      puff.style.setProperty("--duration", `${rnd(7, 14)}s`);
+      puff.style.setProperty("--delay", `${rnd(-12, 0)}s`);
+      smoke.append(puff);
+    }
+    for (let i = 0; i < 20; i++) {
+      const spark = document.createElement("i");
+      spark.className = "boot-spark";
+      spark.style.setProperty("--x", `${rnd(4, 96)}%`);
+      spark.style.setProperty("--y", `${rnd(4, 46)}%`);
+      spark.style.setProperty("--size", `${rnd(1.5, 3.6)}px`);
+      spark.style.setProperty("--drift", `${rnd(-34, 34)}px`);
+      spark.style.setProperty("--duration", `${rnd(5, 11)}s`);
+      spark.style.setProperty("--delay", `${rnd(-10, 2)}s`);
+      sparks.append(spark);
+    }
+    paintBoot();
+    bootSetGoal(8);
+    bootPulseTimer = window.setInterval(() => {
+      if (bootFinished) return;
+      // Fill up to the current milestone, then keep the bar alive with a
+      // very slow drift while the server is still answering. Real milestones
+      // (26/58/94/100) always jump back ahead, so this never races to 100.
+      if (bootGoal < 88) bootGoal += 0.06;
+      bootProgress = Math.min(
+        bootGoal,
+        bootProgress + Math.max(0.18, (bootGoal - bootProgress) * 0.07),
+      );
+      paintBoot();
+    }, 90);
+  }
+
+  function bootFirstModel() {
+    if (bootFinished) return;
+    // The app is already interactive under the fading splash: a player can
+    // tap the orb even while the last smoke animation finishes.
+    if (bootEl) bootEl.classList.add("is-ready");
+    bootSetGoal(58, t("ЗАГРУЗКА…"));
+  }
+
+  function finishBoot() {
+    if (bootFinished || !bootEl) return;
+    bootFinished = true;
+    bootProgress = 100;
+    paintBoot();
+    bootEl.classList.add("is-ready");
+    if (bootPulseTimer) window.clearInterval(bootPulseTimer);
+    window.setTimeout(() => {
+      bootEl.classList.add("is-done");
+      window.setTimeout(() => {
+        bootEl.hidden = true;
+      }, 650);
+    }, 320);
+  }
+
+  function completeBoot(status) {
+    if (bootFinished) return;
+    if (status && bootStatusEl) bootStatusEl.textContent = status;
+    bootSetGoal(94);
+    const elapsed = performance.now() - bootStartedAt;
+    window.setTimeout(finishBoot, Math.max(0, BOOT_MIN_MS - elapsed));
   }
 
   function applyTranslations() {
@@ -1860,15 +1966,23 @@
   seedMiningParticles();
   setInterval(paintChain, 1000);
   applyTranslations();
+  seedBoot();
   render();
   if (initData()) {
-    refresh();
-    loadTasks();
-    loadUpgrades();
-    loadBank();
+    bootSetGoal(26, t("ЗАГРУЗКА…"));
+    Promise.allSettled([
+      refresh(),
+      loadTasks(),
+      loadUpgrades(),
+      loadBank(),
+    ]).then(() => completeBoot(t("ЗАГРУЗКА…")));
+    // A stalled request must never trap the player on the splash screen.
+    window.setTimeout(() => completeBoot(t("ЗАГРУЗКА…")), 9000);
   } else {
     renderTasks(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
     renderUpgrades(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
     renderReferrals(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
+    if (bootEl) bootEl.classList.add("is-ready");
+    completeBoot(t("ТОЛЬКО В TELEGRAM"));
   }
 })();

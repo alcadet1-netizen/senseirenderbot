@@ -24,6 +24,7 @@ ASSETS = {
     'style.css',
     'miner.js',
     'assets/sensei.webp',
+    'assets/loading-hero.webp',
 }
 
 
@@ -275,7 +276,7 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/{asset:style\\.css|miner\\.js}', page)
     app.router.add_get(
-        '/miniapp/dojo/assets/{asset:sensei\\.webp}', page)
+        '/miniapp/dojo/assets/{asset:sensei\\.webp|loading-hero\\.webp}', page)
     app.router.add_post(
         '/miniapp/dojo/api/{action:state|start|collect|tasks|task|upgrades|buy|bank|burn|referrals|share}',
         api)
