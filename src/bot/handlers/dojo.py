@@ -1,4 +1,4 @@
-"""Запуск восьмичасового майнера SenseiCoin."""
+"""Запуск четырёхчасового майнера SenseiCoin."""
 import os
 from urllib.parse import urlsplit
 
@@ -36,11 +36,12 @@ async def cmd_dojo(message, container):
         await message.answer('Майнер ещё не опубликован. Администратору нужно настроить DOJO_APP_URL или RENDER_EXTERNAL_URL.', parse_mode=None)
         return
     hours = CYCLE_SECONDS // 3600
+    hour_word = 'час' if hours == 1 else 'часа' if 2 <= hours <= 4 else 'часов'
     await message.answer(
         '⛏ Додзё: Майнер SenseiCoin\n\n'
-        f'Запусти майнинг на {hours} часов: кирка добывает от {int(BASE_RATE)} Coin/ч. '
+        f'Запусти майнинг на {hours} {hour_word}: кирка добывает от {int(BASE_RATE)} Coin/ч. '
         '100 энергии — час полной мощности, потом 10% скорости.\n\n'
-        f'Пока цикл идёт, новый не запустить. Вернись через {hours} часов, забери награду '
+        f'Пока цикл идёт, новый не запустить. Вернись через {hours} {hour_word}, забери награду '
         'и запускай следующий. Монеты начисляются только внутри Telegram и только с сервера.\n\n'
         'Внутри — «Задания», «Улучшения» за Stars и общая эмиссия SenseiBank.',
         parse_mode=None, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[

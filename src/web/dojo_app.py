@@ -1,11 +1,19 @@
-"""SenseiCoin miner Mini App: one start runs an eight-hour bank-funded cycle."""
+"""SenseiCoin miner Mini App: one start runs a four-hour bank-funded cycle."""
 import asyncio
 import logging
+import secrets
 from pathlib import Path
 
-from aiogram.types import LabeledPrice
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InlineQueryResultArticle,
+    InputTextMessageContent,
+    LabeledPrice,
+)
 from aiohttp import web
 
+from src.services.dojo_miner_service import CYCLE_HOURS
 from src.services.hedgehog_service import GameError
 from src.services.maintenance_service import MaintenanceService
 from src.web.telegram_auth import verify_init_data
@@ -27,6 +35,68 @@ def _referral_level(value) -> int:
     return level if level in (1, 2, 3) else 1
 
 
+def _cycle_label() -> str:
+    hours = int(CYCLE_HOURS)
+    word = 'час' if hours == 1 else 'часа' if 2 <= hours <= 4 else 'часов'
+    return f'{hours} {word}'
+
+
+REFERRAL_SHARE_BODY = (
+    '🥷 Добывай SenseiCoin вместе со мной — заходи в додзё Сенсея '
+    'и запускай майнинг!\n\n'
+    f'⛏ {_cycle_label()} — один цикл\n'
+    '💠 Награда приходит из SenseiBank\n'
+    '🎁 Новичку — стартовый набор: 3 000 Coin, 1 уровень и катана 10 см'
+)
+
+
+async def _referral_link(container, user_id: int) -> str:
+    bot = getattr(container, 'bot', None)
+    if bot is None:
+        return ''
+    try:
+        me = await asyncio.wait_for(bot.get_me(), timeout=5)
+        username = getattr(me, 'username', None)
+        return f'https://t.me/{username}?start=ref_{user_id}' if username else ''
+    except Exception:
+        # A missing bot username must not make the whole tab unavailable.
+        logging.getLogger(__name__).warning('Dojo referrals link unavailable')
+        return ''
+
+
+async def _prepare_referral_share(container, user_id: int) -> dict:
+    """Prepare an inline message with the link and a «Майнинг» button."""
+    link = await _referral_link(container, user_id)
+    if not link:
+        raise GameError('Ссылка приглашения пока недоступна.')
+    bot = getattr(container, 'bot', None)
+    save = getattr(bot, 'save_prepared_inline_message', None)
+    if save is None:
+        raise GameError('Поделиться временно недоступно.')
+    text = f'{REFERRAL_SHARE_BODY}\n\n{link}'
+    result = InlineQueryResultArticle(
+        id=f'dojo-ref-{user_id}-{secrets.token_hex(4)}',
+        title='Добывай SenseiCoin',
+        description='Майнинг из SenseiBank · стартовый набор новичку',
+        input_message_content=InputTextMessageContent(
+            message_text=text, parse_mode=None),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text='⛏ Майнинг', url=link),
+        ]]),
+    )
+    prepared = await asyncio.wait_for(
+        save(user_id=user_id, result=result, allow_user_chats=True,
+             allow_group_chats=True, allow_channel_chats=True),
+        timeout=10,
+    )
+    return {
+        'prepare_id': prepared.id,
+        'expires_at': prepared.expiration_date,
+        'link': link,
+        'text': text,
+    }
+
+
 async def _referrals_payload(container, user_id: int, level) -> dict:
     """Reuse the /senseireferal data source so chat and Mini App never diverge."""
     level = _referral_level(level)
@@ -36,21 +106,12 @@ async def _referrals_payload(container, user_id: int, level) -> dict:
         service.get_level_members(user_id, level=level, limit=10),
     )
 
-    link = ''
-    bot = getattr(container, 'bot', None)
-    if bot is not None:
-        try:
-            me = await asyncio.wait_for(bot.get_me(), timeout=5)
-            username = getattr(me, 'username', None)
-            if username:
-                link = f'https://t.me/{username}?start=ref_{user_id}'
-        except Exception:
-            # A missing bot username must not make the whole tab unavailable.
-            logging.getLogger(__name__).warning('Dojo referrals link unavailable')
-
+    link = await _referral_link(container, user_id)
     rank, next_rank = stats.rank, stats.next_rank
     return {
         'link': link,
+        'share_body': REFERRAL_SHARE_BODY,
+        'share_text': f'{REFERRAL_SHARE_BODY}\n\n{link}' if link else '',
         'earned': float(stats.total_coins_earned),
         'levels': [
             {'level': n, 'count': getattr(stats, f'level_{n}_count'),
@@ -174,6 +235,8 @@ def setup_dojo(app, container=None):
             elif action == 'referrals':
                 result = await _referrals_payload(container, user['id'],
                                                    payload.get('level', 1))
+            elif action == 'share':
+                result = await _prepare_referral_share(container, user['id'])
             else:
                 result = await service.collect(user['id'])
                 # The bank/emission tab must not show a snapshot older than the
@@ -199,5 +262,5 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/assets/{asset:sensei\\.webp}', page)
     app.router.add_post(
-        '/miniapp/dojo/api/{action:state|start|collect|tasks|task|upgrades|buy|bank|referrals}',
+        '/miniapp/dojo/api/{action:state|start|collect|tasks|task|upgrades|buy|bank|referrals|share}',
         api)

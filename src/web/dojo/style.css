@@ -1870,10 +1870,22 @@ button:focus-visible {
     0 14px 32px rgba(0, 0, 0, 0.48),
     inset 0 0 22px rgba(47, 255, 142, 0.07);
   color: #c9f4dc;
+  font: inherit;
   text-align: left;
-  pointer-events: none;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
   transform: rotate(1.8deg);
   transform-origin: top right;
+}
+
+.roadmap-sticker:active {
+  filter: brightness(1.18);
+}
+
+.roadmap-sticker:focus-visible {
+  outline: 2px solid #baffd6;
+  outline-offset: 3px;
 }
 
 .roadmap-sticker::after {
@@ -2479,4 +2491,72 @@ button:focus-visible {
   .chain-bpm {
     display: none;
   }
+}
+
+/* --- Roadmap modal ------------------------------------------------------- */
+.roadmap-card {
+  padding-top: 30px;
+}
+
+.roadmap-steps {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 16px;
+}
+
+.roadmap-step {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(92, 255, 166, 0.18);
+  border-radius: 13px;
+  background: rgba(2, 16, 9, 0.7);
+}
+
+.roadmap-step.is-live {
+  border-color: rgba(109, 255, 171, 0.48);
+  box-shadow: inset 0 0 22px rgba(45, 255, 137, 0.06);
+}
+
+.roadmap-step.is-tge {
+  border-color: rgba(174, 255, 205, 0.32);
+}
+
+.roadmap-step-num {
+  color: #6d8f7c;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.roadmap-step b {
+  display: block;
+  color: #eafff3;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.7px;
+}
+
+.roadmap-step strong {
+  display: block;
+  margin-top: 3px;
+  color: #8affbe;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.3px;
+}
+
+.roadmap-step p {
+  margin: 5px 0 0;
+  color: #8da397;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.roadmap-note {
+  margin: 0 0 14px;
+  color: #6f8e7d;
+  font-size: 9px;
+  line-height: 1.45;
 }

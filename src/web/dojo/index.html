@@ -68,10 +68,11 @@
         </button>
       </header>
 
-      <aside
+      <button
+        id="roadmap"
         class="roadmap-sticker"
-        aria-label="Roadmap SenseiCoin"
-        data-i18n-aria="Roadmap SenseiCoin"
+        type="button"
+        aria-label="ROAD MAP"
       >
         <span class="roadmap-tape" aria-hidden="true"></span>
         <b class="roadmap-title">ROAD MAP</b>
@@ -88,7 +89,7 @@
             >КОГДА ВСЕ МОНЕТЫ ДОБЫТЫ</strong
           >
         </span>
-      </aside>
+      </button>
 
       <div class="stage">
         <section
@@ -179,7 +180,7 @@
             </button>
           </div>
           <p id="status" class="status">ПОДКЛЮЧЕНИЕ</p>
-          <p id="hint" class="hint">8 часов · 15 Coin/ч базово · энергия 100</p>
+          <p id="hint" class="hint">4 часа · 15 Coin/ч базово · энергия 100</p>
           <div id="coins" class="coins" aria-hidden="true"></div>
         </section>
 
@@ -385,7 +386,9 @@
               <span data-i18n="ПОДЕЛИТЬСЯ ССЫЛКОЙ">ПОДЕЛИТЬСЯ ССЫЛКОЙ</span>
             </button>
             <button id="ref-copy" class="ref-copy-button" type="button">
-              <span data-i18n="СКОПИРОВАТЬ ССЫЛКУ">СКОПИРОВАТЬ ССЫЛКУ</span>
+              <span data-i18n="СКОПИРОВАТЬ ПРИГЛАШЕНИЕ"
+                >СКОПИРОВАТЬ ПРИГЛАШЕНИЕ</span
+              >
             </button>
           </div>
 
@@ -420,8 +423,7 @@
               ><b id="profile-energy">100</b>
             </div>
             <div class="stat-row">
-              <span data-i18n="Цикл">Цикл</span
-              ><b data-i18n="8 часов">8 часов</b>
+              <span data-i18n="Цикл">Цикл</span><b data-i18n="4 часа">4 часа</b>
             </div>
             <div class="stat-row">
               <span data-i18n="Награда">Награда</span
@@ -548,9 +550,9 @@
           </h2>
           <ol class="rules">
             <li
-              data-i18n-html="<b>Запусти цикл.</b> Сенсей уходит в майнинг ровно на 8 часов."
+              data-i18n-html="<b>Запусти цикл.</b> Сенсей уходит в майнинг ровно на 4 часа."
             >
-              <b>Запусти цикл.</b> Сенсей уходит в майнинг ровно на 8 часов.
+              <b>Запусти цикл.</b> Сенсей уходит в майнинг ровно на 4 часа.
             </li>
             <li
               data-i18n-html="<b>Следи за энергией.</b> 100 энергии хватает на час полной мощности; потом кирка добывает 10% от базовой скорости."
@@ -579,6 +581,59 @@
           <button class="sheet-done" data-close="sheet" data-i18n="ПОНЯТНО">
             ПОНЯТНО
           </button>
+        </section>
+      </div>
+
+      <div id="roadmap-sheet" class="sheet" hidden>
+        <div class="sheet-backdrop" data-close="roadmap-sheet"></div>
+        <section
+          class="sheet-card roadmap-card"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="roadmap-sheet-title"
+        >
+          <button
+            class="sheet-close"
+            data-close="roadmap-sheet"
+            aria-label="Close"
+          >
+            ×
+          </button>
+          <p class="view-eyebrow">ROAD MAP</p>
+          <h2 id="roadmap-sheet-title">SENSEICOIN ROADMAP</h2>
+          <div class="roadmap-steps">
+            <article class="roadmap-step">
+              <span class="roadmap-step-num">01</span>
+              <div>
+                <b>AIRDROP</b>
+                <strong>Q4 2026</strong>
+                <p>Community airdrop. Dates may shift.</p>
+              </div>
+            </article>
+            <article class="roadmap-step is-live">
+              <span class="roadmap-step-num">02</span>
+              <div>
+                <b>MINER START</b>
+                <strong>LIVE</strong>
+                <p>Four-hour mining cycles. Rewards come from SenseiBank.</p>
+              </div>
+            </article>
+            <article class="roadmap-step is-tge">
+              <span class="roadmap-step-num">03</span>
+              <div>
+                <b>TGE · FINISH MINE</b>
+                <strong>WHEN ALL COINS ARE MINED</strong>
+                <p>
+                  Token Generation Event unlocks after the mine is finished: all
+                  10,000,000,000 SenseiCoin mined.
+                </p>
+              </div>
+            </article>
+          </div>
+          <p class="roadmap-note">
+            Roadmap dates may shift. No price, listing or return is promised.
+          </p>
+          <button class="sheet-done" data-close="roadmap-sheet">CLOSE</button>
         </section>
       </div>
     </main>

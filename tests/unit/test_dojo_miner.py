@@ -33,7 +33,7 @@ async def test_launcher():
     assert button.web_app.url.endswith('/miniapp/dojo')
     assert 'Начать майнинг' in button.text
     text = msg.answer.call_args.args[0]
-    assert '8 часов' in text and 'SenseiCoin' in text and '15 Coin/ч' in text
+    assert '4 часа' in text and 'SenseiCoin' in text and '15 Coin/ч' in text
     assert 'SenseiBank' in text and 'Задания' in text and 'Улучшения' in text
 
 
@@ -84,9 +84,9 @@ async def test_miner_has_language_switch_and_scrollable_stage():
 
 @pytest.mark.asyncio
 async def test_api_requires_signature_and_dispatches_actions():
-    state = AsyncMock(return_value={'phase': 'ready', 'reward': 26, 'balance': 1000})
-    start = AsyncMock(return_value={'phase': 'mining', 'reward': 26})
-    collect = AsyncMock(return_value={'phase': 'ready', 'mined': 120, 'balance': 1000})
+    state = AsyncMock(return_value={'phase': 'ready', 'reward': 20, 'balance': 1000})
+    start = AsyncMock(return_value={'phase': 'mining', 'reward': 20})
+    collect = AsyncMock(return_value={'phase': 'ready', 'mined': 20, 'balance': 1000})
     list_tasks = AsyncMock(return_value=[{'slug': 'senseidurova', 'claimed': False}])
     claim = AsyncMock(return_value={
         'task': {'slug': 'senseidurova', 'claimed': True},
@@ -98,6 +98,8 @@ async def test_api_requires_signature_and_dispatches_actions():
         'title': 'Кирка +10 Coin/ч', 'description': 'Постоянный бонус.',
     })
     create_invoice = AsyncMock(return_value='https://t.me/invoice/1')
+    prepare_share = AsyncMock(return_value=SimpleNamespace(
+        id='prep-7', expiration_date=123456))
     bank = AsyncMock(return_value={
         'bank_balance': 900, 'circulation': 100, 'total_supply': 1000, 'users': 2})
     referral_stats = ReferralStats(
@@ -117,6 +119,7 @@ async def test_api_requires_signature_and_dispatches_actions():
             get_stats=referral_stats, get_level_members=referral_members),
         bot=SimpleNamespace(
             create_invoice_link=create_invoice,
+            save_prepared_inline_message=prepare_share,
             get_me=AsyncMock(return_value=SimpleNamespace(username='sensei_bot'))))
     app = web.Application()
     setup_dojo(app, container)
@@ -134,7 +137,7 @@ async def test_api_requires_signature_and_dispatches_actions():
         assert response.status == 200 and (await response.json())['phase'] == 'mining'
         start.assert_awaited_once_with(7)
         response = await client.post('/miniapp/dojo/api/collect', json={'initData': auth})
-        assert response.status == 200 and (await response.json())['mined'] == 120
+        assert response.status == 200 and (await response.json())['mined'] == 20
         collect.assert_awaited_once_with(7)
         response = await client.post('/miniapp/dojo/api/tasks', json={'initData': auth})
         assert response.status == 200
@@ -174,7 +177,23 @@ async def test_api_requires_signature_and_dispatches_actions():
         assert data['bonus'] == {
             'eligible': True, 'paid': False, 'activity_days': 2,
             'paid_upgrade': True}
+        assert data['share_body'].startswith('🥷') and '4 часа' in data['share_body']
+        assert data['share_text'].endswith('start=ref_7')
         referral_members.assert_awaited_once_with(7, level=2, limit=10)
+        response = await client.post('/miniapp/dojo/api/share', json={
+            'initData': auth})
+        assert response.status == 200
+        shared = await response.json()
+        assert shared['prepare_id'] == 'prep-7'
+        prepared = prepare_share.await_args.kwargs
+        assert prepared['user_id'] == 7
+        assert prepared['allow_user_chats'] is True
+        assert prepared['allow_group_chats'] is True
+        article = prepared['result']
+        assert 'start=ref_7' in article.input_message_content.message_text
+        button = article.reply_markup.inline_keyboard[0][0]
+        assert button.text == '⛏ Майнинг'
+        assert button.url == 'https://t.me/sensei_bot?start=ref_7'
         assert (await client.post('/miniapp/dojo/api/kick', json={'initData': auth})).status == 404
         assert (await client.post('/miniapp/dojo/api/nope', json={'initData': auth})).status == 404
 
@@ -194,11 +213,15 @@ async def test_miner_keeps_action_slot_and_renders_new_layers():
     assert '.mine-meter.is-idle' in css
     assert '.orb,' in css and '.phase-mining .orb,' in css
     assert 'grid-template-rows' in css
-    # Right-side roadmap sticker, decorative chain footer and referral card.
-    assert 'class="roadmap-sticker"' in html
+    # Right-side roadmap sticker, its English modal, chain footer and referral card.
+    assert 'id="roadmap"' in html and 'class="roadmap-sticker"' in html
     assert 'AIRDROP' in html and 'Q4 2026' in html
     assert 'КОГДА ВСЕ МОНЕТЫ ДОБЫТЫ' in html
+    assert 'id="roadmap-sheet"' in html
+    assert 'TGE · FINISH MINE' in html and 'WHEN ALL COINS ARE MINED' in html
     assert 'id="chain-panel"' in html and 'id="chain-line"' in html
     assert 'id="ref-share" class="ref-share-button"' in html
     assert 'id="ref-link" class="ref-link"' in html
+    assert '4 часа' in html and '8 часов' not in html
+    assert '4 ЧАСА' in js and '8 ЧАСОВ' not in js
     assert 'seedMiningParticles' in js and 'paintChain' in js

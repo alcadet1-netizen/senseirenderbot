@@ -1,4 +1,4 @@
-"""Серверный восьмичасовой цикл: старт, ожидание, выплата из банка."""
+"""Серверный четырёхчасовой цикл: старт, ожидание, выплата из банка."""
 import copy
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -33,11 +33,11 @@ def test_container_has_lazy_miner_service_slot():
     assert container._dojo_miner_service is None
 
 
-def test_cycle_constants_are_eight_hours_and_small():
-    assert miner.CYCLE_SECONDS == 8 * 60 * 60
+def test_cycle_constants_are_four_hours_and_small():
+    assert miner.CYCLE_SECONDS == 4 * 60 * 60
     assert miner.BASE_RATE == 15
     assert miner.PICKAXE_STEP == 10
-    assert miner.MINING_REWARD == 120
+    assert miner.MINING_REWARD == 60
 
 
 @pytest.mark.asyncio
@@ -46,39 +46,39 @@ async def test_ready_state_has_balance_and_reward():
     with patch.object(miner.time, 'time', return_value=1000):
         state = await dojo.state(7)
     assert state['phase'] == 'ready'
-    assert state['reward'] == 26
-    assert state['next_reward'] == 26
+    assert state['reward'] == 20
+    assert state['next_reward'] == 20
     assert state['balance'] == 500
     assert state['energy_max'] == 100
     assert state['base_rate'] == 15
     assert state['progress_percent'] == 0
-    assert state['cycle_seconds'] == 28800
+    assert state['cycle_seconds'] == 14400
 
 
 @pytest.mark.asyncio
-async def test_start_runs_only_one_eight_hour_cycle():
+async def test_start_runs_only_one_four_hour_cycle():
     _, dojo, economy = service()
     with patch.object(miner.time, 'time', return_value=1000):
         started = await dojo.start(7)
     assert started['phase'] == 'mining'
-    assert started['finish_at'] == 1000 + 28800
-    assert started['remaining_ms'] == 28800_000
+    assert started['finish_at'] == 1000 + 14400
+    assert started['remaining_ms'] == 14400_000
     with patch.object(miner.time, 'time', return_value=2000):
         with pytest.raises(GameError, match='уже идёт'):
             await dojo.start(7)
         state = await dojo.state(7)
-    assert state['phase'] == 'mining' and state['progress'] == pytest.approx(1000 / 28800)
+    assert state['phase'] == 'mining' and state['progress'] == pytest.approx(1000 / 14400)
     assert state['energy'] == 72
     assert state['energy_max'] == 100
     economy.process_game_win.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_cannot_collect_before_eight_hours():
+async def test_cannot_collect_before_four_hours():
     _, dojo, economy = service()
     with patch.object(miner.time, 'time', return_value=1000):
         await dojo.start(7)
-    with patch.object(miner.time, 'time', return_value=29799):
+    with patch.object(miner.time, 'time', return_value=15399):
         with pytest.raises(GameError, match='не завершён'):
             await dojo.collect(7)
     economy.process_game_win.assert_not_awaited()
@@ -89,14 +89,14 @@ async def test_collect_pays_once_from_bank_and_reopens_cycle():
     _, dojo, economy = service()
     with patch.object(miner.time, 'time', return_value=1000):
         await dojo.start(7)
-    with patch.object(miner.time, 'time', return_value=29800):
+    with patch.object(miner.time, 'time', return_value=15400):
         result = await dojo.collect(7)
-    assert result['mined'] == 26
+    assert result['mined'] == 20
     assert result['balance'] == 620
     assert result['phase'] == 'ready'
     economy.process_game_win.assert_awaited_once()
-    assert economy.process_game_win.await_args.kwargs['coins'] == 26
-    assert '8h' in economy.process_game_win.await_args.kwargs['description']
+    assert economy.process_game_win.await_args.kwargs['coins'] == 20
+    assert '4h' in economy.process_game_win.await_args.kwargs['description']
     with patch.object(miner.time, 'time', return_value=30000):
         with pytest.raises(GameError, match='уже получена'):
             await dojo.collect(7)
@@ -110,7 +110,7 @@ async def test_finished_uncollected_state_is_ready_to_collect():
     _, dojo, _ = service()
     with patch.object(miner.time, 'time', return_value=1000):
         await dojo.start(7)
-    with patch.object(miner.time, 'time', return_value=29801):
+    with patch.object(miner.time, 'time', return_value=15401):
         state = await dojo.state(7)
     assert state['phase'] == 'ready_to_collect'
     assert state['progress'] == 1
@@ -123,12 +123,12 @@ async def test_bank_failure_rolls_back_so_reward_is_not_lost():
     economy.process_game_win.return_value = {'success': False, 'reason': 'banned'}
     with patch.object(miner.time, 'time', return_value=1000):
         await dojo.start(7)
-    with patch.object(miner.time, 'time', return_value=29800):
+    with patch.object(miner.time, 'time', return_value=15400):
         with pytest.raises(GameError, match='недоступна'):
             await dojo.collect(7)
     doc = dojo.miners.docs[7]
     assert doc['collected'] is False
-    with patch.object(miner.time, 'time', return_value=29800):
+    with patch.object(miner.time, 'time', return_value=15400):
         state = await dojo.state(7)
     assert state['phase'] == 'ready_to_collect'
 
@@ -139,7 +139,7 @@ async def test_bank_exception_rolls_back_so_reward_is_not_lost():
     economy.process_game_win.side_effect = RuntimeError('bank offline')
     with patch.object(miner.time, 'time', return_value=1000):
         await dojo.start(7)
-    with patch.object(miner.time, 'time', return_value=29800):
+    with patch.object(miner.time, 'time', return_value=15400):
         with pytest.raises(GameError, match='не смог выплатить'):
             await dojo.collect(7)
     assert dojo.miners.docs[7]['collected'] is False

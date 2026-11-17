@@ -90,11 +90,11 @@ def upgrade_service(user=None):
     return users, DojoUpgradeService(container)
 
 
-def test_energy_curve_matches_the_eight_hour_cycle():
-    assert miner.estimate_amount(miner.BASE_RATE, 0) == 12
-    assert miner.estimate_amount(miner.BASE_RATE, 100) == 26
-    assert miner.estimate_amount(miner.BASE_RATE, 800) == 120
-    assert miner.estimate_amount(miner.BASE_RATE + 10, 100) == 43
+def test_energy_curve_matches_the_four_hour_cycle():
+    assert miner.estimate_amount(miner.BASE_RATE, 0) == 6
+    assert miner.estimate_amount(miner.BASE_RATE, 100) == 20
+    assert miner.estimate_amount(miner.BASE_RATE, 800) == 60
+    assert miner.estimate_amount(miner.BASE_RATE + 10, 100) == 33
 
 
 def payment(payload, charge, stars):
@@ -184,15 +184,15 @@ async def test_pickaxe_and_energy_budget_drive_the_cycle():
         state = await dojo.state(7)
         started = await dojo.start(7)
     assert state['base_rate'] == 45 and state['energy_max'] == 800
-    assert state['reward'] == 360 and state['next_reward'] == 360
-    assert started['energy_start'] == 800 and started['reward'] == 360
+    assert state["reward"] == 180 and state["next_reward"] == 180
+    assert started['energy_start'] == 800 and started["reward"] == 180
     with patch.object(miner.time, 'time', return_value=1000 + 4 * 3600):
         mid = await dojo.state(7)
     assert mid['energy'] == 400 and mid['current_rate'] == 45
     with patch.object(miner.time, 'time', return_value=1000 + 8 * 3600):
         done = await dojo.state(7)
     assert done['phase'] == 'ready_to_collect'
-    assert done['progress_percent'] == 100 and done['energy'] == 0
+    assert done['progress_percent'] == 100 and done['energy'] == 400
 
 
 @pytest.mark.asyncio
@@ -207,7 +207,7 @@ async def test_task_energy_extends_budget():
     with patch.object(miner.time, 'time', return_value=1000):
         state = await dojo.state(7)
     assert state['energy_max'] == 200
-    assert state['reward'] == 39
+    assert state['reward'] == 33
 
 
 @pytest.mark.asyncio
@@ -223,12 +223,12 @@ async def test_auto_collect_starts_and_renews_cycles():
         assert await dojo.auto_tick() == 1
     first = dojo.miners.docs[7]
     assert first['started_at'] == 1000 and not first['collected']
-    with patch.object(miner.time, 'time', return_value=1000 + 28800):
+    with patch.object(miner.time, 'time', return_value=1000 + 14400):
         assert await dojo.auto_tick() == 1
     economy.process_game_win.assert_awaited_once()
     second = dojo.miners.docs[7]
-    assert second['started_at'] == 1000 + 28800
-    assert second['finish_at'] == 1000 + 2 * 28800
+    assert second['started_at'] == 1000 + 14400
+    assert second['finish_at'] == 1000 + 2 * 14400
     assert second['collected'] is False
 
 

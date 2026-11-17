@@ -45,3 +45,35 @@ async def test_welcome_only_announces_kit_for_new_profile(created, answers):
     assert event.answer.await_count == answers
     if created:
         assert 'СТАРТОВЫЙ НАБОР' in event.answer.call_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_referred_newcomer_is_created_with_the_starter_kit():
+    """A /start ref_<id> creates the profile before binding the referrer."""
+    from src.services.user_service import UserService
+
+    class Users:
+        def __init__(self):
+            self.docs = {}
+
+        async def find_one(self, query):
+            return self.docs.get(query.get('id'))
+
+        async def insert_one(self, document):
+            self.docs[document['id']] = document
+
+    users = Users()
+    service = UserService.__new__(UserService)
+    service.users = users
+    service.emission = NS(
+        reserve_starter=AsyncMock(return_value=STARTER_COINS))
+    result = await service.get_or_create(
+        7, username='newcomer', first_name='New')
+    assert result['created'] is True
+    user = users.docs[7]
+    assert user['coins'] == STARTER_COINS == 3_000
+    assert LevelService().get_level(user['xp']) == 1
+    assert user['has_katana'] is True
+    assert user['katana_length'] == STARTER_KATANA_LENGTH == 10
+    # Binding a referrer only sets referrer_id; it never touches the kit.
+    assert user['referrer_id'] is None
