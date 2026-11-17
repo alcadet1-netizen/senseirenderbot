@@ -1,8 +1,8 @@
-"""Four-hour SenseiCoin miner behind the /dojo Mini App.
+"""Three-hour SenseiCoin miner behind the /dojo Mini App.
 
 A cycle has a fixed power level from the pickaxe and an energy budget. Every
 100 energy lasts one hour at full power; after that the pickaxe runs at 10% of
-its base rate for the rest of the four-hour cycle. The browser only renders
+its base rate for the rest of the three-hour cycle. The browser only renders
 state; start, collect and automatic cycles are validated and paid here.
 """
 import asyncio
@@ -12,7 +12,7 @@ from collections import defaultdict
 
 from src.services.hedgehog_service import GameError
 
-CYCLE_SECONDS = 4 * 60 * 60
+CYCLE_SECONDS = 3 * 60 * 60
 CYCLE_HOURS = CYCLE_SECONDS / 3600
 BASE_RATE = 15.0
 PICKAXE_STEP = 10.0
@@ -24,10 +24,10 @@ ENERGY_MAX_PURCHASES = 100
 ENERGY_REFILL_STARS = 10
 ENERGY_REFILL_AMOUNT = 100
 SPEED_BOOST_STARS = 1
-SPEED_BOOST_SECONDS = 2 * 60 * 60
+SPEED_BOOST_SECONDS = 60 * 60
 SPEED_BOOST_PERCENT = 50
 SPEED_BOOST_BONUS = 0.5
-MINING_REWARD = int(BASE_RATE * CYCLE_HOURS)  # legacy reference: 60/cycle
+MINING_REWARD = int(BASE_RATE * CYCLE_HOURS)  # 3h at the full base rate; legacy fallback
 AUTOCOLLECT_INTERVAL = 60
 
 logger = logging.getLogger(__name__)
@@ -88,6 +88,29 @@ class DojoMinerService:
                 float(bonus.get('amount', 0)) - ENERGY_PER_HOUR * since / 3600,
             )
         return max(0, int(energy))
+
+    @staticmethod
+    def _boost_cycle_key(doc: dict | None, now: float) -> str:
+        """Stable id for the active cycle, or the next cycle when idle."""
+        if not doc or doc.get('collected'):
+            return 'upcoming'
+        started = float(doc.get('started_at', 0) or 0)
+        finish = float(doc.get('finish_at', 0) or 0)
+        if started and finish and now < finish:
+            return f'c:{int(started * 1000)}'
+        return 'upcoming'
+
+    async def boost_cycle_status(self, user_id: int) -> dict:
+        """Whether the current cycle has already used its one boost purchase."""
+        now = time.time()
+        doc = await self.miners.find_one({'_id': user_id}) or {}
+        user = await self.users.find_one({'id': user_id}) or {}
+        key = self._boost_cycle_key(doc, now)
+        return {
+            'cycle_key': key,
+            'purchased': str(user.get('dojo_boost_cycle') or '') == key,
+            'active_cycle': key != 'upcoming',
+        }
 
     @staticmethod
     def _profile(user: dict) -> dict:
@@ -152,6 +175,7 @@ class DojoMinerService:
         boost_active = boost_until > now
         if boost_active and energy > 0:
             current_rate *= 1.0 + SPEED_BOOST_BONUS
+        boost_cycle_key = self._boost_cycle_key(doc, now)
         return {
             'phase': phase,
             'server_now': now,
@@ -178,6 +202,9 @@ class DojoMinerService:
             'boost_percent': SPEED_BOOST_PERCENT,
             'boost_stars': SPEED_BOOST_STARS,
             'boost_hours': SPEED_BOOST_SECONDS // 3600,
+            'boost_cycle_key': boost_cycle_key,
+            'boost_purchased': str(user.get('dojo_boost_cycle') or '')
+            == boost_cycle_key,
             'cycle_seconds': CYCLE_SECONDS,
             'started_at': started,
             'finish_at': finish,
@@ -232,6 +259,12 @@ class DojoMinerService:
                     await self.miners.insert_one({'_id': user_id, **session})
                 except Exception:
                     raise GameError('Майнер уже запущен. Обнови экран.')
+            # A boost bought between cycles belongs to this cycle.  Mark it now
+            # so the same cycle cannot buy a second one.
+            await self.users.update_one(
+                {'id': user_id, 'dojo_boost_cycle': 'upcoming'},
+                {'$set': {'dojo_boost_cycle': f'c:{int(now * 1000)}'}},
+            )
             return await self.state(user_id)
 
     async def collect(self, user_id: int) -> dict:
@@ -256,7 +289,7 @@ class DojoMinerService:
             try:
                 result = await self.economy.process_game_win(
                     user_id=user_id, coins=amount, xp=0,
-                    description='Dojo miner: 4h SenseiCoin cycle',
+                    description='Dojo miner: 3h SenseiCoin cycle',
                 )
             except Exception:
                 await self._rollback(user_id, version + 1)
@@ -389,10 +422,11 @@ class DojoMinerService:
         return False
 
     async def apply_speed_boost(self, user_id: int, charge: str) -> bool:
-        """Extend a +50% speed boost by two hours, once per Telegram charge.
+        """Apply one +50% speed boost for one hour per mining cycle.
 
-        Repeat purchases add hours only: the multiplier stays at +50% and the
-        user document stores one absolute ``dojo_boost_until`` timestamp.
+        A cycle may buy at most one boost.  The timestamp is stored as an
+        absolute ``dojo_boost_until``; buying before the next cycle is allowed
+        once and is consumed by that cycle at start.
         """
         if not charge or type(user_id) is not int or user_id <= 0:
             return False
@@ -406,6 +440,11 @@ class DojoMinerService:
                 receipts = list(user.get('dojo_applied_receipts') or [])
                 if charge in receipts:
                     return True
+                doc = await self.miners.find_one({'_id': user_id}) or {}
+                cycle_key = self._boost_cycle_key(doc, now)
+                if str(user.get('dojo_boost_cycle') or '') == cycle_key:
+                    # One purchase per cycle, even after the first hour ends.
+                    return False
                 old = user.get('dojo_boost_until')
                 old_until = max(0.0, float(old or 0))
                 starts_at = max(now, old_until)
@@ -414,6 +453,7 @@ class DojoMinerService:
                     'id': user_id,
                     'is_banned': {'$ne': True},
                     'dojo_applied_receipts': {'$ne': charge},
+                    'dojo_boost_cycle': {'$ne': cycle_key},
                 }
                 if old is None:
                     query['dojo_boost_until'] = {'$exists': False}
@@ -422,6 +462,7 @@ class DojoMinerService:
                 updated = await self.users.update_one(
                     query,
                     {'$set': {'dojo_boost_until': new_until,
+                              'dojo_boost_cycle': cycle_key,
                               'dojo_boost_updated_at': now},
                      '$addToSet': {'dojo_applied_receipts': charge}},
                 )
@@ -429,6 +470,8 @@ class DojoMinerService:
                     current = await self.users.find_one({'id': user_id}) or {}
                     if charge in (current.get('dojo_applied_receipts') or []):
                         return True
+                    if str(current.get('dojo_boost_cycle') or '') == cycle_key:
+                        return False
                     continue
 
                 # Reward the part of the running cycle that the boost covers.

@@ -42,7 +42,7 @@ KINDS = {
     'auto': {
         'stars': AUTOCOLLECT_STARS,
         'title': 'Автосбор',
-        'description': 'Автоматически собирает награду и запускает новый цикл каждые 4 часа.',
+        'description': 'Автоматически собирает награду и запускает новый цикл каждые 3 часа.',
     },
     'refill': {
         'stars': ENERGY_REFILL_STARS,
@@ -51,8 +51,8 @@ KINDS = {
     },
     'boost': {
         'stars': BOOST_STARS,
-        'title': 'Скорость +50% на 2 часа',
-        'description': 'Ускоряет добычу на 50% на два часа. Повторная покупка добавляет только часы — процент не растёт.',
+        'title': 'Скорость +50% на 1 час',
+        'description': 'Ускоряет добычу на 50% на один час. Одна покупка за цикл.',
     },
 }
 PAYLOAD_PREFIX = 'dojobuy:v1:'
@@ -81,6 +81,15 @@ class DojoUpgradeService:
                                int(user.get('dojo_energy_purchases', 0) or 0)))
         now = time.time()
         boost_until = float(user.get('dojo_boost_until', 0) or 0)
+        boost_status = {}
+        miner = getattr(self.container, 'dojo_miner_service', None)
+        status_fn = getattr(miner, 'boost_cycle_status', None)
+        if status_fn is not None:
+            try:
+                boost_status = await status_fn(user_id)
+            except Exception:
+                boost_status = {}
+        boost_purchased = bool(boost_status.get('purchased'))
         return {
             'pickaxe_level': level,
             'pickaxe_max': PICKAXE_MAX_LEVEL,
@@ -102,6 +111,9 @@ class DojoUpgradeService:
             'boost_until': boost_until,
             'boost_active': boost_until > now,
             'boost_seconds_left': max(0, int(boost_until - now)),
+            'boost_purchased': boost_purchased,
+            'boost_available': not boost_purchased,
+            'boost_once_per_cycle': True,
         }
 
     async def prepare(self, user_id: int, kind: str) -> dict:
@@ -266,5 +278,12 @@ class DojoUpgradeService:
             state = await self.container.dojo_miner_service.state(user['id'])
             if state.get('phase') != 'mining' or int(state.get('energy', 0)) > 0:
                 raise GameError('Пополнить можно только при нулевой энергии.')
-        if kind == 'boost' and not user.get('id'):
-            raise GameError('Профиль недоступен.')
+        if kind == 'boost':
+            if not user.get('id'):
+                raise GameError('Профиль недоступен.')
+            miner = getattr(self.container, 'dojo_miner_service', None)
+            status_fn = getattr(miner, 'boost_cycle_status', None)
+            if status_fn is not None:
+                status = await status_fn(user['id'])
+                if status.get('purchased'):
+                    raise GameError('Скорость уже куплена в этом цикле.')

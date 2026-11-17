@@ -91,11 +91,11 @@ def upgrade_service(user=None):
     return users, DojoUpgradeService(container)
 
 
-def test_energy_curve_matches_the_four_hour_cycle():
-    assert miner.estimate_amount(miner.BASE_RATE, 0) == 6
-    assert miner.estimate_amount(miner.BASE_RATE, 100) == 20
-    assert miner.estimate_amount(miner.BASE_RATE, 800) == 60
-    assert miner.estimate_amount(miner.BASE_RATE + 10, 100) == 33
+def test_energy_curve_matches_the_three_hour_cycle():
+    assert miner.estimate_amount(miner.BASE_RATE, 0) == 5
+    assert miner.estimate_amount(miner.BASE_RATE, 100) == 18
+    assert miner.estimate_amount(miner.BASE_RATE, 800) == 45
+    assert miner.estimate_amount(miner.BASE_RATE + 10, 100) == 30
 
 
 def payment(payload, charge, stars):
@@ -207,7 +207,7 @@ async def test_empty_energy_can_be_refilled_for_ten_stars():
         assert state['energy'] == 100
         assert state['energy_refill_available'] is False
         # One full-power hour replaces an hour that would have run at 10%.
-        assert state['reward'] == 34
+        assert state['reward'] == 32
         assert (await service.receive(
             7, payment(order['payload'], 'charge-refill', 10)))['state'] == 'fulfilled'
         # A second paid refill cannot land while the bar is already positive.
@@ -252,15 +252,15 @@ async def test_pickaxe_and_energy_budget_drive_the_cycle():
         state = await dojo.state(7)
         started = await dojo.start(7)
     assert state['base_rate'] == 45 and state['energy_max'] == 800
-    assert state["reward"] == 180 and state["next_reward"] == 180
-    assert started['energy_start'] == 800 and started["reward"] == 180
-    with patch.object(miner.time, 'time', return_value=1000 + 4 * 3600):
+    assert state["reward"] == 135 and state["next_reward"] == 135
+    assert started['energy_start'] == 800 and started["reward"] == 135
+    with patch.object(miner.time, 'time', return_value=1000 + 2 * 3600):
         mid = await dojo.state(7)
-    assert mid['energy'] == 400 and mid['current_rate'] == 45
-    with patch.object(miner.time, 'time', return_value=1000 + 8 * 3600):
+    assert mid['energy'] == 600 and mid['current_rate'] == 45
+    with patch.object(miner.time, 'time', return_value=1000 + 3 * 3600):
         done = await dojo.state(7)
     assert done['phase'] == 'ready_to_collect'
-    assert done['progress_percent'] == 100 and done['energy'] == 400
+    assert done['progress_percent'] == 100 and done['energy'] == 500
 
 
 @pytest.mark.asyncio
@@ -281,10 +281,10 @@ async def test_task_energy_extends_one_budget_without_raising_the_cap():
         started = await dojo.start(7)
     assert state['energy_max'] == 100
     assert state['energy'] == 200
-    assert state['reward'] == 33
+    assert state['reward'] == 32
     assert started['energy_max'] == 100
     assert started['energy_start'] == 200
-    assert started['reward'] == 33
+    assert started['reward'] == 32
     # The one-time charge is spent by this cycle, not folded into the cap.
     consumed = await dojo.state(7)
     assert consumed['task_energy_pending'] == 0
@@ -310,6 +310,8 @@ async def test_speed_boost_costs_one_star_and_is_applied_once_per_charge():
     snapshot = await service.snapshot(7)
     assert snapshot['boost_stars'] == 1
     assert snapshot['boost_percent'] == 50
+    assert snapshot['boost_hours'] == 1
+    assert snapshot['boost_once_per_cycle'] is True
 
 
 @pytest.mark.asyncio
@@ -325,12 +327,12 @@ async def test_auto_collect_starts_and_renews_cycles():
         assert await dojo.auto_tick() == 1
     first = dojo.miners.docs[7]
     assert first['started_at'] == 1000 and not first['collected']
-    with patch.object(miner.time, 'time', return_value=1000 + 14400):
+    with patch.object(miner.time, 'time', return_value=1000 + 10800):
         assert await dojo.auto_tick() == 1
     economy.process_game_win.assert_awaited_once()
     second = dojo.miners.docs[7]
-    assert second['started_at'] == 1000 + 14400
-    assert second['finish_at'] == 1000 + 2 * 14400
+    assert second['started_at'] == 1000 + 10800
+    assert second['finish_at'] == 1000 + 2 * 10800
     assert second['collected'] is False
 
 
@@ -381,3 +383,25 @@ async def test_bank_snapshot_never_reports_more_than_the_hard_supply_cap():
     assert data['total_supply'] == 1_000
     assert data['bank_balance'] + data['circulation'] <= data['emission_cap']
     assert data['burned'] == 25 and data['confiscated'] == 75
+
+
+@pytest.mark.asyncio
+async def test_boost_purchase_is_refused_once_per_cycle():
+    users = Users([{'id': 7, 'coins': 0}])
+    db = SimpleNamespace(users=users, dojo_orders=Users(), dojo_payments=Users())
+    miner_service = SimpleNamespace(
+        boost_cycle_status=AsyncMock(return_value={
+            'cycle_key': 'c:10800000', 'purchased': True, 'active_cycle': True,
+        }),
+        state=AsyncMock(),
+    )
+    service = DojoUpgradeService(SimpleNamespace(
+        mongo_client=SimpleNamespace(database=db),
+        dojo_miner_service=miner_service,
+    ))
+    with pytest.raises(GameError, match='уже куплена'):
+        await service.prepare(7, 'boost')
+    snapshot = await service.snapshot(7)
+    assert snapshot['boost_purchased'] is True
+    assert snapshot['boost_available'] is False
+    assert snapshot['boost_once_per_cycle'] is True

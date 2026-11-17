@@ -7,13 +7,17 @@ import pytest
 
 from src.bot.handlers.dojo_tasks_admin import (
     cmd_task_add,
+    cmd_task_link,
     parse_add_args,
+    parse_link_args,
 )
 from src.services.dojo_miner_service import DojoMinerService
 from src.services.dojo_task_service import (
     DEFAULT_ENERGY,
     DEFAULT_REWARD,
     DojoTaskService,
+    link_slug,
+    normalize_link_url,
     normalize_username,
 )
 from src.services.hedgehog_service import GameError
@@ -227,4 +231,89 @@ async def test_task_energy_is_pending_above_the_base_cap_not_inside_it():
     assert state['energy_start'] == 200
     assert state['task_energy_pending'] == 100
     # Two full-power hours instead of one: 15 + 15 + 3 = 33.
-    assert state['reward'] == 33
+    assert state['reward'] == 32
+
+
+def test_link_urls_are_https_and_stable():
+    assert normalize_link_url('https://Example.com/ref?a=1#x') == (
+        'https://example.com/ref?a=1#x')
+    assert normalize_link_url('t.me/MyAppBot?start=ref_7') == (
+        'https://t.me/MyAppBot?start=ref_7')
+    assert normalize_link_url('www.example.com/ref') == (
+        'https://www.example.com/ref')
+    assert normalize_link_url('http://example.com') == ''
+    assert normalize_link_url('javascript:alert(1)') == ''
+    assert normalize_link_url('https://user:pass@example.com') == ''
+    assert link_slug('https://Example.com/ref') == link_slug('https://example.com/ref')
+
+
+@pytest.mark.asyncio
+async def test_admin_can_add_and_claim_an_app_link_without_subscription_check():
+    _, tasks, economy, bot = service(status='left')
+    added = await tasks.add_link(
+        'https://t.me/MyAppBot?start=ref_7', 'Мой сервис', 5_000, 50,
+        created_by=1)
+    assert added['kind'] == 'link'
+    assert added['button_label'] == 'Запустить'
+    assert added['host'] == 't.me'
+    assert added['slug'].startswith('link-')
+    items = await tasks.list_tasks(7)
+    assert [item['kind'] for item in items] == ['channel', 'link']
+    claimed = await tasks.claim(7, added['slug'])
+    assert claimed['reward_coins'] == 5_000
+    assert claimed['task']['claimed'] is True
+    assert claimed['task']['button_label'] == 'Запустить'
+    economy.process_game_win.assert_awaited_once()
+    assert 'launch t.me' in economy.process_game_win.await_args.kwargs['description']
+    bot.get_chat_member.assert_not_awaited()
+    assert await tasks.remove_task('https://t.me/MyAppBot?start=ref_7') is True
+    assert [item['slug'] for item in await tasks.list_tasks(7)] == ['senseidurova']
+
+
+def test_admin_link_parser_accepts_reward_energy_and_title():
+    assert parse_link_args(
+        '/task_link https://app.example/ref 5000 50 Мой сервис') == (
+        'https://app.example/ref', 5000, 50, 'Мой сервис')
+    url, reward, energy, title = parse_link_args('/task_link t.me/MyBot?start=x')
+    assert url == 'https://t.me/MyBot?start=x'
+    assert reward == DEFAULT_REWARD and energy == DEFAULT_ENERGY
+    assert title == 't.me'
+
+
+@pytest.mark.asyncio
+async def test_task_link_command_adds_a_launch_button():
+    message = SimpleNamespace(
+        text='/task_link https://app.example/ref 2500 25 Мой сервис',
+        from_user=SimpleNamespace(id=1),
+        answer=AsyncMock(),
+    )
+    add_link = AsyncMock(return_value={
+        'kind': 'link', 'title': 'Мой сервис',
+        'url': 'https://app.example/ref', 'host': 'app.example',
+        'reward_coins': 2500, 'energy_bonus': 25,
+    })
+    await cmd_task_link(message, SimpleNamespace(
+        dojo_task_service=SimpleNamespace(add_link=add_link)))
+    kwargs = add_link.await_args.kwargs
+    assert kwargs['url'] == 'https://app.example/ref'
+    assert kwargs['title'] == 'Мой сервис'
+    assert kwargs['reward_coins'] == 2500 and kwargs['energy_bonus'] == 25
+    text = message.answer.await_args.args[0]
+    assert 'Мой сервис' in text and 'Запустить' in text
+
+
+@pytest.mark.asyncio
+async def test_task_add_accepts_a_referral_url_as_link():
+    message = SimpleNamespace(
+        text='/task_add https://app.example/ref 1000 10 Приложение',
+        from_user=SimpleNamespace(id=1),
+        answer=AsyncMock(),
+    )
+    add_link = AsyncMock(return_value={
+        'kind': 'link', 'title': 'Приложение',
+        'url': 'https://app.example/ref', 'host': 'app.example',
+        'reward_coins': 1000, 'energy_bonus': 10,
+    })
+    container = SimpleNamespace(dojo_task_service=SimpleNamespace(add_link=add_link))
+    await cmd_task_add(message, container)
+    add_link.assert_awaited_once()
