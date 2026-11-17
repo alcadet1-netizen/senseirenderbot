@@ -51,7 +51,27 @@ def get_mention(user) -> str:
     return f"<b>{html.escape(user.full_name)}</b>"
 
 
-async def show_profile(message: Message, container: Container, user, is_edit: bool = False):
+async def _katana_snapshot(container: Container, user_id: int, fallback_length: float):
+    """Current length and live rank, bounded so a slow leaderboard cannot stall a card."""
+    length = float(fallback_length or 0)
+    try:
+        position = await asyncio.wait_for(
+            container.user_service.get_katana_position(user_id), timeout=2)
+    except Exception:
+        logger.warning("Katana leaderboard lookup unavailable")
+        position = None
+    if position is not None:
+        length = float(position['length'])
+    return length, position
+
+
+async def show_profile(
+    message: Message,
+    container: Container,
+    user,
+    is_edit: bool = False,
+    with_katana: bool = True,
+):
     """Отобразить профиль."""
     mention = get_mention(user)
 
@@ -79,6 +99,14 @@ async def show_profile(message: Message, container: Container, user, is_edit: bo
                 logger.error(f"❌ Failed to send profile not found message: {e}")
             return
 
+    katana_length = profile.get("katana_length", 0.0)
+    position = None
+    if with_katana and profile.get("has_katana"):
+        # Resolve the live length before painting so the card and the GIF
+        # cannot disagree when an upgrade lands between two reads.
+        katana_length, position = await _katana_snapshot(
+            container, user.id, katana_length)
+
     card = Visuals.profile_card(
         username=profile["username"],
         level=profile["level"],
@@ -90,7 +118,7 @@ async def show_profile(message: Message, container: Container, user, is_edit: bo
         messages=profile["messages"],
         streak=profile["streak"],
         has_katana=profile["has_katana"],
-        katana_length=profile.get("katana_length", 0.0),
+        katana_length=katana_length,
         achievements_count=profile["achievements_count"],
         wins=profile.get("wins", 0),
         losses=profile.get("losses", 0),
@@ -112,6 +140,22 @@ async def show_profile(message: Message, container: Container, user, is_edit: bo
         logger.info(f"✅ Profile shown for {user.id}")
     except Exception as e:
         logger.error(f"❌ Failed to send profile card: {e}")
+        return
+
+    # /mysensei must show the same current katana as /mykatana: live length,
+    # live rank and the GIF for the model level, not a stale preview.
+    if with_katana and profile.get("has_katana"):
+        try:
+            await send_current_katana(
+                message, katana_length, position=position,
+                owner_name=user.full_name,
+                animate=getattr(
+                    getattr(container, "settings", None),
+                    "widget_animations_enabled", True,
+                ),
+            )
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to send profile katana: {e}")
 
 
 @router.message(CommandStart())
@@ -203,7 +247,11 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
         await message.answer(
             f"{mention}\n\n{text}",
             parse_mode="HTML",
-            reply_markup=get_start_keyboard(message.from_user.id)
+            reply_markup=get_start_keyboard(
+                message.from_user.id,
+                dojo_url=dojo_url(container.settings)
+                if message.chat.type == "private" else None,
+            )
         )
         logger.info(f"✅ Start menu sent to {message.from_user.id}")
     except Exception as e:
@@ -304,18 +352,10 @@ async def cmd_mykatana(message: Message, container: Container) -> None:
             await message.answer(f"{mention}\n\n❌ У тебя нет катаны! Купи её в магазине.")
             return
 
-        length = profile.get("katana_length", 0.0)
-
-        try:
-            position = await asyncio.wait_for(
-                container.user_service.get_katana_position(message.from_user.id), timeout=2)
-        except Exception:
-            logger.warning("Katana leaderboard lookup unavailable")
-            position = None
-        if position is not None:
-            # Use the exact length used by the rank calculation, not an older
-            # profile read if an upgrade happened between the two requests.
-            length = position['length']
+        # Use the exact length used by the rank calculation, not an older
+        # profile read if an upgrade happened between the two requests.
+        length, position = await _katana_snapshot(
+            container, message.from_user.id, profile.get("katana_length", 0.0))
         await send_current_katana(
             message, length, position=position,
             owner_name=message.from_user.full_name,

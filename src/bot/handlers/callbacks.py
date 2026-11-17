@@ -29,6 +29,7 @@ from src.bot.keyboards.inline import (
     get_katana_top_keyboard
 )
 from src.bot.handlers.user_commands import show_profile
+from src.bot.handlers.dojo import dojo_url
 from src.bot.handlers.donate import show_donate_menu
 from src.texts.donate_prompts import katana_insufficient_text
 from src.bot.utils import check_owner
@@ -73,7 +74,14 @@ async def cb_check_sub(query: CallbackQuery, container: Container):
         except Exception:
             pass
         # Отправляем приветственное сообщение или меню
-        await query.message.answer("👋 Привет! Используй меню или команды.", reply_markup=get_start_keyboard(user_id))
+        await query.message.answer(
+            "👋 Привет! Используй меню или команды.",
+            reply_markup=get_start_keyboard(
+                user_id,
+                dojo_url=dojo_url(container.settings)
+                if query.message.chat.type == "private" else None,
+            ),
+        )
     else:
         try:
             await query.answer("❌ Вы всё ещё не подписаны!", show_alert=True)
@@ -340,7 +348,7 @@ async def cb_help(query: CallbackQuery, callback_data: MenuCb):
 
 
 @router.callback_query(MenuCb.filter(F.action == "back_to_start"))
-async def cb_back_to_start(query: CallbackQuery, callback_data: MenuCb):
+async def cb_back_to_start(query: CallbackQuery, callback_data: MenuCb, container: Container):
     """Назад в главное меню."""
     if not query.message:
         return
@@ -359,7 +367,11 @@ async def cb_back_to_start(query: CallbackQuery, callback_data: MenuCb):
     await query.message.edit_text(
         f"{mention}\n\n{text}",
         parse_mode="HTML",
-        reply_markup=get_start_keyboard(query.from_user.id)
+        reply_markup=get_start_keyboard(
+            query.from_user.id,
+            dojo_url=dojo_url(container.settings)
+            if query.message.chat.type == "private" else None,
+        )
     )
     try:
         await query.answer()

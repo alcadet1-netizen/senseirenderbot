@@ -183,7 +183,8 @@ def test_full_profile_fields_match_mysensei_data():
     assert rows['Оценка баланса'] == '≈ 0.25 USDT'
     assert rows['Достижения'] == '12'
     assert rows['Победы / поражения'] == '19 / 4'
-    assert rows['Клинок'] == Visuals.get_katana_art(28.5)[0]
+    from src.widgets.katana_models import katana_name
+    assert rows['Клинок'] == katana_name(28.5) == 'Ледяной страж'
     assert card.art == Visuals.get_katana_art_ascii(28.5)
     html = to_html(card)
     from src.bot.handlers.widgets import text_fallback
