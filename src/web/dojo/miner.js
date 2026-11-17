@@ -43,9 +43,9 @@
     AIRDROP: "AIRDROP",
     "СТАРТ МАЙНЕРА": "MINER START",
     "КОГДА ВСЕ МОНЕТЫ ДОБЫТЫ": "WHEN ALL COINS ARE MINED",
-    "Декоративная симуляция блокчейна": "Decorative blockchain simulation",
-    "СИМУЛЯЦИЯ · ОЖИДАНИЕ": "SIMULATION · IDLE",
-    "ПСЕВДО-ЦЕПОЧКА · БЛОК {block}": "PSEUDO-CHAIN · BLOCK {block}",
+    "Лента блоков майнинга": "Mining block feed",
+    "СЕТЬ · ОЖИДАНИЕ": "NETWORK · IDLE",
+    "ЦЕПОЧКА · БЛОК {block}": "CHAIN · BLOCK {block}",
     "БЛОК ГОТОВ · ЖДЁТ СБОРА": "BLOCK READY · WAITING TO COLLECT",
     "ЗАПУСТИ МАЙНИНГ, ЧТОБЫ НАЧАТЬ ДОБЫЧУ БЛОКОВ":
       "Start mining to begin producing blocks",
@@ -580,7 +580,7 @@
         });
         bpmNode.textContent = "— BPM";
       } else {
-        status.textContent = t("СИМУЛЯЦИЯ · ОЖИДАНИЕ");
+        status.textContent = t("СЕТЬ · ОЖИДАНИЕ");
         line.textContent = t("ЗАПУСТИ МАЙНИНГ, ЧТОБЫ НАЧАТЬ ДОБЫЧУ БЛОКОВ");
         bpmNode.textContent = "— BPM";
       }
@@ -595,7 +595,7 @@
     const nonce = 100000 + ((block * 7919 + chainSerial * 104729) % 900000);
     const bpm = 64 + (block % 9);
     panel.style.setProperty("--beat", `${(60 / bpm).toFixed(2)}s`);
-    status.textContent = t("ПСЕВДО-ЦЕПОЧКА · БЛОК {block}", {
+    status.textContent = t("ЦЕПОЧКА · БЛОК {block}", {
       block: coin(block),
     });
     line.textContent = t("HASH 0x{hash} · NONCE {nonce} · PULSE {bpm} BPM", {

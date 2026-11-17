@@ -218,7 +218,7 @@ const { chromium } = require("playwright-core");
   assert.equal(await page.locator("#mine-meter").isVisible(), true);
   assert.match(
     await page.locator("#chain-status").textContent(),
-    /ПСЕВДО-ЦЕПОЧКА · БЛОК/,
+    /ЦЕПОЧКА · БЛОК/,
   );
   assert.match(
     await page.locator("#chain-line").textContent(),
