@@ -80,7 +80,7 @@ def get_profile_keyboard(user_id: int, has_katana: bool = True, dojo_url: str | 
 
     # The miner reads the same users.coins value as this card.
     if dojo_url:
-        keyboard.append([InlineKeyboardButton(text="⛏ Майнер", web_app=WebAppInfo(url=dojo_url))])
+        keyboard.append([InlineKeyboardButton(text="⛏ Майнинг", web_app=WebAppInfo(url=dojo_url))])
 
     if not has_katana:
         keyboard.insert(0, [
@@ -137,22 +137,26 @@ def get_confirm_keyboard(user_id: int, action: str) -> InlineKeyboardMarkup:
     )
 
 
-def get_start_keyboard(user_id: int) -> InlineKeyboardMarkup:
-    """Клавиатура старта."""
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="👤 Профиль", callback_data=MenuCb(action="profile", user_id=user_id).pack()),
-                InlineKeyboardButton(text="🏆 Топ", callback_data=MenuCb(action="top_menu", user_id=user_id).pack()),
-            ],
-            [
-                InlineKeyboardButton(text="🎁 Ежедневный бонус", callback_data=MenuCb(action="daily", user_id=user_id).pack()),
-            ],
-            [
-                InlineKeyboardButton(text="❓ Помощь", callback_data=MenuCb(action="help", user_id=user_id).pack()),
-            ]
-        ]
-    )
+def get_start_keyboard(user_id: int, dojo_url: str | None = None) -> InlineKeyboardMarkup:
+    """Клавиатура старта; майнинг открывается как Mini App в личке."""
+    keyboard = [
+        [
+            InlineKeyboardButton(text="👤 Профиль", callback_data=MenuCb(action="profile", user_id=user_id).pack()),
+            InlineKeyboardButton(text="🏆 Топ", callback_data=MenuCb(action="top_menu", user_id=user_id).pack()),
+        ],
+        [
+            InlineKeyboardButton(text="🎁 Ежедневный бонус", callback_data=MenuCb(action="daily", user_id=user_id).pack()),
+        ],
+    ]
+    if dojo_url:
+        keyboard.append([
+            InlineKeyboardButton(text="⛏ Майнинг", web_app=WebAppInfo(url=dojo_url)),
+        ])
+    keyboard.append([
+        InlineKeyboardButton(text="❓ Помощь", callback_data=MenuCb(action="help", user_id=user_id).pack()),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
 
 def get_referral_keyboard(link: str, user_id: int) -> InlineKeyboardMarkup:
     from aiogram.types import CopyTextButton

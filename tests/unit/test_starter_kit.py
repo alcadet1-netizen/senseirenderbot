@@ -6,7 +6,7 @@ import pytest
 from src.core.constants import STARTER_XP, STARTER_COINS, STARTER_KATANA_LENGTH
 from src.core.visuals import Visuals
 from src.services.level_service import LevelService
-from src.widgets.katana_models import katana_name, model_caption, model_index
+from src.widgets.katana_models import MODEL_NAMES, katana_name, model_caption, model_index
 
 
 def test_starter_kit_is_level_one_ten_cm_and_three_thousand_coin():
@@ -21,17 +21,13 @@ def test_starter_kit_is_level_one_ten_cm_and_three_thousand_coin():
     assert max(len(line) for line in lines) <= 23
 
 
-@pytest.mark.parametrize('length,name', [
-    (0, 'НОЖ Дно-Копателя'), (5, 'Шард-лезвие'), (7, 'Великий HODL-Меч'),
-    (10, 'Нейронный вакидзаси'), (14, 'КАТАНА ДУРОВА'), (19, 'ГОЙСКИЙ КЛИНОК'),
-    (23, 'Red Blood Tanto'), (29, 'Хеш-клинок Сатоши'), (38, 'DAO-клинок'),
-    (48, 'НАГАМАКИ ЧЕРНЫЙ-ЛЕБЕДЬ'), (60, 'НАГИНАТО-СБРИВАТОР'), (80, 'УБИЙЦА БОГОВ'),
-    (300, 'УБИЙЦА БОГОВ'),
-])
-def test_original_names_used_in_model_caption(length, name):
-    assert katana_name(length) == name
-    assert name in model_caption(length)
-    assert model_index(length) == min(14, int(length // 20))
+@pytest.mark.parametrize('index', range(15))
+def test_model_names_follow_the_fifteen_length_levels(index):
+    length = index * 20 + 19.99
+    assert katana_name(length) == MODEL_NAMES[index]
+    assert f'{MODEL_NAMES[index]}' in model_caption(length)
+    assert f'Уровень {index + 1}/15' in model_caption(length)
+    assert model_index(length) == index
 
 
 @pytest.mark.asyncio

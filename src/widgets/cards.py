@@ -53,7 +53,12 @@ def profile_card(profile: dict) -> Card:
     coins = number(profile.get('coins'))
     has_katana = bool(profile.get('has_katana', False))
     length = number(profile.get('katana_length'))
-    katana_name, rank = Visuals.get_katana_art(length) if has_katana else ('Нет катаны', '')
+    from src.widgets.katana_models import katana_name as model_name
+    blade_name, rank = model_name(length), ''
+    if has_katana:
+        _, rank = Visuals.get_katana_art(length)
+    else:
+        blade_name = 'Нет катаны'
     rows = (
         ('Уровень', str(level)),
         ('Звание', label(profile.get('level_name') or LEVEL_NAMES.get(level, 'Ученик'))),
@@ -71,7 +76,7 @@ def profile_card(profile: dict) -> Card:
         ('Катана', f'{length:.1f} см' if has_katana else 'Нет катаны'),
     )
     if has_katana:
-        rows += (('Клинок', label(katana_name)), ('Ранг клинка', rank))
+        rows += (('Клинок', label(blade_name)), ('Ранг клинка', rank))
     return Card(
         'МОЙ СЕНСЕЙ', label(profile.get('username') or profile.get('first_name') or 'Ученик'),
         rows, max(0, min(100, progress)),

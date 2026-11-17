@@ -634,13 +634,14 @@ class Visuals:
         # Progress bar
         xp_bar = cls.progress_bar(xp, xp_next, length=12)
         
-        # Katana info
-        katana_name = "Нет катаны"
+        # Katana info: cosmetic model names are the 15 length levels.
+        from src.widgets.katana_models import katana_name, model_index
+        katana_title = "Нет катаны"
+        katana_level = 0
         if has_katana:
-            name, _ = cls.get_katana_art(katana_length)
-            katana_name = name
-            
-        katana_title_short = cls._ellipsize(katana_name, 20)
+            katana_level = model_index(katana_length)
+            katana_title = katana_name(katana_length)
+        katana_title_short = cls._ellipsize(katana_title, 20)
 
         box_lines = [
             f"ПРОФИЛЬ {username_short}",
@@ -659,7 +660,7 @@ class Visuals:
         ])
         
         if has_katana:
-            box_lines.append(f"🗡 {katana_length:.1f} см")
+            box_lines.append(f"🗡 {katana_length:.1f} см · уровень {katana_level + 1}/15")
             box_lines.append(f"{katana_title_short}")
             
         box_lines.append(f"⚔ W{wins} / L{losses}")
@@ -887,9 +888,11 @@ class Visuals:
     @classmethod
     def katana_info(cls, length: float) -> str:
         w = cls.FRAME_W_PROFILE
+        from src.widgets.katana_models import katana_name
         art = cls.get_katana_art_ascii(length)
-        name, rank = cls.get_katana_art(length)
-        
+        name = katana_name(length)
+        _, rank = cls.get_katana_art(length)
+
         lines = [
             cls.frame_top_left(w),
             cls.frame_line_left("🗡️ ТВОЯ КАТАНА", w, "center"),
