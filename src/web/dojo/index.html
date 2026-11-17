@@ -68,6 +68,28 @@
         </button>
       </header>
 
+      <aside
+        class="roadmap-sticker"
+        aria-label="Roadmap SenseiCoin"
+        data-i18n-aria="Roadmap SenseiCoin"
+      >
+        <span class="roadmap-tape" aria-hidden="true"></span>
+        <b class="roadmap-title">ROAD MAP</b>
+        <span class="roadmap-item">
+          <em data-i18n="AIRDROP">AIRDROP</em>
+          <strong>Q4 2026</strong>
+        </span>
+        <span class="roadmap-item">
+          <em data-i18n="СТАРТ МАЙНЕРА">СТАРТ МАЙНЕРА</em>
+        </span>
+        <span class="roadmap-item roadmap-item-tge">
+          <em>TGE</em>
+          <strong data-i18n="КОГДА ВСЕ МОНЕТЫ ДОБЫТЫ"
+            >КОГДА ВСЕ МОНЕТЫ ДОБЫТЫ</strong
+          >
+        </span>
+      </aside>
+
       <div class="stage">
         <section
           class="balance"
@@ -117,7 +139,7 @@
         </section>
 
         <section id="view-mining" class="view view-mining">
-          <div id="mine-meter" class="mine-meter" hidden>
+          <div id="mine-meter" class="mine-meter is-idle">
             <div class="mine-meter-head">
               <span data-i18n="ПРОГРЕСС ЦИКЛА">ПРОГРЕСС ЦИКЛА</span>
               <b id="mine-percent">0%</b>
@@ -126,9 +148,17 @@
               <i id="mine-bar"></i>
             </div>
           </div>
-          <div class="orb">
+          <div id="orb" class="orb">
             <span class="orb-halo" aria-hidden="true"></span>
             <span class="orb-spark" aria-hidden="true"></span>
+            <span class="orb-orbit orbit-a" aria-hidden="true"></span>
+            <span class="orb-orbit orbit-b" aria-hidden="true"></span>
+            <span class="orb-scan" aria-hidden="true"></span>
+            <span
+              id="mining-particles"
+              class="mining-particles"
+              aria-hidden="true"
+            ></span>
             <button id="action" class="orb-button" disabled>
               <span id="orb-icon" class="orb-icon" aria-hidden="true">
                 <svg class="icon pickaxe" viewBox="0 0 24 24">
@@ -201,11 +231,12 @@
           <h2 data-i18n="ЭМИССИЯ">ЭМИССИЯ</h2>
           <p
             class="view-copy"
-            data-i18n="Всего в экономике может быть 10 000 000 000 Coin — жёсткий лимит. Монеты выпускаются в SenseiBank, добыча переводит их из банка игроку; переводы лимит не меняют."
+            data-i18n="Всего в экономике может быть 10 000 000 000 Coin — жёсткий лимит. Новые Coin появляются только при стартовом заполнении SenseiBank и наборе новичка. Майнинг, задания и игры сначала списывают награду из SenseiBank; если банк пуст, начисления нет — лимит не растёт."
           >
             Всего в экономике может быть 10 000 000 000 Coin — жёсткий лимит.
-            Монеты выпускаются в SenseiBank, добыча переводит их из банка
-            игроку; переводы лимит не меняют.
+            Новые Coin появляются только при стартовом заполнении SenseiBank и
+            наборе новичка. Майнинг, задания и игры сначала списывают награду из
+            SenseiBank; если банк пуст, начисления нет — лимит не растёт.
           </p>
           <div
             class="emission-track"
@@ -333,12 +364,28 @@
             </p>
           </div>
 
-          <div class="ref-actions">
-            <button id="ref-copy" class="bank-refresh" type="button">
-              <span data-i18n="СКОПИРОВАТЬ ССЫЛКУ">СКОПИРОВАТЬ ССЫЛКУ</span>
+          <div class="ref-invite">
+            <div class="ref-invite-head">
+              <span class="ref-invite-mark" aria-hidden="true">↗</span>
+              <div>
+                <b data-i18n="ТВОЯ РЕФЕРАЛЬНАЯ ССЫЛКА"
+                  >ТВОЯ РЕФЕРАЛЬНАЯ ССЫЛКА</b
+                >
+                <span data-i18n="Ссылка на майнер · комиссии 10% / 1% / 0,1%"
+                  >Ссылка на майнер · комиссии 10% / 1% / 0,1%</span
+                >
+              </div>
+            </div>
+            <p id="ref-link" class="ref-link" dir="ltr">—</p>
+            <button id="ref-share" class="ref-share-button" type="button">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m22 2-7 20-4-9-9-4Z" />
+                <path d="M22 2 11 13" />
+              </svg>
+              <span data-i18n="ПОДЕЛИТЬСЯ ССЫЛКОЙ">ПОДЕЛИТЬСЯ ССЫЛКОЙ</span>
             </button>
-            <button id="ref-share" class="bank-refresh" type="button">
-              <span data-i18n="ПОДЕЛИТЬСЯ">ПОДЕЛИТЬСЯ</span>
+            <button id="ref-copy" class="ref-copy-button" type="button">
+              <span data-i18n="СКОПИРОВАТЬ ССЫЛКУ">СКОПИРОВАТЬ ССЫЛКУ</span>
             </button>
           </div>
 
@@ -390,6 +437,30 @@
           </div>
         </section>
       </div>
+
+      <section
+        id="chain-panel"
+        class="chain-panel"
+        aria-label="Лента блоков майнинга"
+        data-i18n-aria="Лента блоков майнинга"
+      >
+        <span class="chain-heart" aria-hidden="true"><i></i></span>
+        <div class="chain-copy">
+          <b id="chain-status">СЕТЬ · ОЖИДАНИЕ</b>
+          <span id="chain-line">BLOCK — · HASH — · NONCE —</span>
+        </div>
+        <span id="chain-bpm" class="chain-bpm">— BPM</span>
+        <svg
+          class="chain-ecg"
+          viewBox="0 0 240 28"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M0 15h28l5-9 6 17 6-13 4 5h28l5-9 6 17 6-13 4 5h28l5-9 6 17 6-13 4 5h28l5-9 6 17 6-13 4 5h52"
+          />
+        </svg>
+      </section>
 
       <nav
         class="tabs"

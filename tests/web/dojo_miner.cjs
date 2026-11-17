@@ -82,6 +82,34 @@ const { chromium } = require("playwright-core");
       });
       return;
     }
+    if (action === "referrals") {
+      await route.fulfill({
+        json: {
+          link: "https://t.me/Senseigame_bot?start=ref_7",
+          level: 1,
+          earned: 125.5,
+          levels: [
+            { level: 1, count: 3, active: 2 },
+            { level: 2, count: 1, active: 1 },
+            { level: 3, count: 0, active: 0 },
+          ],
+          rank: {
+            title: "Новичок",
+            emoji: "🥋",
+            progress: 42,
+            next: { title: "Ученик", required: 5 },
+          },
+          bonus: {
+            eligible: true,
+            paid: false,
+            activity_days: 1,
+            paid_upgrade: false,
+          },
+          members: [{ username: "student", active: true }],
+        },
+      });
+      return;
+    }
     if (action === "tasks") {
       await route.fulfill({
         json: {
@@ -162,6 +190,15 @@ const { chromium } = require("playwright-core");
       .locator("#app")
       .evaluate((n) => n.classList.contains("phase-ready")),
   );
+  assert.equal(await page.locator("#mine-meter").isVisible(), true);
+  assert.match(await page.locator("#chain-status").textContent(), /ОЖИДАНИЕ/);
+  const roadmap = await page.locator(".roadmap-sticker").textContent();
+  assert.match(roadmap, /ROAD MAP/);
+  assert.match(roadmap, /AIRDROP/);
+  assert.match(roadmap, /Q4 2026/);
+  assert.match(roadmap, /TGE/);
+  assert.match(roadmap, /КОГДА ВСЕ МОНЕТЫ ДОБЫТЫ/);
+  const readyBox = await page.locator("#orb").boundingBox();
   await page.screenshot({ path: ".cache/miner2-ready.png" });
 
   await page.click("#action");
@@ -173,6 +210,26 @@ const { chromium } = require("playwright-core");
     await page.locator("#action-label").textContent(),
     /^\d\d:\d\d:\d\d$/,
   );
+  const miningBox = await page.locator("#orb").boundingBox();
+  assert.ok(
+    Math.abs(miningBox.y - readyBox.y) < 1,
+    `action button moved from ${readyBox.y} to ${miningBox.y}`,
+  );
+  assert.equal(await page.locator("#mine-meter").isVisible(), true);
+  assert.match(
+    await page.locator("#chain-status").textContent(),
+    /ЦЕПОЧКА · БЛОК/,
+  );
+  assert.match(
+    await page.locator("#chain-line").textContent(),
+    /HASH 0x[0-9a-f]+/,
+  );
+  assert.match(
+    await page.locator("#chain-line").textContent(),
+    /PULSE \d+ BPM/,
+  );
+  assert.equal(await page.locator(".orb-orbit").count(), 2);
+  assert.ok((await page.locator(".mining-particles i").count()) >= 14);
   await page.screenshot({ path: ".cache/miner2-mining.png" });
 
   await page.waitForFunction(
@@ -185,6 +242,9 @@ const { chromium } = require("playwright-core");
     "ЦИКЛ ЗАВЕРШЁН · 100%",
   );
   assert.equal(await page.locator("#energy").textContent(), "0 / 100");
+  assert.match(await page.locator("#chain-status").textContent(), /БЛОК ГОТОВ/);
+  const doneBox = await page.locator("#orb").boundingBox();
+  assert.ok(Math.abs(doneBox.y - readyBox.y) < 1);
   await page.screenshot({ path: ".cache/miner2-done.png" });
 
   await page.click(".tab[data-tab='upgrades']");
@@ -200,6 +260,26 @@ const { chromium } = require("playwright-core");
   assert.equal(await page.locator("#view-bank").isVisible(), true);
   assert.match(await page.locator("#bank-supply").textContent(), /1\s000\s000/);
   await page.screenshot({ path: ".cache/miner2-bank.png" });
+  await page.click(".tab[data-tab='referrals']");
+  assert.equal(await page.locator("#view-referrals").isVisible(), true);
+  await page.waitForFunction(() =>
+    document.querySelector("#ref-link").textContent.includes("t.me"),
+  );
+  assert.match(await page.locator("#ref-link").textContent(), /start=ref_7/);
+  assert.equal(await page.locator("#ref-share").isVisible(), true);
+  assert.match(await page.locator("#ref-share").textContent(), /ПОДЕЛИТЬСЯ/);
+  await page.evaluate(() => {
+    window.__shareUrl = "";
+    window.Telegram.WebApp.openTelegramLink = (url) => {
+      window.__shareUrl = url;
+    };
+  });
+  await page.click("#ref-share");
+  assert.match(
+    await page.evaluate(() => window.__shareUrl),
+    /^https:\/\/t\.me\/share\/url\?url=/,
+  );
+  await page.screenshot({ path: ".cache/miner2-referrals.png" });
   await page.click(".tab[data-tab='profile']");
   assert.equal(await page.locator("#view-profile").isVisible(), true);
   assert.match(
@@ -251,7 +331,9 @@ const { chromium } = require("playwright-core");
     calls
       .filter(
         (action) =>
-          !["tasks", "task", "upgrades", "bank", "buy"].includes(action),
+          !["tasks", "task", "upgrades", "bank", "buy", "referrals"].includes(
+            action,
+          ),
       )
       .slice(0, 3),
     ["state", "start", "state"],
