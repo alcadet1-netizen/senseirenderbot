@@ -37,8 +37,26 @@
     "Оплата Stars · улучшения не сгорают":
       "Stars payment · upgrades never expire",
     ЭМИССИЯ: "EMISSION",
-    "Всего в экономике может быть 10 000 000 000 Coin — жёсткий лимит. Монеты выпускаются в SenseiBank, добыча переводит их из банка игроку; переводы лимит не меняют.":
-      "The economy can hold at most 10,000,000,000 Coin. Coins are emitted into SenseiBank, and mining transfers them from the bank to the player; transfers do not change the cap.",
+    "Всего в экономике может быть 10 000 000 000 Coin — жёсткий лимит. Новые Coin появляются только при стартовом заполнении SenseiBank и наборе новичка. Майнинг, задания и игры сначала списывают награду из SenseiBank; если банк пуст, начисления нет — лимит не растёт.":
+      "The economy can hold at most 10,000,000,000 Coin. New coins appear only in the initial SenseiBank fill and the newcomer kit. Mining, tasks and games debit the reward from SenseiBank first; if the bank is empty, nothing is credited and the cap does not grow.",
+    "Roadmap SenseiCoin": "SenseiCoin roadmap",
+    AIRDROP: "AIRDROP",
+    "СТАРТ МАЙНЕРА": "MINER START",
+    "КОГДА ВСЕ МОНЕТЫ ДОБЫТЫ": "WHEN ALL COINS ARE MINED",
+    "Декоративная симуляция блокчейна": "Decorative blockchain simulation",
+    "СИМУЛЯЦИЯ · ОЖИДАНИЕ": "SIMULATION · IDLE",
+    "ПСЕВДО-ЦЕПОЧКА · БЛОК {block}": "PSEUDO-CHAIN · BLOCK {block}",
+    "БЛОК ГОТОВ · ЖДЁТ СБОРА": "BLOCK READY · WAITING TO COLLECT",
+    "ЗАПУСТИ МАЙНИНГ, ЧТОБЫ НАЧАТЬ ДОБЫЧУ БЛОКОВ":
+      "Start mining to begin producing blocks",
+    "HASH 0x{hash} · NONCE {nonce} · PULSE {bpm} BPM":
+      "HASH 0x{hash} · NONCE {nonce} · PULSE {bpm} BPM",
+    "100% · HASH 0x{hash} · NONCE {nonce}":
+      "100% · HASH 0x{hash} · NONCE {nonce}",
+    "ТВОЯ РЕФЕРАЛЬНАЯ ССЫЛКА": "YOUR REFERRAL LINK",
+    "Ссылка на майнер · комиссии 10% / 1% / 0,1%":
+      "Link to the miner · 10% / 1% / 0.1% commissions",
+    "ПОДЕЛИТЬСЯ ССЫЛКОЙ": "SHARE THE LINK",
     "Использование лимита эмиссии": "Emission cap usage",
     Выпущено: "Emitted",
     Лимит: "Cap",
@@ -184,6 +202,7 @@
     "ПОКА НЕТ УЧЕНИКОВ": "NO STUDENTS YET",
     "НЕ УДАЛОСЬ ЗАГРУЗИТЬ РЕФЕРАЛОВ": "COULD NOT LOAD REFERRALS",
     Ученик: "Student",
+    "ЗАГРУЖАЕМ ССЫЛКУ…": "LOADING LINK…",
     "Ссылка недоступна. Открой майнер через /dojo.":
       "Link unavailable. Open the miner via /dojo.",
     "{percent}% до звания {rank}": "{percent}% to {rank}",
@@ -366,6 +385,20 @@
     }, 3200);
   }
 
+  function seedMiningParticles() {
+    const layer = $("mining-particles");
+    if (!layer || layer.childElementCount) return;
+    for (let i = 0; i < 14; i++) {
+      const node = document.createElement("i");
+      node.style.setProperty("--x", `${rnd(6, 94)}%`);
+      node.style.setProperty("--size", `${rnd(1.5, 3.6).toFixed(1)}px`);
+      node.style.setProperty("--delay", `${-rnd(0, 5).toFixed(2)}s`);
+      node.style.setProperty("--duration", `${rnd(3.4, 7.2).toFixed(2)}s`);
+      node.style.setProperty("--drift", `${rnd(-18, 18).toFixed(1)}px`);
+      layer.appendChild(node);
+    }
+  }
+
   let model = null;
   let skew = 0;
   let pending = null;
@@ -384,6 +417,7 @@
   let referralLevel = 1;
   let referralBusy = false;
   let referralReload = false;
+  let referralAttempted = false;
 
   try {
     tg?.ready?.();
@@ -501,20 +535,84 @@
   function paintMeter() {
     const meter = $("mine-meter");
     if (!meter) return;
+    meter.hidden = false;
     const active =
       model?.phase === "mining" || model?.phase === "ready_to_collect";
-    meter.hidden = !active;
-    if (!active) return;
-    const value = percent();
+    meter.classList.toggle("is-idle", !active);
+    const value = active ? percent() : 0;
     $("mine-bar").style.width = `${value}%`;
     $("mine-percent").textContent = `${value.toFixed(1)}%`;
+  }
+
+  let chainSerial = 0;
+
+  function pseudoHash(seed) {
+    let value = seed >>> 0 || 1;
+    value = Math.imul(value ^ (value >>> 16), 0x45d9f3b) >>> 0;
+    value = Math.imul(value ^ (value >>> 16), 0x45d9f3b) >>> 0;
+    return ((value ^ (value >>> 16)) >>> 0).toString(16).padStart(8, "0");
+  }
+
+  function paintChain() {
+    const panel = $("chain-panel");
+    const status = $("chain-status");
+    const line = $("chain-line");
+    const bpmNode = $("chain-bpm");
+    if (!panel || !status || !line || !bpmNode) return;
+    const mining = initData() && model?.phase === "mining";
+    const complete = initData() && model?.phase === "ready_to_collect";
+    panel.classList.toggle("is-live", Boolean(mining));
+    panel.classList.toggle("is-complete", Boolean(complete));
+    if (!mining) {
+      chainSerial += 1;
+      if (complete) {
+        // A finished block has one fixed fingerprint: it must not change while
+        // the player is deciding when to collect.
+        const seed =
+          (184000 * 2654435761 +
+            Math.floor((Number(model.finish_at) || 0) * 1000)) >>>
+          0;
+        const hash = `${pseudoHash(seed)}${pseudoHash(seed ^ 0x9e3779b9)}`;
+        status.textContent = t("БЛОК ГОТОВ · ЖДЁТ СБОРА");
+        line.textContent = t("100% · HASH 0x{hash} · NONCE {nonce}", {
+          hash,
+          nonce: coin(100000 + (seed % 900000)),
+        });
+        bpmNode.textContent = "— BPM";
+      } else {
+        status.textContent = t("СИМУЛЯЦИЯ · ОЖИДАНИЕ");
+        line.textContent = t("ЗАПУСТИ МАЙНИНГ, ЧТОБЫ НАЧАТЬ ДОБЫЧУ БЛОКОВ");
+        bpmNode.textContent = "— BPM";
+      }
+      return;
+    }
+    chainSerial += 1;
+    const started = Number(model.started_at) || 0;
+    const elapsed = Math.max(0, serverNow() / 1000 - started);
+    const block = 184000 + Math.floor(elapsed / 7);
+    const seed = (block * 2654435761 + chainSerial * 40503) >>> 0;
+    const hash = `${pseudoHash(seed)}${pseudoHash(seed ^ 0x9e3779b9)}`;
+    const nonce = 100000 + ((block * 7919 + chainSerial * 104729) % 900000);
+    const bpm = 64 + (block % 9);
+    panel.style.setProperty("--beat", `${(60 / bpm).toFixed(2)}s`);
+    status.textContent = t("ПСЕВДО-ЦЕПОЧКА · БЛОК {block}", {
+      block: coin(block),
+    });
+    line.textContent = t("HASH 0x{hash} · NONCE {nonce} · PULSE {bpm} BPM", {
+      hash,
+      nonce: coin(nonce),
+      bpm,
+    });
+    bpmNode.textContent = `${bpm} BPM`;
   }
 
   function paintAction(icon, label, sub, timer = false, disabled = true) {
     const button = $("action");
     const labelNode = $("action-label");
-    $("orb-icon").innerHTML = ICONS[icon] || ICONS.pickaxe;
-    $("orb-icon").hidden = timer;
+    const iconNode = $("orb-icon");
+    iconNode.innerHTML = ICONS[icon] || ICONS.pickaxe;
+    iconNode.classList.toggle("is-hidden", timer);
+    iconNode.setAttribute("aria-hidden", timer ? "true" : "false");
     labelNode.textContent = label;
     labelNode.classList.toggle("is-timer", timer);
     $("orb-sub").textContent = sub;
@@ -543,6 +641,7 @@
     $("profile-auto").textContent = model?.auto_collect ? t("ВКЛ") : t("ВЫКЛ");
     paintEnergy(energyValue());
     paintMeter();
+    paintChain();
 
     const status = $("status");
     const hint = $("hint");
@@ -700,6 +799,7 @@
       renderReferrals(referralsLoaded ? undefined : t("ЗАГРУЖАЕМ УЧЕНИКОВ…"));
     }
     renderBank();
+    paintReferralLink();
   }
 
   async function refresh(silent = false) {
@@ -1099,7 +1199,31 @@
     }
   }
 
+  function paintReferralLink() {
+    const node = $("ref-link");
+    if (!node) return;
+    const link = referrals?.link || "";
+    const loading = initData() && !referralAttempted;
+    node.textContent =
+      link ||
+      (loading
+        ? t("ЗАГРУЖАЕМ ССЫЛКУ…")
+        : t("Ссылка недоступна. Открой майнер через /dojo."));
+    node.classList.toggle("is-empty", !link);
+    node.title = link;
+    const share = $("ref-share");
+    if (share) {
+      share.setAttribute(
+        "aria-label",
+        link
+          ? `${t("ПОДЕЛИТЬСЯ ССЫЛКОЙ")}: ${link}`
+          : t("Ссылка недоступна. Открой майнер через /dojo."),
+      );
+    }
+  }
+
   function renderReferrals(emptyText = t("ПОКА НЕТ УЧЕНИКОВ")) {
+    paintReferralLink();
     const members = $("ref-members");
     const bonusText = $("ref-bonus-text");
     if (!referrals) {
@@ -1193,6 +1317,7 @@
     if (!initData()) {
       referrals = null;
       referralsLoaded = false;
+      referralAttempted = false;
       renderReferrals(t("ОТКРОЙ ЧЕРЕЗ /DOJO"));
       return;
     }
@@ -1202,6 +1327,7 @@
       return;
     }
     if (referralsLoaded && !force && referrals?.level === referralLevel) return;
+    referralAttempted = true;
     referralBusy = true;
     try {
       const data = await api("referrals", { level: referralLevel });
@@ -1211,6 +1337,7 @@
       referrals = data;
       referralsLoaded = true;
       renderReferrals();
+      paintReferralLink();
     } catch (error) {
       referralsLoaded = false;
       renderReferrals(t("НЕ УДАЛОСЬ ЗАГРУЗИТЬ РЕФЕРАЛОВ"));
@@ -1250,7 +1377,7 @@
     }
   }
 
-  function shareReferralLink() {
+  async function shareReferralLink() {
     const link = referrals?.link;
     if (!link) {
       showToast(t("Ссылка недоступна. Открой майнер через /dojo."), true);
@@ -1261,10 +1388,17 @@
       link,
     )}&text=${encodeURIComponent(text)}`;
     try {
-      if (tg?.openTelegramLink) tg.openTelegramLink(url);
-      else window.open(url, "_blank", "noopener,noreferrer");
-    } catch {
-      showToast(url, true);
+      if (tg?.openTelegramLink) {
+        tg.openTelegramLink(url);
+        return;
+      }
+      if (navigator.share) {
+        await navigator.share({ title: "SenseiCoin", text, url: link });
+        return;
+      }
+      await copyReferralLink();
+    } catch (error) {
+      if (error?.name !== "AbortError") showToast(url, true);
     }
   }
 
@@ -1371,6 +1505,8 @@
   }, 30000);
 
   seedAmbient();
+  seedMiningParticles();
+  setInterval(paintChain, 1000);
   applyTranslations();
   render();
   if (initData()) {

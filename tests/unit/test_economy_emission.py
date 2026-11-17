@@ -68,3 +68,21 @@ async def test_starter_kit_uses_the_global_reservation():
     # A reservation that would cross the ceiling is refused, so the counter
     # remains at its previous value instead of being rounded up.
     assert (await db.bank.find_one({"_id": "single"}))["total_emitted"] == 9_999_999_999
+
+
+@pytest.mark.asyncio
+async def test_game_win_moves_bank_coins_without_emission():
+    """Mining and game rewards must never increase the emission counter."""
+    economy_service, db = economy([{
+        "_id": "single", "coins": 1_000.0, "total_emitted": 1_000.0,
+        "emission_cap": 10_000_000_000,
+    }])
+    result = await economy_service.process_game_win(
+        7, coins=125, xp=5, description="Dojo miner test")
+    assert result["success"] is True
+    assert result["new_coins"] == 1_125.0
+    bank = await db.bank.find_one({"_id": "single"})
+    assert bank["coins"] == 875.0
+    # A bank -> player transfer is not minting: the lifetime counter stays put.
+    assert bank["total_emitted"] == 1_000.0
+    assert bank["emission_cap"] == 10_000_000_000

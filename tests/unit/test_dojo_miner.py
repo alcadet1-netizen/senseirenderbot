@@ -177,3 +177,28 @@ async def test_api_requires_signature_and_dispatches_actions():
         referral_members.assert_awaited_once_with(7, level=2, limit=10)
         assert (await client.post('/miniapp/dojo/api/kick', json={'initData': auth})).status == 404
         assert (await client.post('/miniapp/dojo/api/nope', json={'initData': auth})).status == 404
+
+
+@pytest.mark.asyncio
+async def test_miner_keeps_action_slot_and_renders_new_layers():
+    app = web.Application()
+    setup_dojo(app)
+    async with TestClient(TestServer(app)) as client:
+        html = await (await client.get('/miniapp/dojo')).text()
+        css = await (await client.get('/miniapp/dojo/style.css')).text()
+        js = await (await client.get('/miniapp/dojo/miner.js')).text()
+    # The progress meter stays in flow in every phase, so starting or
+    # collecting never removes a block and pushes the orb down.
+    assert 'id="mine-meter" class="mine-meter is-idle"' in html
+    assert 'id="orb" class="orb"' in html
+    assert '.mine-meter.is-idle' in css
+    assert '.orb,' in css and '.phase-mining .orb,' in css
+    assert 'grid-template-rows' in css
+    # Right-side roadmap sticker, decorative chain footer and referral card.
+    assert 'class="roadmap-sticker"' in html
+    assert 'AIRDROP' in html and 'Q4 2026' in html
+    assert 'КОГДА ВСЕ МОНЕТЫ ДОБЫТЫ' in html
+    assert 'id="chain-panel"' in html and 'id="chain-line"' in html
+    assert 'id="ref-share" class="ref-share-button"' in html
+    assert 'id="ref-link" class="ref-link"' in html
+    assert 'seedMiningParticles' in js and 'paintChain' in js

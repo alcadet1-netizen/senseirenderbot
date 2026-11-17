@@ -1,4 +1,5 @@
 """The canonical and legacy bank documents are one spendable pool."""
+import asyncio
 from types import SimpleNamespace as NS
 
 import pytest
@@ -43,3 +44,14 @@ async def test_legacy_only_bank_is_still_spendable_and_receives_deposits():
     assert await service.try_withdraw(50.0) is True
     await service.deposit(5.0)
     assert (await db.bank.find_one({"_id": "main"}))["balance"] == 30.0
+
+
+@pytest.mark.asyncio
+async def test_concurrent_withdrawals_cannot_spend_the_same_coins_twice():
+    service, db = ledger([
+        {"_id": "single", "coins": 100.0, "total_emitted": 1_000},
+    ])
+    results = await asyncio.gather(*(service.try_withdraw(30.0) for _ in range(6)))
+    assert sum(bool(value) for value in results) == 3
+    assert (await db.bank.find_one({"_id": "single"}))["coins"] == 10.0
+    assert (await db.bank.find_one({"_id": "single"}))["total_emitted"] == 1_000
