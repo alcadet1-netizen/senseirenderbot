@@ -10,7 +10,10 @@ const { chromium } = require("playwright-core");
     args: bin.args,
     headless: true,
   });
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const page = await browser.newPage({
+    viewport: { width: 390, height: 844 },
+    bypassCSP: true,
+  });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.addInitScript(() => {
@@ -141,11 +144,13 @@ const { chromium } = require("playwright-core");
       energy:
         phase === "ready"
           ? energyMax
-          : Math.max(
-              0,
-              energyMax -
-                100 * Math.max(0, (Math.min(now, finish) - started) / 3600),
-            ),
+          : phase === "ready_to_collect"
+            ? 0
+            : Math.max(
+                0,
+                energyMax -
+                  100 * Math.max(0, (Math.min(now, finish) - started) / 3600),
+              ),
       energy_max: energyMax,
       energy_start: energyMax,
       energy_per_hour: 100,
@@ -198,10 +203,7 @@ const { chromium } = require("playwright-core");
   assert.match(await page.locator("#chain-status").textContent(), /ОЖИДАНИЕ/);
   const roadmap = await page.locator(".roadmap-sticker").textContent();
   assert.match(roadmap, /ROAD MAP/);
-  assert.match(roadmap, /AIRDROP/);
-  assert.match(roadmap, /Q4 2026/);
-  assert.match(roadmap, /TGE/);
-  assert.match(roadmap, /КОГДА ВСЕ МОНЕТЫ ДОБЫТЫ/);
+  assert.doesNotMatch(roadmap, /AIRDROP|Q4 2026|TGE|КОГДА/);
   await page.click("#roadmap");
   assert.equal(await page.locator("#roadmap-sheet").isVisible(), true);
   const roadmapModal = await page.locator("#roadmap-sheet").textContent();
@@ -211,6 +213,23 @@ const { chromium } = require("playwright-core");
   await page.click("#roadmap-sheet .sheet-done");
   assert.equal(await page.locator("#roadmap-sheet").isVisible(), false);
   const readyBox = await page.locator("#orb").boundingBox();
+  assert.ok(readyBox.width <= 182, `orb is too wide: ${readyBox.width}`);
+  const readyFit = await page.evaluate(() => {
+    const stage = document.querySelector(".stage");
+    const action = document.querySelector("#action").getBoundingClientRect();
+    const tabs = document.querySelector(".tabs").getBoundingClientRect();
+    return {
+      viewport: innerHeight,
+      document: document.documentElement.scrollHeight,
+      stage: stage.clientHeight,
+      stageScroll: stage.scrollHeight,
+      actionBottom: action.bottom,
+      tabsTop: tabs.top,
+    };
+  });
+  assert.ok(readyFit.document <= readyFit.viewport + 1, "page scrolls");
+  assert.ok(readyFit.stageScroll <= readyFit.stage + 1, "stage scrolls");
+  assert.ok(readyFit.actionBottom <= readyFit.tabsTop + 1, "orb overlaps tabs");
   await page.screenshot({ path: ".cache/miner2-ready.png" });
 
   await page.click("#action");
@@ -299,6 +318,9 @@ const { chromium } = require("playwright-core");
     };
   });
   await page.click("#ref-share");
+  await page.waitForFunction(() => window.__sharedMessage === "prep-7", {
+    timeout: 3000,
+  });
   assert.equal(await page.evaluate(() => window.__sharedMessage), "prep-7");
   await page.screenshot({ path: ".cache/miner2-referrals.png" });
   await page.click(".tab[data-tab='profile']");
@@ -306,6 +328,10 @@ const { chromium } = require("playwright-core");
   assert.match(
     await page.locator("#profile-balance").textContent(),
     /^12\s840 Coin$/,
+  );
+  assert.doesNotMatch(
+    await page.locator("#view-profile").textContent(),
+    /как в чате/i,
   );
   await page.screenshot({ path: ".cache/miner2-profile.png" });
 

@@ -13,6 +13,8 @@ from src.services.dojo_miner_service import (
     BASE_ENERGY,
     BASE_RATE,
     ENERGY_MAX_PURCHASES,
+    ENERGY_REFILL_AMOUNT,
+    ENERGY_REFILL_STARS,
     PICKAXE_MAX_LEVEL,
     PICKAXE_STEP,
 )
@@ -37,9 +39,15 @@ KINDS = {
         'title': 'Автосбор',
         'description': 'Автоматически собирает награду и запускает новый цикл каждые 4 часа.',
     },
+    'refill': {
+        'stars': ENERGY_REFILL_STARS,
+        'title': 'Пополнение энергии',
+        'description': 'Мгновенно +100 энергии в текущем цикле, если энергия уже на нуле.',
+    },
 }
 PAYLOAD_PREFIX = 'dojobuy:v1:'
-PAYLOAD_RE = re.compile(r'^dojobuy:v1:(\d+):(pickaxe|energy|auto):(\d+):([a-f0-9]{24})$')
+PAYLOAD_RE = re.compile(
+    r'^dojobuy:v1:(\d+):(pickaxe|energy|auto|refill):(\d+):([a-f0-9]{24})$')
 
 
 def payload_kind(payload: str) -> str:
@@ -74,6 +82,8 @@ class DojoUpgradeService:
             'auto_collect': bool(user.get('dojo_auto_collect')),
             'auto_stars': AUTOCOLLECT_STARS,
             'base_energy': BASE_ENERGY,
+            'energy_refill_stars': ENERGY_REFILL_STARS,
+            'energy_refill_amount': ENERGY_REFILL_AMOUNT,
         }
 
     async def prepare(self, user_id: int, kind: str) -> dict:
@@ -172,6 +182,9 @@ class DojoUpgradeService:
             {'_id': charge}, {'$set': {'state': 'refunded'}})
 
     async def _apply(self, user_id: int, kind: str, charge: str) -> bool:
+        if kind == 'refill':
+            return await self.container.dojo_miner_service.apply_energy_refill(
+                user_id, charge)
         base = {
             'id': user_id,
             'is_banned': {'$ne': True},
@@ -228,3 +241,7 @@ class DojoUpgradeService:
             raise GameError('Достигнут максимум покупок энергии.')
         if kind == 'auto' and user.get('dojo_auto_collect'):
             raise GameError('Автосбор уже включён навсегда.')
+        if kind == 'refill':
+            state = await self.container.dojo_miner_service.state(user['id'])
+            if state.get('phase') != 'mining' or int(state.get('energy', 0)) > 0:
+                raise GameError('Пополнить можно только при нулевой энергии.')

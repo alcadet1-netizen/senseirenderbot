@@ -86,7 +86,7 @@
       "10% / 1% / 0.1% from every paid katana upgrade across three levels. The remainder goes to SenseiBank.",
     ПРОФИЛЬ: "PROFILE",
     "СЕНСЕЙ-МАЙНЕР": "SENSEI MINER",
-    "Баланс (как в чате)": "Balance (same as chat)",
+    Баланс: "Balance",
     Добыча: "Mining rate",
     Энергия: "Energy",
     Цикл: "Cycle",
@@ -149,6 +149,12 @@
       "Pickaxe {rate} Coin/h · energy {energy} · {hours} h at full power",
     "Энергия {energy} / {max} · {rate} Coin/ч · после нуля 10%":
       "Energy {energy} / {max} · {rate} Coin/h · 10% after zero",
+    "10 ⭐ · ПОПОЛНИТЬ": "10 ⭐ · REFILL",
+    "Пополнить энергию за 10 ⭐": "Refill energy for 10 ⭐",
+    "Пополняем энергию": "Refilling energy",
+    "Энергия пополнена": "Energy refilled",
+    "Пополнить можно только при нулевой энергии.":
+      "You can refill only at zero energy.",
     "Майнинг запущен · Сенсей ушёл на 4 часа":
       "Mining started · Sensei left for 4 hours",
     "+{amount} SenseiCoin · баланс {balance}":
@@ -525,11 +531,22 @@
 
   function paintEnergy(value) {
     const max = energyMax();
-    const rounded = Math.max(0, Math.min(max, Math.round(value)));
+    const rounded = Math.max(0, Math.min(max, Math.floor(value)));
     $("energy").textContent = `${rounded} / ${max}`;
     $("energy-bar").style.width = `${(rounded / max) * 100}%`;
     $("energy-track").setAttribute("aria-valuemax", String(max));
     $("energy-track").setAttribute("aria-valuenow", String(rounded));
+    const card = $("energy-card");
+    if (card) {
+      const empty = model?.phase === "mining" && rounded <= 0 && initData();
+      card.classList.toggle("is-empty", Boolean(empty));
+      card.setAttribute("aria-disabled", empty ? "false" : "true");
+      card.setAttribute(
+        "aria-label",
+        empty ? t("Пополнить энергию за 10 ⭐") : t("Энергия майнера"),
+      );
+      card.tabIndex = empty ? 0 : -1;
+    }
   }
 
   function paintMeter() {
@@ -1136,7 +1153,13 @@
         upgradeBusy = null;
         renderUpgrades();
         if (status === "paid") {
-          showToast(t("Оплата получена · включаем улучшение"));
+          showToast(
+            t(
+              kind === "refill"
+                ? "Энергия пополнена"
+                : "Оплата получена · включаем улучшение",
+            ),
+          );
           setTimeout(() => {
             loadUpgrades(true);
             refresh(true);
@@ -1156,6 +1179,19 @@
       renderUpgrades();
       showToast(error.message, true);
     }
+  }
+
+  async function refillEnergy() {
+    if (!initData() || upgradeBusy) return;
+    if (
+      !model ||
+      model.phase !== "mining" ||
+      Math.floor(Number(energyValue()) || 0) > 0
+    ) {
+      showToast(t("Пополнить можно только при нулевой энергии."), true);
+      return;
+    }
+    await buyUpgrade("refill");
   }
 
   function renderBank() {
@@ -1491,6 +1527,17 @@
     node.addEventListener("click", () => {
       $("roadmap-sheet").hidden = true;
     });
+  });
+
+  $("energy-card").addEventListener("click", () => {
+    if ($("energy-card").classList.contains("is-empty")) refillEnergy();
+  });
+
+  $("energy-card").addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    if (!$("energy-card").classList.contains("is-empty")) return;
+    event.preventDefault();
+    refillEnergy();
   });
 
   $("bank-refresh").addEventListener("click", () => loadBank(true));

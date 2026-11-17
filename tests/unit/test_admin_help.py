@@ -18,7 +18,7 @@ def test_pages_complete_and_telegram_safe():
     documented=set(re.findall(r'/([\w]+)',text))
     # Every registered command/alias in these administrative modules is listed.
     root=Path(__file__).resolve().parents[2]/'src/bot/handlers'
-    for name in ['admin_commands.py','boss_admin.py','boss_commands.py','maintenance.py','chat_settings.py','zov.py','quiz.py','digest.py','sensei_check/admin.py']:
+    for name in ['admin_commands.py','dojo_tasks_admin.py','boss_admin.py','boss_commands.py','maintenance.py','chat_settings.py','zov.py','quiz.py','digest.py','sensei_check/admin.py']:
         tree=ast.parse((root/name).read_text())
         for node in ast.walk(tree):
             if isinstance(node,ast.Call) and isinstance(node.func,ast.Name) and node.func.id=='Command':
@@ -27,6 +27,7 @@ def test_pages_complete_and_telegram_safe():
                         assert arg.value in documented, (name,arg.value)
     assert '+fire' in text and '/+fire' not in text
     assert '/boss_reset_pool' in text and '/senseifly on|off|status' in text
+    assert '/senseihelp' in text and '/topticket' in text
 
 
 @pytest.mark.asyncio
@@ -46,3 +47,35 @@ async def test_admin_help_router_access_and_delivery(command,allowed):
         assert all(call.args[0].parse_mode is None for call in bot.call_args_list)
     else:
         bot.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_senseihelp_gives_admin_the_full_catalogue():
+    from src.bot.handlers.user_commands import cmd_help
+    bot = AsyncMock()
+    msg = Message.model_validate(dict(
+        message_id=1, date=1, chat=dict(id=7, type='private'),
+        **{'from': dict(id=7, is_bot=False, first_name='Admin')},
+        text='/senseihelp')).as_(bot)
+    with patch('src.bot.handlers.user_commands.settings',
+               NS(admin_ids=[7], admin_ids_str='7')):
+        await cmd_help(msg)
+    pages = admin_help_pages()
+    assert bot.await_count == len(pages)
+    assert [call.args[0].text for call in bot.call_args_list] == pages
+    assert all(call.args[0].parse_mode is None for call in bot.call_args_list)
+
+
+@pytest.mark.asyncio
+async def test_senseihelp_stays_private_for_non_admin_in_private_chat():
+    from src.bot.handlers.user_commands import cmd_help
+    bot = AsyncMock()
+    msg = Message.model_validate(dict(
+        message_id=1, date=1, chat=dict(id=7, type='private'),
+        **{'from': dict(id=7, is_bot=False, first_name='User')},
+        text='/senseihelp')).as_(bot)
+    with patch('src.bot.handlers.user_commands.settings',
+               NS(admin_ids=[], admin_ids_str='')):
+        await cmd_help(msg)
+    assert bot.await_count == 1
+    assert 'только в групповых чатах' in bot.call_args.args[0].text

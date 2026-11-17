@@ -21,6 +21,8 @@ ENERGY_PER_HOUR = 100.0
 LOW_POWER = 0.1
 PICKAXE_MAX_LEVEL = 100
 ENERGY_MAX_PURCHASES = 100
+ENERGY_REFILL_STARS = 10
+ENERGY_REFILL_AMOUNT = 100
 MINING_REWARD = int(BASE_RATE * CYCLE_HOURS)  # legacy reference: 60/cycle
 AUTOCOLLECT_INTERVAL = 60
 
@@ -45,6 +47,20 @@ class DojoMinerService:
 
     async def ensure_indexes(self) -> None:
         await self.users.create_index('dojo_auto_collect')
+
+    @staticmethod
+    def _energy_at(doc: dict, now: float, finish: float, energy_start: int) -> int:
+        """Current energy: base drain plus each paid refill, decayed since it was added."""
+        started = doc.get('started_at')
+        elapsed = max(0.0, min(now, finish) - started) if started else 0.0
+        energy = max(0, energy_start - ENERGY_PER_HOUR * elapsed / 3600)
+        for refill in doc.get('energy_refills') or []:
+            since = max(0.0, min(now, finish) - float(refill.get('at', now)))
+            energy += max(
+                0.0,
+                float(refill.get('amount', 0)) - ENERGY_PER_HOUR * since / 3600,
+            )
+        return max(0, int(energy))
 
     async def _task_energy(self, user_id: int) -> int:
         if self.tasks is None:
@@ -94,8 +110,9 @@ class DojoMinerService:
             energy_start = max(0, int(doc.get('energy_start', energy_cap)))
             base_rate = float(doc.get('base_rate', profile['base_rate']))
             amount = int(doc.get('amount', estimate_amount(base_rate, energy_start)))
-            elapsed = max(0.0, min(now, finish) - started) if started else 0.0
-            energy = max(0, int(energy_start - ENERGY_PER_HOUR * elapsed / 3600))
+            # A refill adds energy at the moment of payment, so it must not be
+            # drained retroactively by the hours before that payment.
+            energy = self._energy_at(doc, now, finish, energy_start)
             if phase == 'mining':
                 remaining = max(0.0, finish - now)
                 progress = min(1.0, max(0.0, (now - started) / (finish - started))) if finish > started else 0.0
@@ -112,6 +129,9 @@ class DojoMinerService:
             'energy_max': energy_start if phase != 'ready' else energy_cap,
             'energy_start': energy_start,
             'energy_per_hour': ENERGY_PER_HOUR,
+            'energy_refill_stars': ENERGY_REFILL_STARS,
+            'energy_refill_amount': ENERGY_REFILL_AMOUNT,
+            'energy_refill_available': phase == 'mining' and energy <= 0,
             'base_rate': base_rate,
             'current_rate': current_rate,
             'pickaxe_level': profile['pickaxe_level'],
@@ -146,6 +166,7 @@ class DojoMinerService:
                 'amount': estimate_amount(base_rate, energy_start),
                 'base_rate': base_rate,
                 'energy_start': energy_start,
+                'energy_refills': [],
                 'version': version + 1,
             }
             if doc:
@@ -198,6 +219,47 @@ class DojoMinerService:
             state['mined'] = amount
             state['balance'] = result.get('new_coins', state['balance'])
             return state
+
+    async def apply_energy_refill(self, user_id: int, charge: str) -> bool:
+        """Add purchased energy to the running cycle, once per Telegram charge."""
+        if not charge or type(user_id) is not int or user_id <= 0:
+            return False
+        async with self._locks[user_id]:
+            now = time.time()
+            doc = await self.miners.find_one({'_id': user_id})
+            if not doc or doc.get('collected') or now >= doc.get('finish_at', 0):
+                return False
+            refills = list(doc.get('energy_refills') or [])
+            if any(str(item.get('charge')) == str(charge) for item in refills):
+                return True
+            finish = float(doc.get('finish_at', now))
+            energy_start = max(0, int(doc.get('energy_start', BASE_ENERGY)))
+            if self._energy_at(doc, now, finish, energy_start) > 0:
+                return False
+            version = int(doc.get('version', 0))
+            base_rate = float(doc.get('base_rate', BASE_RATE))
+            remaining_hours = max(0.0, (finish - now) / 3600)
+            # 100 energy buys one hour at full power; the rest of the cycle
+            # would have run at 10%, so only that hour is the added reward.
+            full_hours = min(remaining_hours, ENERGY_REFILL_AMOUNT / ENERGY_PER_HOUR)
+            extra = int(base_rate * full_hours * (1.0 - LOW_POWER) + 0.5)
+            amount = int(doc.get('amount', MINING_REWARD)) + extra
+            refills.append({
+                'charge': str(charge),
+                'at': now,
+                'amount': ENERGY_REFILL_AMOUNT,
+            })
+            updated = await self.miners.find_one_and_update(
+                {'_id': user_id, 'version': version, 'collected': False},
+                {'$set': {'energy_refills': refills, 'amount': amount},
+                 '$inc': {'version': 1}},
+            )
+            if updated:
+                return True
+            current = await self.miners.find_one({'_id': user_id})
+            return bool(current and any(
+                str(item.get('charge')) == str(charge)
+                for item in current.get('energy_refills') or []))
 
     async def auto_step(self, user_id: int) -> None:
         """Collect a finished cycle and immediately start the next one."""

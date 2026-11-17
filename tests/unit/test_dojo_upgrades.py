@@ -113,6 +113,8 @@ async def test_snapshot_defaults_and_prices():
     assert data['pickaxe_level'] == 0 and data['pickaxe_rate'] == 15
     assert data['pickaxe_stars'] == PICKAXE_STARS == 10
     assert data['energy_bonus'] == 0 and data['energy_stars'] == ENERGY_STARS == 50
+    assert data['energy_refill_stars'] == 10
+    assert data['energy_refill_amount'] == 100
     assert data['auto_collect'] is False and data['auto_stars'] == AUTOCOLLECT_STARS == 1000
 
 
@@ -169,6 +171,71 @@ async def test_max_pickaxe_and_invalid_payments_are_rejected():
     with pytest.raises(GameError):
         await service.receive(7, payment(order['payload'], 'charge', 10))
     assert 'dojo_energy_purchases' not in users.docs[7]
+
+
+@pytest.mark.asyncio
+async def test_empty_energy_can_be_refilled_for_ten_stars():
+    users = Users([{'id': 7, 'coins': 0}])
+    miners = Miners()
+    db = SimpleNamespace(
+        users=users, dojo_miners=miners,
+        dojo_orders=Users(), dojo_payments=Users(),
+    )
+    dojo = DojoMinerService(
+        SimpleNamespace(database=db),
+        SimpleNamespace(process_game_win=AsyncMock()),
+    )
+    service = DojoUpgradeService(SimpleNamespace(
+        mongo_client=SimpleNamespace(database=db),
+        dojo_miner_service=dojo,
+    ))
+    with patch.object(miner.time, 'time', return_value=1000):
+        await dojo.start(7)
+    with patch.object(miner.time, 'time', return_value=1000 + 3600):
+        state = await dojo.state(7)
+        assert state['energy'] == 0
+        assert state['energy_refill_available'] is True
+        assert state['energy_refill_stars'] == 10
+        order = await service.prepare(7, 'refill')
+        assert order['stars'] == 10
+        await service.checkout(order['payload'], 7, 'XTR', 10)
+        receipt = await service.receive(
+            7, payment(order['payload'], 'charge-refill', 10))
+        assert receipt['state'] == 'fulfilled'
+        state = await dojo.state(7)
+        assert state['energy'] == 100
+        assert state['energy_refill_available'] is False
+        # One full-power hour replaces an hour that would have run at 10%.
+        assert state['reward'] == 34
+        assert (await service.receive(
+            7, payment(order['payload'], 'charge-refill', 10)))['state'] == 'fulfilled'
+        # A second paid refill cannot land while the bar is already positive.
+        assert await dojo.apply_energy_refill(7, 'charge-refill-2') is False
+    assert len(miners.docs[7]['energy_refills']) == 1
+
+
+@pytest.mark.asyncio
+async def test_energy_refill_requires_a_running_empty_cycle():
+    users = Users([{'id': 7, 'coins': 0}])
+    db = SimpleNamespace(
+        users=users, dojo_miners=Miners(),
+        dojo_orders=Users(), dojo_payments=Users(),
+    )
+    dojo = DojoMinerService(
+        SimpleNamespace(database=db),
+        SimpleNamespace(process_game_win=AsyncMock()),
+    )
+    service = DojoUpgradeService(SimpleNamespace(
+        mongo_client=SimpleNamespace(database=db),
+        dojo_miner_service=dojo,
+    ))
+    with patch.object(miner.time, 'time', return_value=1000):
+        with pytest.raises(GameError, match='нулевой энергии'):
+            await service.prepare(7, 'refill')
+        await dojo.start(7)
+    with patch.object(miner.time, 'time', return_value=1100):
+        with pytest.raises(GameError, match='нулевой энергии'):
+            await service.prepare(7, 'refill')
 
 
 @pytest.mark.asyncio

@@ -344,6 +344,14 @@ async def cmd_help(message: Message):
     mention = get_mention(message.from_user)
 
     try:
+        if is_admin:
+            # The administrator needs the complete, paginated command
+            # catalogue, not the short player-facing card.
+            from src.bot.admin_help import admin_help_pages
+            for page in admin_help_pages():
+                await message.answer(page, parse_mode=None)
+            logger.info(f"✅ Admin help sent to {message.from_user.id}")
+            return
         text = Visuals.help_card()
         await message.answer(f"{mention}\n\n{text}", parse_mode="HTML")
         logger.info(f"✅ Help sent to {message.from_user.id}")

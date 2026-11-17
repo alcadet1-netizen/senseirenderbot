@@ -73,22 +73,10 @@
         class="roadmap-sticker"
         type="button"
         aria-label="ROAD MAP"
+        title="ROAD MAP"
       >
         <span class="roadmap-tape" aria-hidden="true"></span>
         <b class="roadmap-title">ROAD MAP</b>
-        <span class="roadmap-item">
-          <em data-i18n="AIRDROP">AIRDROP</em>
-          <strong>Q4 2026</strong>
-        </span>
-        <span class="roadmap-item">
-          <em data-i18n="СТАРТ МАЙНЕРА">СТАРТ МАЙНЕРА</em>
-        </span>
-        <span class="roadmap-item roadmap-item-tge">
-          <em>TGE</em>
-          <strong data-i18n="КОГДА ВСЕ МОНЕТЫ ДОБЫТЫ"
-            >КОГДА ВСЕ МОНЕТЫ ДОБЫТЫ</strong
-          >
-        </span>
       </button>
 
       <div class="stage">
@@ -112,8 +100,12 @@
         </section>
 
         <section
+          id="energy-card"
           class="energy"
+          role="button"
+          tabindex="-1"
           aria-label="Энергия майнера"
+          aria-disabled="true"
           data-i18n-aria="Энергия майнера"
         >
           <div class="energy-head">
@@ -137,6 +129,13 @@
           >
             <i id="energy-bar"></i>
           </div>
+          <span
+            id="energy-refill"
+            class="energy-refill"
+            data-i18n="10 ⭐ · ПОПОЛНИТЬ"
+            aria-hidden="true"
+            >10 ⭐ · ПОПОЛНИТЬ</span
+          >
         </section>
 
         <section id="view-mining" class="view view-mining">
@@ -411,7 +410,7 @@
           <h2 data-i18n="СЕНСЕЙ-МАЙНЕР">СЕНСЕЙ-МАЙНЕР</h2>
           <div class="stat-list profile-list">
             <div class="stat-row">
-              <span data-i18n="Баланс (как в чате)">Баланс (как в чате)</span
+              <span data-i18n="Баланс">Баланс</span
               ><b id="profile-balance">—</b>
             </div>
             <div class="stat-row">
@@ -584,7 +583,7 @@
         </section>
       </div>
 
-      <div id="roadmap-sheet" class="sheet" hidden>
+      <div id="roadmap-sheet" class="sheet roadmap-screen" hidden>
         <div class="sheet-backdrop" data-close="roadmap-sheet"></div>
         <section
           class="sheet-card roadmap-card"

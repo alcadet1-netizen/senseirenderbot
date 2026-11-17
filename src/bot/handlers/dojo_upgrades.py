@@ -36,6 +36,13 @@ async def successful_payment(message, container):
         return
     if receipt['state'] == 'fulfilled':
         kind = receipt.get('kind')
+        if kind == 'refill':
+            await message.answer(
+                '✅ Энергия пополнена на +100 в текущем цикле.\n'
+                f'Оплачено: {receipt["stars"]} ⭐.\n'
+                'Открой /dojo и продолжай майнинг.',
+                parse_mode=None)
+            return
         title = KINDS.get(kind, {}).get('title', 'Улучшение')
         await message.answer(
             f'✅ {title} активировано навсегда.\n'

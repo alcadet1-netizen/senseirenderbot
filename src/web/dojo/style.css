@@ -236,13 +236,13 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  padding: clamp(56px, 18vh, 180px) 18px max(18px, env(safe-area-inset-bottom));
+  padding: clamp(28px, 6.5vh, 58px) 18px 10px;
 }
 
 .stage::-webkit-scrollbar {
@@ -251,6 +251,8 @@ button {
 
 /* Tab content starts under the header and gets the whole stage to scroll. */
 #app.tabs-open .stage {
+  justify-content: flex-start;
+  overflow-y: auto;
   padding-top: max(14px, env(safe-area-inset-top));
 }
 
@@ -310,9 +312,9 @@ button {
 }
 
 .balance-label {
-  margin: 0 0 8px;
+  margin: 0 0 4px;
   color: #b4c9bd;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 500;
   letter-spacing: 7px;
   text-indent: 7px;
@@ -329,8 +331,8 @@ button {
 .point-coin {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   border: 1px solid rgba(92, 255, 166, 0.48);
   background: radial-gradient(
@@ -346,13 +348,13 @@ button {
 }
 
 .point-coin .icon {
-  width: 27px;
-  height: 22px;
+  width: 24px;
+  height: 19px;
 }
 
 #balance {
   display: block;
-  font-size: clamp(48px, 13vw, 66px);
+  font-size: clamp(38px, 11.5vw, 58px);
   font-weight: 300;
   line-height: 0.92;
   letter-spacing: 2px;
@@ -364,18 +366,19 @@ button {
 }
 
 .balance-sub {
-  margin: 9px 0 0;
+  margin: 5px 0 0;
   color: #a9beb2;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 400;
   letter-spacing: 1.2px;
   text-shadow: 0 2px 10px #000;
 }
 
 .energy {
+  position: relative;
   width: min(86vw, 380px);
-  margin-top: 17px;
-  padding: 14px 18px 16px;
+  margin-top: 10px;
+  padding: 10px 16px 12px;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: linear-gradient(
@@ -395,9 +398,9 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 11px;
-  font-size: 11px;
-  letter-spacing: 2.4px;
+  margin-bottom: 7px;
+  font-size: 10px;
+  letter-spacing: 2.2px;
 }
 
 .energy-title {
@@ -445,6 +448,55 @@ button {
   transition: width 0.5s linear;
 }
 
+.energy.is-empty {
+  border-color: rgba(167, 255, 205, 0.55);
+  cursor: pointer;
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.38),
+    0 0 28px rgba(63, 255, 151, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.energy.is-empty:active {
+  transform: scale(0.995);
+}
+
+.energy.is-empty:focus-visible {
+  outline: 2px solid rgba(138, 255, 190, 0.86);
+  outline-offset: 3px;
+}
+
+.energy.is-empty #energy-bar {
+  background: linear-gradient(90deg, #5c3220, #a95c37);
+  box-shadow: 0 0 12px rgba(255, 120, 70, 0.32);
+}
+
+.energy-refill {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  padding: 2px 9px;
+  border: 1px solid rgba(92, 255, 166, 0.32);
+  border-radius: 999px;
+  background: rgba(1, 18, 9, 0.9);
+  color: #d8ffe8;
+  font-size: 7px;
+  font-weight: 600;
+  letter-spacing: 1.1px;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-align: center;
+  text-shadow: 0 1px 4px #000;
+  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.energy.is-empty .energy-refill {
+  opacity: 1;
+}
+
 .view {
   width: 100%;
   min-height: 0;
@@ -452,14 +504,14 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 2vh;
+  padding-top: 8px;
 }
 
 .mine-meter {
   width: 100%;
   flex: 0 0 auto;
-  padding: 9px 12px 10px;
-  margin-bottom: 6px;
+  padding: 7px 11px 8px;
+  margin-bottom: 4px;
   border: 1px solid rgba(92, 255, 166, 0.16);
   border-radius: 12px;
   background: rgba(2, 14, 8, 0.72);
@@ -596,7 +648,7 @@ button {
   position: relative;
   display: grid;
   place-items: center;
-  width: min(58vw, 230px);
+  width: min(46vw, 182px);
   aspect-ratio: 1;
   flex: 0 0 auto;
 }
@@ -719,7 +771,7 @@ button {
 }
 
 .orb-label.is-timer {
-  font-size: clamp(27px, 8.2vw, 35px);
+  font-size: clamp(22px, 7vw, 30px);
   font-weight: 300;
   letter-spacing: 1.5px;
   font-variant-numeric: tabular-nums;
@@ -739,9 +791,9 @@ button {
 }
 
 .status {
-  margin: 12px 0 0;
+  margin: 7px 0 0;
   color: #78e6a4;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 500;
   letter-spacing: 3.6px;
   text-align: center;
@@ -751,9 +803,9 @@ button {
 
 .hint {
   max-width: 82%;
-  margin: 7px 0 0;
+  margin: 4px 0 0;
   color: #8da397;
-  font-size: 10px;
+  font-size: 8px;
   line-height: 1.4;
   letter-spacing: 0.4px;
   text-align: center;
@@ -1552,13 +1604,25 @@ button:focus-visible {
 
 @keyframes ring-pulse {
   0% {
-    opacity: 0.58;
-    transform: scale(0.9);
+    opacity: 0.78;
+    transform: scale(0.28);
   }
   72%,
   100% {
     opacity: 0;
-    transform: scale(1.2);
+    transform: scale(1.18);
+  }
+}
+
+@keyframes centre-pulse {
+  0% {
+    opacity: 0.72;
+    transform: scale(0.2);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
   }
 }
 
@@ -1681,12 +1745,12 @@ button:focus-visible {
   }
 
   .orb {
-    width: min(54vw, 220px);
+    width: min(42vw, 158px);
   }
 
   .phase-mining .orb,
   .phase-done .orb {
-    width: min(48vw, 190px);
+    width: min(42vw, 158px);
   }
 
   .orb-icon {
@@ -1811,7 +1875,41 @@ button:focus-visible {
 .orb,
 .phase-mining .orb,
 .phase-done .orb {
-  width: min(58vw, 230px);
+  width: min(46vw, 182px);
+}
+
+/* The pulse starts at the button's centre, not at its border. */
+.orb,
+.orb-halo,
+.orb::after,
+.orb-button {
+  transform-origin: 50% 50%;
+}
+
+.orb-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(151, 255, 197, 0.26),
+    rgba(57, 255, 147, 0.08) 42%,
+    transparent 70%
+  );
+  opacity: 0;
+  transform: scale(0.2);
+  pointer-events: none;
+}
+
+.orb-button > * {
+  position: relative;
+  z-index: 1;
+}
+
+.phase-mining .orb-button::before {
+  animation: centre-pulse 2.6s ease-out infinite;
 }
 
 .orb-button {
@@ -1850,10 +1948,13 @@ button:focus-visible {
 .roadmap-sticker {
   position: absolute;
   z-index: 6;
-  top: calc(max(18px, env(safe-area-inset-top)) + 58px);
-  right: max(5px, env(safe-area-inset-right));
-  width: 82px;
-  padding: 12px 8px 10px;
+  top: calc(max(18px, env(safe-area-inset-top)) + 54px);
+  right: max(8px, env(safe-area-inset-right));
+  display: grid;
+  place-items: center;
+  width: 70px;
+  min-height: 42px;
+  padding: 10px 7px 8px;
   border: 1px solid rgba(174, 255, 205, 0.3);
   border-radius: 3px 10px 10px 10px;
   background: linear-gradient(
@@ -1871,7 +1972,7 @@ button:focus-visible {
     inset 0 0 22px rgba(47, 255, 142, 0.07);
   color: #c9f4dc;
   font: inherit;
-  text-align: left;
+  text-align: center;
   appearance: none;
   -webkit-appearance: none;
   cursor: pointer;
@@ -1916,38 +2017,6 @@ button:focus-visible {
   letter-spacing: 2.2px;
   text-align: center;
   text-shadow: 0 0 12px rgba(64, 255, 150, 0.55);
-}
-
-.roadmap-item {
-  display: block;
-  margin-top: 8px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(92, 255, 166, 0.14);
-}
-
-.roadmap-item em {
-  display: block;
-  color: #84a897;
-  font-size: 6.5px;
-  font-style: normal;
-  letter-spacing: 1.1px;
-  line-height: 1.35;
-}
-
-.roadmap-item strong {
-  display: block;
-  margin-top: 2px;
-  color: #eafff3;
-  font-size: 8px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  line-height: 1.25;
-}
-
-.roadmap-item-tge strong {
-  color: #bfffd8;
-  font-size: 7px;
-  letter-spacing: 0.35px;
 }
 
 #app.tabs-open .roadmap-sticker {
@@ -2427,7 +2496,7 @@ button:focus-visible {
   .orb,
   .phase-mining .orb,
   .phase-done .orb {
-    width: min(50vw, 200px);
+    width: min(42vw, 158px);
   }
 
   .orb-button {
@@ -2447,39 +2516,241 @@ button:focus-visible {
 
   .roadmap-sticker {
     top: calc(max(12px, env(safe-area-inset-top)) + 42px);
-    width: 76px;
-    padding: 10px 7px 8px;
-    transform: rotate(1.8deg) scale(0.82);
+    width: 66px;
+    min-height: 39px;
+    padding: 9px 6px 7px;
+    transform: rotate(1.8deg) scale(0.9);
+  }
+}
+
+@media (max-height: 640px) {
+  .stage {
+    padding-top: 26px;
+    padding-bottom: 6px;
   }
 
-  .roadmap-item {
+  .balance-label {
+    margin-bottom: 2px;
+    font-size: 8px;
+    letter-spacing: 5px;
+  }
+
+  .point-coin {
+    width: 30px;
+    height: 30px;
+  }
+
+  .point-coin .icon {
+    width: 19px;
+    height: 15px;
+  }
+
+  #balance {
+    font-size: 34px;
+  }
+
+  .balance-sub {
+    margin-top: 2px;
+    font-size: 9px;
+  }
+
+  .energy {
     margin-top: 6px;
-    padding-top: 5px;
+    padding: 8px 12px 9px;
+  }
+
+  .energy-head {
+    margin-bottom: 4px;
+    font-size: 9px;
+  }
+
+  .view {
+    padding-top: 2px;
+  }
+
+  .mine-meter {
+    min-height: 36px;
+    margin-bottom: 2px;
+    padding: 5px 9px 6px;
+  }
+
+  .orb,
+  .phase-mining .orb,
+  .phase-done .orb {
+    width: min(36vw, 132px);
+  }
+
+  .orb-button {
+    grid-template-rows: 32px minmax(36px, auto) 10px;
+    gap: 4px;
+    padding: 12px;
+  }
+
+  .orb-icon {
+    height: 32px;
+  }
+
+  .orb-icon .icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .orb-label {
+    font-size: 12px;
+    letter-spacing: 2px;
+  }
+
+  .orb-label.is-timer {
+    font-size: 20px;
+    letter-spacing: 0.8px;
+  }
+
+  .status {
+    margin-top: 3px;
+    font-size: 8px;
+  }
+
+  .hint {
+    margin-top: 3px;
+    font-size: 7px;
+    line-height: 1.2;
+  }
+
+  .chain-panel {
+    height: 40px;
+    padding-block: 4px;
+  }
+
+  .tabs {
+    padding: 4px 4px max(6px, env(safe-area-inset-bottom));
+  }
+
+  .tab {
+    padding: 4px 0;
+    font-size: 7px;
+  }
+
+  .tab .icon {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+@media (max-height: 520px) {
+  .balance-label,
+  .balance-sub {
+    display: none;
+  }
+
+  .point-coin {
+    width: 26px;
+    height: 26px;
+  }
+
+  .point-coin .icon {
+    width: 16px;
+    height: 13px;
+  }
+
+  #balance {
+    font-size: 28px;
+  }
+
+  .energy {
+    margin-top: 4px;
+  }
+
+  .orb,
+  .phase-mining .orb,
+  .phase-done .orb {
+    width: min(30vw, 108px);
+  }
+
+  .orb-button {
+    grid-template-rows: 24px minmax(30px, auto) 8px;
+    gap: 2px;
+    padding: 7px;
+  }
+
+  .orb-icon {
+    height: 24px;
+  }
+
+  .orb-icon .icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .orb-label,
+  .orb-label.is-action {
+    font-size: 12px;
+    letter-spacing: 1.2px;
+    line-height: 1.15;
+  }
+
+  .orb-sub {
+    font-size: 6px;
+    letter-spacing: 0.7px;
+    line-height: 1.25;
+  }
+
+  .orb-label.is-timer {
+    font-size: 17px;
+    letter-spacing: 1.6px;
+  }
+
+  #view-profile {
+    margin-top: 6px;
+    padding: 12px 14px 14px;
+  }
+
+  #view-profile .view-eyebrow {
+    margin-bottom: 3px;
+    font-size: 8px;
+  }
+
+  #view-profile h2 {
+    margin-bottom: 8px;
+    font-size: 22px;
+  }
+
+  #view-profile .stat-row {
+    padding: 6px 11px;
+    font-size: 11px;
+  }
+}
+
+@media (max-height: 480px) {
+  #view-profile {
+    margin-top: 2px;
+    padding: 8px 12px 10px;
+  }
+
+  #view-profile .view-eyebrow {
+    margin-bottom: 2px;
+  }
+
+  #view-profile h2 {
+    margin-bottom: 6px;
+    font-size: 18px;
+  }
+
+  #view-profile .stat-row {
+    padding: 4px 10px;
+    font-size: 10px;
   }
 }
 
 @media (max-width: 380px) {
   .roadmap-sticker {
-    right: 3px;
-    width: 70px;
-    padding: 10px 6px 8px;
+    right: 4px;
+    width: 64px;
+    padding: 9px 5px 7px;
   }
 
   .roadmap-title {
-    font-size: 6.5px;
-    letter-spacing: 1.7px;
-  }
-
-  .roadmap-item em {
-    font-size: 6px;
-  }
-
-  .roadmap-item strong {
     font-size: 7px;
-  }
-
-  .roadmap-item-tge strong {
-    font-size: 6.5px;
+    letter-spacing: 1.6px;
   }
 
   .chain-panel {
@@ -2493,15 +2764,39 @@ button:focus-visible {
   }
 }
 
-/* --- Roadmap modal ------------------------------------------------------- */
+/* --- Roadmap screen ------------------------------------------------------ */
+#roadmap-sheet.roadmap-screen {
+  z-index: 21;
+  align-items: stretch;
+}
+
+#roadmap-sheet.roadmap-screen .sheet-backdrop {
+  display: none;
+}
+
 .roadmap-card {
-  padding-top: 30px;
+  width: 100%;
+  height: 100%;
+  gap: 0;
+  max-height: none;
+  margin: 0;
+  padding: max(24px, env(safe-area-inset-top)) 22px
+    max(22px, env(safe-area-inset-bottom));
+  border: 0;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
 }
 
 .roadmap-steps {
   display: grid;
   gap: 10px;
   margin: 4px 0 16px;
+}
+
+.roadmap-card .sheet-done {
+  margin-top: auto;
 }
 
 .roadmap-step {

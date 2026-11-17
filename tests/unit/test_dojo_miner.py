@@ -74,6 +74,7 @@ async def test_miner_has_language_switch_and_scrollable_stage():
         css = await (await client.get('/miniapp/dojo/style.css')).text()
         assert '.lang-switch' in css
         assert '#app.tabs-open .stage' in css
+        assert 'overflow-y: hidden' in css
         assert 'overflow-y: auto' in css
         assert 'max-height: none' in css
         js = await (await client.get('/miniapp/dojo/miner.js')).text()
@@ -213,12 +214,17 @@ async def test_miner_keeps_action_slot_and_renders_new_layers():
     assert '.mine-meter.is-idle' in css
     assert '.orb,' in css and '.phase-mining .orb,' in css
     assert 'grid-template-rows' in css
-    # Right-side roadmap sticker, its English modal, chain footer and referral card.
+    # The central sticker is only a small ROAD MAP button; the complete
+    # English roadmap lives on its own full-screen view.
     assert 'id="roadmap"' in html and 'class="roadmap-sticker"' in html
+    assert '>ROAD MAP</b>' in html
     assert 'AIRDROP' in html and 'Q4 2026' in html
-    assert 'КОГДА ВСЕ МОНЕТЫ ДОБЫТЫ' in html
-    assert 'id="roadmap-sheet"' in html
+    assert 'id="roadmap-sheet"' in html and 'roadmap-screen' in html
     assert 'TGE · FINISH MINE' in html and 'WHEN ALL COINS ARE MINED' in html
+    assert 'id="energy-card"' in html and 'id="energy-refill"' in html
+    assert '10 ⭐ · ПОПОЛНИТЬ' in html
+    assert 'Баланс (как в чате)' not in html
+    assert 'data-i18n="Баланс"' in html
     assert 'id="chain-panel"' in html and 'id="chain-line"' in html
     assert 'id="ref-share" class="ref-share-button"' in html
     assert 'id="ref-link" class="ref-link"' in html
