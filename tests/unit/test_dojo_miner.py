@@ -172,6 +172,11 @@ async def test_api_requires_signature_and_dispatches_actions():
         assert response.status == 200
         assert data['burn']['amount'] == 100 and data['balance'] == 900
         burn.assert_awaited_once_with(7, 100)
+        response = await client.post('/miniapp/dojo/api/burn', json={
+            'initData': auth, 'amount': 100,
+            'request_id': 'burn-request-1234'})
+        assert response.status == 200
+        burn.assert_awaited_with(7, 100, 'burn-request-1234')
         response = await client.post('/miniapp/dojo/api/referrals', json={
             'initData': auth, 'level': 2})
         data = await response.json()

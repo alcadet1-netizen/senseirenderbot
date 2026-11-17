@@ -207,3 +207,18 @@ async def test_task_energy_waits_for_the_next_cycle_and_is_consumed_once():
         after = await dojo.state(7)
     assert after['energy_max'] == 100
     assert after['energy'] < 200
+
+
+@pytest.mark.asyncio
+async def test_boost_bought_before_start_is_in_the_ready_reward():
+    _, dojo, _ = service()
+    with patch.object(miner.time, 'time', return_value=1000):
+        assert await dojo.apply_speed_boost(7, 'charge-ready-boost') is True
+        ready = await dojo.state(7)
+        assert ready['phase'] == 'ready'
+        assert ready['boost_active'] is True
+        assert ready['reward'] == 35
+        assert ready['next_reward'] == 35
+        started = await dojo.start(7)
+    assert started['reward'] == 35
+    assert started['boost_seconds_left'] == 7200

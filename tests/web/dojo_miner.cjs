@@ -29,7 +29,9 @@ const { chromium } = require("playwright-core");
   let cycleEnergyStart = 100;
   let burned = 0;
   let claimed = false;
+  let burnRequestId = "";
   const calls = [];
+  const boostUntil = Date.now() / 1000 + 3600;
 
   await page.route("**/miniapp/dojo/api/**", async (route) => {
     const action = route.request().url().split("/").pop();
@@ -54,7 +56,9 @@ const { chromium } = require("playwright-core");
       taskEnergy = 0;
     }
     if (action === "burn") {
-      const amount = Number(route.request().postDataJSON().amount) || 0;
+      const body = route.request().postDataJSON();
+      burnRequestId = body.request_id || "";
+      const amount = Number(body.amount) || 0;
       balance -= amount;
       burned += amount;
     }
@@ -84,8 +88,9 @@ const { chromium } = require("playwright-core");
             boost_stars: 1,
             boost_percent: 50,
             boost_hours: 2,
-            boost_active: false,
-            boost_seconds_left: 0,
+            boost_active: true,
+            boost_until: boostUntil,
+            boost_seconds_left: 3600,
           },
         },
       });
@@ -184,6 +189,10 @@ const { chromium } = require("playwright-core");
       pickaxe_level: 0,
       energy_purchases: 0,
       auto_collect: false,
+      boost_until: boostUntil,
+      boost_active: true,
+      boost_seconds_left: 3600,
+      boost_percent: 50,
       cycle_seconds: 14400,
       started_at: started || null,
       finish_at: finish || null,
@@ -219,6 +228,8 @@ const { chromium } = require("playwright-core");
   assert.ok((await page.locator(".matrix-col").count()) >= 9);
   assert.equal(await page.locator("#energy").textContent(), "100 / 100");
   assert.equal(await page.locator("#status").textContent(), "СЕНСЕЙ ГОТОВ");
+  assert.equal(await page.locator("#boost-pill").isVisible(), true);
+  assert.match(await page.locator("#boost-pill").textContent(), /СКОРОСТЬ/);
   assert.ok(
     await page
       .locator("#app")
@@ -310,6 +321,10 @@ const { chromium } = require("playwright-core");
   assert.match(
     await page.locator(".upgrade-card").nth(2).textContent(),
     /1 ⭐.*УСКОРИТЬ/s,
+  );
+  assert.match(
+    await page.locator(".upgrade-card").nth(2).textContent(),
+    /АКТИВЕН/,
   );
   assert.match(
     await page.locator(".upgrade-card").first().textContent(),
@@ -430,6 +445,7 @@ const { chromium } = require("playwright-core");
   );
   assert.equal(await page.locator("#burn-sheet").isVisible(), false);
   assert.match(await page.locator("#toast").textContent(), /Сожжено/);
+  assert.match(burnRequestId, /^[A-Za-z0-9_-]{8,64}$/);
   assert.deepEqual(errors, []);
   assert.deepEqual(
     calls

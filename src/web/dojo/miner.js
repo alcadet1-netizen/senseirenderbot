@@ -319,6 +319,10 @@
       "Emission cannot be reduced any further.",
     "Сжигание недоступно для этого профиля.":
       "Burning is unavailable for this profile.",
+    "Неверный запрос сжигания. Открой окно заново.":
+      "Invalid burn request. Reopen the window and try again.",
+    "Сжигание уже обрабатывается. Подожди и обнови экран.":
+      "The burn is already being processed. Wait and refresh the screen.",
     НАМАЙНЕНО: "MINED",
     "ЭМИССИИ ВЫПУЩЕНО": "OF EMISSION RELEASED",
     "ОСТАЛОСЬ ДО КОНЦА МАЙНИНГА": "LEFT UNTIL MINING ENDS",
@@ -477,6 +481,7 @@
   let upgradesLoaded = false;
   let upgradeBusy = null;
   let burnBusy = false;
+  let burnRequest = "";
   let bank = null;
   let referrals = null;
   let referralsLoaded = false;
@@ -578,17 +583,22 @@
   function paintBoost() {
     const pill = $("boost-pill");
     const timer = $("boost-timer");
-    if (!pill || !timer) return;
-    const until = Number(model?.boost_until) * 1000;
-    const active = Boolean(initData() && model && until > serverNow());
+    if (!pill || !timer || !model) return;
+    const until = Number(model.boost_until) * 1000;
+    const left = Math.max(0, until - serverNow());
+    const active = Boolean(initData() && until > serverNow());
+    const cardTimer = document.querySelector("[data-boost-timer]");
+    if (cardTimer) {
+      cardTimer.textContent = left
+        ? t("АКТИВЕН · {time}", { time: clock(left) })
+        : t("2 ЧАСА");
+    }
     pill.hidden = !active;
     if (!active) return;
-    timer.textContent = clock(until - serverNow());
+    timer.textContent = clock(left);
     pill.setAttribute(
       "aria-label",
-      t("Скорость +50% · осталось {time}", {
-        time: clock(until - serverNow()),
-      }),
+      t("Скорость +50% · осталось {time}", { time: clock(left) }),
     );
   }
 
@@ -596,7 +606,12 @@
     if (!model) return;
     const energy = energyValue();
     const base = Number(model.base_rate) || 0;
-    const rate = energy > 0 ? base : base / 10;
+    const boostActive =
+      Number(model.boost_until) * 1000 > serverNow() && energy > 0;
+    const boost = boostActive
+      ? 1 + (Number(model.boost_percent) || 50) / 100
+      : 1;
+    const rate = energy > 0 ? base * boost : base / 10;
     $("hint").textContent = t(
       "Энергия {energy} / {max} · {rate} Coin/ч · после нуля 10%",
       { energy: Math.round(energy), max: energyMax(), rate: coin(rate) },
@@ -1199,6 +1214,7 @@
         : t("{stars} ⭐ · УСКОРИТЬ", { stars: upgrades.boost_stars }),
       upgradeBusy === "boost",
     );
+    boost.querySelector(".upgrade-head span").dataset.boostTimer = "1";
     const auto = upgradeCard(
       "clock",
       t("АВТОСБОР"),
@@ -1332,6 +1348,15 @@
     updateBurnPreview();
   }
 
+  function newBurnRequest() {
+    try {
+      if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    } catch {}
+    return `burn-${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 12)}`;
+  }
+
   function openBurn() {
     if (!initData()) {
       showToast(t("Открой майнер через /dojo."), true);
@@ -1339,6 +1364,7 @@
     }
     closeSheet();
     $("roadmap-sheet").hidden = true;
+    burnRequest = newBurnRequest();
     $("burn-amount").value = "";
     $("burn-total").textContent = `${coin(bank?.burned)} Coin`;
     $("burn-sheet").hidden = false;
@@ -1375,8 +1401,12 @@
     burnBusy = true;
     updateBurnPreview();
     try {
-      const data = await api("burn", { amount });
+      const data = await api("burn", {
+        amount,
+        request_id: burnRequest,
+      });
       const burned = Number(data.burn?.amount) || amount;
+      burnRequest = "";
       if (model) model.balance = Number(data.balance ?? data.burn?.balance);
       closeBurn();
       showToast(

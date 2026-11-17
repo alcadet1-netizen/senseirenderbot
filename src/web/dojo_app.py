@@ -233,8 +233,13 @@ def setup_dojo(app, container=None):
             elif action == 'bank':
                 result = await container.stats_service.get_bank_summary()
             elif action == 'burn':
-                burn = await container.burn_service.burn(
-                    user['id'], payload.get('amount'))
+                request_id = payload.get('request_id')
+                if request_id:
+                    burn = await container.burn_service.burn(
+                        user['id'], payload.get('amount'), request_id)
+                else:
+                    burn = await container.burn_service.burn(
+                        user['id'], payload.get('amount'))
                 result = await service.state(user['id'])
                 result['balance'] = burn['balance']
                 result['burn'] = burn
