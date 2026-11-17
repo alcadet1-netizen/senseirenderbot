@@ -1,4 +1,4 @@
-// Сервер хранит 4-часовой цикл; интерфейс показывает таймер, энергию, прогресс и сбор.
+// Сервер хранит 3-часовой цикл; интерфейс показывает таймер, энергию, прогресс и сбор.
 (() => {
   "use strict";
 
@@ -24,15 +24,19 @@
     "ПРОГРЕСС ЦИКЛА": "CYCLE PROGRESS",
     ЗАДАНИЯ: "TASKS",
     ПОДПИСКИ: "SUBSCRIPTIONS",
-    "Подпишись на канал и забери SenseiCoin и разовый заряд энергии. Награда за каждый канал — один раз; базовый лимит энергии не растёт.":
-      "Subscribe to the channel and claim SenseiCoin plus a one-cycle energy charge. Each channel reward can be claimed once; the base energy cap does not grow.",
+    БОНУСЫ: "BONUSES",
+    "Подпишись на канал или запусти приложение и забери SenseiCoin и разовый заряд энергии. Награда за каждое задание — один раз; базовый лимит энергии не растёт.":
+      "Subscribe to a channel or launch an app and claim SenseiCoin plus a one-cycle energy charge. Each task reward can be claimed once; the base energy cap does not grow.",
     "ЗАГРУЖАЕМ ЗАДАНИЯ…": "LOADING TASKS…",
-    "Подписку проверяет сервер через Telegram.":
-      "The server verifies the subscription via Telegram.",
+    "Подписку проверяет сервер через Telegram. Ссылки на приложения открываются кнопкой «Запустить».":
+      "The server verifies subscriptions via Telegram. App links open with the Launch button.",
+    "Приложение · {host}": "App · {host}",
+    Запустить: "Launch",
+    Получить: "Claim",
     УЛУЧШЕНИЯ: "UPGRADES",
     ПРОКАЧКА: "UPGRADES",
-    "Улучшения за Telegram Stars. Кирка повышает добычу, энергия держит полную мощность дольше, буст ускоряет фарм на 2 часа, автосбор работает без тебя.":
-      "Telegram Stars upgrades. The pickaxe boosts mining, energy keeps full power longer, a boost speeds up farming for 2 hours, and auto-collect works without you.",
+    "Улучшения за Telegram Stars. Кирка повышает добычу, энергия держит полную мощность дольше, буст ускоряет фарм на 1 час, автосбор работает без тебя.":
+      "Telegram Stars upgrades. The pickaxe boosts mining, energy keeps full power longer, a boost speeds up farming for 1 hour, and auto-collect works without you.",
     "ЗАГРУЖАЕМ УЛУЧШЕНИЯ…": "LOADING UPGRADES…",
     "Оплата Stars · улучшения не сгорают":
       "Stars payment · upgrades never expire",
@@ -44,6 +48,10 @@
     "СТАРТ МАЙНЕРА": "MINER START",
     "КОГДА ВСЕ МОНЕТЫ ДОБЫТЫ": "WHEN ALL COINS ARE MINED",
     "Лента блоков майнинга": "Mining block feed",
+    "Последние найденные блоки": "Latest found blocks",
+    "ЖДЁМ ПЕРВЫЙ БЛОК": "WAITING FOR THE FIRST BLOCK",
+    "смайнил блок": "mined a block",
+    "ты · смайнил блок": "you · mined a block",
     "СЕТЬ · ОЖИДАНИЕ": "NETWORK · IDLE",
     "ЦЕПОЧКА · БЛОК {block}": "CHAIN · BLOCK {block}",
     "БЛОК ГОТОВ · ЖДЁТ СБОРА": "BLOCK READY · WAITING TO COLLECT",
@@ -90,7 +98,7 @@
     Добыча: "Mining rate",
     Энергия: "Energy",
     Цикл: "Cycle",
-    "4 часа": "4 hours",
+    "3 часа": "3 hours",
     Награда: "Reward",
     Автосбор: "Auto-collect",
     ВКЛ: "ON",
@@ -105,8 +113,8 @@
     Закрыть: "Close",
     ПРАВИЛА: "RULES",
     "КАК РАБОТАЕТ МАЙНЕР": "HOW THE MINER WORKS",
-    "<b>Запусти цикл.</b> Сенсей уходит в майнинг ровно на 4 часа.":
-      "<b>Start a cycle.</b> Sensei goes mining for exactly 4 hours.",
+    "<b>Запусти цикл.</b> Сенсей уходит в майнинг ровно на 3 часа.":
+      "<b>Start a cycle.</b> Sensei goes mining for exactly 3 hours.",
     "<b>Следи за энергией.</b> 100 энергии хватает на час полной мощности; потом кирка добывает 10% от базовой скорости.":
       "<b>Watch your energy.</b> 100 energy lasts one hour at full power; after that the pickaxe mines at 10% of its base rate.",
     "<b>Забери награду.</b> Она приходит из SenseiBank только после конца цикла. Процент прогресса виден на экране.":
@@ -134,10 +142,10 @@
     "Сервер начисляет SenseiCoin из банка.":
       "The server credits SenseiCoin from the bank.",
     "ЗАПУСК…": "STARTING…",
-    "4 ЧАСА": "4 HOURS",
+    "3 ЧАСА": "3 HOURS",
     "СЕНСЕЙ УХОДИТ В МАЙНИНГ": "SENSEI GOES MINING",
-    "Создаём четырёхчасовой цикл на сервере.":
-      "Creating a four-hour cycle on the server.",
+    "Создаём трёхчасовой цикл на сервере.":
+      "Creating a three-hour cycle on the server.",
     "ДО КОНЦА ЦИКЛА": "UNTIL THE CYCLE ENDS",
     "МАЙНИНГ ИДЁТ · {percent}%": "MINING · {percent}%",
     "ЗАБРАТЬ {amount}": "COLLECT {amount}",
@@ -145,7 +153,7 @@
     "Награда из SenseiBank ждёт тебя. Забери и начни снова.":
       "Your SenseiBank reward is waiting. Collect it and start again.",
     "НАЧАТЬ МАЙНИНГ": "START MINING",
-    "4 ЧАСА · {amount} COIN": "4 HOURS · {amount} COIN",
+    "3 ЧАСА · {amount} COIN": "3 HOURS · {amount} COIN",
     "СЕНСЕЙ ГОТОВ": "SENSEI IS READY",
     "Кирка {rate} Coin/ч · энергия {energy} · {hours} ч полной мощности":
       "Pickaxe {rate} Coin/h · energy {energy} · {hours} h at full power",
@@ -157,8 +165,8 @@
     "Энергия пополнена": "Energy refilled",
     "Пополнить можно только при нулевой энергии.":
       "You can refill only at zero energy.",
-    "Майнинг запущен · Сенсей ушёл на 4 часа":
-      "Mining started · Sensei left for 4 hours",
+    "Майнинг запущен · Сенсей ушёл на 3 часа":
+      "Mining started · Sensei left for 3 hours",
     "+{amount} SenseiCoin · баланс {balance}":
       "+{amount} SenseiCoin · balance {balance}",
     "ПОКА НЕТ ЗАДАНИЙ": "NO TASKS YET",
@@ -189,8 +197,8 @@
     "{stars} ⭐ · +100 ЭНЕРГИИ": "{stars} ⭐ · +100 ENERGY",
     АВТОСБОР: "AUTO-COLLECT",
     АКТИВЕН: "ACTIVE",
-    "Сам собирает награду и запускает новый цикл каждые 4 часа. Участие не нужно.":
-      "Collects the reward and starts a new cycle every 4 hours. No action needed.",
+    "Сам собирает награду и запускает новый цикл каждые 3 часа. Участие не нужно.":
+      "Collects the reward and starts a new cycle every 3 hours. No action needed.",
     "Один раз · работает всегда": "One-time · always active",
     "УЖЕ ВКЛЮЧЁН": "ALREADY ON",
     "{stars} ⭐ · ВКЛЮЧИТЬ": "{stars} ⭐ · ENABLE",
@@ -283,11 +291,12 @@
       "Auto-collect is already permanently enabled.",
     "+50% СКОРОСТЬ": "+50% SPEED",
     "СКОРОСТЬ +50%": "SPEED +50%",
-    "2 ЧАСА": "2 HOURS",
+    "1 ЧАС": "1 HOUR",
+    "КУПЛЕНО В ЦИКЛЕ": "BOUGHT THIS CYCLE",
     "АКТИВЕН · {time}": "ACTIVE · {time}",
-    "Ускоряет добычу на 50% на два часа. Повторная покупка добавляет только часы — процент не растёт.":
-      "Boosts mining by 50% for two hours. A repeat purchase adds hours only — the percentage never stacks.",
-    "1 ⭐ · +2 ЧАСА · МАКСИМУМ +50%": "1 ⭐ · +2 HOURS · MAX +50%",
+    "Ускоряет добычу на 50% на один час. Одна покупка за цикл.":
+      "Boosts mining by 50% for one hour. One purchase per cycle.",
+    "1 ⭐ · +1 ЧАС · 1 РАЗ ЗА ЦИКЛ": "1 ⭐ · +1 HOUR · ONCE PER CYCLE",
     "{stars} ⭐ · УСКОРИТЬ": "{stars} ⭐ · SPEED UP",
     "Скорость +50% · осталось {time}": "Speed +50% · {time} left",
     "Сожжено {amount} Coin. Эмиссия уменьшена навсегда.":
@@ -402,6 +411,9 @@
       <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>`,
     clock: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`,
+    launch: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M14 3h7v7"/><path d="M10 14 21 3"/>
+      <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>`,
   };
 
   const TIMER_SEGMENTS = {
@@ -663,7 +675,7 @@
     if (cardTimer) {
       cardTimer.textContent = left
         ? t("АКТИВЕН · {time}", { time: clock(left) })
-        : t("2 ЧАСА");
+        : t("1 ЧАС");
     }
     pill.hidden = !active;
     if (!active) return;
@@ -734,7 +746,8 @@
     $("mine-percent").textContent = `${value.toFixed(1)}%`;
   }
 
-  let chainSerial = 0;
+  let chainSession = "";
+  let chainLastBlock = 0;
 
   function pseudoHash(seed) {
     let value = seed >>> 0 || 1;
@@ -743,55 +756,158 @@
     return ((value ^ (value >>> 16)) >>> 0).toString(16).padStart(8, "0");
   }
 
+  function currentUserId() {
+    const direct = tg?.initDataUnsafe?.user?.id;
+    if (direct) return String(direct);
+    try {
+      const raw = new URLSearchParams(initData()).get("user");
+      const user = raw ? JSON.parse(raw) : null;
+      return user?.id ? String(user.id) : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function maskId(value) {
+    const clean = String(value || "").replace(/\D/g, "");
+    if (clean.length < 4) return "ID…";
+    return `${clean.slice(0, 3)}…${clean.slice(-2)}`;
+  }
+
+  function networkId(block) {
+    const seed = (block * 2654435761 + 40503) >>> 0;
+    const digits = 100000000 + (parseInt(pseudoHash(seed), 16) % 900000000);
+    return String(digits);
+  }
+
+  function chainTime(at) {
+    try {
+      return new Date(at * 1000).toLocaleTimeString(
+        lang === "en" ? "en-GB" : "ru-RU",
+        { hour: "2-digit", minute: "2-digit", second: "2-digit" },
+      );
+    } catch {
+      return "--:--:--";
+    }
+  }
+
+  function makeChainRow(block, at, mine = false) {
+    const row = document.createElement("li");
+    row.className = `chain-row${mine ? " is-mine is-new" : " is-new"}`;
+    row.dataset.block = String(block);
+    const dot = document.createElement("span");
+    dot.className = "chain-dot";
+    const id = document.createElement("span");
+    id.className = "chain-id";
+    const local = currentUserId();
+    id.textContent = maskId(mine && local ? local : networkId(block));
+    const verb = document.createElement("span");
+    verb.className = "chain-verb";
+    verb.textContent = mine ? t("ты · смайнил блок") : t("смайнил блок");
+    const time = document.createElement("time");
+    time.className = "chain-time";
+    time.dateTime = new Date(at * 1000).toISOString();
+    time.textContent = chainTime(at);
+    row.append(dot, id, verb, time);
+    return row;
+  }
+
+  function pushChainRow(feed, block, at, mine = false) {
+    feed.prepend(makeChainRow(block, at, mine));
+    while (feed.children.length > 3) feed.lastElementChild.remove();
+  }
+
+  function resetChainFeed(feed, rows) {
+    feed.replaceChildren();
+    rows.forEach((row) =>
+      feed.appendChild(makeChainRow(row.block, row.at, row.mine)),
+    );
+  }
+
   function paintChain() {
     const panel = $("chain-panel");
     const status = $("chain-status");
-    const line = $("chain-line");
+    const feed = $("chain-feed");
     const bpmNode = $("chain-bpm");
-    if (!panel || !status || !line || !bpmNode) return;
+    if (!panel || !status || !feed || !bpmNode) return;
     const mining = initData() && model?.phase === "mining";
     const complete = initData() && model?.phase === "ready_to_collect";
     panel.classList.toggle("is-live", Boolean(mining));
     panel.classList.toggle("is-complete", Boolean(complete));
-    if (!mining) {
-      chainSerial += 1;
-      if (complete) {
-        // A finished block has one fixed fingerprint: it must not change while
-        // the player is deciding when to collect.
-        const seed =
-          (184000 * 2654435761 +
-            Math.floor((Number(model.finish_at) || 0) * 1000)) >>>
-          0;
-        const hash = `${pseudoHash(seed)}${pseudoHash(seed ^ 0x9e3779b9)}`;
-        status.textContent = t("БЛОК ГОТОВ · ЖДЁТ СБОРА");
-        line.textContent = t("100% · HASH 0x{hash} · NONCE {nonce}", {
-          hash,
-          nonce: coin(100000 + (seed % 900000)),
-        });
-        bpmNode.textContent = "— BPM";
-      } else {
-        status.textContent = t("СЕТЬ · ОЖИДАНИЕ");
-        line.textContent = t("ЗАПУСТИ МАЙНИНГ, ЧТОБЫ НАЧАТЬ ДОБЫЧУ БЛОКОВ");
-        bpmNode.textContent = "— BPM";
+
+    const session = `${model?.phase || "none"}|${model?.started_at || ""}|${model?.finish_at || ""}|${lang}`;
+    const reset = session !== chainSession;
+    chainSession = session;
+
+    if (!mining && !complete) {
+      if (reset) {
+        const now = serverNow() / 1000;
+        resetChainFeed(
+          feed,
+          [0, 1, 2].map((index) => ({
+            block: 184000 + Math.floor(now / 7) - index,
+            at: now - index * 7,
+            mine: false,
+          })),
+        );
       }
+      status.textContent = t("СЕТЬ · ОЖИДАНИЕ");
+      bpmNode.textContent = "— BPM";
       return;
     }
-    chainSerial += 1;
-    const started = Number(model.started_at) || 0;
-    const elapsed = Math.max(0, serverNow() / 1000 - started);
-    const block = 184000 + Math.floor(elapsed / 7);
-    const seed = (block * 2654435761 + chainSerial * 40503) >>> 0;
-    const hash = `${pseudoHash(seed)}${pseudoHash(seed ^ 0x9e3779b9)}`;
-    const nonce = 100000 + ((block * 7919 + chainSerial * 104729) % 900000);
-    const bpm = 64 + (block % 9);
+
+    const started = Number(model.started_at) || serverNow() / 1000;
+    const finish = Number(model.finish_at) || serverNow() / 1000;
+    const blockAt = (at) =>
+      184000 + Math.max(0, Math.floor((at - started) / 7));
+    const timeAt = (block) => started + Math.max(0, block - 184000) * 7;
+
+    if (complete) {
+      if (reset) {
+        const finalBlock = blockAt(finish);
+        const rows = [];
+        // The finished block is ours and sits at the top of the strip.
+        rows.push({ block: finalBlock, at: finish, mine: true });
+        for (let i = 1; i <= 2; i += 1) {
+          rows.push({
+            block: finalBlock - i,
+            at: Math.max(started, finish - i * 7),
+            mine: false,
+          });
+        }
+        resetChainFeed(feed, rows);
+      }
+      status.textContent = t("БЛОК ГОТОВ · ЖДЁТ СБОРА");
+      bpmNode.textContent = "— BPM";
+      return;
+    }
+
+    const now = serverNow() / 1000;
+    const currentBlock = blockAt(Math.min(now, finish));
+    if (reset) {
+      const rows = [];
+      for (let i = 0; i < 3; i += 1) {
+        const block = currentBlock - i;
+        rows.push({
+          block,
+          at: Math.min(now, timeAt(block)),
+          mine: false,
+        });
+      }
+      resetChainFeed(feed, rows);
+      chainLastBlock = currentBlock;
+    } else if (currentBlock > chainLastBlock) {
+      const next = Math.min(currentBlock, chainLastBlock + 6);
+      for (let block = chainLastBlock + 1; block <= next; block += 1) {
+        pushChainRow(feed, block, Math.min(now, timeAt(block)));
+      }
+      chainLastBlock = next;
+    }
+
+    const bpm = 64 + (currentBlock % 9);
     panel.style.setProperty("--beat", `${(60 / bpm).toFixed(2)}s`);
     status.textContent = t("ЦЕПОЧКА · БЛОК {block}", {
-      block: coin(block),
-    });
-    line.textContent = t("HASH 0x{hash} · NONCE {nonce} · PULSE {bpm} BPM", {
-      hash,
-      nonce: coin(nonce),
-      bpm,
+      block: coin(currentBlock),
     });
     bpmNode.textContent = `${bpm} BPM`;
   }
@@ -923,9 +1039,9 @@
     }
 
     if (pending === "start") {
-      paintAction("pickaxe", t("ЗАПУСК…"), t("4 ЧАСА"), false, true);
+      paintAction("pickaxe", t("ЗАПУСК…"), t("3 ЧАСА"), false, true);
       status.textContent = t("СЕНСЕЙ УХОДИТ В МАЙНИНГ");
-      hint.textContent = t("Создаём четырёхчасовой цикл на сервере.");
+      hint.textContent = t("Создаём трёхчасовой цикл на сервере.");
       return;
     }
 
@@ -962,7 +1078,7 @@
     paintAction(
       "pickaxe",
       t("НАЧАТЬ МАЙНИНГ"),
-      t("4 ЧАСА · {amount} COIN", { amount: coin(model.next_reward) }),
+      t("3 ЧАСА · {amount} COIN", { amount: coin(model.next_reward) }),
       false,
       false,
     );
@@ -1172,7 +1288,7 @@
     try {
       const data = await api("start");
       apply(data);
-      showToast(t("Майнинг запущен · Сенсей ушёл на 4 часа"));
+      showToast(t("Майнинг запущен · Сенсей ушёл на 3 часа"));
     } catch (error) {
       failed = true;
       showToast(error.message, true);
@@ -1236,22 +1352,24 @@
       return;
     }
     tasks.forEach((task) => {
+      const isLink = task.kind === "link";
       const card = document.createElement("article");
-      card.className = `task-card${task.claimed ? " claimed" : ""}`;
+      card.className = `task-card${task.claimed ? " claimed" : ""}${isLink ? " is-link" : ""}`;
 
       const top = document.createElement("div");
       top.className = "task-top";
       const avatar = document.createElement("span");
       avatar.className = "task-avatar";
-      avatar.innerHTML = ICONS.telegram;
+      avatar.innerHTML = isLink ? ICONS.launch : ICONS.telegram;
       const name = document.createElement("span");
       name.className = "task-name";
       const title = document.createElement("b");
-      title.textContent = task.title || `@${task.username}`;
+      title.textContent =
+        task.title || (isLink ? task.host : `@${task.username}`);
       const handle = document.createElement("span");
-      handle.textContent = t("@{username} · подписка на канал", {
-        username: task.username,
-      });
+      handle.textContent = isLink
+        ? t("Приложение · {host}", { host: task.host || task.username || "" })
+        : t("@{username} · подписка на канал", { username: task.username });
       name.append(title, handle);
       top.append(avatar, name);
 
@@ -1282,17 +1400,30 @@
         open.href = task.url;
         open.target = "_blank";
         open.rel = "noopener noreferrer";
-        open.textContent = t("Подписаться");
+        open.textContent = isLink ? t("Запустить") : t("Подписаться");
         open.addEventListener("click", (event) => {
-          if (tg?.openTelegramLink) {
-            event.preventDefault();
-            tg.openTelegramLink(task.url);
+          if (!tg) return;
+          event.preventDefault();
+          if (isLink) {
+            if (task.url.includes("t.me/") && tg.openTelegramLink) {
+              tg.openTelegramLink(task.url);
+            } else if (tg.openLink) {
+              tg.openLink(task.url);
+            } else {
+              window.open(task.url, "_blank", "noopener,noreferrer");
+            }
+            return;
           }
+          if (tg.openTelegramLink) tg.openTelegramLink(task.url);
         });
         const claim = document.createElement("button");
         claim.className = "task-claim";
         claim.textContent =
-          taskBusy === task.slug ? t("Проверяем…") : t("Проверить");
+          taskBusy === task.slug
+            ? t("Проверяем…")
+            : isLink
+              ? t("Получить")
+              : t("Проверить");
         claim.disabled = Boolean(taskBusy);
         claim.addEventListener("click", () => claimTask(task.slug));
         actions.append(open, claim);
@@ -1428,20 +1559,23 @@
         upgrades.energy_purchases >= upgrades.energy_max_purchases,
     );
     const boostLeft = Math.max(0, Number(upgrades.boost_seconds_left) || 0);
+    const boostPurchased = Boolean(upgrades.boost_purchased);
     const boost = upgradeCard(
       "bolt",
       t("СКОРОСТЬ +50%"),
       boostLeft > 0
         ? t("АКТИВЕН · {time}", { time: clock(boostLeft * 1000) })
-        : t("2 ЧАСА"),
-      t(
-        "Ускоряет добычу на 50% на два часа. Повторная покупка добавляет только часы — процент не растёт.",
-      ),
-      t("1 ⭐ · +2 ЧАСА · МАКСИМУМ +50%"),
+        : t("1 ЧАС"),
+      t("Ускоряет добычу на 50% на один час. Одна покупка за цикл."),
+      boostPurchased
+        ? t("1 ⭐ · 1 РАЗ ЗА ЦИКЛ")
+        : t("1 ⭐ · +1 ЧАС · 1 РАЗ ЗА ЦИКЛ"),
       upgradeBusy === "boost"
         ? t("СЧЁТ…")
-        : t("{stars} ⭐ · УСКОРИТЬ", { stars: upgrades.boost_stars }),
-      upgradeBusy === "boost",
+        : boostPurchased
+          ? t("КУПЛЕНО В ЦИКЛЕ")
+          : t("{stars} ⭐ · УСКОРИТЬ", { stars: upgrades.boost_stars }),
+      upgradeBusy === "boost" || boostPurchased,
     );
     boost.querySelector(".upgrade-head span").dataset.boostTimer = "1";
     const auto = upgradeCard(
@@ -1449,7 +1583,7 @@
       t("АВТОСБОР"),
       upgrades.auto_collect ? t("АКТИВЕН") : t("ВЫКЛ"),
       t(
-        "Сам собирает награду и запускает новый цикл каждые 4 часа. Участие не нужно.",
+        "Сам собирает награду и запускает новый цикл каждые 3 часа. Участие не нужно.",
       ),
       t("Один раз · работает всегда"),
       upgrades.auto_collect
@@ -1513,7 +1647,7 @@
               kind === "refill"
                 ? "Энергия пополнена"
                 : kind === "boost"
-                  ? "Скорость +50% активирована"
+                  ? "Скорость +50% активирована на 1 час"
                   : "Оплата получена · включаем улучшение",
             ),
           );

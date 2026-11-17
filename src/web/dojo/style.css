@@ -4512,7 +4512,8 @@ button:focus-visible {
   .ambient-puff,
   .ambient-mote,
   .timer-colon-dot,
-  .timer-seg {
+  .timer-seg,
+  .chain-row.is-new {
     animation: none;
     transition: none;
   }
@@ -4544,5 +4545,159 @@ button:focus-visible {
     max-width: 92%;
     font-size: 7px;
     letter-spacing: 0.4px;
+  }
+}
+
+/* --- Live block feed: a non-scrollable list that moves by itself ---------- */
+.chain-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  height: 74px;
+  padding: 7px 14px 6px;
+  overflow: hidden;
+}
+
+.chain-copy {
+  width: 100%;
+  min-width: 0;
+  gap: 0;
+  padding-left: 24px;
+}
+
+.chain-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chain-head b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chain-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  height: 42px;
+  margin: 3px 0 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  touch-action: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+.chain-row {
+  display: grid;
+  grid-template-columns: 7px minmax(56px, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+  min-height: 13px;
+  color: #8fb8a0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 7.5px;
+  line-height: 1;
+}
+
+.chain-row.is-new {
+  animation: chain-row-in 0.45s ease both;
+}
+
+.task-card.is-link {
+  border-color: rgba(112, 212, 255, 0.24);
+  background: linear-gradient(
+    145deg,
+    rgba(4, 24, 30, 0.78),
+    rgba(2, 14, 9, 0.76)
+  );
+}
+
+.task-card.is-link .task-avatar {
+  border-color: rgba(112, 212, 255, 0.4);
+  color: #9de8ff;
+}
+
+.chain-row.is-mine .chain-id {
+  color: #effff5;
+  text-shadow: 0 0 9px rgba(101, 255, 171, 0.7);
+}
+
+.chain-row.is-empty .chain-verb {
+  grid-column: 2 / -1;
+}
+
+.chain-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #65ffac;
+  box-shadow: 0 0 7px rgba(101, 255, 172, 0.8);
+}
+
+.chain-row.is-mine .chain-dot {
+  background: #f4fff8;
+  box-shadow: 0 0 9px rgba(198, 255, 222, 0.95);
+}
+
+.chain-id {
+  overflow: hidden;
+  color: #b9f6cf;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chain-verb {
+  overflow: hidden;
+  color: #709482;
+  font-size: 7px;
+  letter-spacing: 0.65px;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.chain-time {
+  color: #93bea4;
+  font-size: 7px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+@keyframes chain-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-height: 640px) {
+  .chain-panel {
+    height: 64px;
+    padding-block: 5px;
+  }
+
+  .chain-feed {
+    height: 35px;
+    margin-top: 2px;
+  }
+
+  .chain-row {
+    min-height: 11px;
+    font-size: 7px;
   }
 }

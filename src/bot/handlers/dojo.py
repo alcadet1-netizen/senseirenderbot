@@ -1,4 +1,4 @@
-"""Запуск четырёхчасового майнера SenseiCoin."""
+"""Запуск трёхчасового майнера SenseiCoin."""
 import os
 from urllib.parse import urlsplit
 

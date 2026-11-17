@@ -45,9 +45,9 @@ async def successful_payment(message, container):
             return
         if kind == 'boost':
             await message.answer(
-                '✅ Скорость +50% активирована на 2 часа.\n'
+                '✅ Скорость +50% активирована на 1 час.\n'
                 f'Оплачено: {receipt["stars"]} ⭐.\n'
-                'Повторная покупка добавляет только 2 часа: процент остаётся +50%.',
+                'Это одна покупка скорости за цикл: процент остаётся +50%.',
                 parse_mode=None)
             return
         title = KINDS.get(kind, {}).get('title', 'Улучшение')

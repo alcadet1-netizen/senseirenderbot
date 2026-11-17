@@ -1,4 +1,4 @@
-"""SenseiCoin miner Mini App: one start runs a four-hour bank-funded cycle."""
+"""SenseiCoin miner Mini App: one start runs a three-hour bank-funded cycle."""
 import asyncio
 import logging
 import secrets

@@ -281,19 +281,20 @@
             </button>
           </div>
           <p id="status" class="status">ПОДКЛЮЧЕНИЕ</p>
-          <p id="hint" class="hint">4 часа · 15 Coin/ч базово · энергия 100</p>
+          <p id="hint" class="hint">3 часа · 15 Coin/ч базово · энергия 100</p>
           <div id="coins" class="coins" aria-hidden="true"></div>
         </section>
 
         <section id="view-tasks" class="view tab-view" hidden>
-          <p class="view-eyebrow" data-i18n="ЗАДАНИЯ">ЗАДАНИЯ</p>
-          <h2 data-i18n="ПОДПИСКИ">ПОДПИСКИ</h2>
+          <p class="view-eyebrow" data-i18n="БОНУСЫ">БОНУСЫ</p>
+          <h2 data-i18n="ЗАДАНИЯ">ЗАДАНИЯ</h2>
           <p
             class="view-copy"
-            data-i18n="Подпишись на канал и забери SenseiCoin и разовый заряд энергии. Награда за каждый канал — один раз; базовый лимит энергии не растёт."
+            data-i18n="Подпишись на канал или запусти приложение и забери SenseiCoin и разовый заряд энергии. Награда за каждое задание — один раз; базовый лимит энергии не растёт."
           >
-            Подпишись на канал и забери SenseiCoin и разовый заряд энергии.
-            Награда за каждый канал — один раз; базовый лимит энергии не растёт.
+            Подпишись на канал или запусти приложение и забери SenseiCoin и
+            разовый заряд энергии. Награда за каждое задание — один раз; базовый
+            лимит энергии не растёт.
           </p>
           <div id="tasks-list" class="task-list">
             <p class="task-empty" data-i18n="ЗАГРУЖАЕМ ЗАДАНИЯ…">
@@ -302,9 +303,10 @@
           </div>
           <p
             class="task-note"
-            data-i18n="Подписку проверяет сервер через Telegram."
+            data-i18n="Подписку проверяет сервер через Telegram. Ссылки на приложения открываются кнопкой «Запустить»."
           >
-            Подписку проверяет сервер через Telegram.
+            Подписку проверяет сервер через Telegram. Ссылки на приложения
+            открываются кнопкой «Запустить».
           </p>
         </section>
 
@@ -313,10 +315,10 @@
           <h2 data-i18n="ПРОКАЧКА">ПРОКАЧКА</h2>
           <p
             class="view-copy"
-            data-i18n="Улучшения за Telegram Stars. Кирка повышает добычу, энергия держит полную мощность дольше, буст ускоряет фарм на 2 часа, автосбор работает без тебя."
+            data-i18n="Улучшения за Telegram Stars. Кирка повышает добычу, энергия держит полную мощность дольше, буст ускоряет фарм на 1 час, автосбор работает без тебя."
           >
             Улучшения за Telegram Stars. Кирка повышает добычу, энергия держит
-            полную мощность дольше, буст ускоряет фарм на 2 часа, автосбор
+            полную мощность дольше, буст ускоряет фарм на 1 час, автосбор
             работает без тебя.
           </p>
           <div id="upgrades-list" class="upgrade-list">
@@ -562,7 +564,7 @@
               ><b id="profile-energy">100</b>
             </div>
             <div class="stat-row">
-              <span data-i18n="Цикл">Цикл</span><b data-i18n="4 часа">4 часа</b>
+              <span data-i18n="Цикл">Цикл</span><b data-i18n="3 часа">3 часа</b>
             </div>
             <div class="stat-row">
               <span data-i18n="Награда">Награда</span
@@ -587,10 +589,26 @@
       >
         <span class="chain-heart" aria-hidden="true"><i></i></span>
         <div class="chain-copy">
-          <b id="chain-status">СЕТЬ · ОЖИДАНИЕ</b>
-          <span id="chain-line">BLOCK — · HASH — · NONCE —</span>
+          <div class="chain-head">
+            <b id="chain-status">СЕТЬ · ОЖИДАНИЕ</b>
+            <span id="chain-bpm" class="chain-bpm">— BPM</span>
+          </div>
+          <ol
+            id="chain-feed"
+            class="chain-feed"
+            aria-label="Последние найденные блоки"
+            data-i18n-aria="Последние найденные блоки"
+            aria-live="off"
+          >
+            <li class="chain-row is-empty">
+              <span class="chain-id">—</span>
+              <span class="chain-verb" data-i18n="ЖДЁМ ПЕРВЫЙ БЛОК"
+                >ЖДЁМ ПЕРВЫЙ БЛОК</span
+              >
+              <time class="chain-time" datetime="">—:—</time>
+            </li>
+          </ol>
         </div>
-        <span id="chain-bpm" class="chain-bpm">— BPM</span>
         <svg
           class="chain-ecg"
           viewBox="0 0 240 28"
@@ -689,9 +707,9 @@
           </h2>
           <ol class="rules">
             <li
-              data-i18n-html="<b>Запусти цикл.</b> Сенсей уходит в майнинг ровно на 4 часа."
+              data-i18n-html="<b>Запусти цикл.</b> Сенсей уходит в майнинг ровно на 3 часа."
             >
-              <b>Запусти цикл.</b> Сенсей уходит в майнинг ровно на 4 часа.
+              <b>Запусти цикл.</b> Сенсей уходит в майнинг ровно на 3 часа.
             </li>
             <li
               data-i18n-html="<b>Следи за энергией.</b> 100 энергии хватает на час полной мощности; потом кирка добывает 10% от базовой скорости."

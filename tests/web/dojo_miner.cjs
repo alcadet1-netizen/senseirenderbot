@@ -17,7 +17,12 @@ const { chromium } = require("playwright-core");
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.addInitScript(() => {
-    window.Telegram = { WebApp: { initData: "signed-test" } };
+    window.Telegram = {
+      WebApp: {
+        initData: "signed-test",
+        initDataUnsafe: { user: { id: 700000123 } },
+      },
+    };
   });
 
   let phase = "ready";
@@ -40,7 +45,7 @@ const { chromium } = require("playwright-core");
     if (action === "start") {
       phase = "mining";
       started = now;
-      finish = now + 5;
+      finish = now + 9;
     }
     if (action === "collect") {
       phase = "ready";
@@ -87,7 +92,10 @@ const { chromium } = require("playwright-core");
             auto_stars: 1000,
             boost_stars: 1,
             boost_percent: 50,
-            boost_hours: 2,
+            boost_hours: 1,
+            boost_purchased: true,
+            boost_available: false,
+            boost_once_per_cycle: true,
             boost_active: true,
             boost_until: boostUntil,
             boost_seconds_left: 3600,
@@ -158,6 +166,17 @@ const { chromium } = require("playwright-core");
               energy_bonus: 100,
               claimed,
             },
+            {
+              slug: "link-0123456789abcdef",
+              kind: "link",
+              button_label: "Запустить",
+              title: "Приложение Сенсея",
+              host: "app.example",
+              url: "https://app.example/ref_7",
+              reward_coins: 5000,
+              energy_bonus: 50,
+              claimed: false,
+            },
           ],
         },
       });
@@ -193,7 +212,7 @@ const { chromium } = require("playwright-core");
       boost_active: true,
       boost_seconds_left: 3600,
       boost_percent: 50,
-      cycle_seconds: 14400,
+      cycle_seconds: 10800,
       started_at: started || null,
       finish_at: finish || null,
       remaining_ms: phase === "mining" ? Math.max(0, (finish - now) * 1000) : 0,
@@ -344,14 +363,26 @@ const { chromium } = require("playwright-core");
     await page.locator("#chain-status").textContent(),
     /ЦЕПОЧКА · БЛОК/,
   );
-  assert.match(
-    await page.locator("#chain-line").textContent(),
-    /HASH 0x[0-9a-f]+/,
+  const chainRows = page.locator("#chain-feed .chain-row");
+  assert.equal(await chainRows.count(), 3);
+  assert.match(await chainRows.first().textContent(), /смайнил блок/);
+  assert.match(await chainRows.first().textContent(), /\d{3}….{2}/);
+  assert.match(await page.locator("#chain-bpm").textContent(), /\d+ BPM/);
+  assert.equal(
+    await page
+      .locator("#chain-feed")
+      .evaluate((node) => getComputedStyle(node).overflowY),
+    "hidden",
   );
-  assert.match(
-    await page.locator("#chain-line").textContent(),
-    /PULSE \d+ BPM/,
+  assert.equal(
+    await page
+      .locator("#chain-feed")
+      .evaluate((node) => getComputedStyle(node).pointerEvents),
+    "none",
   );
+  const firstRow = await chainRows.first().textContent();
+  await page.waitForTimeout(8200);
+  assert.notEqual(await chainRows.first().textContent(), firstRow);
   assert.equal(await page.locator(".orb-orbit").count(), 2);
   assert.ok((await page.locator(".mining-particles i").count()) >= 14);
   await page.screenshot({ path: ".cache/miner2-mining.png" });
@@ -378,7 +409,15 @@ const { chromium } = require("playwright-core");
   assert.equal(await page.locator(".upgrade-card").count(), 4);
   assert.match(
     await page.locator(".upgrade-card").nth(2).textContent(),
-    /1 ⭐.*УСКОРИТЬ/s,
+    /1 ⭐.*КУПЛЕНО В ЦИКЛЕ/s,
+  );
+  assert.equal(
+    await page
+      .locator(".upgrade-card")
+      .nth(2)
+      .locator(".upgrade-buy")
+      .isDisabled(),
+    true,
   );
   assert.match(
     await page.locator(".upgrade-card").nth(2).textContent(),
@@ -451,16 +490,29 @@ const { chromium } = require("playwright-core");
 
   await page.click(".tab[data-tab='tasks']");
   assert.equal(await page.locator("#view-tasks").isVisible(), true);
-  assert.equal(await page.locator(".task-card").count(), 1);
-  assert.match(await page.locator(".task-card").textContent(), /10\s000 Coin/);
-  assert.match(await page.locator(".task-card").textContent(), /\+100 энергии/);
+  assert.equal(await page.locator(".task-card").count(), 2);
+  assert.match(
+    await page.locator(".task-card:not(.is-link)").textContent(),
+    /10\s000 Coin/,
+  );
+  assert.match(
+    await page.locator(".task-card:not(.is-link)").textContent(),
+    /\+100 энергии/,
+  );
+  const linkCard = page.locator(".task-card.is-link");
+  assert.match(await linkCard.textContent(), /Приложение Сенсея/);
+  assert.match(await linkCard.textContent(), /Запустить/);
+  assert.equal(
+    await linkCard.locator(".task-link").getAttribute("href"),
+    "https://app.example/ref_7",
+  );
   await page.screenshot({ path: ".cache/miner2-tasks.png" });
-  await page.click(".task-claim");
+  await page.click(".task-card:not(.is-link) .task-claim");
   await page.waitForFunction(() =>
     document.querySelector(".task-card").classList.contains("claimed"),
   );
   assert.match(
-    await page.locator(".task-card").textContent(),
+    await page.locator(".task-card:not(.is-link)").textContent(),
     /Награда получена/,
   );
   assert.equal(await page.locator("#energy").textContent(), "0 / 100");
@@ -541,7 +593,7 @@ const { chromium } = require("playwright-core");
     ["state", "start", "state"],
   );
   console.log(
-    "Miner checks passed: energy, start, 4h countdown, tabs, rules, collect and balance.",
+    "Miner checks passed: energy, start, 3h countdown, tabs, rules, collect and balance.",
   );
   await browser.close();
 })().catch((error) => {

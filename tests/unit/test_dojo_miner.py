@@ -33,7 +33,7 @@ async def test_launcher():
     assert button.web_app.url.endswith('/miniapp/dojo')
     assert 'Начать майнинг' in button.text
     text = msg.answer.call_args.args[0]
-    assert '4 часа' in text and 'SenseiCoin' in text and '15 Coin/ч' in text
+    assert '3 часа' in text and 'SenseiCoin' in text and '15 Coin/ч' in text
     assert 'SenseiBank' in text and 'Задания' in text and 'Улучшения' in text
 
 
@@ -217,7 +217,7 @@ async def test_api_requires_signature_and_dispatches_actions():
         assert data['bonus'] == {
             'eligible': True, 'paid': False, 'activity_days': 2,
             'paid_upgrade': True}
-        assert data['share_body'].startswith('🥷') and '4 часа' in data['share_body']
+        assert data['share_body'].startswith('🥷') and '3 часа' in data['share_body']
         assert data['share_text'].endswith('start=ref_7')
         referral_members.assert_awaited_once_with(7, level=2, limit=10)
         response = await client.post('/miniapp/dojo/api/share', json={
@@ -266,12 +266,13 @@ async def test_miner_keeps_action_slot_and_renders_new_layers():
     assert '10 ⭐ · ПОПОЛНИТЬ' in html
     assert 'Баланс (как в чате)' not in html
     assert 'data-i18n="Баланс"' in html
-    assert 'id="chain-panel"' in html and 'id="chain-line"' in html
+    assert 'id="chain-panel"' in html and 'id="chain-feed"' in html
     assert 'id="ref-share" class="ref-share-button"' in html
     assert 'id="ref-link" class="ref-link"' in html
-    assert '4 часа' in html and '8 часов' not in html
-    assert '4 ЧАСА' in js and '8 ЧАСОВ' not in js
+    assert '3 часа' in html and '8 часов' not in html
+    assert '3 ЧАСА' in js and '8 ЧАСОВ' not in js
     assert 'seedMiningParticles' in js and 'paintChain' in js
+    assert 'makeChainRow' in js and 'chain-row' in css
 
 
 @pytest.mark.asyncio

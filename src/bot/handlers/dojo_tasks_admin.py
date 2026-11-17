@@ -1,5 +1,6 @@
-"""Admin commands for /dojo subscription tasks."""
+"""Admin commands for /dojo channel and app-link tasks."""
 import html
+from urllib.parse import urlsplit
 
 from aiogram import Router
 from aiogram.filters import Command
@@ -12,6 +13,8 @@ from src.services.dojo_task_service import (
     DEFAULT_REWARD,
     MAX_ENERGY,
     MAX_REWARD,
+    channel_link_username,
+    normalize_link_url,
     normalize_username,
 )
 
@@ -20,6 +23,12 @@ router.message.filter(AdminFilter())
 
 USAGE_ADD = (
     'Использование: <code>/task_add @channel [coin] [energy%]</code>\n'
+    'Или ссылка: <code>/task_link URL [coin] [energy%] [название]</code>\n'
+    f'По умолчанию: {DEFAULT_REWARD} Coin и +{DEFAULT_ENERGY}% энергии.'
+)
+USAGE_LINK = (
+    'Использование: <code>/task_link URL [coin] [energy%] [название]</code>\n'
+    'URL — HTTPS-ссылка на приложение, бота или реферальную страницу.\n'
     f'По умолчанию: {DEFAULT_REWARD} Coin и +{DEFAULT_ENERGY}% энергии.'
 )
 
@@ -45,8 +54,83 @@ def parse_add_args(text: str) -> tuple[str, int, int]:
     return username, reward, energy
 
 
+def looks_like_link(value: str) -> bool:
+    raw = (value or '').strip().lower()
+    return raw.startswith(('https://', 'http://', 't.me/', 'telegram.me/',
+                           'www.'))
+
+
+def parse_link_args(text: str) -> tuple[str, int, int, str]:
+    """Parse /task_link URL [coin] [energy] [title with spaces]."""
+    parts = (text or '').split()
+    if len(parts) < 2:
+        raise ValueError('url')
+    url = normalize_link_url(parts[1])
+    if not url:
+        raise ValueError('url')
+    reward = DEFAULT_REWARD
+    energy = DEFAULT_ENERGY
+    index = 2
+    try:
+        if index < len(parts) and parts[index].lstrip('-').isdigit():
+            reward = int(parts[index])
+            index += 1
+            if index < len(parts) and parts[index].lstrip('-').isdigit():
+                energy = int(parts[index])
+                index += 1
+    except ValueError as exc:
+        raise ValueError('numbers') from exc
+    if not 0 <= reward <= MAX_REWARD or not 0 <= energy <= MAX_ENERGY:
+        raise ValueError('numbers')
+    title = ' '.join(parts[index:]).strip()[:120]
+    if not title:
+        title = (urlsplit(url).hostname or 'Приложение').lower()
+    return url, reward, energy, title
+
+
+async def _add_link_task(message: Message, container: Container) -> None:
+    try:
+        url, reward, energy, title = parse_link_args(message.text or '')
+    except ValueError as exc:
+        if str(exc) == 'numbers':
+            await message.answer(
+                f'Награда: 0…{format_number(MAX_REWARD)} Coin. '
+                f'Энергия: 0…{format_number(MAX_ENERGY)}%.', parse_mode='HTML')
+        else:
+            await message.answer(USAGE_LINK, parse_mode='HTML')
+        return
+    task = await container.dojo_task_service.add_link(
+        url=url,
+        title=title,
+        reward_coins=reward,
+        energy_bonus=energy,
+        created_by=message.from_user.id,
+    )
+    host = task.get('host') or urlsplit(task.get('url', '')).hostname or ''
+    await message.answer(
+        '✅ <b>Задание-ссылка добавлено</b>\n\n'
+        f'Приложение: <b>{html.escape(task["title"])}</b> · '
+        f'<a href="{html.escape(task["url"], quote=True)}">'
+        f'{html.escape(str(host))}</a>\n'
+        f'Награда: <b>{format_number(task["reward_coins"])} SenseiCoin</b>\n'
+        f'Энергия: <b>+{task["energy_bonus"]}%</b>\n'
+        'Кнопка игрока: <b>Запустить</b>',
+        parse_mode='HTML',
+        disable_web_page_preview=True,
+    )
+
+
+@router.message(Command('task_link', 'задание_ссылка', 'app_link'))
+async def cmd_task_link(message: Message, container: Container) -> None:
+    await _add_link_task(message, container)
+
+
 @router.message(Command('task_add', 'задание_добавить'))
 async def cmd_task_add(message: Message, container: Container) -> None:
+    parts = (message.text or '').split()
+    if len(parts) > 1 and looks_like_link(parts[1]) and not channel_link_username(parts[1]):
+        await _add_link_task(message, container)
+        return
     try:
         username, reward, energy = parse_add_args(message.text or '')
     except ValueError as exc:
@@ -97,29 +181,37 @@ async def cmd_task_list(message: Message, container: Container) -> None:
     if not tasks:
         await message.answer('Заданий пока нет.')
         return
-    lines = ['📋 <b>Задания подписки</b>', '']
+    lines = ['📋 <b>Задания /dojo</b>', '']
     for task in tasks:
         mark = '🟢' if task['active'] else '⚪️'
+        kind = task.get('kind') or 'channel'
+        if kind == 'link':
+            label = (f'🔗 <b>{html.escape(task["title"])}</b> · '
+                     f'{html.escape(str(task.get("host") or ""))}')
+        else:
+            label = f'📣 <b>@{task["username"]}</b>'
         lines.append(
-            f'{mark} <b>@{task["username"]}</b> · '
+            f'{mark} {label} · '
             f'{format_number(task["reward_coins"])} Coin · '
             f'+{task["energy_bonus"]}% энергии'
         )
     lines.append('')
-    lines.append('Добавить: <code>/task_add @channel</code>')
-    lines.append('Убрать: <code>/task_remove @channel</code>')
+    lines.append('Канал: <code>/task_add @channel [coin] [energy%]</code>')
+    lines.append('Ссылка: <code>/task_link URL [coin] [energy%] [название]</code>')
+    lines.append('Убрать: <code>/task_remove @channel</code> или <code>/task_remove URL</code>')
     await message.answer('\n'.join(lines), parse_mode='HTML', disable_web_page_preview=True)
 
 
 @router.message(Command('task_remove', 'задание_убрать'))
 async def cmd_task_remove(message: Message, container: Container) -> None:
     parts = (message.text or '').split()
-    username = normalize_username(parts[1]) if len(parts) > 1 else ''
-    if not username:
+    value = parts[1] if len(parts) > 1 else ''
+    if not value:
         await message.answer(
-            'Использование: <code>/task_remove @channel</code>', parse_mode='HTML')
+            'Использование: <code>/task_remove @channel</code> или '
+            '<code>/task_remove URL</code>', parse_mode='HTML')
         return
-    if not await container.dojo_task_service.remove_task(username):
-        await message.answer(f'Задание для @{username} не найдено.')
+    if not await container.dojo_task_service.remove_task(value):
+        await message.answer(f'Задание {value} не найдено.')
         return
-    await message.answer(f'⚪️ Задание для @{username} отключено.')
+    await message.answer(f'⚪️ Задание {value} отключено.')
