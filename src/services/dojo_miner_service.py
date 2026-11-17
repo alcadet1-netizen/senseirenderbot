@@ -1,8 +1,8 @@
-"""Eight-hour SenseiCoin miner behind the /dojo Mini App.
+"""Four-hour SenseiCoin miner behind the /dojo Mini App.
 
 A cycle has a fixed power level from the pickaxe and an energy budget. Every
 100 energy lasts one hour at full power; after that the pickaxe runs at 10% of
-its base rate for the rest of the eight-hour cycle. The browser only renders
+its base rate for the rest of the four-hour cycle. The browser only renders
 state; start, collect and automatic cycles are validated and paid here.
 """
 import asyncio
@@ -12,7 +12,7 @@ from collections import defaultdict
 
 from src.services.hedgehog_service import GameError
 
-CYCLE_SECONDS = 8 * 60 * 60
+CYCLE_SECONDS = 4 * 60 * 60
 CYCLE_HOURS = CYCLE_SECONDS / 3600
 BASE_RATE = 15.0
 PICKAXE_STEP = 10.0
@@ -21,7 +21,7 @@ ENERGY_PER_HOUR = 100.0
 LOW_POWER = 0.1
 PICKAXE_MAX_LEVEL = 100
 ENERGY_MAX_PURCHASES = 100
-MINING_REWARD = int(BASE_RATE * CYCLE_HOURS)  # legacy reference: 120/cycle
+MINING_REWARD = int(BASE_RATE * CYCLE_HOURS)  # legacy reference: 60/cycle
 AUTOCOLLECT_INTERVAL = 60
 
 logger = logging.getLogger(__name__)
@@ -184,7 +184,7 @@ class DojoMinerService:
             try:
                 result = await self.economy.process_game_win(
                     user_id=user_id, coins=amount, xp=0,
-                    description='Dojo miner: 8h SenseiCoin cycle',
+                    description='Dojo miner: 4h SenseiCoin cycle',
                 )
             except Exception:
                 await self._rollback(user_id, version + 1)

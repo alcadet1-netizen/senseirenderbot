@@ -1,4 +1,4 @@
-// Сервер хранит 8-часовой цикл; интерфейс показывает таймер, энергию, прогресс и сбор.
+// Сервер хранит 4-часовой цикл; интерфейс показывает таймер, энергию, прогресс и сбор.
 (() => {
   "use strict";
 
@@ -79,7 +79,7 @@
     "III уровень": "Level III",
     "Уровень сети": "Network level",
     "ЗАГРУЖАЕМ УЧЕНИКОВ…": "LOADING STUDENTS…",
-    "СКОПИРОВАТЬ ССЫЛКУ": "COPY LINK",
+    "СКОПИРОВАТЬ ПРИГЛАШЕНИЕ": "COPY INVITE",
     ПОДЕЛИТЬСЯ: "SHARE",
     "🎁 Бонус за ученика": "🎁 Referral bonus",
     "10% / 1% / 0,1% с каждого платного апа катаны по трём уровням. Остаток уходит в SenseiBank.":
@@ -90,7 +90,7 @@
     Добыча: "Mining rate",
     Энергия: "Energy",
     Цикл: "Cycle",
-    "8 часов": "8 hours",
+    "4 часа": "4 hours",
     Награда: "Reward",
     Автосбор: "Auto-collect",
     ВКЛ: "ON",
@@ -105,8 +105,8 @@
     Закрыть: "Close",
     ПРАВИЛА: "RULES",
     "КАК РАБОТАЕТ МАЙНЕР": "HOW THE MINER WORKS",
-    "<b>Запусти цикл.</b> Сенсей уходит в майнинг ровно на 8 часов.":
-      "<b>Start a cycle.</b> Sensei goes mining for exactly 8 hours.",
+    "<b>Запусти цикл.</b> Сенсей уходит в майнинг ровно на 4 часа.":
+      "<b>Start a cycle.</b> Sensei goes mining for exactly 4 hours.",
     "<b>Следи за энергией.</b> 100 энергии хватает на час полной мощности; потом кирка добывает 10% от базовой скорости.":
       "<b>Watch your energy.</b> 100 energy lasts one hour at full power; after that the pickaxe mines at 10% of its base rate.",
     "<b>Забери награду.</b> Она приходит из SenseiBank только после конца цикла. Процент прогресса виден на экране.":
@@ -132,10 +132,10 @@
     "Сервер начисляет SenseiCoin из банка.":
       "The server credits SenseiCoin from the bank.",
     "ЗАПУСК…": "STARTING…",
-    "8 ЧАСОВ": "8 HOURS",
+    "4 ЧАСА": "4 HOURS",
     "СЕНСЕЙ УХОДИТ В МАЙНИНГ": "SENSEI GOES MINING",
-    "Создаём восьмичасовой цикл на сервере.":
-      "Creating an eight-hour cycle on the server.",
+    "Создаём четырёхчасовой цикл на сервере.":
+      "Creating a four-hour cycle on the server.",
     "ДО КОНЦА ЦИКЛА": "UNTIL THE CYCLE ENDS",
     "МАЙНИНГ ИДЁТ · {percent}%": "MINING · {percent}%",
     "ЗАБРАТЬ {amount}": "COLLECT {amount}",
@@ -143,14 +143,14 @@
     "Награда из SenseiBank ждёт тебя. Забери и начни снова.":
       "Your SenseiBank reward is waiting. Collect it and start again.",
     "НАЧАТЬ МАЙНИНГ": "START MINING",
-    "8 ЧАСОВ · {amount} COIN": "8 HOURS · {amount} COIN",
+    "4 ЧАСА · {amount} COIN": "4 HOURS · {amount} COIN",
     "СЕНСЕЙ ГОТОВ": "SENSEI IS READY",
     "Кирка {rate} Coin/ч · энергия {energy} · {hours} ч полной мощности":
       "Pickaxe {rate} Coin/h · energy {energy} · {hours} h at full power",
     "Энергия {energy} / {max} · {rate} Coin/ч · после нуля 10%":
       "Energy {energy} / {max} · {rate} Coin/h · 10% after zero",
-    "Майнинг запущен · Сенсей ушёл на 8 часов":
-      "Mining started · Sensei left for 8 hours",
+    "Майнинг запущен · Сенсей ушёл на 4 часа":
+      "Mining started · Sensei left for 4 hours",
     "+{amount} SenseiCoin · баланс {balance}":
       "+{amount} SenseiCoin · balance {balance}",
     "ПОКА НЕТ ЗАДАНИЙ": "NO TASKS YET",
@@ -179,8 +179,8 @@
     "{stars} ⭐ · +100 ЭНЕРГИИ": "{stars} ⭐ · +100 ENERGY",
     АВТОСБОР: "AUTO-COLLECT",
     АКТИВЕН: "ACTIVE",
-    "Сам собирает награду и запускает новый цикл каждые 8 часов. Участие не нужно.":
-      "Collects the reward and starts a new cycle every 8 hours. No action needed.",
+    "Сам собирает награду и запускает новый цикл каждые 4 часа. Участие не нужно.":
+      "Collects the reward and starts a new cycle every 4 hours. No action needed.",
     "Один раз · работает всегда": "One-time · always active",
     "УЖЕ ВКЛЮЧЁН": "ALREADY ON",
     "{stars} ⭐ · ВКЛЮЧИТЬ": "{stars} ⭐ · ENABLE",
@@ -208,7 +208,7 @@
     "{percent}% до звания {rank}": "{percent}% to {rank}",
     "{emitted} из {cap} Coin": "{emitted} of {cap} Coin",
     "Максимальное звание": "Maximum rank",
-    "Ссылка приглашения скопирована": "Invite link copied",
+    "Приглашение с ссылкой скопировано": "Invite text with the link copied",
     "Заходи в додзё Сенсея — вместе майним SenseiCoin 🥷":
       "Join Sensei's dojo — let's mine SenseiCoin together 🥷",
     "Майнер не ответил. Попробуй ещё раз.":
@@ -679,9 +679,9 @@
     }
 
     if (pending === "start") {
-      paintAction("pickaxe", t("ЗАПУСК…"), t("8 ЧАСОВ"), false, true);
+      paintAction("pickaxe", t("ЗАПУСК…"), t("4 ЧАСА"), false, true);
       status.textContent = t("СЕНСЕЙ УХОДИТ В МАЙНИНГ");
-      hint.textContent = t("Создаём восьмичасовой цикл на сервере.");
+      hint.textContent = t("Создаём четырёхчасовой цикл на сервере.");
       return;
     }
 
@@ -718,7 +718,7 @@
     paintAction(
       "pickaxe",
       t("НАЧАТЬ МАЙНИНГ"),
-      t("8 ЧАСОВ · {amount} COIN", { amount: coin(model.next_reward) }),
+      t("4 ЧАСА · {amount} COIN", { amount: coin(model.next_reward) }),
       false,
       false,
     );
@@ -819,7 +819,7 @@
     try {
       const data = await api("start");
       apply(data);
-      showToast(t("Майнинг запущен · Сенсей ушёл на 8 часов"));
+      showToast(t("Майнинг запущен · Сенсей ушёл на 4 часа"));
     } catch (error) {
       failed = true;
       showToast(error.message, true);
@@ -1079,7 +1079,7 @@
       t("АВТОСБОР"),
       upgrades.auto_collect ? t("АКТИВЕН") : t("ВЫКЛ"),
       t(
-        "Сам собирает награду и запускает новый цикл каждые 8 часов. Участие не нужно.",
+        "Сам собирает награду и запускает новый цикл каждые 4 часа. Участие не нужно.",
       ),
       t("Один раз · работает всегда"),
       upgrades.auto_collect
@@ -1351,18 +1351,31 @@
     }
   }
 
+  function referralShareBody() {
+    return (
+      referrals?.share_body ||
+      t("Заходи в додзё Сенсея — вместе майним SenseiCoin 🥷")
+    );
+  }
+
+  function referralShareText() {
+    const link = referrals?.link || "";
+    return referrals?.share_text || `${referralShareBody()}\n\n${link}`.trim();
+  }
+
   async function copyReferralLink() {
     const link = referrals?.link;
     if (!link) {
       showToast(t("Ссылка недоступна. Открой майнер через /dojo."), true);
       return;
     }
+    const text = referralShareText();
     try {
       if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(link);
+        await navigator.clipboard.writeText(text);
       } else {
         const field = document.createElement("textarea");
-        field.value = link;
+        field.value = text;
         field.setAttribute("readonly", "");
         field.style.position = "fixed";
         field.style.opacity = "0";
@@ -1371,9 +1384,9 @@
         document.execCommand("copy");
         field.remove();
       }
-      showToast(t("Ссылка приглашения скопирована"));
+      showToast(t("Приглашение с ссылкой скопировано"));
     } catch {
-      showToast(link);
+      showToast(text);
     }
   }
 
@@ -1383,10 +1396,21 @@
       showToast(t("Ссылка недоступна. Открой майнер через /dojo."), true);
       return;
     }
-    const text = t("Заходи в додзё Сенсея — вместе майним SenseiCoin 🥷");
+    const text = referralShareBody();
     const url = `https://t.me/share/url?url=${encodeURIComponent(
       link,
     )}&text=${encodeURIComponent(text)}`;
+    // A prepared inline message carries the text AND a «Майнинг» button into
+    // any chat. Old clients without shareMessage fall back to the URL share.
+    if (typeof tg?.shareMessage === "function") {
+      try {
+        const prepared = await api("share");
+        if (prepared?.prepare_id) {
+          tg.shareMessage(prepared.prepare_id, () => {});
+          return;
+        }
+      } catch {}
+    }
     try {
       if (tg?.openTelegramLink) {
         tg.openTelegramLink(url);
@@ -1432,9 +1456,11 @@
     // authoritative server balance whenever the player returns to a view.
     if (name === "mining" || name === "profile") refresh(true);
     closeSheet();
+    $("roadmap-sheet").hidden = true;
   }
 
   function openSheet() {
+    $("roadmap-sheet").hidden = true;
     $("sheet").hidden = false;
   }
 
@@ -1454,6 +1480,17 @@
   $("info").addEventListener("click", () => {
     if (activeTab !== "mining") setTab("mining");
     openSheet();
+  });
+
+  $("roadmap").addEventListener("click", () => {
+    closeSheet();
+    $("roadmap-sheet").hidden = false;
+  });
+
+  document.querySelectorAll("[data-close='roadmap-sheet']").forEach((node) => {
+    node.addEventListener("click", () => {
+      $("roadmap-sheet").hidden = true;
+    });
   });
 
   $("bank-refresh").addEventListener("click", () => loadBank(true));
@@ -1490,7 +1527,10 @@
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeSheet();
+    if (event.key === "Escape") {
+      closeSheet();
+      $("roadmap-sheet").hidden = true;
+    }
   });
 
   document.addEventListener("visibilitychange", () => {

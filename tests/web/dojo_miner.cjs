@@ -36,7 +36,7 @@ const { chromium } = require("playwright-core");
     }
     if (action === "collect") {
       phase = "ready";
-      balance += 26;
+      balance += 20;
     }
     if (action === "task") {
       balance += 10000;
@@ -80,6 +80,10 @@ const { chromium } = require("playwright-core");
           users: 42,
         },
       });
+      return;
+    }
+    if (action === "share") {
+      await route.fulfill({ json: { prepare_id: "prep-7", expires_at: 123 } });
       return;
     }
     if (action === "referrals") {
@@ -132,8 +136,8 @@ const { chromium } = require("playwright-core");
       phase,
       server_now: now,
       balance,
-      reward: 26,
-      next_reward: 26,
+      reward: 20,
+      next_reward: 20,
       energy:
         phase === "ready"
           ? energyMax
@@ -150,12 +154,12 @@ const { chromium } = require("playwright-core");
       pickaxe_level: 0,
       energy_purchases: 0,
       auto_collect: false,
-      cycle_seconds: 28800,
+      cycle_seconds: 14400,
       started_at: started || null,
       finish_at: finish || null,
       remaining_ms: phase === "mining" ? Math.max(0, (finish - now) * 1000) : 0,
       progress,
-      mined: 26,
+      mined: 20,
     };
     if (action === "task") {
       Object.assign(state, {
@@ -198,6 +202,14 @@ const { chromium } = require("playwright-core");
   assert.match(roadmap, /Q4 2026/);
   assert.match(roadmap, /TGE/);
   assert.match(roadmap, /КОГДА ВСЕ МОНЕТЫ ДОБЫТЫ/);
+  await page.click("#roadmap");
+  assert.equal(await page.locator("#roadmap-sheet").isVisible(), true);
+  const roadmapModal = await page.locator("#roadmap-sheet").textContent();
+  assert.match(roadmapModal, /TGE · FINISH MINE/);
+  assert.match(roadmapModal, /WHEN ALL COINS ARE MINED/);
+  assert.match(roadmapModal, /10,000,000,000/);
+  await page.click("#roadmap-sheet .sheet-done");
+  assert.equal(await page.locator("#roadmap-sheet").isVisible(), false);
   const readyBox = await page.locator("#orb").boundingBox();
   await page.screenshot({ path: ".cache/miner2-ready.png" });
 
@@ -279,6 +291,15 @@ const { chromium } = require("playwright-core");
     await page.evaluate(() => window.__shareUrl),
     /^https:\/\/t\.me\/share\/url\?url=/,
   );
+  await page.evaluate(() => {
+    window.__sharedMessage = "";
+    window.Telegram.WebApp.shareMessage = (id, callback) => {
+      window.__sharedMessage = id;
+      callback && callback(true);
+    };
+  });
+  await page.click("#ref-share");
+  assert.equal(await page.evaluate(() => window.__sharedMessage), "prep-7");
   await page.screenshot({ path: ".cache/miner2-referrals.png" });
   await page.click(".tab[data-tab='profile']");
   assert.equal(await page.locator("#view-profile").isVisible(), true);
@@ -318,10 +339,10 @@ const { chromium } = require("playwright-core");
 
   await page.click("#action");
   await page.waitForFunction(() =>
-    /^22\s866$/.test(document.querySelector("#balance").textContent),
+    /^22\s860$/.test(document.querySelector("#balance").textContent),
   );
   assert.equal(await page.locator("#energy").textContent(), "200 / 200");
-  assert.match(await page.locator("#toast").textContent(), /\+26 SenseiCoin/);
+  assert.match(await page.locator("#toast").textContent(), /\+20 SenseiCoin/);
   await page.waitForFunction(
     () =>
       document.querySelector("#action-label").textContent === "НАЧАТЬ МАЙНИНГ",
@@ -331,15 +352,21 @@ const { chromium } = require("playwright-core");
     calls
       .filter(
         (action) =>
-          !["tasks", "task", "upgrades", "bank", "buy", "referrals"].includes(
-            action,
-          ),
+          ![
+            "tasks",
+            "task",
+            "upgrades",
+            "bank",
+            "buy",
+            "referrals",
+            "share",
+          ].includes(action),
       )
       .slice(0, 3),
     ["state", "start", "state"],
   );
   console.log(
-    "Miner checks passed: energy, start, 8h countdown, tabs, rules, collect and balance.",
+    "Miner checks passed: energy, start, 4h countdown, tabs, rules, collect and balance.",
   );
   await browser.close();
 })().catch((error) => {

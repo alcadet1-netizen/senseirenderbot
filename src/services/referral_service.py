@@ -48,7 +48,12 @@ class ReferralService:
         # The user_service.process_referral returns a dict with keys: success, referrer_id, etc.
         # We need to convert to the expected tuple (bool, str)
         if result.get("success"):
-            return True, '🥷 Приглашение принято! Бонус 50 Coin — после активности в три разных дня и платного улучшения катаны; при наличии средств банка.'
+            return True, (
+                '🥷 Приглашение принято! Стартовый набор новичка уже начислен: '
+                '3 000 Coin, 1 уровень и катана 10 см.\n\n'
+                'Бонус 50 Coin — после активности в три разных дня и платного '
+                'улучшения катаны; при наличии средств банка.'
+            )
         else:
             error = result.get("error", "Unknown error")
             return False, f"❌ {error}"
