@@ -185,3 +185,21 @@ async def test_legacy_bank_is_folded_once_and_never_double_counted():
     canonical = await db.bank.find_one({"_id": "single"})
     assert canonical["coins"] == 150.0
     assert (await db.bank.find_one({"_id": "main"}))["balance"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_burn_reduces_only_the_lifetime_counter_and_never_goes_negative():
+    emission, db = service(bank=[{
+        "_id": "single", "coins": 50_000, "total_emitted": 5_000,
+        "emission_cap": TOTAL_EMISSION_CAP,
+    }])
+    assert await emission.burn(1_000) == 1_000
+    bank = await db.bank.find_one({"_id": "single"})
+    assert bank["total_emitted"] == 4_000
+    assert bank["burned"] == 1_000
+    assert bank["coins"] == 50_000  # bank coins are not burned
+    assert await emission.burn(9_000) == 4_000
+    bank = await db.bank.find_one({"_id": "single"})
+    assert bank["total_emitted"] == 0
+    assert bank["burned"] == 5_000
+    assert await emission.burn(1) == 0

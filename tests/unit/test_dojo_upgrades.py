@@ -9,6 +9,7 @@ from src.services import dojo_miner_service as miner
 from src.services.dojo_miner_service import DojoMinerService
 from src.services.dojo_upgrade_service import (
     AUTOCOLLECT_STARS,
+    BOOST_STARS,
     ENERGY_STARS,
     PICKAXE_STARS,
     DojoUpgradeService,
@@ -263,18 +264,52 @@ async def test_pickaxe_and_energy_budget_drive_the_cycle():
 
 
 @pytest.mark.asyncio
-async def test_task_energy_extends_budget():
+async def test_task_energy_extends_one_budget_without_raising_the_cap():
     db = SimpleNamespace(
         users=Users([{'id': 7, 'coins': 0}]),
-        dojo_miners=Miners(),
+        dojo_miners=Miners([{
+            '_id': 7,
+            'collected': True,
+            'task_energy_pending': [{'key': '7:senseidurova', 'amount': 100}],
+            'version': 1,
+        }]),
     )
-    tasks = SimpleNamespace(energy_bonus_total=AsyncMock(return_value=100))
     dojo = DojoMinerService(SimpleNamespace(database=db),
-                            SimpleNamespace(process_game_win=AsyncMock()), tasks)
+                            SimpleNamespace(process_game_win=AsyncMock()))
     with patch.object(miner.time, 'time', return_value=1000):
         state = await dojo.state(7)
-    assert state['energy_max'] == 200
+        started = await dojo.start(7)
+    assert state['energy_max'] == 100
+    assert state['energy'] == 200
     assert state['reward'] == 33
+    assert started['energy_max'] == 100
+    assert started['energy_start'] == 200
+    assert started['reward'] == 33
+    # The one-time charge is spent by this cycle, not folded into the cap.
+    consumed = await dojo.state(7)
+    assert consumed['task_energy_pending'] == 0
+    assert consumed['energy_max'] == 100
+
+
+@pytest.mark.asyncio
+async def test_speed_boost_costs_one_star_and_is_applied_once_per_charge():
+    users = Users([{'id': 7, 'coins': 0}])
+    db = SimpleNamespace(
+        users=users, dojo_orders=Users(), dojo_payments=Users(),
+    )
+    miner_service = SimpleNamespace(apply_speed_boost=AsyncMock(return_value=True))
+    service = DojoUpgradeService(SimpleNamespace(
+        mongo_client=SimpleNamespace(database=db),
+        dojo_miner_service=miner_service,
+    ))
+    order = await service.prepare(7, 'boost')
+    assert order['kind'] == 'boost' and order['stars'] == BOOST_STARS == 1
+    await service.checkout(order['payload'], 7, 'XTR', 1)
+    assert await service._apply(7, 'boost', 'charge-speed') is True
+    miner_service.apply_speed_boost.assert_awaited_once_with(7, 'charge-speed')
+    snapshot = await service.snapshot(7)
+    assert snapshot['boost_stars'] == 1
+    assert snapshot['boost_percent'] == 50
 
 
 @pytest.mark.asyncio
@@ -321,3 +356,28 @@ async def test_bank_summary_uses_the_cached_admin_snapshot():
     assert data['initial_coins'] == 1_000_000_000.0
     assert data['users'] == 3
     stats.get_admin_stats.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_bank_snapshot_never_reports_more_than_the_hard_supply_cap():
+    stats = StatsService(SimpleNamespace(database=SimpleNamespace(
+        users=SimpleNamespace(), bank=SimpleNamespace(),
+        transactions=SimpleNamespace(), tickets=SimpleNamespace())))
+    stats.get_admin_stats = AsyncMock(return_value={
+        'users': {'total': 3},
+        'circulation': 600,
+        'bank': {
+            'balance': 800,
+            'total_supply': 1_400,
+            'total_emitted': 1_400,
+            'emission_cap': 1_000,
+            'burned': 25,
+            'confiscated': 75,
+        },
+    })
+    data = await stats.get_bank_summary()
+    assert data['bank_balance'] == 400
+    assert data['circulation'] == 600
+    assert data['total_supply'] == 1_000
+    assert data['bank_balance'] + data['circulation'] <= data['emission_cap']
+    assert data['burned'] == 25 and data['confiscated'] == 75

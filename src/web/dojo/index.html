@@ -79,6 +79,25 @@
         <b class="roadmap-title">ROAD MAP</b>
       </button>
 
+      <button
+        id="burn"
+        class="burn-sticker"
+        type="button"
+        aria-label="Сжечь SenseiCoin"
+        data-i18n-aria="Сжечь SenseiCoin"
+        title="BURN"
+      >
+        <span class="burn-flame" aria-hidden="true">
+          <svg viewBox="0 0 24 32">
+            <path
+              d="M12 1c1 6-5 8-5 14 0 3 2 5 5 5s5-2 5-5c0-2-2-4-2-7 4 3 7 7 7 12 0 6-5 11-10 11S2 26 2 20C2 12 8 9 12 1Z"
+            />
+            <path d="M12 17c1 3-2 4-2 7 0 2 1 3 2 3s2-1 2-3c0-2-2-4-2-7Z" />
+          </svg>
+        </span>
+        <b class="burn-title">BURN</b>
+      </button>
+
       <div class="stage">
         <section
           class="balance"
@@ -129,6 +148,11 @@
           >
             <i id="energy-bar"></i>
           </div>
+          <span id="boost-pill" class="boost-pill" hidden>
+            <span aria-hidden="true">⚡</span>
+            <span data-i18n="+50% СКОРОСТЬ">+50% СКОРОСТЬ</span>
+            <b id="boost-timer">00:00:00</b>
+          </span>
           <span
             id="energy-refill"
             class="energy-refill"
@@ -188,10 +212,10 @@
           <h2 data-i18n="ПОДПИСКИ">ПОДПИСКИ</h2>
           <p
             class="view-copy"
-            data-i18n="Подпишись на канал и забери SenseiCoin и энергию. Награда за каждый канал — один раз."
+            data-i18n="Подпишись на канал и забери SenseiCoin и разовый заряд энергии. Награда за каждый канал — один раз; базовый лимит энергии не растёт."
           >
-            Подпишись на канал и забери SenseiCoin и энергию. Награда за каждый
-            канал — один раз.
+            Подпишись на канал и забери SenseiCoin и разовый заряд энергии.
+            Награда за каждый канал — один раз; базовый лимит энергии не растёт.
           </p>
           <div id="tasks-list" class="task-list">
             <p class="task-empty" data-i18n="ЗАГРУЖАЕМ ЗАДАНИЯ…">
@@ -211,10 +235,11 @@
           <h2 data-i18n="ПРОКАЧКА">ПРОКАЧКА</h2>
           <p
             class="view-copy"
-            data-i18n="Постоянные улучшения за Telegram Stars. Кирка повышает добычу, энергия держит полную мощность дольше, автосбор работает без тебя."
+            data-i18n="Улучшения за Telegram Stars. Кирка повышает добычу, энергия держит полную мощность дольше, буст ускоряет фарм на 2 часа, автосбор работает без тебя."
           >
-            Постоянные улучшения за Telegram Stars. Кирка повышает добычу,
-            энергия держит полную мощность дольше, автосбор работает без тебя.
+            Улучшения за Telegram Stars. Кирка повышает добычу, энергия держит
+            полную мощность дольше, буст ускоряет фарм на 2 часа, автосбор
+            работает без тебя.
           </p>
           <div id="upgrades-list" class="upgrade-list">
             <p class="task-empty" data-i18n="ЗАГРУЖАЕМ УЛУЧШЕНИЯ…">
@@ -231,53 +256,90 @@
           <h2 data-i18n="ЭМИССИЯ">ЭМИССИЯ</h2>
           <p
             class="view-copy"
-            data-i18n="Всего в экономике может быть 10 000 000 000 Coin — жёсткий лимит. Новые Coin появляются только при стартовом заполнении SenseiBank и наборе новичка. Майнинг, задания и игры сначала списывают награду из SenseiBank; если банк пуст, начисления нет — лимит не растёт."
+            data-i18n="Жёсткий лимит: 10 000 000 000 Coin. Награды списываются из SenseiBank, а не печатаются сверх лимита. Пустой банк останавливает начисления."
           >
-            Всего в экономике может быть 10 000 000 000 Coin — жёсткий лимит.
-            Новые Coin появляются только при стартовом заполнении SenseiBank и
-            наборе новичка. Майнинг, задания и игры сначала списывают награду из
-            SenseiBank; если банк пуст, начисления нет — лимит не растёт.
+            Жёсткий лимит: 10 000 000 000 Coin. Награды списываются из
+            SenseiBank, а не печатаются сверх лимита. Пустой банк останавливает
+            начисления.
           </p>
-          <div
-            class="emission-track"
-            id="bank-progress-track"
-            role="progressbar"
-            aria-label="Использование лимита эмиссии"
-            data-i18n-aria="Использование лимита эмиссии"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow="0"
-          >
-            <span id="bank-progress"></span>
+          <div class="mining-progress">
+            <div class="mining-progress-head">
+              <span data-i18n="НАМАЙНЕНО">НАМАЙНЕНО</span>
+              <b id="bank-mined-label">—</b>
+            </div>
+            <div
+              class="emission-track"
+              id="bank-progress-track"
+              role="progressbar"
+              aria-label="Использование лимита эмиссии"
+              data-i18n-aria="Использование лимита эмиссии"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+            >
+              <span id="bank-progress"></span>
+              <i class="emission-shine" aria-hidden="true"></i>
+            </div>
+            <div class="mining-progress-foot">
+              <span
+                ><b id="bank-progress-percent">0%</b>
+                <span data-i18n="ЭМИССИИ ВЫПУЩЕНО">ЭМИССИИ ВЫПУЩЕНО</span></span
+              >
+              <span
+                ><b id="bank-remaining-label">—</b>
+                <span data-i18n="ОСТАЛОСЬ ДО КОНЦА МАЙНИНГА"
+                  >ОСТАЛОСЬ ДО КОНЦА МАЙНИНГА</span
+                ></span
+              >
+            </div>
+            <div class="mining-progress-meta">
+              <span
+                ><span data-i18n="ВЫПУЩЕНО">ВЫПУЩЕНО</span>
+                <b id="bank-emitted">—</b></span
+              >
+              <span
+                ><span data-i18n="ЛИМИТ">ЛИМИТ</span>
+                <b id="bank-cap">—</b></span
+              >
+              <span
+                ><span data-i18n="ОСТАЛОСЬ">ОСТАЛОСЬ</span>
+                <b id="bank-remaining">—</b></span
+              >
+            </div>
           </div>
-          <div id="bank-stats" class="stat-list">
-            <div class="stat-row">
-              <span data-i18n="Выпущено">Выпущено</span
-              ><b id="bank-emitted">—</b>
-            </div>
-            <div class="stat-row">
-              <span data-i18n="Лимит">Лимит</span><b id="bank-cap">—</b>
-            </div>
-            <div class="stat-row">
-              <span data-i18n="Осталось">Осталось</span
-              ><b id="bank-remaining">—</b>
-            </div>
-            <div class="stat-row">
+          <div id="bank-stats" class="bank-grid">
+            <div class="bank-stat">
               <span data-i18n="Всего в экономике">Всего в экономике</span
               ><b id="bank-supply">—</b>
             </div>
-            <div class="stat-row">
+            <div class="bank-stat">
               <span data-i18n="Баланс банка">Баланс банка</span
               ><b id="bank-balance">—</b>
             </div>
-            <div class="stat-row">
+            <div class="bank-stat">
               <span data-i18n="В обороте">В обороте</span
               ><b id="bank-circulation">—</b>
             </div>
-            <div class="stat-row">
+            <div class="bank-stat">
+              <span data-i18n="Сожжено навсегда">Сожжено навсегда</span
+              ><b id="bank-burned">—</b>
+            </div>
+            <div class="bank-stat">
+              <span data-i18n="Вернулось из автобана"
+                >Вернулось из автобана</span
+              ><b id="bank-confiscated">—</b>
+            </div>
+            <div class="bank-stat">
               <span data-i18n="Игроков">Игроков</span><b id="bank-users">—</b>
             </div>
           </div>
+          <p
+            class="bank-note"
+            data-i18n="Автобан возвращает Coin в SenseiBank. Сжигание уменьшает эмиссию навсегда и не пополняет банк."
+          >
+            Автобан возвращает Coin в SenseiBank. Сжигание уменьшает эмиссию
+            навсегда и не пополняет банк.
+          </p>
           <button id="bank-refresh" class="bank-refresh" type="button">
             <span data-i18n="ОБНОВИТЬ ДАННЫЕ">ОБНОВИТЬ ДАННЫЕ</span>
           </button>
@@ -580,6 +642,110 @@
           <button class="sheet-done" data-close="sheet" data-i18n="ПОНЯТНО">
             ПОНЯТНО
           </button>
+        </section>
+      </div>
+
+      <div id="burn-sheet" class="sheet burn-sheet" hidden>
+        <div class="sheet-backdrop" data-close="burn-sheet"></div>
+        <section
+          class="sheet-card burn-card"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="burn-title"
+        >
+          <button
+            class="sheet-close"
+            data-close="burn-sheet"
+            aria-label="Закрыть"
+            data-i18n-aria="Закрыть"
+          >
+            ×
+          </button>
+          <p class="view-eyebrow">BURN · SENSEICOIN</p>
+          <h2 id="burn-title" data-i18n="СЖЕЧЬ ЭМИССИЮ">СЖЕЧЬ ЭМИССИЮ</h2>
+          <p
+            class="burn-warning"
+            data-i18n="Это добровольное и необратимое сжигание твоих Coin. Монеты исчезают навсегда: вернуть их нельзя, отменить операцию после подтверждения тоже."
+          >
+            Это добровольное и необратимое сжигание твоих Coin. Монеты исчезают
+            навсегда: вернуть их нельзя, отменить операцию после подтверждения
+            тоже.
+          </p>
+          <div class="burn-balance">
+            <span data-i18n="Твой баланс">Твой баланс</span>
+            <b id="burn-available">—</b>
+          </div>
+          <label
+            class="burn-label"
+            for="burn-amount"
+            data-i18n="Сколько Coin сжечь"
+          >
+            Сколько Coin сжечь
+          </label>
+          <div class="burn-amount-row">
+            <input
+              id="burn-amount"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              step="1"
+              placeholder="0"
+              autocomplete="off"
+            />
+            <span>Coin</span>
+          </div>
+          <div
+            class="burn-quick"
+            role="group"
+            aria-label="Быстрый выбор суммы"
+            data-i18n-aria="Быстрый выбор суммы"
+          >
+            <button type="button" data-burn-percent="25">25%</button>
+            <button type="button" data-burn-percent="50">50%</button>
+            <button type="button" data-burn-percent="100" data-i18n="ВСЁ">
+              ВСЁ
+            </button>
+          </div>
+          <p class="burn-preview">
+            <span data-i18n="Сгорит">Сгорит</span>
+            <b id="burn-preview">0</b>
+            <span data-i18n="Coin · останется">Coin · останется</span>
+            <b id="burn-left">—</b>
+            <span>Coin</span>
+          </p>
+          <p
+            class="burn-marketing"
+            data-i18n="Каждый сожжённый Coin навсегда уменьшает эмиссию SenseiCoin. Меньше предложения — чище токеномика и сильнее история дефицита к TGE. Это твой добровольный вклад в проект, а не инвестиция и не обещание цены или листинга."
+          >
+            Каждый сожжённый Coin навсегда уменьшает эмиссию SenseiCoin. Меньше
+            предложения — чище токеномика и сильнее история дефицита к TGE. Это
+            твой добровольный вклад в проект, а не инвестиция и не обещание цены
+            или листинга.
+          </p>
+          <p class="burn-total">
+            <span data-i18n="Всего сожжено сообществом"
+              >Всего сожжено сообществом</span
+            >
+            <b id="burn-total">—</b>
+          </p>
+          <div class="burn-actions">
+            <button
+              class="burn-cancel"
+              data-close="burn-sheet"
+              type="button"
+              data-i18n="ОТМЕНА"
+            >
+              ОТМЕНА
+            </button>
+            <button
+              id="burn-confirm"
+              class="burn-confirm"
+              type="button"
+              data-i18n="СЖЕЧЬ НАВСЕГДА"
+            >
+              СЖЕЧЬ НАВСЕГДА
+            </button>
+          </div>
         </section>
       </div>
 

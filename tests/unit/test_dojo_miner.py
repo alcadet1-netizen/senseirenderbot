@@ -103,6 +103,7 @@ async def test_api_requires_signature_and_dispatches_actions():
         id='prep-7', expiration_date=123456))
     bank = AsyncMock(return_value={
         'bank_balance': 900, 'circulation': 100, 'total_supply': 1000, 'users': 2})
+    burn = AsyncMock(return_value={'success': True, 'amount': 100, 'balance': 900})
     referral_stats = ReferralStats(
         user_id=7, level_1_count=3, level_1_active=2, level_2_count=1,
         level_3_count=4, level_3_active=1, total_coins_earned=125.5,
@@ -116,6 +117,7 @@ async def test_api_requires_signature_and_dispatches_actions():
         dojo_task_service=SimpleNamespace(list_tasks=list_tasks, claim=claim),
         dojo_upgrade_service=SimpleNamespace(snapshot=upgrades, prepare=prepare),
         stats_service=SimpleNamespace(get_bank_summary=bank),
+        burn_service=SimpleNamespace(burn=burn),
         referral_service=SimpleNamespace(
             get_stats=referral_stats, get_level_members=referral_members),
         bot=SimpleNamespace(
@@ -164,6 +166,12 @@ async def test_api_requires_signature_and_dispatches_actions():
         response = await client.post('/miniapp/dojo/api/bank', json={'initData': auth})
         assert response.status == 200 and (await response.json())['total_supply'] == 1000
         bank.assert_awaited_once()
+        response = await client.post('/miniapp/dojo/api/burn', json={
+            'initData': auth, 'amount': 100})
+        data = await response.json()
+        assert response.status == 200
+        assert data['burn']['amount'] == 100 and data['balance'] == 900
+        burn.assert_awaited_once_with(7, 100)
         response = await client.post('/miniapp/dojo/api/referrals', json={
             'initData': auth, 'level': 2})
         data = await response.json()
@@ -218,6 +226,8 @@ async def test_miner_keeps_action_slot_and_renders_new_layers():
     # English roadmap lives on its own full-screen view.
     assert 'id="roadmap"' in html and 'class="roadmap-sticker"' in html
     assert '>ROAD MAP</b>' in html
+    assert 'id="burn"' in html and 'class="burn-sticker"' in html
+    assert 'id="burn-sheet"' in html and 'id="burn-confirm"' in html
     assert 'AIRDROP' in html and 'Q4 2026' in html
     assert 'id="roadmap-sheet"' in html and 'roadmap-screen' in html
     assert 'TGE · FINISH MINE' in html and 'WHEN ALL COINS ARE MINED' in html

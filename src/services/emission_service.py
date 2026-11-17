@@ -321,6 +321,39 @@ class EmissionService:
         except Exception:
             logger.exception("Emission release failed: reason=%s amounts=%.2f", reason, amount)
 
+    async def burn(self, amount: float) -> float:
+        """Destroy already-emitted coins and return the amount actually burned.
+
+        Only the lifetime counter is reduced; SenseiBank is untouched because
+        these coins came from a player's balance, not from the bank pool.  A
+        conditional update prevents the counter from going negative when two
+        burns race.
+        """
+        amount = max(0.0, _num(amount, 0.0))
+        if amount <= 0:
+            return 0.0
+        doc = await self.ensure_state()
+        emitted = max(0.0, _num(doc.get("total_emitted"), 0.0))
+        actual = min(amount, emitted)
+        if actual <= 0:
+            return 0.0
+        try:
+            result = await self.bank.update_one(
+                {"_id": BANK_ID, "total_emitted": {"$gte": actual}},
+                {"$inc": {"total_emitted": -actual, "burned": actual},
+                 "$set": {"emission_cap": self.cap,
+                          "emission_frozen": emitted - actual > self.cap,
+                          "emission_updated_at": datetime.now(timezone.utc)}},
+            )
+        except Exception:
+            logger.exception("Emission burn failed: amount=%.2f", actual)
+            return 0.0
+        if not _matched(result):
+            logger.warning("Emission burn missed: amount=%.2f", actual)
+            return 0.0
+        logger.info("Emission burned: amount=%.2f", actual)
+        return actual
+
     async def reserve_starter(self, user_id: int, amount: float) -> float:
         """Return the starter amount actually allowed by the global ceiling."""
         amount = max(0.0, _num(amount, 0.0))

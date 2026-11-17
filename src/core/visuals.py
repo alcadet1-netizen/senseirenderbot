@@ -722,6 +722,8 @@ class Visuals:
         emitted = bank.get("total_emitted", total_supply)
         cap = bank.get("emission_cap", TOTAL_EMISSION_CAP)
         remaining = bank.get("emission_remaining", max(0, cap - emitted))
+        burned = bank.get("burned", 0)
+        confiscated = bank.get("confiscated", 0)
         collected = bank.get("total_collected", 0)
         distributed = bank.get("total_distributed", 0)
         
@@ -739,6 +741,8 @@ class Visuals:
             cls.frame_line_left(f"🏭 Выпущено: {cls._fmt_coins(emitted)}", w),
             cls.frame_line_left(f"🎚 Лимит: {cls._fmt_coins(cap)}", w),
             cls.frame_line_left(f"🟢 Осталось: {cls._fmt_coins(remaining)}", w),
+            cls.frame_line_left(f"🔥 Сожжено: {cls._fmt_coins(burned)}", w),
+            cls.frame_line_left(f"↩️ Из автобана: {cls._fmt_coins(confiscated)}", w),
             cls.frame_separator_left(w),
             cls.frame_line_left("📊 Статистика:", w),
             cls.frame_line_left(f"📥 Собрано: {collected:,.0f}", w),

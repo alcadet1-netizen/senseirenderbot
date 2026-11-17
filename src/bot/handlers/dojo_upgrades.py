@@ -43,6 +43,13 @@ async def successful_payment(message, container):
                 'Открой /dojo и продолжай майнинг.',
                 parse_mode=None)
             return
+        if kind == 'boost':
+            await message.answer(
+                '✅ Скорость +50% активирована на 2 часа.\n'
+                f'Оплачено: {receipt["stars"]} ⭐.\n'
+                'Повторная покупка добавляет только 2 часа: процент остаётся +50%.',
+                parse_mode=None)
+            return
         title = KINDS.get(kind, {}).get('title', 'Улучшение')
         await message.answer(
             f'✅ {title} активировано навсегда.\n'

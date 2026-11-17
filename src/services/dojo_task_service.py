@@ -1,9 +1,11 @@
 """Subscription tasks for the /dojo miner.
 
 Admins add Telegram channels; users subscribe once and claim a one-time
-SenseiCoin reward plus a permanent energy bonus. Every check runs on the
-server through the bot API and every claim is unique per user and channel.
+SenseiCoin reward plus a one-time +100 energy charge. The charge is spent by
+one mining cycle and never raises the permanent energy cap. Every check runs
+on the server through the bot API and every claim is unique per user/channel.
 """
+import logging
 import re
 import time
 from datetime import datetime, timezone
@@ -11,6 +13,8 @@ from datetime import datetime, timezone
 from pymongo.errors import DuplicateKeyError
 
 from src.services.hedgehog_service import GameError
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_SLUG = 'senseidurova'
 DEFAULT_REWARD = 10_000
@@ -158,11 +162,17 @@ class DojoTaskService:
         return items
 
     async def energy_bonus_total(self, user_id: int) -> int:
+        """Largest single task charge (legacy read-only helper).
+
+        Task energy is not a permanent cap any more: it is applied once by
+        :meth:`DojoMinerService.apply_task_energy`.  Returning the maximum
+        keeps old callers from accidentally growing a cap with every claim.
+        """
         await self.ensure_defaults()
-        total = 0
+        largest = 0
         async for doc in self.claims.find({'user_id': user_id}):
-            total += int(doc.get('energy_bonus', 0))
-        return max(0, total)
+            largest = max(largest, int(doc.get('energy_bonus', 0) or 0))
+        return max(0, largest)
 
     async def claim(self, user_id: int, slug: str) -> dict:
         if type(user_id) is not int or user_id <= 0:
@@ -213,6 +223,23 @@ class DojoTaskService:
             if isinstance(payout, dict) and payout.get('reason') == 'insufficient_bank':
                 raise GameError('SenseiBank не может выплатить награду. Попробуй позже.')
             raise GameError('Награда недоступна для этого профиля.')
+        # The energy part is a one-time charge, not a cap upgrade.  It is
+        # applied after the payout so a failed claim never leaves free energy
+        # behind; a miner error must not roll back coins the user already got.
+        miner = getattr(self.container, 'dojo_miner_service', None)
+        energy_bonus = int(claim_doc.get('energy_bonus', 0) or 0)
+        if miner is not None and energy_bonus > 0:
+            try:
+                applied = await miner.apply_task_energy(
+                    user_id, energy_bonus, claim_id)
+                if not applied:
+                    logger.warning(
+                        'Dojo task energy skipped user=%s claim=%s',
+                        user_id, claim_id)
+            except Exception:
+                logger.exception(
+                    'Dojo task energy apply failed user=%s claim=%s',
+                    user_id, claim_id)
         public = self._public(task, claimed=True)
         return {
             'success': True,

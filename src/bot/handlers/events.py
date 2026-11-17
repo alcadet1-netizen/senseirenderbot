@@ -114,6 +114,13 @@ async def on_user_leave(event: ChatMemberUpdated, container: Container):
 
     # Автобан и конфискация
     result = await container.moderation_service.handle_user_left(user.id)
+    if result.get('success'):
+        # The bank tab shows confiscated coins; do not wait up to a minute for
+        # the cached admin snapshot to expire.
+        stats = getattr(container, 'stats_service', None)
+        invalidate = getattr(stats, 'invalidate', None)
+        if invalidate is not None:
+            invalidate()
 
     # Проверяем настройки уведомлений (по умолчанию включены)
     key = f"chat:{event.chat.id}:exit_notifications"

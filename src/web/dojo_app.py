@@ -232,6 +232,16 @@ def setup_dojo(app, container=None):
                           'stars': order['stars']}
             elif action == 'bank':
                 result = await container.stats_service.get_bank_summary()
+            elif action == 'burn':
+                burn = await container.burn_service.burn(
+                    user['id'], payload.get('amount'))
+                result = await service.state(user['id'])
+                result['balance'] = burn['balance']
+                result['burn'] = burn
+                stats = getattr(container, 'stats_service', None)
+                invalidate = getattr(stats, 'invalidate', None)
+                if invalidate is not None:
+                    invalidate()
             elif action == 'referrals':
                 result = await _referrals_payload(container, user['id'],
                                                    payload.get('level', 1))
@@ -262,5 +272,5 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/assets/{asset:sensei\\.webp}', page)
     app.router.add_post(
-        '/miniapp/dojo/api/{action:state|start|collect|tasks|task|upgrades|buy|bank|referrals|share}',
+        '/miniapp/dojo/api/{action:state|start|collect|tasks|task|upgrades|buy|bank|burn|referrals|share}',
         api)

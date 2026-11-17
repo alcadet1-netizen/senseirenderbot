@@ -27,6 +27,7 @@ class Container:
     _dojo_task_service: Optional["DojoTaskService"] = field(default=None, init=False, repr=False)
     _dojo_upgrade_service: Optional["DojoUpgradeService"] = field(default=None, init=False, repr=False)
     _dojo_miner_service: Optional["DojoMinerService"] = field(default=None, init=False, repr=False)
+    _burn_service: Optional["BurnService"] = field(default=None, init=False, repr=False)
     _exchange_service: Optional["ExchangeService"] = field(default=None, init=False, repr=False)
     _achievement_service: Optional["AchievementService"] = field(default=None, init=False, repr=False)
     _level_service: Optional["LevelService"] = field(default=None, init=False, repr=False)
@@ -93,6 +94,13 @@ class Container:
             self._dojo_miner_service = DojoMinerService(
                 self.mongo_client, self.economy_service, self.dojo_task_service)
         return self._dojo_miner_service
+
+    @property
+    def burn_service(self):
+        if self._burn_service is None:
+            from src.services.burn_service import BurnService
+            self._burn_service = BurnService(self.mongo_client)
+        return self._burn_service
 
     @property
     def hedgehog_service(self):
