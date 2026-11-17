@@ -3830,3 +3830,719 @@ button:focus-visible {
     transform: scale(1.02);
   }
 }
+
+/* --- Visual refresh: aligned HUD, blade timer and layered atmosphere ------ */
+:root {
+  --hud-gutter: clamp(12px, 4vw, 22px);
+  --hud-max: 448px;
+}
+
+.top {
+  min-height: 44px;
+  padding-inline: max(var(--hud-gutter), calc((100% - var(--hud-max)) / 2));
+}
+
+.lang-switch,
+.info {
+  min-height: 36px;
+}
+
+.info {
+  width: 36px;
+  height: 36px;
+}
+
+.logo {
+  gap: 8px;
+  letter-spacing: 5px;
+  padding-left: 5px;
+}
+
+.stage {
+  padding-inline: var(--hud-gutter);
+}
+
+.balance {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: var(--hud-max);
+  padding-top: 2px;
+}
+
+.balance-label {
+  margin-bottom: 5px;
+  color: #c9ddcf;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 6px;
+  text-indent: 6px;
+  text-shadow: 0 2px 14px #000;
+}
+
+.points {
+  min-height: 46px;
+  gap: 10px;
+}
+
+/* Keep the number optically centred: the torii medallion is an ornament,
+   not a flex item that drags the balance off the HUD axis. */
+.points::after {
+  width: 35px;
+  height: 35px;
+  flex: 0 0 35px;
+  content: "";
+  pointer-events: none;
+}
+
+.point-coin {
+  width: 35px;
+  height: 35px;
+  border-color: rgba(137, 255, 190, 0.42);
+  background: radial-gradient(
+      circle at 50% 38%,
+      rgba(53, 151, 91, 0.58),
+      rgba(3, 18, 10, 0.88) 70%
+    ),
+    #03140b;
+  box-shadow:
+    0 0 22px rgba(40, 255, 136, 0.18),
+    inset 0 1px 0 rgba(223, 255, 237, 0.12);
+}
+
+.point-coin .icon {
+  width: 21px;
+  height: 17px;
+}
+
+#balance {
+  font-size: clamp(34px, 10vw, 52px);
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: 0.5px;
+  color: #f5fff8;
+  text-shadow:
+    0 0 30px rgba(35, 178, 100, 0.38),
+    0 3px 18px rgba(0, 0, 0, 0.9);
+}
+
+.balance-sub {
+  margin-top: 4px;
+  color: #a9c0b3;
+  font-size: 10.5px;
+  letter-spacing: 1.4px;
+}
+
+.energy {
+  width: 100%;
+  max-width: var(--hud-max);
+  margin-top: 10px;
+  padding: 11px 14px 12px;
+  border-color: rgba(116, 255, 174, 0.22);
+  border-radius: 17px;
+  background: linear-gradient(
+      180deg,
+      rgba(8, 29, 17, 0.88),
+      rgba(2, 11, 7, 0.91)
+    ),
+    rgba(2, 12, 7, 0.7);
+  box-shadow:
+    0 15px 36px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(215, 255, 232, 0.07);
+  backdrop-filter: blur(14px);
+}
+
+.energy::before {
+  position: absolute;
+  top: 0;
+  right: 16px;
+  left: 16px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(151, 255, 199, 0.48),
+    transparent
+  );
+  content: "";
+  pointer-events: none;
+}
+
+.energy-head {
+  margin-bottom: 8px;
+  font-size: 9.5px;
+  letter-spacing: 2px;
+}
+
+.energy-title .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.energy-value {
+  font-size: 12px;
+  letter-spacing: 0.8px;
+}
+
+.energy-track {
+  height: 6px;
+  background: rgba(0, 6, 3, 0.95);
+  box-shadow:
+    inset 0 2px 6px #000,
+    0 0 12px rgba(64, 255, 145, 0.08);
+}
+
+#energy-bar {
+  background: linear-gradient(90deg, #0b9a50, #47ee91 58%, #baffd6);
+  box-shadow: 0 0 12px rgba(80, 255, 158, 0.58);
+}
+
+.mine-meter {
+  position: relative;
+  width: 100%;
+  max-width: var(--hud-max);
+  margin-top: 8px;
+  padding: 8px 12px 9px;
+  border-color: rgba(116, 255, 174, 0.18);
+  border-radius: 13px;
+  background: linear-gradient(
+      180deg,
+      rgba(7, 27, 15, 0.8),
+      rgba(2, 11, 7, 0.85)
+    ),
+    rgba(2, 12, 7, 0.65);
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(215, 255, 232, 0.05);
+  backdrop-filter: blur(12px);
+}
+
+.mine-meter-head {
+  margin-bottom: 7px;
+  color: #9bc7b0;
+  font-size: 8px;
+  letter-spacing: 1.8px;
+}
+
+.mine-meter-head b {
+  color: #e0ffed;
+  font-size: 9.5px;
+}
+
+.mine-track {
+  height: 4px;
+  background: rgba(0, 6, 3, 0.95);
+}
+
+/* Utility rail: both actions share the same right gutter and no overlap. */
+.utility-rail {
+  position: absolute;
+  z-index: 6;
+  top: calc(max(18px, env(safe-area-inset-top)) + 51px);
+  right: max(var(--hud-gutter), calc((100% - var(--hud-max)) / 2));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+}
+
+.roadmap-sticker,
+.burn-sticker {
+  position: relative;
+  top: auto;
+  right: auto;
+}
+
+.roadmap-sticker {
+  width: 76px;
+  min-height: 34px;
+  padding: 8px 9px 7px;
+  border-radius: 999px;
+  transform: rotate(0.8deg);
+  transform-origin: center;
+}
+
+.roadmap-sticker::after {
+  inset: 3px;
+  border-radius: 999px;
+}
+
+.roadmap-tape {
+  top: -4px;
+  width: 25px;
+  height: 8px;
+}
+
+.roadmap-title {
+  font-size: 7px;
+  letter-spacing: 1.7px;
+}
+
+.burn-sticker {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: auto;
+  min-width: 79px;
+  height: 33px;
+  min-height: 0;
+  padding: 0 10px;
+  border-radius: 999px;
+  transform: rotate(-1deg);
+  transform-origin: center;
+}
+
+.burn-sticker::after {
+  inset: 3px;
+  border-radius: 999px;
+}
+
+.burn-flame {
+  width: 16px;
+  height: 19px;
+  flex: 0 0 16px;
+}
+
+.burn-title {
+  color: #d1ffe6;
+  font-size: 9px;
+  letter-spacing: 1.7px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+#app.tabs-open .utility-rail {
+  display: none;
+}
+
+/* Lock the orb diameter so showing the timer cannot re-centre the stage. */
+.orb,
+.phase-mining .orb,
+.phase-done .orb {
+  height: min(46vw, 182px);
+}
+
+/* The timer uses a bespoke seven-segment blade alphabet drawn in SVG. */
+.orb-button.is-timer {
+  display: grid;
+  grid-template-rows: 1fr;
+  place-items: center;
+  padding: 0;
+}
+
+.orb-button.is-timer .orb-icon {
+  display: none;
+}
+
+.orb-button.is-timer .orb-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  clip-path: inset(50%);
+  pointer-events: none;
+}
+
+.orb-button.is-timer .orb-sub {
+  position: absolute;
+  right: 0;
+  bottom: 16px;
+  left: 0;
+  z-index: 2;
+  max-width: 78%;
+  margin-inline: auto;
+  font-size: 8px;
+  line-height: 1.3;
+}
+
+.timer-face {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  padding: 2px 4px 8px;
+  pointer-events: none;
+}
+
+.timer-digits {
+  display: block;
+  width: min(94%, 166px);
+  height: auto;
+  overflow: visible;
+  filter: drop-shadow(0 0 5px rgba(76, 255, 155, 0.4));
+}
+
+.timer-seg {
+  fill: none;
+  stroke: rgba(139, 255, 190, 0.1);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition:
+    stroke 0.16s ease,
+    opacity 0.16s ease;
+}
+
+.timer-seg.is-on {
+  stroke: #cdffe0;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px rgba(86, 255, 166, 0.85));
+}
+
+.timer-colon-dot {
+  fill: #baffd6;
+  filter: drop-shadow(0 0 4px rgba(86, 255, 166, 0.85));
+  animation: timer-colon 1.8s ease-in-out infinite;
+}
+
+@keyframes timer-colon {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+
+  45%,
+  65% {
+    opacity: 1;
+  }
+}
+
+/* Layered atmosphere: aura, slow light sweep, mist, dust, petals and code. */
+.ambient-aura,
+.ambient-ray,
+.ambient-mist,
+.ambient-dust,
+.phase-mining .matrix-layer {
+  opacity: 0.46;
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 16%,
+    #000 76%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 16%,
+    #000 76%,
+    transparent 100%
+  );
+}
+
+.matrix-col {
+  filter: blur(0.3px);
+}
+
+.ambient-scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ambient-aura {
+  background: radial-gradient(
+      ellipse at 18% 24%,
+      rgba(24, 170, 91, 0.2),
+      transparent 40%
+    ),
+    radial-gradient(
+      ellipse at 84% 68%,
+      rgba(17, 119, 71, 0.16),
+      transparent 44%
+    ),
+    radial-gradient(
+      ellipse at 50% 50%,
+      rgba(65, 255, 148, 0.07),
+      transparent 58%
+    );
+  mix-blend-mode: screen;
+  opacity: 0.75;
+  animation: ambient-aura 19s ease-in-out infinite alternate;
+  will-change: transform, opacity;
+}
+
+.ambient-ray {
+  background: conic-gradient(
+    from 205deg at 50% 42%,
+    transparent 0deg,
+    rgba(83, 255, 157, 0.075) 18deg,
+    transparent 38deg,
+    transparent 180deg,
+    rgba(31, 192, 104, 0.05) 215deg,
+    transparent 250deg
+  );
+  mix-blend-mode: screen;
+  opacity: 0.8;
+  animation: ambient-sweep 32s linear infinite;
+  will-change: transform;
+}
+
+.ambient-puff {
+  position: absolute;
+  top: var(--y);
+  left: var(--x);
+  width: var(--size);
+  height: calc(var(--size) * 0.68);
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse,
+    rgba(75, 255, 149, 0.16),
+    rgba(18, 151, 76, 0.06) 42%,
+    transparent 72%
+  );
+  filter: blur(20px);
+  opacity: 0.55;
+  animation: ambient-mist var(--duration) ease-in-out var(--delay) infinite
+    alternate;
+}
+
+.ambient-mote {
+  position: absolute;
+  bottom: -8px;
+  left: var(--x);
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  background: #c7ffdd;
+  box-shadow:
+    0 0 5px rgba(100, 255, 169, 0.9),
+    0 0 12px rgba(46, 255, 132, 0.5);
+  opacity: 0;
+  animation: ambient-mote-rise var(--duration) linear var(--delay) infinite;
+  will-change: transform, opacity;
+}
+
+.phase-mining .matrix-layer {
+  opacity: 0.46;
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 16%,
+    #000 76%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 16%,
+    #000 76%,
+    transparent 100%
+  );
+}
+
+.matrix-col {
+  filter: blur(0.3px);
+}
+
+.ambient-scan {
+  background: repeating-linear-gradient(
+      180deg,
+      rgba(184, 255, 215, 0.022) 0,
+      rgba(184, 255, 215, 0.022) 1px,
+      transparent 1px,
+      transparent 4px
+    ),
+    radial-gradient(
+      ellipse at 50% 46%,
+      transparent 42%,
+      rgba(0, 4, 2, 0.3) 100%
+    );
+  mix-blend-mode: soft-light;
+  opacity: 0.7;
+}
+
+@keyframes ambient-aura {
+  0% {
+    opacity: 0.58;
+    transform: scale(1.02) translate3d(-1.5%, 1%, 0);
+  }
+
+  100% {
+    opacity: 0.9;
+    transform: scale(1.12) translate3d(1.5%, -1%, 0);
+  }
+}
+
+@keyframes ambient-sweep {
+  0% {
+    transform: rotate(-8deg) scale(1.08);
+  }
+
+  100% {
+    transform: rotate(8deg) scale(1.08);
+  }
+}
+
+@keyframes ambient-mist {
+  0% {
+    opacity: 0.28;
+    transform: translate3d(0, 0, 0) scale(0.92);
+  }
+
+  100% {
+    opacity: 0.62;
+    transform: translate3d(var(--drift), -18px, 0) scale(1.12);
+  }
+}
+
+@keyframes ambient-mote-rise {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.5);
+  }
+
+  14% {
+    opacity: var(--opacity);
+  }
+
+  72% {
+    opacity: calc(var(--opacity) * 0.65);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--drift), -112vh, 0) scale(1);
+  }
+}
+
+@media (max-height: 720px) {
+  .orb,
+  .phase-mining .orb,
+  .phase-done .orb {
+    height: min(42vw, 158px);
+  }
+
+  .utility-rail {
+    top: calc(max(12px, env(safe-area-inset-top)) + 45px);
+    gap: 6px;
+  }
+
+  .roadmap-sticker {
+    width: 70px;
+    min-height: 32px;
+    padding: 7px 8px 6px;
+  }
+
+  .burn-sticker {
+    height: 31px;
+    min-width: 74px;
+    padding-inline: 9px;
+  }
+
+  .burn-flame {
+    width: 14px;
+    height: 17px;
+    flex-basis: 14px;
+  }
+
+  .timer-digits {
+    width: min(86%, 150px);
+  }
+}
+
+@media (max-height: 640px) {
+  .orb,
+  .phase-mining .orb,
+  .phase-done .orb {
+    height: min(36vw, 132px);
+  }
+}
+
+@media (max-height: 520px) {
+  .utility-rail {
+    top: calc(max(12px, env(safe-area-inset-top)) + 38px);
+    gap: 5px;
+  }
+
+  .roadmap-sticker {
+    width: 64px;
+    min-height: 29px;
+    padding: 6px 7px 5px;
+  }
+
+  .burn-sticker {
+    height: 28px;
+    min-width: 68px;
+    padding-inline: 8px;
+    gap: 5px;
+  }
+
+  .burn-flame {
+    width: 13px;
+    height: 15px;
+    flex-basis: 13px;
+  }
+
+  .burn-title {
+    font-size: 7px;
+    letter-spacing: 1.2px;
+  }
+
+  .timer-digits {
+    width: min(84%, 132px);
+  }
+
+  .orb-button.is-timer .orb-sub {
+    bottom: 11px;
+    font-size: 7px;
+  }
+}
+
+@media (max-width: 380px) {
+  .roadmap-sticker {
+    width: 70px;
+  }
+
+  .burn-sticker {
+    width: auto;
+    min-width: 75px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-aura,
+  .ambient-ray,
+  .ambient-puff,
+  .ambient-mote,
+  .timer-colon-dot,
+  .timer-seg {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* Compact phones: keep the rail on one line and the timer caption intact. */
+.roadmap-sticker b,
+.burn-title {
+  white-space: nowrap;
+}
+
+@media (max-width: 380px) {
+  .roadmap-sticker {
+    width: auto;
+    padding-inline: 8px;
+  }
+
+  .roadmap-sticker b {
+    font-size: 7px;
+    letter-spacing: 1px;
+  }
+
+  .burn-title {
+    font-size: 8px;
+    letter-spacing: 1.2px;
+  }
+
+  .orb-button.is-timer .orb-sub {
+    max-width: 92%;
+    font-size: 7px;
+    letter-spacing: 0.4px;
+  }
+}

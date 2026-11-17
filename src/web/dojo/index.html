@@ -76,8 +76,13 @@
       <div class="shade" aria-hidden="true"></div>
 
       <div class="ambient" aria-hidden="true">
+        <div class="ambient-aura"></div>
+        <div class="ambient-ray"></div>
+        <div id="ambient-mist" class="ambient-mist"></div>
+        <div id="ambient-dust" class="ambient-dust"></div>
         <div id="sakura" class="sakura-layer"></div>
         <div id="matrix" class="matrix-layer"></div>
+        <div class="ambient-scan"></div>
       </div>
 
       <header class="top">
@@ -123,35 +128,37 @@
         </button>
       </header>
 
-      <button
-        id="roadmap"
-        class="roadmap-sticker"
-        type="button"
-        aria-label="ROAD MAP"
-        title="ROAD MAP"
-      >
-        <span class="roadmap-tape" aria-hidden="true"></span>
-        <b class="roadmap-title">ROAD MAP</b>
-      </button>
+      <div class="utility-rail">
+        <button
+          id="roadmap"
+          class="roadmap-sticker"
+          type="button"
+          aria-label="ROAD MAP"
+          title="ROAD MAP"
+        >
+          <span class="roadmap-tape" aria-hidden="true"></span>
+          <b class="roadmap-title">ROAD MAP</b>
+        </button>
 
-      <button
-        id="burn"
-        class="burn-sticker"
-        type="button"
-        aria-label="Сжечь SenseiCoin"
-        data-i18n-aria="Сжечь SenseiCoin"
-        title="BURN"
-      >
-        <span class="burn-flame" aria-hidden="true">
-          <svg viewBox="0 0 24 32">
-            <path
-              d="M12 1c1 6-5 8-5 14 0 3 2 5 5 5s5-2 5-5c0-2-2-4-2-7 4 3 7 7 7 12 0 6-5 11-10 11S2 26 2 20C2 12 8 9 12 1Z"
-            />
-            <path d="M12 17c1 3-2 4-2 7 0 2 1 3 2 3s2-1 2-3c0-2-2-4-2-7Z" />
-          </svg>
-        </span>
-        <b class="burn-title">BURN</b>
-      </button>
+        <button
+          id="burn"
+          class="burn-sticker"
+          type="button"
+          aria-label="Сжечь SenseiCoin"
+          data-i18n-aria="Сжечь SenseiCoin"
+          title="BURN"
+        >
+          <span class="burn-flame" aria-hidden="true">
+            <svg viewBox="0 0 24 32">
+              <path
+                d="M12 1c1 6-5 8-5 14 0 3 2 5 5 5s5-2 5-5c0-2-2-4-2-7 4 3 7 7 7 12 0 6-5 11-10 11S2 26 2 20C2 12 8 9 12 1Z"
+              />
+              <path d="M12 17c1 3-2 4-2 7 0 2 1 3 2 3s2-1 2-3c0-2-2-4-2-7Z" />
+            </svg>
+          </span>
+          <b class="burn-title">BURN</b>
+        </button>
+      </div>
 
       <div class="stage">
         <section
@@ -251,6 +258,22 @@
                   <path
                     d="M18.352 3.352a1.205 1.205 0 0 0-1.704 0l-5.296 5.296a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l5.296-5.296a1.205 1.205 0 0 0 0-1.704z"
                   />
+                </svg>
+              </span>
+              <span
+                id="timer-face"
+                class="timer-face"
+                aria-hidden="true"
+                hidden
+              >
+                <svg
+                  id="timer-digits"
+                  class="timer-digits"
+                  viewBox="0 0 181 48"
+                  role="presentation"
+                  focusable="false"
+                >
+                  <g id="timer-glyphs"></g>
                 </svg>
               </span>
               <span id="action-label" class="orb-label">ЗАГРУЗКА</span>

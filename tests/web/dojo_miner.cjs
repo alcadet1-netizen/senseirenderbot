@@ -283,6 +283,17 @@ const { chromium } = require("playwright-core");
   assert.equal(await page.locator("#roadmap-sheet").isVisible(), false);
   const readyBox = await page.locator("#orb").boundingBox();
   assert.ok(readyBox.width <= 182, `orb is too wide: ${readyBox.width}`);
+  assert.equal(await page.locator("#timer-face").isVisible(), false);
+  assert.equal(await page.locator(".ambient-aura").count(), 1);
+  assert.equal(await page.locator(".ambient-ray").count(), 1);
+  assert.ok((await page.locator("#ambient-mist .ambient-puff").count()) >= 3);
+  assert.ok((await page.locator("#ambient-dust .ambient-mote").count()) >= 12);
+  const burnFlame = await page.locator(".burn-flame").boundingBox();
+  const burnTitle = await page.locator(".burn-title").boundingBox();
+  assert.ok(
+    burnTitle.x >= burnFlame.x + burnFlame.width - 1,
+    "BURN caption must sit clear of the animated flame",
+  );
   const readyFit = await page.evaluate(() => {
     const stage = document.querySelector(".stage");
     const action = document.querySelector("#action").getBoundingClientRect();
@@ -315,6 +326,19 @@ const { chromium } = require("playwright-core");
     Math.abs(miningBox.y - readyBox.y) < 1,
     `action button moved from ${readyBox.y} to ${miningBox.y}`,
   );
+  assert.equal(await page.locator("#timer-face").isVisible(), true);
+  assert.equal(await page.locator(".timer-seg").count(), 42);
+  assert.ok(
+    (await page.locator(".timer-seg.is-on").count()) >= 20,
+    "the bespoke timer face should light its digit blades",
+  );
+  const timerBox = await page.locator("#timer-digits").boundingBox();
+  assert.ok(
+    Math.abs(
+      timerBox.x + timerBox.width / 2 - (miningBox.x + miningBox.width / 2),
+    ) < 1,
+    "the timer must be centred in the orb",
+  );
   assert.equal(await page.locator("#mine-meter").isVisible(), true);
   assert.match(
     await page.locator("#chain-status").textContent(),
@@ -345,6 +369,7 @@ const { chromium } = require("playwright-core");
   assert.match(await page.locator("#chain-status").textContent(), /БЛОК ГОТОВ/);
   const doneBox = await page.locator("#orb").boundingBox();
   assert.ok(Math.abs(doneBox.y - readyBox.y) < 1);
+  assert.equal(await page.locator("#timer-face").isVisible(), false);
   await page.screenshot({ path: ".cache/miner2-done.png" });
 
   await page.click(".tab[data-tab='upgrades']");

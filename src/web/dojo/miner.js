@@ -404,6 +404,47 @@
       <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`,
   };
 
+  const TIMER_SEGMENTS = {
+    top: "M7 4 H17",
+    upperLeft: "M4 7 V19",
+    upperRight: "M20 7 V19",
+    middle: "M7 22 H17",
+    lowerLeft: "M4 25 V37",
+    lowerRight: "M20 25 V37",
+    bottom: "M7 40 H17",
+  };
+  const TIMER_DIGITS = {
+    0: ["top", "upperLeft", "upperRight", "lowerLeft", "lowerRight", "bottom"],
+    1: ["upperRight", "lowerRight"],
+    2: ["top", "upperRight", "middle", "lowerLeft", "bottom"],
+    3: ["top", "upperRight", "middle", "lowerRight", "bottom"],
+    4: ["upperLeft", "upperRight", "middle", "lowerRight"],
+    5: ["top", "upperLeft", "middle", "lowerRight", "bottom"],
+    6: ["top", "upperLeft", "middle", "lowerLeft", "lowerRight", "bottom"],
+    7: ["top", "upperRight", "lowerRight"],
+    8: [
+      "top",
+      "upperLeft",
+      "upperRight",
+      "middle",
+      "lowerLeft",
+      "lowerRight",
+      "bottom",
+    ],
+    9: ["top", "upperLeft", "upperRight", "middle", "lowerRight", "bottom"],
+  };
+  const TIMER_LAYOUT = [
+    { kind: "digit", x: 0 },
+    { kind: "digit", x: 27 },
+    { kind: "colon", x: 56 },
+    { kind: "digit", x: 66 },
+    { kind: "digit", x: 93 },
+    { kind: "colon", x: 122 },
+    { kind: "digit", x: 132 },
+    { kind: "digit", x: 159 },
+  ];
+  const timerDigitNodes = [];
+
   const motionQuery = window.matchMedia
     ? window.matchMedia("(prefers-reduced-motion: reduce)")
     : null;
@@ -422,6 +463,34 @@
     const sakura = $("sakura");
     const matrix = $("matrix");
     if (!sakura || !matrix || reduceMotion) return;
+    const mist = $("ambient-mist");
+    const dust = $("ambient-dust");
+    if (mist && !mist.childElementCount) {
+      for (let i = 0; i < 4; i++) {
+        const puff = document.createElement("i");
+        puff.className = "ambient-puff";
+        puff.style.setProperty("--x", `${rnd(-20, 82)}%`);
+        puff.style.setProperty("--y", `${rnd(38, 88)}%`);
+        puff.style.setProperty("--size", `${rnd(150, 280)}px`);
+        puff.style.setProperty("--duration", `${rnd(13, 22)}s`);
+        puff.style.setProperty("--delay", `${rnd(-18, 0)}s`);
+        puff.style.setProperty("--drift", `${rnd(-60, 60)}px`);
+        mist.appendChild(puff);
+      }
+    }
+    if (dust && !dust.childElementCount) {
+      for (let i = 0; i < 22; i++) {
+        const mote = document.createElement("i");
+        mote.className = "ambient-mote";
+        mote.style.setProperty("--x", `${rnd(2, 98)}%`);
+        mote.style.setProperty("--size", `${rnd(1, 2.6)}px`);
+        mote.style.setProperty("--duration", `${rnd(10, 23)}s`);
+        mote.style.setProperty("--delay", `${rnd(-20, 0)}s`);
+        mote.style.setProperty("--drift", `${rnd(-42, 42)}px`);
+        mote.style.setProperty("--opacity", rnd(0.25, 0.85).toFixed(2));
+        dust.appendChild(mote);
+      }
+    }
     const narrow = window.innerWidth < 420;
     const leaves = narrow ? 9 : 13;
     const columns = narrow ? 9 : 13;
@@ -617,7 +686,7 @@
     const rate = energy > 0 ? base * boost : base / 10;
     $("hint").textContent = t(
       "Энергия {energy} / {max} · {rate} Coin/ч · после нуля 10%",
-      { energy: Math.round(energy), max: energyMax(), rate: coin(rate) },
+      { energy: Math.floor(energy), max: energyMax(), rate: coin(rate) },
     );
   }
 
@@ -727,6 +796,53 @@
     bpmNode.textContent = `${bpm} BPM`;
   }
 
+  function buildTimerFace() {
+    const svg = $("timer-digits");
+    const glyphs = $("timer-glyphs");
+    if (!svg || !glyphs || timerDigitNodes.length) return;
+    const ns = "http://www.w3.org/2000/svg";
+    TIMER_LAYOUT.forEach((slot) => {
+      if (slot.kind === "colon") {
+        const group = document.createElementNS(ns, "g");
+        group.setAttribute("transform", `translate(${slot.x} 0)`);
+        [16, 31].forEach((cy) => {
+          const dot = document.createElementNS(ns, "circle");
+          dot.setAttribute("cx", "3");
+          dot.setAttribute("cy", String(cy));
+          dot.setAttribute("r", "2.8");
+          dot.setAttribute("class", "timer-colon-dot");
+          group.appendChild(dot);
+        });
+        glyphs.appendChild(group);
+        return;
+      }
+      const group = document.createElementNS(ns, "g");
+      group.setAttribute("transform", `translate(${slot.x} 0)`);
+      const segments = {};
+      Object.entries(TIMER_SEGMENTS).forEach(([name, pathData]) => {
+        const path = document.createElementNS(ns, "path");
+        path.setAttribute("d", pathData);
+        path.setAttribute("class", "timer-seg");
+        group.appendChild(path);
+        segments[name] = path;
+      });
+      glyphs.appendChild(group);
+      timerDigitNodes.push(segments);
+    });
+  }
+
+  function paintTimerFace(value) {
+    if (!timerDigitNodes.length) buildTimerFace();
+    if (!timerDigitNodes.length) return;
+    const digits = String(value).replace(/\D/g, "").slice(0, 6);
+    timerDigitNodes.forEach((segments, index) => {
+      const active = TIMER_DIGITS[digits[index]] || [];
+      Object.entries(segments).forEach(([name, path]) => {
+        path.classList.toggle("is-on", active.includes(name));
+      });
+    });
+  }
+
   function paintAction(icon, label, sub, timer = false, disabled = true) {
     const button = $("action");
     const labelNode = $("action-label");
@@ -736,6 +852,11 @@
     iconNode.setAttribute("aria-hidden", timer ? "true" : "false");
     labelNode.textContent = label;
     labelNode.classList.toggle("is-timer", timer);
+    labelNode.classList.toggle("is-timer-hidden", timer);
+    button.classList.toggle("is-timer", timer);
+    const timerFace = $("timer-face");
+    if (timerFace) timerFace.hidden = !timer;
+    if (timer) paintTimerFace(label);
     $("orb-sub").textContent = sub;
     button.disabled = disabled;
     button.setAttribute("aria-label", `${label}. ${sub}`);
@@ -863,8 +984,10 @@
     if (model.phase !== "mining" || pending) return;
     const left = remaining();
     const label = $("action-label");
-    label.textContent = clock(left);
+    const timerText = clock(left);
+    label.textContent = timerText;
     label.classList.add("is-timer");
+    paintTimerFace(timerText);
     paintEnergy(energyValue());
     paintBurn();
     paintMeter();
@@ -1964,6 +2087,7 @@
 
   seedAmbient();
   seedMiningParticles();
+  buildTimerFace();
   setInterval(paintChain, 1000);
   applyTranslations();
   seedBoot();
