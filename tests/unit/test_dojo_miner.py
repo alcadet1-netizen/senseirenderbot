@@ -146,6 +146,8 @@ async def test_api_requires_signature_and_dispatches_actions():
         settings=SimpleNamespace(bot_token='test-token', maintenance_mode=False),
         dojo_miner_service=SimpleNamespace(state=state, start=start, collect=collect, add_circle_energy=circle),
         dojo_task_service=SimpleNamespace(list_tasks=list_tasks, claim=claim),
+        mongo_client=SimpleNamespace(database=SimpleNamespace(
+            dojo_task_claims=SimpleNamespace(find_one=AsyncMock(return_value=None)))),
         dojo_upgrade_service=SimpleNamespace(snapshot=upgrades, prepare=prepare),
         stats_service=SimpleNamespace(get_bank_summary=bank),
         burn_service=SimpleNamespace(burn=burn),

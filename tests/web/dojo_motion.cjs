@@ -66,3 +66,7 @@ assert.equal(setup('full', true).classes.has('motion-reduced'), false);
 assert.equal(setup('off', false).classes.has('motion-reduced'), true, 'saved off disables motion even without OS reduced motion');
 assert.equal(setup(null, true, true).classes.has('motion-reduced'), false, 'blocked storage still animates');
 console.log('Motion: initial boot preference, OS setting, saved choice and control passed.');
+assert.doesNotMatch(source.slice(source.indexOf("  function paintChain()"), source.indexOf("  function paintTimerFace")), /motionReduced\(\)/);
+assert.match(css, /html\.motion-reduced \.chain-row\.is-new\s*\{\s*animation-duration:\s*0\.45s !important/);
+assert.match(css, /html\.motion-reduced \.chain-panel\.is-live \.chain-ecg path\s*\{\s*animation-duration:\s*calc/);
+assert.ok(!source.includes('Обведи круг вокруг майнера'));
