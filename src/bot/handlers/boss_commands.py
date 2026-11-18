@@ -196,8 +196,6 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
     Supports both CallbackQuery (buttons) and Message (text commands).
     """
     boss_service = container.boss_service
-    economy_service = container.economy_service
-
     user = event.from_user
     if user is None:
         return
@@ -342,70 +340,37 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
         return
 
     # Result is "hit" or "killed"
-    boss_config = BOSSES[state["boss_id"]]
-
-    # Get hit stats for feedback
-    user_key = str(user_id)
-    user_stats = state["hits"].get(user_key, {})
-    hit_count = user_stats.get("count", 0)
-    user_total_dmg = user_stats.get("dmg", 0)
-    combo_count = result_obj.combo_count
-
-    # Prepare messages
-
-    # User mention (like Banzai): @username or tg://user link
+    # Only confirmed transfers are announced. Rejected or ambiguous transfers
+    # remain recorded for reconciliation by the reward service, not in chat.
     user_display = Visuals.escape(user.username or user.full_name or f"User {user_id}")
     if user.username:
         user_mention = f"@{user.username}"
     else:
         user_mention = f'<a href="tg://user?id={user_id}">{user_display}</a>'
 
-    alert_text = f"⚔️ {user_mention} · <b>−{actual_dmg} HP</b>\nВсего: {user_total_dmg}"
-    if combo_count > 1:
-        alert_text += f" · серия {combo_count}"
-
     if is_ult:
-        alert_text = f"⚡ Ульта · {user_mention} · <b>−{actual_dmg} HP</b>\nВсего: {user_total_dmg}"
+        alert_text = f"⚡ Ульта · {user_mention} · <b>−{actual_dmg} HP</b>"
     else:
-        # Show progress towards ult for normal hits
-        from src.core.constants import BOSS_ULT_REQUIRED_HITS
-        if hit_count < BOSS_ULT_REQUIRED_HITS:
-            alert_text += f"\n(Ульта: {hit_count}/{BOSS_ULT_REQUIRED_HITS})"
-        else:
-             alert_text += "\n(Ульта готова!)"
+        alert_text = f"⚔️ {user_mention} · <b>−{actual_dmg} HP</b>"
 
-        # --- xRocket Reward Logic ---
-        if actual_dmg >= 20:
-            user_level = container.level_service.get_level(user_db.get("xp", 0))
-            if user_level >= 5:
-                # Dynamic Settings
-                reward_settings = await boss_service.get_reward_settings()
-                logger.info(f"[BOSS GRAM] user={user_id} dmg={actual_dmg} level={user_level} settings={reward_settings}")
-
-                # Check chance
-                if random.random() < reward_settings["drop_chance"]:
-                    reward_amount = round(random.uniform(reward_settings["reward_min"], reward_settings["reward_max"]), 4)
-                    logger.info(f"[BOSS GRAM] user={user_id} DROP CHANCE PASSED amount={reward_amount}")
-
-                    from src.services.boss_reward_service import award_boss_gram
-                    event_key = f"cb:{event.id}" if is_callback else f"msg:{origin.chat.id}:{origin.message_id}"
-                    try:
-                        payout = await award_boss_gram(container, state, user_id, reward_amount, event_key)
-                    except Exception:
-                        logger.exception('Boss GRAM receipt requires reconciliation')
-                        payout = 'needs_review'
-                    if payout == 'confirmed':
-                        alert_text += f"\n💎 <b>LUCKY HIT!</b> +{reward_amount} GRAM — xRocket подтвердил перевод."
-                    elif payout == 'rejected':
-                        alert_text += "\n⚠️ Дырявый xRocket снова вставляет палки в катану: перевод GRAM отклонён! Сенсей не виноват 😤\nВыплата не подтверждена. Причину отказа нужно проверить."
-                    elif payout == 'needs_review':
-                        alert_text += "\n⏳ GRAM: перевод требует проверки, повторная отправка автоматически не выполняется."
-                else:
-                    logger.info(f"[BOSS GRAM] user={user_id} drop chance NOT passed (drop_chance={reward_settings['drop_chance']})")
-            else:
-                logger.info(f"[BOSS GRAM] user={user_id} level too low: {user_level} < 5")
-        else:
-            logger.info(f"[BOSS GRAM] user={user_id} damage too low: {actual_dmg} < 20")
+    if not is_ult and actual_dmg >= 20 and player_level >= 5:
+        try:
+            reward_settings = await boss_service.get_reward_settings()
+            logger.info("[BOSS GRAM] user=%s dmg=%s level=%s settings=%s",
+                        user_id, actual_dmg, player_level, reward_settings)
+            if random.random() < reward_settings["drop_chance"]:
+                reward_amount = round(random.uniform(reward_settings["reward_min"], reward_settings["reward_max"]), 4)
+                from src.services.boss_reward_service import award_boss_gram
+                event_key = f"cb:{event.id}" if is_callback else f"msg:{origin.chat.id}:{origin.message_id}"
+                payout = await award_boss_gram(container, state, user_id, reward_amount, event_key)
+                if payout == 'confirmed':
+                    alert_text += f"\n💎 <b>LUCKY HIT!</b> +{reward_amount} GRAM — xRocket подтвердил перевод."
+                elif payout in ('rejected', 'needs_review'):
+                    logger.warning("Boss GRAM receipt requires reconciliation: user=%s status=%s", user_id, payout)
+        except Exception:
+            # The hit was already applied. Never retry an ambiguous payout or
+            # suppress its damage message because a reward lookup/transfer failed.
+            logger.exception('Boss GRAM receipt requires reconciliation')
 
     # Send hit result + GRAM reward announcement as ONE message in the chat
     # (kept in chat — not auto-deleted, so players can see the outcome)

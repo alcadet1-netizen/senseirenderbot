@@ -151,3 +151,82 @@ async def test_text_ult_in_other_chat_is_not_deleted_or_processed():
         await cmd_ult(message,container)
     message.delete.assert_not_awaited()
     attack.assert_not_awaited()
+
+
+class FakeBossCallback:
+    def __init__(self, user, message, bot):
+        self.from_user = user
+        self.message = message
+        self.bot = bot
+        self.id = 'callback-42'
+        self.answer = AsyncMock()
+
+
+def boss_attack_fixture(*, is_callback=False, damage=25, result='hit'):
+    from src.bot.handlers import boss_commands
+    user = NS(id=7, username='Ronin', full_name='Ronin', first_name='Ronin',
+              last_name=None, is_bot=False)
+    state = {'chat_id': -100, 'message_id': 12, 'boss_id': next(iter(BOSSES)),
+             'hits': {'7': {'count': 3, 'dmg': 90}}, 'start_time': 100,
+             'battle_id': 'battle', 'hp': 50}
+    bot = NS(send_message=AsyncMock())
+    message = NS(from_user=user, chat=NS(id=-100), message_id=12, bot=bot)
+    event = FakeBossCallback(user, message, bot) if is_callback else message
+    attack_result = NS(state=state, result_type=result, actual_damage=damage, combo_count=3)
+    service = NS(get_state=AsyncMock(return_value=state),
+                 attack_boss=AsyncMock(return_value=attack_result),
+                 get_reward_settings=AsyncMock(return_value={
+                     'drop_chance': 1, 'reward_min': .006, 'reward_max': .02}))
+    container = NS(boss_service=service, economy_service=NS(),
+                   user_service=NS(get_or_create=AsyncMock(return_value={
+                       'user': {'has_katana': True, 'katana_length': 30, 'xp': 200}})),
+                   level_service=NS(get_level=MagicMock(return_value=5)))
+    return boss_commands, event, container, bot
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('callback', [False, True])
+@pytest.mark.parametrize('payout', ['confirmed', 'rejected', 'needs_review', 'pool_exhausted', 'duplicate', 'exception'])
+async def test_boss_attack_only_announces_confirmed_gram(callback, payout, caplog):
+    commands, event, container, bot = boss_attack_fixture(is_callback=callback)
+    value = RuntimeError('reward unavailable') if payout == 'exception' else None
+    with (patch.object(commands, 'CallbackQuery', FakeBossCallback),
+          patch.object(commands.random, 'random', return_value=0),
+          patch.object(commands.random, 'uniform', return_value=.0123),
+          patch('src.services.boss_reward_service.award_boss_gram', new_callable=AsyncMock,
+                return_value=payout, side_effect=value) as award,
+          patch('src.services.boss_runtime.refresh_boss', new_callable=AsyncMock) as refresh):
+        await commands.process_boss_attack(event, container, is_ult=False)
+    text = bot.send_message.await_args.args[1]
+    assert text.startswith('⚔️ @Ronin · <b>−25 HP</b>')
+    if payout == 'confirmed':
+        assert text == ('⚔️ @Ronin · <b>−25 HP</b>\n'
+                        '💎 <b>LUCKY HIT!</b> +0.0123 GRAM — xRocket подтвердил перевод.')
+    else:
+        assert text == '⚔️ @Ronin · <b>−25 HP</b>'
+    assert 'Дырявый' not in text and 'провер' not in text
+    award.assert_awaited_once()
+    assert award.await_args.args[4] == ('cb:callback-42' if callback else 'msg:-100:12')
+    refresh.assert_awaited_once_with(bot, container, force=False)
+    if callback:
+        event.answer.assert_awaited_once()
+    if payout in ('rejected', 'needs_review', 'exception'):
+        assert 'requires reconciliation' in caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('reason', ['settings_failure', 'no_drop', 'low_damage', 'ult'])
+async def test_boss_attack_without_payout_still_reports_damage(reason):
+    commands, event, container, bot = boss_attack_fixture(damage=19 if reason == 'low_damage' else 25)
+    if reason == 'settings_failure':
+        container.boss_service.get_reward_settings.side_effect = RuntimeError('unavailable')
+    if reason == 'no_drop':
+        container.boss_service.get_reward_settings.return_value['drop_chance'] = 0
+    with (patch.object(commands, 'CallbackQuery', FakeBossCallback),
+          patch('src.services.boss_reward_service.award_boss_gram', new_callable=AsyncMock) as award,
+          patch('src.services.boss_runtime.refresh_boss', new_callable=AsyncMock)):
+        await commands.process_boss_attack(event, container, is_ult=reason == 'ult')
+    text = bot.send_message.await_args.args[1]
+    assert text == ('⚡ Ульта · @Ronin · <b>−25 HP</b>' if reason == 'ult'
+                    else f"⚔️ @Ronin · <b>−{19 if reason == 'low_damage' else 25} HP</b>")
+    award.assert_not_awaited()
