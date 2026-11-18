@@ -289,6 +289,15 @@ const { chromium } = require("playwright-core");
   );
   assert.equal(await page.locator("#mine-meter").isVisible(), true);
   assert.match(await page.locator("#chain-status").textContent(), /ОЖИДАНИЕ/);
+  assert.equal(await page.locator("#bonus-sheet").isVisible(), false);
+  assert.equal(await page.locator("#burn").isVisible(), true);
+  await page.click("#bonus-open");
+  assert.equal(await page.locator("#bonus-sheet").isVisible(), true);
+  assert.equal(await page.locator("#bonus-open").getAttribute("aria-expanded"), "true");
+  for (const selector of ["#roadmap", "#daily-open", "#chest-open"]) {
+    const box = await page.locator(selector).boundingBox();
+    assert.ok(Math.abs(box.width - box.height) < 1, `${selector} must be square`);
+  }
   const roadmap = await page.locator(".roadmap-sticker").textContent();
   assert.match(roadmap, /ROAD MAP/);
   assert.doesNotMatch(roadmap, /AIRDROP|Q4 2026|TGE|КОГДА/);
@@ -315,10 +324,9 @@ const { chromium } = require("playwright-core");
     burnTitle.y >= burnFlame.y + burnFlame.height - 1,
     "BURN caption must sit below the flame",
   );
-  for (const selector of ["#roadmap", "#burn", "#daily-open", "#chest-open"]) {
-    const box = await page.locator(selector).boundingBox();
-    assert.ok(Math.abs(box.width - box.height) < 1, `${selector} must be square`);
-  }
+  const burnBox = await page.locator("#burn").boundingBox();
+  const bonusBox = await page.locator("#bonus-open").boundingBox();
+  assert.ok(burnBox.width > bonusBox.width, "BURN should be larger than BONUS");
   const readyFit = await page.evaluate(() => {
     const stage = document.querySelector(".stage");
     const action = document.querySelector("#action").getBoundingClientRect();

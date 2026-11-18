@@ -317,3 +317,24 @@ async def test_task_add_accepts_a_referral_url_as_link():
     container = SimpleNamespace(dojo_task_service=SimpleNamespace(add_link=add_link))
     await cmd_task_add(message, container)
     add_link.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_addchance_command_passes_stable_telegram_message_key(monkeypatch):
+    from src.bot.handlers.dojo_tasks_admin import cmd_addchance
+    grant = AsyncMock(return_value={'amount': 10, 'username': 'Example'})
+    monkeypatch.setattr('src.bot.handlers.dojo_tasks_admin.DojoDailyService', lambda mongo: SimpleNamespace(grant_admin_chests=grant))
+    msg = SimpleNamespace(text='/addchance @Example 10', from_user=SimpleNamespace(id=8),
+                          chat=SimpleNamespace(id=123), message_id=456, answer=AsyncMock())
+    await cmd_addchance(msg, SimpleNamespace(mongo_client=object()))
+    grant.assert_awaited_once_with('Example', 10, 8, '123:456')
+    assert '10 сундуков' in msg.answer.call_args.args[0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('text', ['/addchance @Example -1', '/addchance Example 3', '/addchance @Example 100000', '/addchance @Example 1 extra'])
+async def test_addchance_rejects_bad_syntax(text):
+    from src.bot.handlers.dojo_tasks_admin import cmd_addchance
+    msg = SimpleNamespace(text=text, answer=AsyncMock())
+    await cmd_addchance(msg, SimpleNamespace())
+    assert 'Использование' in msg.answer.call_args.args[0]

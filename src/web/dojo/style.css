@@ -4962,3 +4962,63 @@ button:focus-visible {
 #app.phase-mining:not(.tabs-open) .stage { touch-action: none; }
 #app.phase-mining:not(.tabs-open) #action:disabled { pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .magic-trail { display: none; } }
+
+/* Bonus launcher and the separate, prominent burn seal. */
+.utility-rail.main-utilities {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.bonus-trigger {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; width: 58px; height: 58px; border-radius: 15px;
+  border: 1px solid #9affc3; color: #dcffe9;
+  background: radial-gradient(circle at 50% 22%, #39945f, #0b3921 60%, #04150d);
+  box-shadow: inset 0 0 16px #4fff9a36, 0 0 18px #35ff8c44;
+  cursor: pointer; animation: bonus-heartbeat 2.6s ease-in-out infinite;
+}
+.bonus-trigger span { font-size: 23px; line-height: 1; text-shadow: 0 0 12px #a0ffd0; }
+.bonus-trigger b { font-size: 9px; letter-spacing: 1px; }
+.utility-rail.main-utilities .burn-sticker {
+  width: 76px; height: 76px; border-radius: 18px;
+  border-color: #a8ffca;
+  background: radial-gradient(circle at 50% 70%, #145b35 0%, #062516 65%, #021108 100%);
+  box-shadow: inset 0 0 24px #32ff8e2a, 0 0 24px #39ff8e55, 0 8px 20px #000a;
+  gap: 4px;
+}
+.main-utilities .burn-flame { width: 29px; height: 34px; filter: drop-shadow(0 0 9px #56ff9c); }
+.main-utilities .burn-title { font-size: 10px; letter-spacing: 1.6px; }
+@keyframes bonus-heartbeat { 0%, 100% { transform: scale(1); } 45% { transform: scale(1.045); box-shadow: inset 0 0 20px #56ffa96b, 0 0 22px #49ff9a80; } }
+.bonus-sheet { align-items: center; justify-content: center; z-index: 22; }
+.bonus-card {
+  width: min(92%, 380px); max-height: 90%; padding: 26px 20px 25px;
+  border: 1px solid #72d99b80; border-radius: 22px;
+  text-align: center; background: linear-gradient(160deg, #0a2919, #020d07 82%);
+  box-shadow: 0 24px 70px #000d, 0 0 32px #28ed7b22;
+  animation: bonus-arrive .38s cubic-bezier(.2,.8,.2,1) both;
+}
+.bonus-card h2 { margin: 4px 0; }
+.bonus-card .bonus-subtitle { color: #8ebda0; font-size: 12px; margin: 4px 0 20px; }
+.bonus-card .utility-rail.bonus-grid {
+  position: static; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-items: center; align-items: center; gap: 8px;
+}
+.bonus-grid .daily-sticker, .bonus-grid .roadmap-sticker {
+  --tile-size: clamp(64px, 20vw, 82px);
+  animation: bonus-tile-in .45s ease-out both;
+}
+.bonus-grid #chest-open { animation-delay: .07s; }
+.bonus-grid #roadmap { animation-delay: .14s; }
+.bonus-grid .rail-icon { font-size: 27px; }
+@keyframes bonus-arrive { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes bonus-tile-in { from { opacity: 0; transform: translateY(10px) scale(.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.reel-prize.is-placeholder { border-color: #567465; background: linear-gradient(145deg, #213b2c, #0a1710); color: #aac2b1; }
+.reel-prize.is-placeholder small { color: #d6e6d8; font-size: 7px; }
+@media (max-height: 600px) {
+  .bonus-trigger { width: 48px; height: 48px; }
+  .utility-rail.main-utilities .burn-sticker { width: 62px; height: 62px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bonus-trigger, .bonus-card, .bonus-grid .daily-sticker, .bonus-grid .roadmap-sticker { animation: none !important; }
+}

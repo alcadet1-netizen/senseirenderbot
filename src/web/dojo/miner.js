@@ -2218,8 +2218,26 @@
     if (name === "mining" || name === "profile") refresh(true);
     closeSheet();
     $("roadmap-sheet").hidden = true;
+    closeBonus();
     closeBurn();
   }
+
+  function closeBonus(restoreFocus = false) {
+    const sheet = $("bonus-sheet");
+    if (sheet.hidden) return;
+    sheet.hidden = true;
+    $("bonus-open").setAttribute("aria-expanded", "false");
+    if (restoreFocus) $("bonus-open").focus();
+  }
+  $("bonus-open").addEventListener("click", () => {
+    closeSheet(); closeBurn();
+    $("bonus-sheet").hidden = false;
+    $("bonus-open").setAttribute("aria-expanded", "true");
+    $("bonus-sheet").querySelector(".sheet-close").focus();
+  });
+  document.querySelectorAll("[data-close-bonus]").forEach(node => {
+    node.addEventListener("click", () => closeBonus(true));
+  });
 
   function openSheet() {
     $("roadmap-sheet").hidden = true;
@@ -2246,6 +2264,7 @@
   });
 
   $("roadmap").addEventListener("click", () => {
+    closeBonus();
     closeSheet();
     closeBurn();
     $("roadmap-sheet").hidden = false;
@@ -2318,6 +2337,7 @@
     if (event.key === "Escape") {
       closeSheet();
       closeBurn();
+      closeBonus(true);
       $("roadmap-sheet").hidden = true;
       $("daily-sheet").hidden = true;
       $("chest-sheet").hidden = true;
@@ -2375,8 +2395,9 @@
     track.style.transition = "none";
     track.style.transform = `translateX(${-Math.max(0, offset)}px)`;
   }
-  $("daily-open").addEventListener("click", () => { $("daily-sheet").hidden = false; loadDaily(); });
+  $("daily-open").addEventListener("click", () => { closeBonus(); $("daily-sheet").hidden = false; loadDaily(); });
   $("chest-open").addEventListener("click", () => {
+    closeBonus();
     $("chest-sheet").hidden = false;
     requestAnimationFrame(alignChestWinner);
     loadDaily();
@@ -2409,19 +2430,23 @@
       {kind: "COIN", value: "300"}, {kind: "COIN", value: "400"},
       {kind: "COIN", value: "500"}, {kind: "GRAM", value: "0.01"},
       {kind: "GRAM", value: "0.02"}, {kind: "GRAM", value: "0.03"},
+      {kind: "PLACEHOLDER", value: "1 GRAM"},
+      {kind: "PLACEHOLDER", value: "3 GRAM"},
+      {kind: "PLACEHOLDER", value: "NFT"},
     ];
-    // Decorative cells are only possible rewards, not odds or the draw itself.
+    // These placeholders are labelled as unavailable and never selected as a result.
     for (let i = 0; i < 25; i++) {
       const cell = document.createElement("div");
       const chosen = i === 22;
       const decoration = prizes[(i * 3 + 1) % prizes.length];
       const kind = chosen ? (isGram ? "GRAM" : "COIN") : decoration.kind;
       const value = chosen ? amount : decoration.value;
-      cell.className = `reel-prize${chosen ? " is-selected" : ""}${kind === "GRAM" ? " is-gram" : ""}`;
+      cell.className = `reel-prize${chosen ? " is-selected" : ""}${kind === "GRAM" ? " is-gram" : ""}${kind === "PLACEHOLDER" ? " is-placeholder" : ""}`;
       const icon = document.createElement("span"); icon.className = "reel-prize-icon";
-      icon.textContent = kind === "GRAM" ? "✦" : "◈";
+      icon.textContent = kind === "GRAM" || kind === "PLACEHOLDER" ? "✦" : "◈";
       const number = document.createElement("strong"); number.textContent = value;
-      const label = document.createElement("small"); label.textContent = kind === "GRAM" ? "VIRTUAL GRAM" : "SENSEI COIN";
+      const label = document.createElement("small");
+      label.textContent = kind === "PLACEHOLDER" ? "НЕ ВЫПАДАЕТ" : kind === "GRAM" ? "VIRTUAL GRAM" : "SENSEI COIN";
       cell.append(icon, number, label);
       track.appendChild(cell);
     }

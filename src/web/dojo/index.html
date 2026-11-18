@@ -131,19 +131,10 @@
         </button>
       </header>
 
-      <div class="utility-rail">
-        <button
-          id="roadmap"
-          class="roadmap-sticker"
-          type="button"
-          aria-label="ROAD MAP"
-          title="ROAD MAP"
-        >
-          <span class="rail-path-dot" aria-hidden="true"></span>
-          <span class="rail-icon" aria-hidden="true">⌁</span>
-          <b class="roadmap-title">ROAD MAP</b>
+      <div class="utility-rail main-utilities">
+        <button type="button" id="bonus-open" class="bonus-trigger" aria-label="Открыть бонусы" aria-expanded="false" aria-controls="bonus-sheet">
+          <span aria-hidden="true">✦</span><b>BONUS</b>
         </button>
-
         <button
           id="burn"
           class="burn-sticker"
@@ -162,8 +153,6 @@
           </span>
           <b class="burn-title">BURN</b>
         </button>
-        <button type="button" id="daily-open" class="daily-sticker" aria-label="Ежедневная серия"><span class="rail-icon" aria-hidden="true">✧</span><b>DAILY</b></button>
-        <button type="button" id="chest-open" class="daily-sticker" aria-label="Сундуки"><span class="rail-icon rail-chest" aria-hidden="true">▣</span><b>CHANCE</b></button>
       </div>
       <div class="stage">
         <section
@@ -850,6 +839,31 @@
         </section>
       </div>
 
+      <div id="bonus-sheet" class="sheet bonus-sheet" hidden>
+        <div class="sheet-backdrop" data-close-bonus></div>
+        <section class="sheet-card bonus-card" role="dialog" aria-modal="true" aria-labelledby="bonus-title">
+          <button class="sheet-close" data-close-bonus aria-label="Закрыть">×</button>
+          <p class="view-eyebrow">SENSEI · BONUSES</p>
+          <h2 id="bonus-title">БОНУСЫ ДОДЗЁ</h2>
+          <p class="bonus-subtitle">Выбери свой путь</p>
+          <div class="utility-rail bonus-grid">
+        <button type="button" id="daily-open" class="daily-sticker" aria-label="Ежедневная серия"><span class="rail-icon" aria-hidden="true">✧</span><b>DAILY</b></button>
+        <button type="button" id="chest-open" class="daily-sticker" aria-label="Сундуки"><span class="rail-icon rail-chest" aria-hidden="true">▣</span><b>CHANCE</b></button>
+        <button
+          id="roadmap"
+          class="roadmap-sticker"
+          type="button"
+          aria-label="ROAD MAP"
+          title="ROAD MAP"
+        >
+          <span class="rail-path-dot" aria-hidden="true"></span>
+          <span class="rail-icon" aria-hidden="true">⌁</span>
+          <b class="roadmap-title">ROAD MAP</b>
+        </button>
+          </div>
+        </section>
+      </div>
+
       <div id="daily-sheet" class="sheet" hidden>
         <div class="sheet-backdrop" data-close-daily></div>
         <section class="sheet-card daily-card" role="dialog" aria-modal="true" aria-labelledby="daily-title">
@@ -891,11 +905,12 @@
           <p id="chest-result" class="chest-result" role="status" aria-live="polite"></p>
           <div class="chest-prizes" aria-label="Возможные награды">
             <span>100</span><span>200</span><span>300</span><span>400</span><span>500</span><small>COIN</small>
-            <span>0.01</span><span>0.02</span><span>0.03</span><small>GRAM</small>
+            <span>0.01</span><span>0.02</span><span>0.03</span><small>VIRTUAL GRAM</small>
           </div>
-          <p class="chest-disclaimer">1 бесплатный сундук в день UTC + бонусы серии. Вероятности наград различаются и не зависят от баланса. Результат определяет сервер. GRAM является реальным активом.</p>
-          <p id="gram-info">GRAM · вывод доступен.</p>
-          <button class="sheet-done" disabled title="Вывод пока недоступен">ВЫВОД ОТ 3 GRAM · ДОСТУПЕН</button>
+          <p class="chest-disclaimer">1 GRAM, 3 GRAM и NFT в ленте — только декорация, не выпадают. 1 бесплатный сундук в день UTC + бонусы серии. Вероятности наград различаются и не зависят от баланса. Лента — анимация, результат определяет сервер. Виртуальный GRAM не является реальным активом.</p>
+          <p id="gram-info">Виртуальный GRAM · вывод пока недоступен.</p>
+          <button class="sheet-done" disabled title="Вывод пока недоступен">ВЫВОД ОТ 3 GRAM · НЕДОСТУПЕН</button>
+
           <button id="chest-spin" class="sheet-done" disabled>ОТКРЫТЬ СУНДУК</button>
         </section>
       </div>

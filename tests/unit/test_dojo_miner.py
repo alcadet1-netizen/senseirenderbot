@@ -356,7 +356,7 @@ async def test_daily_and_chest_interface_describes_prizes_without_percentages():
     assert 'day <= Math.min(weekStart + 6, 90)' in js
     assert 'Твоя награда:' in js
     assert 'class="chest-pointer"' in daily and 'class="chest-art"' in daily
-    assert 'Результат определяет сервер.' in daily
+    assert 'Лента — анимация, результат определяет сервер.' in daily
     assert 'track.children[22]' in js and 'target.offsetWidth / 2' in js
     assert 'prefers-reduced-motion: reduce' in js
     assert js.index('await animateChest(data.prize)') < js.index('sessionStorage.removeItem(key)')
@@ -401,3 +401,23 @@ async def test_magic_trail_is_visual_only_bounded_and_respects_reduced_motion():
     assert 'phase-mining' in js and 'activeTab === "mining"' in js
     assert 'touch-action: none' in css and 'pointer-events: none' in css
     assert '.magic-trail { display: none; }' in css
+
+
+@pytest.mark.asyncio
+async def test_bonus_menu_and_placeholder_rewards():
+    app = web.Application()
+    setup_dojo(app)
+    async with TestClient(TestServer(app)) as client:
+        html = await (await client.get('/miniapp/dojo')).text()
+        js = await (await client.get('/miniapp/dojo/miner.js')).text()
+    main = html.split('<div class="utility-rail main-utilities">', 1)[1].split('<div class="stage">', 1)[0]
+    bonus = html.split('<div id="bonus-sheet"', 1)[1].split('<div id="daily-sheet"', 1)[0]
+    assert 'id="bonus-open"' in main and 'id="burn"' in main
+    for identifier in ('daily-open', 'chest-open', 'roadmap'):
+        assert f'id="{identifier}"' in bonus and f'id="{identifier}"' not in main
+    assert '1 GRAM, 3 GRAM и NFT в ленте — только декорация, не выпадают' in html
+    for item in ('1 GRAM', '3 GRAM', 'NFT'):
+        assert f'{{kind: "PLACEHOLDER", value: "{item}"}}' in js
+    assert 'kind === "PLACEHOLDER" ? "НЕ ВЫПАДАЕТ"' in js
+    assert 'const kind = chosen ? (isGram ? "GRAM" : "COIN")' in js
+    assert 'closeBonus();' in js and 'aria-expanded' in js
