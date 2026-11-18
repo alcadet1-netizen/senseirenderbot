@@ -250,7 +250,7 @@ async def main() -> None:
         # introspection does not discover it. Telegram must still deliver it.
         await dp.start_polling(
             bot,
-            allowed_updates=list(dict.fromkeys([*dp.resolve_used_update_types(), "channel_post", "message", "pre_checkout_query", "widget_query", "shared_widget_query"])),
+            allowed_updates=list(dict.fromkeys([*dp.resolve_used_update_types(), "channel_post", "message", "chat_member", "pre_checkout_query", "widget_query", "shared_widget_query"])),
             close_bot_session=True,
         )
     finally:

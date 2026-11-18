@@ -10,99 +10,94 @@ from aiogram.filters import ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER
 
 from src.core.container import Container
 from src.core.visuals import Visuals
-from src.texts.phrases import get_random_welcome, get_random_ban_phrase, get_random_phrase
+from src.texts.phrases import get_random_ban_phrase, get_random_phrase
 
 router = Router(name="events")
 
+async def _answer_join(event, text):
+    # Use the bot directly for membership updates: there is no source message
+    # to reply to and some aiogram versions lack the event.answer shortcut.
+    if isinstance(event, ChatMemberUpdated):
+        await event.bot.send_message(event.chat.id, text, parse_mode="HTML")
+    else:
+        await event.answer(text, parse_mode="HTML")
+
+
 async def _send_welcome_message(user, container: Container, event):
-    """Приветствует нового участника без проверки и ограничения прав."""
+    """Welcome the actual joined user; do not grant the starter twice."""
+    if user.is_bot or event.chat.type not in ("group", "supergroup"):
+        return
+
+    registration = None
+    try:
+        registration = await container.user_service.get_or_create(
+            user_id=user.id, username=user.username,
+            first_name=user.first_name or "", last_name=user.last_name,
+        )
+    except Exception:
+        # A temporary database error should not suppress the welcome or invent
+        # a reward. Registration may be retried by the normal user flow.
+        logging.exception("Unable to register joined user %s", user.id)
+
+    name = " ".join((user.first_name or f"User {user.id}").split())[:80]
+    mention = f'<a href="tg://user?id={user.id}">{html.escape(name)}</a>'
+    try:
+        await _answer_join(event, f"🥋 <b>Добро пожаловать в додзё!</b>\n{mention}, рады видеть тебя в чате.")
+    except Exception:
+        logging.exception("Unable to send welcome to chat %s for user %s", event.chat.id, user.id)
+
+    if registration and registration.get('created'):
+        try:
+            bonus_text = Visuals.welcome_bonus_message(
+                name=user.username or name, coins=registration["user"]["coins"])
+            await _answer_join(event, bonus_text)
+        except Exception:
+            logging.exception("Unable to send starter notice to chat %s for user %s", event.chat.id, user.id)
+
+
+async def _handle_join(user, container: Container, event):
     if user.is_bot:
         return
-    
+    # Telegram may deliver both chat_member and new_chat_members for one join.
+    # A short, Mongo-backed window avoids duplicate greetings across workers.
+    # This lock is not used for money: profile creation is still the only grant.
     try:
-        chat_type = getattr(event, "chat", None).type if hasattr(event, "chat") else None
-        if chat_type == "channel":
+        first = await container.throttle_service.throttle(
+            key=f"{event.chat.id}:{user.id}", limit_seconds=15, scope="join_welcome")
+        if not first:
             return
     except Exception:
-        pass
-
-    # Создаём пользователя
-    registration = await container.user_service.get_or_create(
-        user_id=user.id,
-        username=user.username,
-        first_name=user.first_name or "",
-        last_name=user.last_name
-    )
-
-    # Приветствие
-    username = user.username or user.first_name or f"User {user.id}"
-    welcome_text = Visuals.welcome_message(
-        name=username,
-        phrase=get_random_welcome(username)
-    )
+        logging.exception("Join deduplication unavailable for chat %s", event.chat.id)
 
     try:
-        await event.answer(welcome_text, parse_mode="HTML")
-    except Exception as e:
-        logging.error(f"❌ Failed to send welcome message: {e}")
+        unban_result = await container.moderation_service.unban_user(user.id)
+        if unban_result.get("success"):
+            mention = html.escape(user.full_name or user.first_name or f"User {user.id}")
+            try:
+                await _answer_join(event, f"🔓 <b>Авто-разбан</b>\n\n<b>{mention}</b> разбанен автоматически при возвращении в чат.")
+            except Exception:
+                logging.exception("Unable to send auto-unban notice for user %s", user.id)
+    except Exception:
+        logging.exception("Unable to check auto-unban for user %s", user.id)
+    await _send_welcome_message(user, container, event)
 
-    # Existing profiles and rejoins never receive a second starter kit.
-    if not registration.get('created'):
-        return
-    # Отправляем сообщение о стартовых бонусах
-    try:
-        bonus_text = Visuals.welcome_bonus_message(name=username, coins=registration["user"]["coins"])
-        await event.answer(bonus_text, parse_mode="HTML")
-    except Exception as e:
-        logging.error(f"❌ Failed to send welcome bonus message: {e}")
 
 @router.message(F.new_chat_members)
 async def on_new_chat_members(message: Message, container: Container):
-    """Обработка входа новых участников (через сообщение)."""
+    """Handle Telegram service messages for confirmed joins."""
     if message.chat.type not in ("group", "supergroup"):
         return
-    logging.info(f"📨 New chat members message: {[u.id for u in message.new_chat_members]}")
     for user in message.new_chat_members:
-        # Разбаниваем в боте, если пользователь вернулся в чат (был забанен при выходе)
-        unban_result = await container.moderation_service.unban_user(user.id)
-        if unban_result["success"]:
-            logging.info(f"🔓 User {user.id} auto-unbanned on rejoin (was banned in DB)")
-            try:
-                mention = f"<b>{html.escape(user.full_name)}</b>"
-                await message.answer(
-                    f"🔓 <b>Авто-разбан</b>\n\n"
-                    f"{mention} разбанен автоматически при возвращении в чат.",
-                    parse_mode="HTML"
-                )
-            except Exception as e:
-                logging.error(f"❌ Failed to send auto-unban message: {e}")
+        await _handle_join(user, container, message)
 
-        await _send_welcome_message(user, container, message)
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
 async def on_user_join(event: ChatMemberUpdated, container: Container):
-    """Обработка входа нового участника (через обновление статуса)."""
+    """Handle confirmed membership changes, including approved join requests."""
     if event.chat.type not in ("group", "supergroup"):
         return
-    logging.info(f"👤 User join event: {event.new_chat_member.user.id} ({event.new_chat_member.user.username})")
+    await _handle_join(event.new_chat_member.user, container, event)
 
-    user = event.new_chat_member.user
-
-    # Разбаниваем в боте, если пользователь вернулся в чат (был забанен при выходе)
-    unban_result = await container.moderation_service.unban_user(user.id)
-    if unban_result["success"]:
-        logging.info(f"🔓 User {user.id} auto-unbanned on rejoin (was banned in DB)")
-        try:
-            mention = f"<b>{html.escape(user.full_name)}</b>"
-            await event.answer(
-                f"🔓 <b>Авто-разбан</b>\n\n"
-                f"{mention} разбанен автоматически при возвращении в чат.",
-                parse_mode="HTML"
-            )
-        except Exception as e:
-            logging.error(f"❌ Failed to send auto-unban message: {e}")
-
-    await _send_welcome_message(user, container, event)
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_MEMBER >> IS_NOT_MEMBER))
 async def on_user_leave(event: ChatMemberUpdated, container: Container):
