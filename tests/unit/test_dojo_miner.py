@@ -302,3 +302,36 @@ async def test_miner_has_centred_blade_timer_and_layered_ambient():
         assert layer in css or layer in js
     assert 'function seedAmbient' in js
     assert 'prefers-reduced-motion' in css
+
+
+@pytest.mark.asyncio
+async def test_direct_referral_link_requires_explicit_configuration(monkeypatch):
+    from src.web.dojo_app import _referral_link
+    container = SimpleNamespace(bot=SimpleNamespace(
+        get_me=AsyncMock(return_value=SimpleNamespace(username='sensei_bot'))))
+    monkeypatch.delenv('DOJO_DIRECT_REFERRALS', raising=False)
+    assert await _referral_link(container, 7) == 'https://t.me/sensei_bot?start=ref_7'
+    monkeypatch.setenv('DOJO_DIRECT_REFERRALS', 'true')
+    assert await _referral_link(container, 7) == 'https://t.me/sensei_bot?startapp=ref_7'
+
+
+@pytest.mark.asyncio
+async def test_signed_direct_referral_binds_only_new_player():
+    registration = AsyncMock(side_effect=[{'created': True}, {'created': False}])
+    bind = AsyncMock(return_value=(True, 'ok'))
+    state = AsyncMock(return_value={'phase': 'ready'})
+    container = SimpleNamespace(
+        settings=SimpleNamespace(bot_token='test-token', maintenance_mode=False),
+        dojo_miner_service=SimpleNamespace(state=state),
+        user_service=SimpleNamespace(get_or_create=registration),
+        referral_service=SimpleNamespace(process_referral=bind))
+    app = web.Application()
+    setup_dojo(app, container)
+    async with TestClient(TestServer(app)) as client:
+        auth = signed(now=int(time.time()), start_param='ref_42')
+        for _ in range(2):
+            assert (await client.post('/miniapp/dojo/api/state', json={'initData': auth})).status == 200
+        bind.assert_awaited_once_with(7, 'ref_42')
+        forged = signed(now=int(time.time())) + '&start_param=ref_99'
+        assert (await client.post('/miniapp/dojo/api/state', json={'initData': forged})).status == 401
+        bind.assert_awaited_once()

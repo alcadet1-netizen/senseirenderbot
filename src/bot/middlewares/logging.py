@@ -30,9 +30,9 @@ class LoggingMiddleware(BaseMiddleware):
         if isinstance(event, Message) and event.from_user:
             text_preview = ""
             if event.text:
-                text_preview = event.text[:50] + "..." if len(event.text) > 50 else event.text
+                text_preview = event.text.split()[0] + " [аргументы скрыты]" if event.text.startswith("/") else "[текст]"
             elif event.caption:
-                text_preview = f"[Caption] {event.caption[:50]}..."
+                text_preview = "[подпись]"
             else:
                 text_preview = f"[{event.content_type}]"
                 

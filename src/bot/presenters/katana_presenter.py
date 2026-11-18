@@ -36,7 +36,7 @@ async def send_katana_upgrade(
     if animate:
         try:
             started = time.monotonic()
-            payload = await render_receipt(to_upgrade_gif, receipt)
+            payload = await asyncio.wait_for(render_receipt(to_upgrade_gif, receipt), timeout=2.0)
             logger.info("Katana GIF rendered version=reference-v2 seconds=%.3f bytes=%s", time.monotonic()-started, len(payload))
             await message.answer_animation(
                 BufferedInputFile(payload, filename="sensei-katana-upgrade.gif"),
