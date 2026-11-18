@@ -8,9 +8,11 @@ state; start, collect and automatic cycles are validated and paid here.
 import asyncio
 import logging
 import time
+from datetime import datetime, timezone
 from collections import defaultdict
 
 from src.services.hedgehog_service import GameError
+from src.services.referral_economy import transaction
 
 CYCLE_SECONDS = 3 * 60 * 60
 CYCLE_HOURS = CYCLE_SECONDS / 3600
@@ -356,40 +358,67 @@ class DojoMinerService:
             return await self.state(user_id)
 
     async def collect(self, user_id: int) -> dict:
+        """Commit the cycle, bank debit, player credit and receipt together."""
         async with self._locks[user_id]:
             now = time.time()
-            doc = await self.miners.find_one({'_id': user_id})
-            if not doc:
-                raise GameError('Намайненного пока нет. Сначала запусти майнинг.')
-            if doc.get('collected'):
-                raise GameError('Награда уже получена. Запусти новый цикл.')
-            if now < doc.get('finish_at', 0):
-                raise GameError('Майнинг ещё не завершён.')
-            version = int(doc.get('version', 0))
-            amount = int(doc.get('amount', MINING_REWARD))
-            claimed = await self.miners.find_one_and_update(
-                {'_id': user_id, 'version': version, 'collected': False},
-                {'$set': {'collected': True, 'collected_at': now},
-                 '$inc': {'version': 1}},
-            )
-            if not claimed:
-                raise GameError('Награда уже получена. Обнови экран.')
-            try:
-                result = await self.economy.process_game_win(
-                    user_id=user_id, coins=amount, xp=0,
-                    description='Dojo miner: 3h SenseiCoin cycle',
-                )
-            except Exception:
-                await self._rollback(user_id, version + 1)
-                raise GameError('Майнер не смог выплатить награду. Попробуй ещё раз.')
-            if not isinstance(result, dict) or not result.get('success'):
-                await self._rollback(user_id, version + 1)
-                if isinstance(result, dict) and result.get('reason') == 'insufficient_bank':
+
+            async def work(session):
+                doc = await self.miners.find_one({'_id': user_id}, session=session)
+                if not doc:
+                    raise GameError('Намайненного пока нет. Сначала запусти майнинг.')
+                if doc.get('collected'):
+                    raise GameError('Награда уже получена. Запусти новый цикл.')
+                if now < doc.get('finish_at', 0):
+                    raise GameError('Майнинг ещё не завершён.')
+                user = await self.users.find_one({'id': user_id}, session=session)
+                if not user or user.get('is_banned'):
+                    raise GameError('Награда недоступна для этого профиля.')
+                version = int(doc.get('version', 0))
+                amount = max(0, int(doc.get('amount', MINING_REWARD)))
+                claimed = await self.miners.find_one_and_update(
+                    {'_id': user_id, 'version': version, 'collected': False},
+                    {'$set': {'collected': True, 'collected_at': now},
+                     '$inc': {'version': 1}}, session=session)
+                if not claimed:
+                    raise GameError('Награда уже получена. Обнови экран.')
+                remaining = amount
+                # Both pre-migration bank accounts are spent in the same
+                # transaction; failure to cover the full reward aborts all.
+                for bank_id, field in (('single', 'coins'), ('main', 'balance')):
+                    if not remaining:
+                        break
+                    account = await self.mongo.database.bank.find_one({'_id': bank_id}, session=session) or {}
+                    take = min(remaining, max(0, float(account.get(field, 0) or 0)))
+                    if take:
+                        debit = await self.mongo.database.bank.update_one(
+                            {'_id': bank_id, field: {'$gte': take}},
+                            {'$inc': {field: -take}}, session=session)
+                        if not debit.matched_count:
+                            raise GameError('Баланс банка изменился. Попробуй снова.')
+                        remaining -= take
+                if remaining > 0:
                     raise GameError('SenseiBank не может выплатить награду. Попробуй позже.')
-                raise GameError('Награда недоступна для этого профиля.')
+                credited = await self.users.update_one(
+                    {'id': user_id, 'is_banned': {'$ne': True}},
+                    {'$inc': {'coins': amount}}, session=session)
+                if not credited.matched_count:
+                    raise GameError('Награда недоступна для этого профиля.')
+                await self.mongo.database.transactions.insert_one({
+                    'user_id': user_id, 'tx_type': 'game_win', 'xp_change': 0,
+                    'coins_change': amount, 'description': 'Dojo miner: 3h SenseiCoin cycle',
+                    'created_at': datetime.now(timezone.utc)}, session=session)
+                return amount, float(user.get('coins', 0) or 0) + amount
+
+            try:
+                amount, balance = await transaction(self.mongo, work)
+            except GameError:
+                raise
+            except Exception:
+                logger.exception('Dojo miner collection failed user=%s', user_id)
+                raise GameError('Майнер не смог выплатить награду. Попробуй ещё раз.')
             state = await self.state(user_id)
             state['mined'] = amount
-            state['balance'] = result.get('new_coins', state['balance'])
+            state['balance'] = balance
             return state
 
     async def apply_energy_refill(self, user_id: int, charge: str) -> bool:

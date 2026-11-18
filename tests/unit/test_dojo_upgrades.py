@@ -327,9 +327,12 @@ async def test_auto_collect_starts_and_renews_cycles():
         assert await dojo.auto_tick() == 1
     first = dojo.miners.docs[7]
     assert first['started_at'] == 1000 and not first['collected']
-    with patch.object(miner.time, 'time', return_value=1000 + 10800):
+    async def collect(user_id):
+        dojo.miners.docs[user_id]['collected'] = True
+    with patch.object(dojo, 'collect', side_effect=collect) as claim, \
+         patch.object(miner.time, 'time', return_value=1000 + 10800):
         assert await dojo.auto_tick() == 1
-    economy.process_game_win.assert_awaited_once()
+    claim.assert_awaited_once_with(7)
     second = dojo.miners.docs[7]
     assert second['started_at'] == 1000 + 10800
     assert second['finish_at'] == 1000 + 2 * 10800
@@ -342,7 +345,7 @@ async def test_bank_summary_uses_the_cached_admin_snapshot():
         users=SimpleNamespace(), bank=SimpleNamespace(),
         transactions=SimpleNamespace(), tickets=SimpleNamespace())))
     stats.get_admin_stats = AsyncMock(return_value={
-        'users': {'total': 3}, 'circulation': 450,
+        'users': {'total': 3, 'holders': 2}, 'circulation': 450,
         'bank': {'balance': 1000, 'total_supply': 1450,
                  'initial_coins': 1_000_000_000.0},
     })
@@ -357,11 +360,12 @@ async def test_bank_summary_uses_the_cached_admin_snapshot():
     assert data['emission_remaining'] == 10_000_000_000.0 - 1450
     assert data['initial_coins'] == 1_000_000_000.0
     assert data['users'] == 3
+    assert data['holders'] == 2
     stats.get_admin_stats.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_bank_snapshot_never_reports_more_than_the_hard_supply_cap():
+async def test_bank_snapshot_does_not_hide_supply_over_cap():
     stats = StatsService(SimpleNamespace(database=SimpleNamespace(
         users=SimpleNamespace(), bank=SimpleNamespace(),
         transactions=SimpleNamespace(), tickets=SimpleNamespace())))
@@ -378,10 +382,11 @@ async def test_bank_snapshot_never_reports_more_than_the_hard_supply_cap():
         },
     })
     data = await stats.get_bank_summary()
-    assert data['bank_balance'] == 400
+    assert data['bank_balance'] == 800
     assert data['circulation'] == 600
-    assert data['total_supply'] == 1_000
-    assert data['bank_balance'] + data['circulation'] <= data['emission_cap']
+    assert data['total_supply'] == 1_400
+    assert data['total_emitted'] == 1_400
+    assert data['supply_over_cap'] is True
     assert data['burned'] == 25 and data['confiscated'] == 75
 
 

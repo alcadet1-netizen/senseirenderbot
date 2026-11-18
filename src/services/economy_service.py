@@ -31,6 +31,7 @@ from src.infra.mongo.client import MongoClient
 from src.services.level_service import LevelService
 from src.services.emission_service import EmissionService
 from src.services.bank_ledger import BankLedger
+from src.services.referral_economy import transaction
 import logging
 from datetime import datetime, timezone, timedelta
 
@@ -721,63 +722,50 @@ class EconomyService:
                 # Update if needed - but for game win we don't typically update username/name
                 pass
 
-            if user.get("is_banned", False):
-                logger.info(f"[ECONOMY] User {user_id} is banned, returning")
-                return {"success": False, "reason": "banned"}
-
-            # Apply rewards
-            logger.info(f"[ECONOMY] Applying game win reward for user {user_id}: coins={coins}, xp={xp}")
-
-            # A game win is a transfer from the bank. If the bank cannot cover
-            # the whole amount, fail instead of minting the difference.
             coins = max(0.0, float(coins))
-            bank_balance = await self._get_bank_balance()
-            logger.info(f"[ECONOMY] Bank balance={bank_balance}, coins_reward={coins}")
-            if coins > bank_balance:
-                return {"success": False, "reason": "insufficient_bank",
-                        "bank_balance": bank_balance, "required": coins}
-            if coins > 0 and not await self._withdraw_from_bank(coins):
-                return {"success": False, "reason": "insufficient_bank",
-                        "bank_balance": await self._get_bank_balance(), "required": coins}
-            logger.info(f"[ECONOMY] Withdrew {coins} from bank")
 
-            # Update user XP and coins
-            await self.users.update_one(
-                {"id": user_id},
-                {"$inc": {"xp": xp, "coins": coins}}
-            )
-            user["xp"] = user.get("xp", 0) + xp
-            user["coins"] = user.get("coins", 0.0) + coins
-            logger.info(f"[ECONOMY] Updated user {user_id}: xp={user['xp']}, coins={user['coins']}")
+            async def pay(session):
+                current = await self.users.find_one({'id': user_id}, session=session)
+                if not current or current.get('is_banned'):
+                    return {'success': False, 'reason': 'banned'}
+                remaining = coins
+                bank_balance = 0.0
+                accounts = []
+                for bank_id, field in (('single', 'coins'), ('main', 'balance')):
+                    account = await self.bank.find_one({'_id': bank_id}, session=session) or {}
+                    available = max(0.0, float(account.get(field, 0) or 0))
+                    accounts.append((bank_id, field, available))
+                    bank_balance += available
+                if coins > bank_balance:
+                    return {'success': False, 'reason': 'insufficient_bank',
+                            'bank_balance': bank_balance, 'required': coins}
+                for bank_id, field, available in accounts:
+                    take = min(remaining, available)
+                    if take <= 0:
+                        continue
+                    debit = await self.bank.update_one(
+                        {'_id': bank_id, field: {'$gte': take}},
+                        {'$inc': {field: -take}}, session=session)
+                    if not debit.matched_count:
+                        # Abort instead of committing a partial debit.
+                        raise RuntimeError('bank balance changed during game payout')
+                    remaining -= take
+                credited = await self.users.update_one(
+                    {'id': user_id, 'is_banned': {'$ne': True}},
+                    {'$inc': {'xp': xp, 'coins': coins}}, session=session)
+                if not credited.matched_count:
+                    raise RuntimeError('player unavailable during game payout')
+                await self.transactions.insert_one({
+                    'user_id': user_id, 'tx_type': 'game_win', 'xp_change': xp,
+                    'coins_change': coins, 'description': description,
+                    'created_at': datetime.now(timezone.utc)}, session=session)
+                old_xp = current.get('xp', 0)
+                new_xp = old_xp + xp
+                return {'success': True, 'xp_earned': xp, 'coins_earned': coins,
+                        'new_xp': new_xp, 'new_coins': current.get('coins', 0.0) + coins,
+                        'level_up': self.level_service.check_level_up(old_xp, new_xp) if xp > 0 else None}
 
-            # Create transaction record
-            tx_doc = {
-                "user_id": user_id,
-                "tx_type": "game_win",
-                "xp_change": xp,
-                "coins_change": coins,
-                "description": description,
-                "created_at": datetime.now(timezone.utc),
-            }
-            await self.transactions.insert_one(tx_doc)
-            logger.info(f"[ECONOMY] Inserted transaction for user {user_id}")
-
-            # Check level up
-            level_up = self.level_service.check_level_up(user["xp"] - xp, user["xp"]) if xp > 0 else None
-            if level_up:
-                logger.info(f"[ECONOMY] Level up for user {user_id}: {level_up}")
-
-            # Return the result
-            result = {
-                "success": True,
-                "xp_earned": xp,
-                "coins_earned": coins,
-                "new_xp": user.get("xp", 0),
-                "new_coins": user.get("coins", 0.0),
-                "level_up": level_up
-            }
-            logger.info(f"[ECONOMY] process_game_win result for user {user_id}: {result}")
-            return result
+            return await transaction(self.mongo_client, pay)
 
     async def fire_drop(
         self,
