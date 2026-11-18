@@ -114,7 +114,7 @@ async def test_snapshot_defaults_and_prices():
     assert data['pickaxe_level'] == 0 and data['pickaxe_rate'] == 15
     assert data['pickaxe_stars'] == PICKAXE_STARS == 10
     assert data['energy_bonus'] == 0 and data['energy_stars'] == ENERGY_STARS == 50
-    assert data['energy_refill_stars'] == 10
+    assert data['energy_refill_stars'] == 5
     assert data['energy_refill_amount'] == 100
     assert data['auto_collect'] is False and data['auto_stars'] == AUTOCOLLECT_STARS == 1000
 
@@ -175,7 +175,7 @@ async def test_max_pickaxe_and_invalid_payments_are_rejected():
 
 
 @pytest.mark.asyncio
-async def test_empty_energy_can_be_refilled_for_ten_stars():
+async def test_empty_energy_can_be_refilled_for_five_stars():
     users = Users([{'id': 7, 'coins': 0}])
     miners = Miners()
     db = SimpleNamespace(
@@ -196,12 +196,12 @@ async def test_empty_energy_can_be_refilled_for_ten_stars():
         state = await dojo.state(7)
         assert state['energy'] == 0
         assert state['energy_refill_available'] is True
-        assert state['energy_refill_stars'] == 10
+        assert state['energy_refill_stars'] == 5
         order = await service.prepare(7, 'refill')
-        assert order['stars'] == 10
-        await service.checkout(order['payload'], 7, 'XTR', 10)
+        assert order['stars'] == 5
+        await service.checkout(order['payload'], 7, 'XTR', 5)
         receipt = await service.receive(
-            7, payment(order['payload'], 'charge-refill', 10))
+            7, payment(order['payload'], 'charge-refill', 5))
         assert receipt['state'] == 'fulfilled'
         state = await dojo.state(7)
         assert state['energy'] == 100
@@ -209,7 +209,7 @@ async def test_empty_energy_can_be_refilled_for_ten_stars():
         # One full-power hour replaces an hour that would have run at 10%.
         assert state['reward'] == 32
         assert (await service.receive(
-            7, payment(order['payload'], 'charge-refill', 10)))['state'] == 'fulfilled'
+            7, payment(order['payload'], 'charge-refill', 5)))['state'] == 'fulfilled'
         # A second paid refill cannot land while the bar is already positive.
         assert await dojo.apply_energy_refill(7, 'charge-refill-2') is False
     assert len(miners.docs[7]['energy_refills']) == 1
@@ -405,3 +405,14 @@ async def test_boost_purchase_is_refused_once_per_cycle():
     assert snapshot['boost_purchased'] is True
     assert snapshot['boost_available'] is False
     assert snapshot['boost_once_per_cycle'] is True
+
+
+@pytest.mark.asyncio
+async def test_previously_approved_refill_payment_survives_price_change():
+    users, service = upgrade_service()
+    service.container.dojo_miner_service = SimpleNamespace(apply_energy_refill=AsyncMock(return_value=True))
+    payload = 'dojobuy:v1:7:refill:10:' + 'a' * 24
+    service.orders.docs[payload] = {'_id': payload, 'user_id': 7, 'kind': 'refill', 'stars': 10, 'state': 'checkout'}
+    result = await service.receive(7, payment(payload, 'legacy-refill', 10))
+    assert result['state'] == 'fulfilled'
+    service.container.dojo_miner_service.apply_energy_refill.assert_awaited_once_with(7, 'legacy-refill')

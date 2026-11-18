@@ -167,8 +167,7 @@ class DojoUpgradeService:
         if (not match or payment.currency != 'XTR'
                 or int(match.group(1)) != user_id
                 or int(match.group(3)) != payment.total_amount
-                or match.group(2) not in KINDS
-                or KINDS[match.group(2)]['stars'] != payment.total_amount):
+                or match.group(2) not in KINDS):
             raise GameError('Неверный платёж улучшения.')
         charge = payment.telegram_payment_charge_id
         kind = match.group(2)

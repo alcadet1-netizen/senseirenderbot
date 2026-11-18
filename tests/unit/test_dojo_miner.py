@@ -267,7 +267,7 @@ async def test_miner_keeps_action_slot_and_renders_new_layers():
     assert 'Three-hour mining cycles.' in html
     assert 'Four-hour mining cycles.' not in html
     assert 'id="energy-card"' in html and 'id="energy-refill"' in html
-    assert '10 ⭐ · ПОПОЛНИТЬ' in html
+    assert '5 ⭐ · ПОПОЛНИТЬ' in html
     assert 'Баланс (как в чате)' not in html
     assert 'data-i18n="Баланс"' in html
     assert 'id="chain-panel"' in html and 'id="chain-feed"' in html
@@ -420,7 +420,7 @@ async def test_bonus_menu_and_placeholder_rewards():
     assert '{kind: "PLACEHOLDER", value: "NFT"}' in js
     assert 'НЕ ВЫПАДАЕТ' not in js and 'НЕ ВЫПАДАЕТ' not in html
     assert 'kind === "GRAM" ? " is-gram"' in js
-    assert 'kind === "GRAM" ? "GRAM" : "SENSEI COIN"' in js
+    assert 'kind === "GRAM" ? "GRAM" : kind === "CHEST"' in js
     assert '<small>GRAM</small>' in html
-    assert 'const kind = chosen ? (isGram ? "GRAM" : "COIN")' in js
+    assert 'const kind = chosen ? (isGram ? "GRAM" : isChest ? "CHEST" : "COIN")' in js
     assert 'closeBonus();' in js and 'aria-expanded' in js

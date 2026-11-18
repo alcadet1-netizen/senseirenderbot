@@ -141,3 +141,15 @@ async def test_admin_grant_rejects_invalid_input(monkeypatch, username, amount):
     with pytest.raises(GameError):
         await svc.grant_admin_chests(username, amount, 7, '123:456')
     db.users.find.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('free,starting,expected', [(True, 0, 2), (False, 3, 1)])
+async def test_two_chests_are_credited_in_same_receipt(monkeypatch, free, starting, expected):
+    today = datetime.now(timezone.utc).date().isoformat()
+    svc, db = service(monkeypatch, {'free_day': None if free else today, 'chests': starting})
+    monkeypatch.setattr('src.services.dojo_daily_service.secrets.randbelow', lambda n: 10)
+    assert await svc.open_chest(42, 'chest-win-id') == {'kind': 'chest', 'amount': 2}
+    assert db.dojo_daily.update_one.call_args.args[1]['$inc']['chests'] == expected
+    assert db.dojo_chest_receipts.insert_one.call_args.args[0]['result'] == {'kind': 'chest', 'amount': 2}
+    db.bank.update_one.assert_not_awaited()

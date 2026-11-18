@@ -5022,3 +5022,23 @@ button:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .bonus-trigger, .bonus-card, .bonus-grid .daily-sticker, .bonus-grid .roadmap-sticker { animation: none !important; }
 }
+
+/* Put actions in their own row rather than floating over the balance and HUD. */
+.utility-rail.main-utilities {
+  position: relative;
+  top: auto;
+  right: auto;
+  z-index: 6;
+  flex: 0 0 auto;
+  width: min(100%, var(--hud-max));
+  align-self: center;
+  box-sizing: border-box;
+  padding: 4px var(--hud-gutter);
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 10px;
+}
+#app.tabs-open .utility-rail.main-utilities { display: none; }
+.reel-prize { transition: scale 100ms ease-out; transform-origin: center; }
+@media (prefers-reduced-motion: reduce) { .reel-prize { transition: none; } }
+#app:not(.tabs-open) .stage { padding-top: 4px; }
