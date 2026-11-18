@@ -257,11 +257,17 @@ def setup_dojo(app, container=None):
                     username.strip().lstrip('@'), amount, user['id'], f'web:{user["id"]}:{request_id}')
                 result = {'username': receipt['username'], 'amount': receipt['amount']}
             elif action == 'tasks':
+                from src.services.dojo_profile_tasks import DojoProfileTasks
                 tasks = await container.dojo_task_service.list_tasks(user['id'])
+                tasks.extend(await DojoProfileTasks(container).list_tasks(user['id']))
                 result = {'tasks': tasks}
             elif action == 'task':
-                claim = await container.dojo_task_service.claim(
-                    user['id'], payload.get('slug'))
+                from src.services.dojo_profile_tasks import DojoProfileTasks, TASK_IDS
+                slug = payload.get('slug')
+                if isinstance(slug, str) and slug in TASK_IDS:
+                    claim = await DojoProfileTasks(container).claim(user['id'], slug)
+                else:
+                    claim = await container.dojo_task_service.claim(user['id'], slug)
                 result = await service.state(user['id'])
                 result['balance'] = claim.get('new_coins', result.get('balance', 0))
                 result['task'] = claim['task']

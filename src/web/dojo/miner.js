@@ -22,7 +22,6 @@
     "Эффекты: включены": "Effects: on",
     "Эффекты: как в системе": "Effects: system default",
     "Эффекты: выключены": "Effects: off",
-    "Обведи круг вокруг майнера: до +1 энергии · до 50%": "Draw around the miner: up to +1 energy · up to 50%",
     "+{amount} энергии": "+{amount} energy",
     ЭНЕРГИЯ: "ENERGY",
     "Энергия майнинга": "Mining energy",
@@ -30,12 +29,19 @@
     ЗАДАНИЯ: "TASKS",
     ПОДПИСКИ: "SUBSCRIPTIONS",
     БОНУСЫ: "BONUSES",
-    "Подпишись на канал или запусти приложение и забери SenseiCoin и разовый заряд энергии. Награда за каждое задание — один раз; базовый лимит энергии не растёт.":
-      "Subscribe to a channel or launch an app and claim SenseiCoin plus a one-cycle energy charge. Each task reward can be claimed once; the base energy cap does not grow.",
+    "Выполняй задания: подписки и приложения награждаются один раз, задания профиля — каждый день по UTC. Энергия заданий не увеличивает постоянный максимум.":
+      "Complete tasks: subscriptions and apps pay once, profile tasks pay daily by UTC. Task energy does not increase the permanent maximum.",
     "ЗАГРУЖАЕМ ЗАДАНИЯ…": "LOADING TASKS…",
-    "Подписку проверяет сервер через Telegram. Ссылки на приложения открываются кнопкой «Запустить».":
-      "The server verifies subscriptions via Telegram. App links open with the Launch button.",
+    "Профиль и подписку проверяет Telegram. Если профиль недоступен, открой личный чат с ботом и попробуй снова.":
+      "Telegram verifies your profile and subscription. If your profile is unavailable, open a private chat with the bot and try again.",
     "Приложение · {host}": "App · {host}",
+    "Sensei в имени": "Sensei in name",
+    "Реферальная ссылка в BIO": "Referral link in BIO",
+    "Добавь Sensei в имя или @username Telegram": "Add Sensei to your Telegram name or @username",
+    "Размести свою реферальную ссылку в BIO Telegram": "Add your referral link to your Telegram BIO",
+    "Каждый день · UTC": "Every day · UTC",
+    "✓ Получено сегодня": "✓ Claimed today",
+    "+{amount} SenseiCoin": "+{amount} SenseiCoin",
     Запустить: "Launch",
     Получить: "Claim",
     УЛУЧШЕНИЯ: "UPGRADES",
@@ -1009,10 +1015,6 @@
   function paintMiningHint() {
     if (!model) return;
     const energy = energyValue();
-    if (model.phase === "mining" && circleEnergyValue() < energyMax() / 2) {
-      $("hint").textContent = t("Обведи круг вокруг майнера: до +1 энергии · до 50%");
-      return;
-    }
     const base = Number(model.base_rate) || 0;
     const boostActive =
       Number(model.boost_until) * 1000 > serverNow() && energy > 0;
@@ -1641,6 +1643,7 @@
     }
     tasks.forEach((task) => {
       const isLink = task.kind === "link";
+      const isDailyProfile = task.kind === "daily_profile";
       const card = document.createElement("article");
       card.className = `task-card${task.claimed ? " claimed" : ""}${isLink ? " is-link" : ""}`;
 
@@ -1653,9 +1656,9 @@
       name.className = "task-name";
       const title = document.createElement("b");
       title.textContent =
-        task.title || (isLink ? task.host : `@${task.username}`);
+        t(task.title || (isLink ? task.host : `@${task.username}`));
       const handle = document.createElement("span");
-      handle.textContent = isLink
+      handle.textContent = isDailyProfile ? t(task.description) : isLink
         ? t("Приложение · {host}", { host: task.host || task.username || "" })
         : t("@{username} · подписка на канал", { username: task.username });
       name.append(title, handle);
@@ -1671,7 +1674,12 @@
       energyChip.textContent = t("+{amount} энергии", {
         amount: task.energy_bonus,
       });
-      chips.append(coinChip, energyChip);
+      chips.appendChild(coinChip);
+      if (task.energy_bonus > 0) chips.appendChild(energyChip);
+      if (isDailyProfile) {
+        const daily = document.createElement("span"); daily.className = "task-chip";
+        daily.textContent = t("Каждый день · UTC"); chips.appendChild(daily);
+      }
       if (task.reward_gram_hundredths > 0) {
         const gram = document.createElement("span"); gram.className = "task-chip";
         gram.textContent = `${(task.reward_gram_hundredths / 100).toFixed(2)} виртуальных GRAM`;
@@ -1687,7 +1695,7 @@
       if (task.claimed) {
         const done = document.createElement("div");
         done.className = "task-claimed";
-        done.textContent = t("✓ Награда получена");
+        done.textContent = isDailyProfile ? t("✓ Получено сегодня") : t("✓ Награда получена");
         card.appendChild(done);
       } else {
         const actions = document.createElement("div");
@@ -1723,7 +1731,8 @@
               : t("Проверить");
         claim.disabled = Boolean(taskBusy);
         claim.addEventListener("click", () => claimTask(task.slug));
-        actions.append(open, claim);
+        if (!isDailyProfile) actions.appendChild(open);
+        actions.appendChild(claim);
         card.appendChild(actions);
       }
 
@@ -1768,9 +1777,10 @@
       const extras = [];
       if (data.reward_gram_hundredths) extras.push(`+${(data.reward_gram_hundredths / 100).toFixed(2)} виртуальных GRAM`);
       if (data.reward_chests) extras.push(`+${data.reward_chests} сундуков`);
-      showToast([t("+{amount} SenseiCoin · +{energy} энергии на цикл", {
+      const rewardText = data.energy_bonus > 0 ? t("+{amount} SenseiCoin · +{energy} энергии на цикл", {
         amount: coin(data.reward_coins), energy: data.energy_bonus,
-      }), ...extras].join(" · "));
+      }) : t("+{amount} SenseiCoin", {amount: coin(data.reward_coins)});
+      showToast([rewardText, ...extras].join(" · "));
     } catch (error) {
       showToast(error.message, true);
     } finally {
@@ -2515,7 +2525,7 @@
     tabs.forEach((key) => {
       $(`view-${key}`).hidden = key !== name;
     });
-    if (name === "tasks") loadTasks();
+    if (name === "tasks") loadTasks(true);
     if (name === "upgrades") loadUpgrades();
     if (name === "bank") loadBank(true);
     if (name === "referrals") loadReferrals(true);
@@ -2835,6 +2845,11 @@
   seedAmbient();
   seedMiningParticles();
   setInterval(paintChain, 1000);
+  setInterval(() => {
+    const taskDay = tasks.find((task) => task.daily)?.claim_day;
+    const today = new Date(serverNow()).toISOString().slice(0, 10);
+    if (taskDay && taskDay !== today && !taskBusy && !$("view-tasks").hidden) loadTasks(true);
+  }, 60000);
   applyTranslations();
   seedBoot();
   render();

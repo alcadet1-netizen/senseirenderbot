@@ -4478,8 +4478,7 @@ button:focus-visible {
   html.motion-reduced .ambient-puff,
   html.motion-reduced .ambient-mote,
   html.motion-reduced .timer-colon-dot,
-  html.motion-reduced .timer-seg,
-  html.motion-reduced .chain-row.is-new {
+  html.motion-reduced .timer-seg {
     animation: none;
     transition: none;
   }
@@ -5180,3 +5179,19 @@ html, body { font-family: "Golos Text", system-ui, sans-serif; }
 }
 #app.tabs-open #balance { font-size: clamp(26px, 8.3vw, 31px); }
 .boot-word { font-family: "Unbounded", sans-serif; font-weight: 600; }
+
+/* The block feed is intentionally live even when optional effects are off. */
+html.motion-reduced .chain-row.is-new {
+  animation-duration: 0.45s !important;
+  animation-iteration-count: 1 !important;
+}
+html.motion-reduced .chain-panel.is-live .chain-heart i,
+html.motion-reduced .chain-panel.is-live .chain-heart::before,
+html.motion-reduced .chain-panel.is-live .chain-heart::after {
+  animation-duration: var(--beat) !important;
+  animation-iteration-count: infinite !important;
+}
+html.motion-reduced .chain-panel.is-live .chain-ecg path {
+  animation-duration: calc(var(--beat) * 3) !important;
+  animation-iteration-count: infinite !important;
+}
