@@ -192,7 +192,10 @@ async def main() -> None:
     from src.bot.middlewares.group_admin import GroupAdminMiddleware
     # Receipts must reconcile even if the bot lost group privileges.
     dp.update.outer_middleware(DonationPaymentMiddleware(container))
+    from src.bot.middlewares.join_events import JoinDiagnosticsMiddleware, JoinServiceMessageMiddleware
+    dp.update.outer_middleware(JoinDiagnosticsMiddleware())
     dp.update.outer_middleware(GroupAdminMiddleware())
+    dp.update.outer_middleware(JoinServiceMessageMiddleware(container))
     from src.bot.middlewares.removed_music import RemovedMusicMiddleware
     dp.update.outer_middleware(RemovedMusicMiddleware())
 
@@ -248,6 +251,7 @@ async def main() -> None:
         logger.info("🔄 Starting polling...")
         # Financial pre-checkout is handled by update middleware, so router
         # introspection does not discover it. Telegram must still deliver it.
+        logger.info("Join notifications enabled: polling subscribes to message and chat_member")
         await dp.start_polling(
             bot,
             allowed_updates=list(dict.fromkeys([*dp.resolve_used_update_types(), "channel_post", "message", "chat_member", "pre_checkout_query", "widget_query", "shared_widget_query"])),

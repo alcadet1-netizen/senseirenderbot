@@ -124,3 +124,61 @@ async def test_join_greets_when_registration_or_unban_fails_without_claiming_rew
     event.answer.assert_awaited_once()
     assert 'Добро пожаловать' in event.answer.await_args.args[0]
     assert 'СТАРТОВЫЙ НАБОР' not in event.answer.await_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_service_join_passes_admin_check_but_bypasses_blocking_message_middleware(caplog):
+    from aiogram import BaseMiddleware, Bot, Dispatcher
+    from aiogram.types import Update
+    from src.bot.middlewares.group_admin import GroupAdminMiddleware, group_admin_access
+    from src.bot.middlewares.join_events import JoinDiagnosticsMiddleware, JoinServiceMessageMiddleware
+
+    class BlockAll(BaseMiddleware):
+        async def __call__(self, handler, event, data):
+            return None
+
+    user = {'id': 77, 'is_bot': False, 'first_name': 'New'}
+    update = Update.model_validate({'update_id': 55, 'message': {
+        'message_id': 1, 'date': 1700000000,
+        'chat': {'id': -100222, 'type': 'supergroup', 'title': 'Dojo'},
+        'from': {'id': 78, 'is_bot': False, 'first_name': 'Inviter'},
+        'new_chat_members': [user],
+    }})
+    container = SimpleNamespace(
+        throttle_service=SimpleNamespace(throttle=AsyncMock(return_value=True)),
+        moderation_service=SimpleNamespace(unban_user=AsyncMock(return_value={'success': False})),
+        user_service=SimpleNamespace(get_or_create=AsyncMock(return_value={'created': True, 'user': {'coins': 3000}})),
+    )
+    dp = Dispatcher()
+    dp.update.outer_middleware(JoinDiagnosticsMiddleware())
+    dp.update.outer_middleware(GroupAdminMiddleware())
+    dp.update.outer_middleware(JoinServiceMessageMiddleware(container))
+    dp.message.outer_middleware(BlockAll())
+    bot = Bot('123456:TEST_TOKEN')
+    group_admin_access.invalidate(bot.id, -100222)
+    try:
+        with patch.object(bot, 'get_chat_member', new_callable=AsyncMock, return_value=SimpleNamespace(status='administrator')), \
+             patch.object(Bot, '__call__', new_callable=AsyncMock) as send:
+            await dp.feed_update(bot, update)
+        assert send.await_count == 2
+        assert 'Добро пожаловать' in send.await_args_list[0].args[0].text
+        container.user_service.get_or_create.assert_awaited_once()
+    finally:
+        group_admin_access.invalidate(bot.id, -100222)
+        await bot.session.close()
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_record_membership_before_dispatch(caplog):
+    import logging
+    from aiogram.types import Update
+    from src.bot.middlewares.join_events import JoinDiagnosticsMiddleware
+    user = {'id': 77, 'is_bot': False, 'first_name': 'New'}
+    update = Update.model_validate({'update_id': 10, 'chat_member': {
+        'chat': {'id': -100, 'type': 'supergroup', 'title': 'Dojo'},
+        'from': {'id': 78, 'is_bot': False, 'first_name': 'Admin'}, 'date': 1700000000,
+        'old_chat_member': {'status': 'left', 'user': user},
+        'new_chat_member': {'status': 'member', 'user': user}, 'via_join_request': True}})
+    with caplog.at_level(logging.INFO):
+        await JoinDiagnosticsMiddleware()(AsyncMock(), update, {})
+    assert 'Join ingress update=10 chat=-100 user=77 old=left new=member via_request=True' in caplog.text
