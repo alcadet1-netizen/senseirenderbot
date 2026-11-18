@@ -149,6 +149,29 @@ async def on_shutdown(bot: Bot, container: Container | None = None) -> None:
 
 import time
 
+
+async def run_with_widget_startup(polling, start_widgets):
+    """Do not postpone Bot API polling while the optional transport connects.
+
+    A startup failure still terminates polling, matching the previous fail-fast
+    policy. Always cancel and join the remaining task before resource cleanup.
+    """
+    polling_task = asyncio.create_task(polling())
+    widgets_task = asyncio.create_task(start_widgets())
+    try:
+        done, _ = await asyncio.wait((polling_task, widgets_task), return_when=asyncio.FIRST_COMPLETED)
+        # Propagate errors before waiting on the other task.
+        for task in done:
+            task.result()
+        if polling_task in done:
+            return
+        await polling_task
+    finally:
+        for task in (polling_task, widgets_task):
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(polling_task, widgets_task, return_exceptions=True)
+
 async def main() -> None:
     """Главная функция."""
     # Создаём бота и диспетчер
@@ -243,20 +266,27 @@ async def main() -> None:
         await container.referral_service.ensure_indexes()
         from src.services.fly_service import FlyService
         await FlyService(container).ensure_indexes()
-        if settings.native_widget_transport == 'mtproto':
-            from src.infra.mtproto.widgets import MtprotoWidgets
-            container.native_widget_transport = await MtprotoWidgets.start(container, bot.id)
         from src.bot.campaign_polling import install_campaign_admission
         install_campaign_admission(dp, container.comment_campaign_service)
-        logger.info("🔄 Starting polling...")
-        # Financial pre-checkout is handled by update middleware, so router
-        # introspection does not discover it. Telegram must still deliver it.
-        logger.info("Join notifications enabled: polling subscribes to message and chat_member")
-        await dp.start_polling(
-            bot,
-            allowed_updates=list(dict.fromkeys([*dp.resolve_used_update_types(), "channel_post", "message", "chat_member", "pre_checkout_query", "widget_query", "shared_widget_query"])),
-            close_bot_session=True,
-        )
+
+        async def polling():
+            logger.info("🔄 Starting polling...")
+            # Financial pre-checkout is handled by update middleware, so router
+            # introspection does not discover it. Telegram must still deliver it.
+            logger.info("Join notifications enabled: polling subscribes to message and chat_member")
+            await dp.start_polling(
+                bot,
+                allowed_updates=list(dict.fromkeys([*dp.resolve_used_update_types(), "channel_post", "message", "chat_member", "pre_checkout_query", "widget_query", "shared_widget_query"])),
+                close_bot_session=True,
+            )
+
+        if settings.native_widget_transport == 'mtproto':
+            async def start_widgets():
+                from src.infra.mtproto.widgets import MtprotoWidgets
+                container.native_widget_transport = await MtprotoWidgets.start(container, bot.id)
+            await run_with_widget_startup(polling, start_widgets)
+        else:
+            await polling()
     finally:
         if auto_task is not None:
             auto_task.cancel()
