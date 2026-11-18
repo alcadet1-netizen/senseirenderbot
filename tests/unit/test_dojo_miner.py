@@ -114,6 +114,7 @@ async def test_api_requires_signature_and_dispatches_actions():
     state = AsyncMock(return_value={'phase': 'ready', 'reward': 20, 'balance': 1000})
     start = AsyncMock(return_value={'phase': 'mining', 'reward': 20})
     collect = AsyncMock(return_value={'phase': 'ready', 'mined': 20, 'balance': 1000})
+    circle = AsyncMock(return_value={'added': 1, 'replayed': False})
     list_tasks = AsyncMock(return_value=[{'slug': 'senseidurova', 'claimed': False}])
     claim = AsyncMock(return_value={
         'task': {'slug': 'senseidurova', 'claimed': True},
@@ -139,7 +140,7 @@ async def test_api_requires_signature_and_dispatches_actions():
         {'name': 'Sensei', 'username': 'sensei', 'active': True}])
     container = SimpleNamespace(
         settings=SimpleNamespace(bot_token='test-token', maintenance_mode=False),
-        dojo_miner_service=SimpleNamespace(state=state, start=start, collect=collect),
+        dojo_miner_service=SimpleNamespace(state=state, start=start, collect=collect, add_circle_energy=circle),
         dojo_task_service=SimpleNamespace(list_tasks=list_tasks, claim=claim),
         dojo_upgrade_service=SimpleNamespace(snapshot=upgrades, prepare=prepare),
         stats_service=SimpleNamespace(get_bank_summary=bank),
@@ -162,6 +163,14 @@ async def test_api_requires_signature_and_dispatches_actions():
         response = await client.post('/miniapp/dojo/api/state', json={'initData': auth})
         assert response.status == 200 and (await response.json())['phase'] == 'ready'
         state.assert_awaited_once_with(7)
+        response = await client.post('/miniapp/dojo/api/circle', json={'initData': auth, 'cycle': 1234, 'request_id': 'orbit-test-1'})
+        assert response.status == 200 and (await response.json())['circle']['added'] == 1
+        circle.assert_awaited_once_with(7, 1234, 'orbit-test-1')
+        for bad_cycle in (True, -1, 1e100, None):
+            response = await client.post('/miniapp/dojo/api/circle', json={'initData': auth, 'cycle': bad_cycle, 'request_id': 'orbit-test-2'})
+            assert response.status == 409
+        response = await client.post('/miniapp/dojo/api/circle', json={'initData': auth, 'cycle': 1234, 'request_id': 'x'})
+        assert response.status == 409
         response = await client.post('/miniapp/dojo/api/start', json={'initData': auth})
         assert response.status == 200 and (await response.json())['phase'] == 'mining'
         start.assert_awaited_once_with(7)
@@ -386,7 +395,7 @@ async def test_sensei_font_and_compact_chest_assets():
 
 
 @pytest.mark.asyncio
-async def test_magic_trail_is_visual_only_bounded_and_respects_reduced_motion():
+async def test_magic_trail_supports_circle_energy_and_respects_reduced_motion():
     app = web.Application()
     setup_dojo(app)
     async with TestClient(TestServer(app)) as client:
@@ -395,6 +404,8 @@ async def test_magic_trail_is_visual_only_bounded_and_respects_reduced_motion():
         css = await (await client.get('/miniapp/dojo/style.css')).text()
     assert 'id="magic-trail"' in html and 'aria-hidden="true"' in html
     assert 'function setupMagicTrail()' in js
+    assert 'getCoalescedEvents' in js and 'Math.abs(winding) >= 2 * Math.PI - 0.15' in js
+    assert 'api("circle"' in js and 'request_id: item.request_id' in js
     assert 'MAX_POINTS = 64' in js and 'MAX_SPARKS = 90' in js
     assert 'pointercancel' in js and 'lostpointercapture' in js
     assert 'motionQuery?.matches' in js and 'document.hidden' in js

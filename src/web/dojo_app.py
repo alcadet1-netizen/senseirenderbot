@@ -1,4 +1,5 @@
 """SenseiCoin miner Mini App: one start runs a three-hour bank-funded cycle."""
+import math
 import asyncio
 import logging
 import os
@@ -209,6 +210,14 @@ def setup_dojo(app, container=None):
                 result = await service.state(user['id'])
             elif action == 'start':
                 result = await service.start(user['id'])
+            elif action == 'circle':
+                request_id = payload.get('request_id')
+                cycle = payload.get('cycle')
+                if not isinstance(request_id, str) or not re.fullmatch(r'[a-zA-Z0-9_-]{8,64}', request_id) or type(cycle) not in (int, float) or not 0 < cycle < 10**12 or not math.isfinite(cycle):
+                    raise GameError('Неверный запрос пополнения.')
+                outcome = await service.add_circle_energy(user['id'], cycle, request_id)
+                result = await service.state(user['id'])
+                result['circle'] = outcome
             elif action in ('daily', 'daily_claim', 'chest'):
                 from src.services.dojo_daily_service import DojoDailyService
                 daily = DojoDailyService(container.mongo_client)
@@ -313,5 +322,5 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/assets/{asset:sensei\\.webp|loading-hero\\.webp|sensei-style-(?:400|700)\\.woff2}', page)
     app.router.add_post(
-        '/miniapp/dojo/api/{action:state|start|collect|tasks|task|upgrades|buy|bank|burn|referrals|share|daily|daily_claim|chest}',
+        '/miniapp/dojo/api/{action:state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|share|daily|daily_claim|chest}',
         api)

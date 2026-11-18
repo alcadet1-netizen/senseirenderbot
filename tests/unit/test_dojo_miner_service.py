@@ -228,3 +228,59 @@ async def test_boost_bought_before_start_is_in_the_ready_reward():
         started = await dojo.start(7)
     assert started['reward'] == 26
     assert started['boost_seconds_left'] == 3600
+
+
+@pytest.mark.asyncio
+async def test_circle_energy_rapid_replay_cap_and_new_cycle():
+    _, dojo, _ = service()
+    with patch.object(miner.time, 'time', return_value=1000):
+        await dojo.start(7)
+        with pytest.raises(GameError, match='энергия закончилась'):
+            await dojo.add_circle_energy(7, 1000, 'circle-early')
+    with patch.object(miner.time, 'time', return_value=4600):
+        for i in range(50):
+            assert (await dojo.add_circle_energy(7, 1000, f'circle-{i:04}'))['added'] == 1
+        assert (await dojo.add_circle_energy(7, 1000, 'circle-0000'))['replayed'] is True
+        assert (await dojo.add_circle_energy(7, 1000, 'circle-0050'))['added'] == 0
+        state = await dojo.state(7)
+        assert state['energy'] == pytest.approx(50)
+        assert state['circle_energy_limit'] == 50
+        assert state['reward'] == 25  # extra 50 energy gives 6.75 coins, rounded once
+    with patch.object(miner.time, 'time', return_value=4636):
+        assert (await dojo.state(7))['energy'] == pytest.approx(49)
+        assert (await dojo.add_circle_energy(7, 1000, 'circle-0051'))['added'] == 1
+    with patch.object(miner.time, 'time', return_value=11800):
+        with pytest.raises(GameError, match='не запущен'):
+            await dojo.add_circle_energy(7, 1000, 'circle-finish')
+        await dojo.collect(7)
+        await dojo.start(7)
+        with pytest.raises(GameError, match='Цикл изменился'):
+            await dojo.add_circle_energy(7, 1000, 'circle-stale')
+        assert (await dojo.state(7))['circle_available'] is False
+
+
+@pytest.mark.asyncio
+async def test_circle_energy_adds_reward_only_for_remaining_cycle_and_interacts_with_tasks():
+    _, dojo, _ = service()
+    with patch.object(miner.time, 'time', return_value=1000):
+        await dojo.start(7)
+    with patch.object(miner.time, 'time', return_value=11764):
+        for i in range(10):
+            await dojo.add_circle_energy(7, 1000, f'late-{i:04}')
+        state = await dojo.state(7)
+        assert state['energy'] == pytest.approx(10)
+        assert state['reward'] == 18  # just 36 seconds remain
+        assert await dojo.apply_task_energy(7, 100, 'late-task')
+        doc = dojo.miners.docs[7]
+        assert doc['circle_reward'] == 0  # no double counting when the task fills the same time
+
+
+@pytest.mark.asyncio
+async def test_circle_access_rejects_banned_player():
+    _, dojo, _ = service()
+    with patch.object(miner.time, 'time', return_value=1000):
+        await dojo.start(7)
+    dojo.users.docs[7]['is_banned'] = True
+    with patch.object(miner.time, 'time', return_value=4600):
+        with pytest.raises(GameError, match='Профиль'):
+            await dojo.add_circle_energy(7, 1000, 'circle-test')
