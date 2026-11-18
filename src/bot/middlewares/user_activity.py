@@ -85,6 +85,7 @@ class ActivityConfig:
 
 class NotificationType(Enum):
     """Типы уведомлений."""
+    STARTER_KIT = auto()
     LEVEL_UP = auto()
     ACHIEVEMENT = auto()
     TICKET = auto()
@@ -124,6 +125,7 @@ class TicketData:
 class RewardResult:
     """Результат обработки награды."""
     success: bool
+    starter_coins: Optional[float] = None
     messages_count: int = 0
     new_xp: int = 0
     new_coins: int = 0
@@ -603,6 +605,16 @@ class ActivityProcessor:
             logger.debug(f"Reward processing failed for {user.id}: {result.error}")
             return notifications
 
+        # A new profile is created once; this notice never grants anything.
+        if result.starter_coins is not None and not user.is_bot:
+            notifications.append(Notification(
+                type=NotificationType.STARTER_KIT, user=user, chat_id=chat_id,
+                text=Visuals.welcome_bonus_message(
+                    user.username or user.full_name or f"User {user.id}",
+                    coins=result.starter_coins),
+                priority=100,
+            ))
+
         # Создаём уведомления
         if result.level_up and self._config.enable_level_notifications:
             notifications.append(
@@ -664,6 +676,7 @@ class ActivityProcessor:
 
             return RewardResult(
                 success=True,
+                starter_coins=raw_result.get("starter_coins"),
                 messages_count=raw_result.get("messages_count", 0),
                 new_xp=raw_result.get("new_xp", 0),
                 new_coins=raw_result.get("new_coins", 0),
@@ -835,6 +848,11 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
             return False
 
         if not message.from_user:
+            return False
+
+        # Join updates are handled by events.py for the actual new members.
+        # Do not register the inviter or race the welcome handler here.
+        if message.new_chat_members:
             return False
 
         # Игнорируем служебные сообщения
