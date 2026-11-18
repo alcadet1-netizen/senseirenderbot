@@ -65,13 +65,16 @@ class DojoMinerService:
         await self.users.create_index('dojo_auto_collect')
 
     @staticmethod
-    def _energy_at(doc: dict, now: float, finish: float, energy_start: int) -> int:
+    def _energy_at(doc: dict, now: float, finish: float, energy_start: int) -> float:
         """Current energy: base drain plus paid refills and task bonuses.
 
         Task energy is *used*, not added to the cap.  It therefore decays from
         the moment the task is claimed and adds reward for exactly the extra
         full-power hours it buys, once.
         """
+        if doc.get('circle_energy_events'):
+            energy, _ = DojoMinerService._energy_timeline(doc, now)
+            return max(0.0, energy)
         started = doc.get('started_at')
         elapsed = max(0.0, min(now, finish) - started) if started else 0.0
         energy = max(0, energy_start - ENERGY_PER_HOUR * elapsed / 3600)
@@ -88,6 +91,85 @@ class DojoMinerService:
                 float(bonus.get('amount', 0)) - ENERGY_PER_HOUR * since / 3600,
             )
         return max(0, int(energy))
+
+    @staticmethod
+    def _energy_timeline(doc: dict, now: float, include_circles: bool = True):
+        """Integrate a single energy reservoir, including timed additions."""
+        start = float(doc.get('started_at') or 0)
+        finish = float(doc.get('finish_at') or start)
+        end = min(max(now, start), finish)
+        energy = max(0.0, float(doc.get('energy_start', BASE_ENERGY)))
+        full = 0.0
+        cursor = start
+        events = list(doc.get('energy_refills') or []) + list(doc.get('task_energy_bonuses') or [])
+        if include_circles:
+            events += list(doc.get('circle_energy_events') or [])
+        for event in sorted(events, key=lambda item: float(item.get('at', start))):
+            at = max(start, float(event.get('at', start)))
+            if at > end:
+                break
+            elapsed = max(0.0, at - cursor)
+            used = min(elapsed, energy * 3600 / ENERGY_PER_HOUR)
+            full += used
+            energy = max(0.0, energy - elapsed * ENERGY_PER_HOUR / 3600)
+            energy += max(0.0, float(event.get('amount', 0)))
+            cursor = at
+        elapsed = max(0.0, end - cursor)
+        full += min(elapsed, energy * 3600 / ENERGY_PER_HOUR)
+        energy = max(0.0, energy - elapsed * ENERGY_PER_HOUR / 3600)
+        projected = full + min(finish - end, energy * 3600 / ENERGY_PER_HOUR)
+        return energy, projected
+
+    @classmethod
+    def _circle_reward(cls, doc: dict, now: float) -> int:
+        if not doc.get('circle_energy_events'):
+            return 0
+        _, with_circles = cls._energy_timeline(doc, now, True)
+        _, without_circles = cls._energy_timeline(doc, now, False)
+        rate = float(doc.get('base_rate', BASE_RATE))
+        return max(0, int(rate * (1.0 - LOW_POWER) * (with_circles - without_circles) / 3600 + 0.5))
+
+    async def add_circle_energy(self, user_id: int, cycle: float, request_id: str) -> dict:
+        """Credit one client-reported circle exactly once within the active cycle.
+
+        Gesture recognition runs in the browser and is not proof of a human gesture.
+        """
+        if type(user_id) is not int or user_id <= 0 or not request_id:
+            raise GameError('Неверный запрос пополнения.')
+        async with self._locks[user_id]:
+            for _ in range(8):
+                now = time.time()
+                user = await self.users.find_one({'id': user_id})
+                doc = await self.miners.find_one({'_id': user_id})
+                if not user or user.get('is_banned'):
+                    raise GameError('Профиль недоступен.')
+                if not doc or float(doc.get('started_at') or 0) != cycle:
+                    raise GameError('Цикл изменился. Обнови экран.')
+                events = list(doc.get('circle_energy_events') or [])
+                if any(item.get('key') == request_id for item in events):
+                    return {'added': 1, 'replayed': True}
+                finish = float(doc.get('finish_at') or 0)
+                if doc.get('collected') or now >= finish:
+                    raise GameError('Майнинг не запущен.')
+                energy, _ = self._energy_timeline(doc, now)
+                if not events and int(energy) > 0:
+                    raise GameError('Круги доступны, когда энергия закончилась.')
+                cap = max(0, int(doc.get('energy_max', BASE_ENERGY))) / 2
+                if energy + 1 > cap + 1e-9:
+                    return {'added': 0, 'replayed': False}
+                events.append({'key': request_id, 'at': now, 'amount': 1})
+                candidate = {**doc, 'circle_energy_events': events}
+                bonus = self._circle_reward(candidate, now)
+                old_bonus = int(doc.get('circle_reward', 0))
+                updated = await self.miners.find_one_and_update(
+                    {'_id': user_id, 'version': int(doc.get('version', 0)), 'collected': False},
+                    {'$set': {'circle_energy_events': events, 'circle_reward': bonus,
+                              'amount': int(doc.get('amount', MINING_REWARD)) + bonus - old_bonus},
+                     '$inc': {'version': 1}},
+                )
+                if updated:
+                    return {'added': 1, 'replayed': False}
+            raise GameError('Не удалось сохранить энергию. Попробуй ещё раз.')
 
     @staticmethod
     def _boost_cycle_key(doc: dict | None, now: float) -> str:
@@ -191,6 +273,8 @@ class DojoMinerService:
             'energy_refill_stars': ENERGY_REFILL_STARS,
             'energy_refill_amount': ENERGY_REFILL_AMOUNT,
             'energy_refill_available': phase == 'mining' and energy <= 0,
+            'circle_available': phase == 'mining' and (energy <= 0 or bool(doc.get('circle_energy_events'))),
+            'circle_energy_limit': energy_cap // 2,
             'base_rate': base_rate,
             'current_rate': current_rate,
             'pickaxe_level': profile['pickaxe_level'],
@@ -242,6 +326,8 @@ class DojoMinerService:
                 'energy_start': energy_start,
                 'energy_max': base_cap,
                 'energy_refills': [],
+                'circle_energy_events': [],
+                'circle_reward': 0,
                 'task_energy_pending': [],
                 'task_energy_bonuses': [],
                 'boost_bonus': boost_bonus,
@@ -333,9 +419,11 @@ class DojoMinerService:
                 'at': now,
                 'amount': ENERGY_REFILL_AMOUNT,
             })
+            circle_reward = self._circle_reward({**doc, 'energy_refills': refills}, now)
+            amount += circle_reward - int(doc.get('circle_reward', 0))
             updated = await self.miners.find_one_and_update(
                 {'_id': user_id, 'version': version, 'collected': False},
-                {'$set': {'energy_refills': refills, 'amount': amount},
+                {'$set': {'energy_refills': refills, 'amount': amount, 'circle_reward': circle_reward},
                  '$inc': {'version': 1}},
             )
             if updated:
@@ -382,12 +470,13 @@ class DojoMinerService:
                     hours = min(max(0.0, (finish - now) / 3600),
                                 amount / ENERGY_PER_HOUR)
                     extra = int(base_rate * hours * (1.0 - LOW_POWER) + 0.5)
-                    new_amount = int(doc.get('amount', MINING_REWARD)) + extra
+                    circle_reward = self._circle_reward({**doc, 'task_energy_bonuses': bonuses}, now)
+                    new_amount = int(doc.get('amount', MINING_REWARD)) + extra + circle_reward - int(doc.get('circle_reward', 0))
                     updated = await self.miners.find_one_and_update(
                         {'_id': user_id, 'version': int(doc.get('version', 0)),
                          'collected': False},
                         {'$set': {'task_energy_bonuses': bonuses,
-                                  'amount': new_amount},
+                                  'amount': new_amount, 'circle_reward': circle_reward},
                          '$inc': {'version': 1}},
                     )
                     if updated:

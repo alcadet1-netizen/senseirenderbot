@@ -19,6 +19,7 @@
     "Баланс SenseiCoin": "SenseiCoin balance",
     "ТВОИ ОЧКИ": "YOUR POINTS",
     "Энергия майнера": "Miner energy",
+    "Обведи круг вокруг майнера: +1 энергия · до 50%": "Draw around the miner: +1 energy · up to 50%",
     ЭНЕРГИЯ: "ENERGY",
     "Энергия майнинга": "Mining energy",
     "ПРОГРЕСС ЦИКЛА": "CYCLE PROGRESS",
@@ -471,7 +472,7 @@
       () => MATRIX_GLYPHS[Math.floor(Math.random() * MATRIX_GLYPHS.length)],
     ).join("");
 
-  // Cosmetic, bounded and local-only: it never changes mining or rewards.
+  // The trail is decorative; completed orbits are credited by the server.
   function setupMagicTrail() {
     const canvas = $("magic-trail");
     if (!canvas || !stageEl) return;
@@ -487,6 +488,56 @@
     let width = 0;
     let height = 0;
     let ratio = 1;
+    let lastAngle = null;
+    let winding = 0;
+    let queue = [];
+    let sending = false;
+
+    async function sendCircles() {
+      if (sending) return;
+      sending = true;
+      while (queue.length) {
+        const item = queue[0];
+        try {
+          const data = await api("circle", {cycle: item.cycle, request_id: item.request_id});
+          queue.shift();
+          if (model && data.started_at === model.started_at && data.server_now >= model.server_now) apply(data);
+          if (data.circle.added) showToast("+1 энергия");
+          else queue = queue.filter(next => next.cycle !== item.cycle);
+        } catch (error) {
+          // Retry with the same id: an interrupted response may already be credited.
+          if (!model || model.phase !== "mining" || model.started_at !== item.cycle) { queue.shift(); continue; }
+          showToast(error.message, true);
+          item.retries = (item.retries || 0) + 1;
+          if (item.retries <= 3) setTimeout(sendCircles, 1500);
+          break;
+        }
+      }
+      sending = false;
+    }
+    function recordOrbit(event) {
+      if (!model || model.phase !== "mining" || !initData() ||
+          !(model.circle_available || Math.floor(energyValue()) <= 0)) {
+        lastAngle = null; winding = 0; return;
+      }
+      const box = $("orb").getBoundingClientRect();
+      const x = event.clientX - (box.left + box.width / 2);
+      const y = event.clientY - (box.top + box.height / 2);
+      if (Math.hypot(x, y) < 8) { lastAngle = null; winding = 0; return; }
+      const angle = Math.atan2(y, x);
+      if (lastAngle !== null) {
+        let delta = angle - lastAngle;
+        if (delta > Math.PI) delta -= 2 * Math.PI;
+        if (delta < -Math.PI) delta += 2 * Math.PI;
+        winding += delta;
+        if (Math.abs(winding) >= 2 * Math.PI - 0.15) {
+          winding -= Math.sign(winding) * 2 * Math.PI;
+          queue.push({cycle: model.started_at, request_id: crypto.randomUUID()});
+          sendCircles();
+        }
+      }
+      lastAngle = angle;
+    }
 
     function resizeTrail() {
       const rect = app.getBoundingClientRect();
@@ -497,12 +548,12 @@
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     }
     function enabled() {
-      return !motionQuery?.matches && !document.hidden && activeTab === "mining" &&
+      return !document.hidden && activeTab === "mining" &&
         app.classList.contains("phase-mining") &&
         !Array.from(document.querySelectorAll(".sheet")).some(sheet => !sheet.hidden);
     }
     function resetTrail() {
-      pointer = null; previous = null; trail.length = 0; sparks.length = 0;
+      pointer = null; previous = null; lastAngle = null; winding = 0; trail.length = 0; sparks.length = 0;
       if (frame) cancelAnimationFrame(frame);
       frame = 0; ctx.clearRect(0, 0, width, height);
     }
@@ -560,7 +611,8 @@
     }
     function sample(event) {
       const rect = app.getBoundingClientRect();
-      addPoint(event.clientX - rect.left, event.clientY - rect.top, performance.now());
+      recordOrbit(event);
+      if (!motionQuery?.matches) addPoint(event.clientX - rect.left, event.clientY - rect.top, performance.now());
     }
     stageEl.addEventListener("pointerdown", event => {
       const control = event.target.closest("button, a, input, textarea, select, [role=button]");
@@ -573,10 +625,11 @@
     stageEl.addEventListener("pointermove", event => {
       if (event.pointerId !== pointer) return;
       if (!enabled()) { resetTrail(); return; }
-      sample(event);
+      const samples = event.getCoalescedEvents?.();
+      if (samples && samples.length) samples.forEach(sample); else sample(event);
     });
-    const stop = event => { if (event.pointerId === pointer) { pointer = null; previous = null; } };
-    stageEl.addEventListener("pointerup", stop);
+    const stop = event => { if (event.pointerId === pointer) { pointer = null; previous = null; lastAngle = null; winding = 0; } };
+    stageEl.addEventListener("pointerup", event => { if (event.pointerId === pointer && enabled()) sample(event); stop(event); });
     stageEl.addEventListener("pointercancel", stop);
     stageEl.addEventListener("lostpointercapture", stop);
     window.addEventListener("resize", resizeTrail);
@@ -803,6 +856,10 @@
   function paintMiningHint() {
     if (!model) return;
     const energy = energyValue();
+    if (model.phase === "mining" && (model.circle_available || Math.floor(energy) <= 0) && energy < energyMax() / 2) {
+      $("hint").textContent = t("Обведи круг вокруг майнера: +1 энергия · до 50%");
+      return;
+    }
     const base = Number(model.base_rate) || 0;
     const boostActive =
       Number(model.boost_until) * 1000 > serverNow() && energy > 0;
@@ -826,7 +883,7 @@
 
   function paintEnergy(value) {
     const max = energyMax();
-    const rounded = Math.max(0, Math.floor(value));
+    const rounded = Math.max(0, model?.circle_available ? Math.ceil(value) : Math.floor(value));
     $("energy").textContent = `${rounded} / ${max}`;
     $("energy-bar").style.width = `${Math.min(100, (rounded / max) * 100)}%`;
     $("energy-track").setAttribute("aria-valuemax", String(max));
