@@ -43,7 +43,7 @@ async def test_miner_assets_and_csp():
     setup_dojo(app)
     async with TestClient(TestServer(app)) as client:
         for path in ('/miniapp/dojo', '/miniapp/dojo/', '/miniapp/dojo/style.css',
-                     '/miniapp/dojo/miner.js', '/miniapp/dojo/assets/sensei.webp',
+                     '/miniapp/dojo/miner.js', '/miniapp/dojo/motion.js', '/miniapp/dojo/assets/sensei.webp',
                      '/miniapp/dojo/assets/loading-hero.webp'):
             response = await client.get(path)
             assert response.status == 200, path
@@ -52,6 +52,10 @@ async def test_miner_assets_and_csp():
         page = await client.get('/miniapp/dojo')
         html = await page.text()
         assert 'data-tab="referrals"' in html and 'id="view-referrals"' in html
+        assert html.index('/miniapp/dojo/motion.js') < html.index('/miniapp/dojo/style.css')
+        motion = await client.get('/miniapp/dojo/motion.js')
+        assert motion.headers['Cache-Control'] == 'no-store'
+        assert 'sensei_dojo_motion' in await motion.text()
         webp = await client.get('/miniapp/dojo/assets/sensei.webp')
         assert webp.headers['Content-Type'] == 'image/webp'
         hero = await client.get('/miniapp/dojo/assets/loading-hero.webp')
@@ -289,22 +293,21 @@ async def test_miner_keeps_action_slot_and_renders_new_layers():
 
 
 @pytest.mark.asyncio
-async def test_miner_has_centred_blade_timer_and_layered_ambient():
+async def test_miner_has_centred_dseg_timer_and_layered_ambient():
     app = web.Application()
     setup_dojo(app)
     async with TestClient(TestServer(app)) as client:
         html = await (await client.get('/miniapp/dojo')).text()
         css = await (await client.get('/miniapp/dojo/style.css')).text()
         js = await (await client.get('/miniapp/dojo/miner.js')).text()
-    # A dedicated vector face sits inside the orb instead of a text clock.
+    # The dedicated DSEG clock stays inside the orb and keeps an accessible label.
     assert 'id="timer-face"' in html and 'id="timer-digits"' in html
-    assert 'id="timer-glyphs"' in html and 'viewBox="0 0 181 48"' in html
-    assert 'TIMER_SEGMENTS' in js and 'TIMER_DIGITS' in js and 'TIMER_LAYOUT' in js
-    assert 'function buildTimerFace' in js and 'function paintTimerFace' in js
-    assert '.orb-button.is-timer .orb-label' in css and '.timer-seg.is-on' in css
+    assert 'class="timer-digits">00:00:00</span>' in html
+    assert 'function paintTimerFace' in js and 'digits.textContent = value' in js
+    assert '.orb-button.is-timer .orb-label' in css and 'font-family: "DSEG7 Classic"' in css
     # HUD rails use one shared max width and the timer canvas is centred.
     assert '--hud-max: 448px' in css and '--hud-gutter' in css
-    assert 'place-items: center' in css and 'width: min(94%, 166px)' in css
+    assert 'place-items: center' in css and 'font-variant-numeric: tabular-nums' in css
     # The flame is an inline sibling of the caption, never behind the glyphs.
     assert 'class="burn-flame"' in html and 'class="burn-title"' in html
     assert '.burn-sticker' in css and '.burn-title' in css
@@ -373,20 +376,24 @@ async def test_daily_and_chest_interface_describes_prizes_without_percentages():
 
 
 @pytest.mark.asyncio
-async def test_sensei_font_and_compact_chest_assets():
+async def test_jade_signal_font_and_compact_chest_assets():
     app = web.Application()
     setup_dojo(app)
     async with TestClient(TestServer(app)) as client:
-        for weight in (400, 700):
-            response = await client.get(f'/miniapp/dojo/assets/sensei-style-{weight}.woff2')
+        for name in ('golos-text-variable', 'unbounded-variable', 'dseg7-classic-regular'):
+            response = await client.get(f'/miniapp/dojo/assets/{name}.woff2')
             assert response.status == 200
             assert (await response.read()).startswith(b'wOF2')
             assert "font-src 'self'" in response.headers['Content-Security-Policy']
+        logo = await client.get('/miniapp/dojo/assets/senseicoin-wordmark.svg')
+        assert logo.status == 200 and logo.content_type == 'image/svg+xml'
+        assert '<svg' in await logo.text()
         html = await (await client.get('/miniapp/dojo')).text()
         css = await (await client.get('/miniapp/dojo/style.css')).text()
         js = await (await client.get('/miniapp/dojo/miner.js')).text()
     assert 'rail-path-dot' in html and 'id="chest-open"' in html
-    assert '@font-face' in css and 'font-family: "Sensei Style"' in css
+    assert '@font-face' in css and all(f'font-family: "{name}"' in css for name in ('Golos Text', 'Unbounded', 'DSEG7 Classic'))
+    assert 'alt="SENSEICOIN"' in html and 'senseicoin-wordmark.svg' in html
     assert 'sensei-border-dot' in css and 'sensei-tile-pulse' in css
     assert '#chest-sheet .daily-card' in css and 'overflow: hidden' in css
     assert 'class="chest-prizes"' in html
@@ -396,7 +403,7 @@ async def test_sensei_font_and_compact_chest_assets():
 
 
 @pytest.mark.asyncio
-async def test_magic_trail_supports_circle_energy_and_respects_reduced_motion():
+async def test_magic_trail_supports_circle_energy_and_remains_visible():
     app = web.Application()
     setup_dojo(app)
     async with TestClient(TestServer(app)) as client:
@@ -412,7 +419,7 @@ async def test_magic_trail_supports_circle_energy_and_respects_reduced_motion():
     assert 'motionQuery?.matches' in js and 'document.hidden' in js
     assert 'phase-mining' in js and 'activeTab === "mining"' in js
     assert 'touch-action: none' in css and 'pointer-events: none' in css
-    assert 'html:not(.motion-force) .magic-trail { display: none; }' in css
+    assert 'html.motion-reduced .magic-trail { display: none; }' not in css
     assert 'id="motion-setting"' in html and 'sensei_dojo_motion' in js
     assert 'motionReduced()' in js and 'touchstart' in js and 'touchmove' in js
     assert 'resizePending' in js and 'canvas.width !== pixelWidth' in js

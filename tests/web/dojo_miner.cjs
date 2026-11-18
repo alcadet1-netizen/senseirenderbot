@@ -271,6 +271,37 @@ const { chromium } = require("playwright-core");
     },
   );
   assert.equal(await page.locator("#boot").isVisible(), false);
+  await page.evaluate(() => Promise.all([
+    document.fonts.load('500 16px "Golos Text"'),
+    document.fonts.load('600 14px "Unbounded"'),
+    document.fonts.load('400 28px "DSEG7 Classic"'),
+  ]));
+  assert.ok(await page.evaluate(() => document.fonts.check('500 16px "Golos Text"')));
+  assert.ok(await page.evaluate(() => document.fonts.check('600 14px "Unbounded"')));
+  assert.ok(await page.evaluate(() => document.fonts.check('400 28px "DSEG7 Classic"')));
+  assert.match(await page.locator('body').evaluate(el => getComputedStyle(el).fontFamily), /Golos Text/);
+  assert.equal(await page.locator('.logo-wordmark').getAttribute('alt'), 'SENSEICOIN');
+
+  for (const width of [320, 360, 390, 560]) {
+    await page.setViewportSize({ width, height: 844 });
+    const boxes = await Promise.all([".lang-switch", "#motion-setting", ".logo", ".info"]
+      .map(selector => page.locator(selector).boundingBox()));
+    for (let i = 0; i < boxes.length; i++) {
+      assert.ok(boxes[i] && boxes[i].x >= 0 && boxes[i].x + boxes[i].width <= width,
+        `header item ${i} must fit at ${width}px`);
+      if (i) assert.ok(boxes[i - 1].x + boxes[i - 1].width <= boxes[i].x + 1,
+        `header items must not overlap at ${width}px`);
+    }
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.locator("#motion-setting").textContent(), "EFFECT · ON");
+  await page.click("#motion-setting");
+  assert.equal(await page.locator("#motion-setting").getAttribute("aria-pressed"), "false");
+  assert.equal(await page.locator("#motion-setting").textContent(), "EFFECT · OFF");
+  assert.equal(await page.locator("#magic-trail").isVisible(), true);
+  await page.click("#motion-setting");
+  assert.equal(await page.locator("#motion-setting").getAttribute("aria-pressed"), "true");
+
   await page.waitForFunction(
     () =>
       document.querySelector("#action-label").textContent === "НАЧАТЬ МАЙНИНГ",
@@ -370,7 +401,7 @@ const { chromium } = require("playwright-core");
     return true;
   }), "trail must fade after release");
   await page.emulateMedia({ reducedMotion: "reduce" });
-  assert.equal(await page.locator("#magic-trail").isVisible(), false);
+  assert.equal(await page.locator("#magic-trail").isVisible(), true);
   await page.emulateMedia({ reducedMotion: "no-preference" });
   assert.match(
     await page.locator("#action-label").textContent(),
@@ -382,12 +413,11 @@ const { chromium } = require("playwright-core");
     `action button moved from ${readyBox.y} to ${miningBox.y}`,
   );
   assert.equal(await page.locator("#timer-face").isVisible(), true);
-  assert.equal(await page.locator(".timer-seg").count(), 42);
-  assert.ok(
-    (await page.locator(".timer-seg.is-on").count()) >= 20,
-    "the bespoke timer face should light its digit blades",
-  );
+  assert.match(await page.locator("#timer-digits").textContent(), /^\d\d:\d\d:\d\d$/);
+  assert.match(await page.locator("#timer-digits").evaluate(el => getComputedStyle(el).fontFamily), /DSEG7 Classic/);
+  assert.equal(await page.locator("#timer-digits").textContent(), await page.locator("#action-label").textContent());
   const timerBox = await page.locator("#timer-digits").boundingBox();
+  assert.ok(timerBox.width <= miningBox.width, "timer must fit inside the orb");
   assert.ok(
     Math.abs(
       timerBox.x + timerBox.width / 2 - (miningBox.x + miningBox.width / 2),

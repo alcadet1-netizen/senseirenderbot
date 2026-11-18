@@ -27,8 +27,13 @@ ASSETS = {
     'index.html',
     'style.css',
     'miner.js',
+    'motion.js',
     'assets/sensei.webp',
     'assets/loading-hero.webp',
+    'assets/senseicoin-wordmark.svg',
+    'assets/unbounded-variable.woff2',
+    'assets/golos-text-variable.woff2',
+    'assets/dseg7-classic-regular.woff2',
     'assets/sensei-style-400.woff2',
     'assets/sensei-style-700.woff2',
 }
@@ -342,9 +347,9 @@ def setup_dojo(app, container=None):
     app.router.add_get('/miniapp/dojo', page)
     app.router.add_get('/miniapp/dojo/', page)
     app.router.add_get(
-        '/miniapp/dojo/{asset:style\\.css|miner\\.js}', page)
+        '/miniapp/dojo/{asset:style\\.css|miner\\.js|motion\\.js}', page)
     app.router.add_get(
-        '/miniapp/dojo/assets/{asset:sensei\\.webp|loading-hero\\.webp|sensei-style-(?:400|700)\\.woff2}', page)
+        '/miniapp/dojo/assets/{asset:sensei\\.webp|loading-hero\\.webp|senseicoin-wordmark\\.svg|unbounded-variable\\.woff2|golos-text-variable\\.woff2|dseg7-classic-regular\\.woff2|sensei-style-(?:400|700)\\.woff2}', page)
     app.router.add_post(
         '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|share|daily|daily_claim|chest}',
         api)
