@@ -415,9 +415,12 @@ async def test_bonus_menu_and_placeholder_rewards():
     assert 'id="bonus-open"' in main and 'id="burn"' in main
     for identifier in ('daily-open', 'chest-open', 'roadmap'):
         assert f'id="{identifier}"' in bonus and f'id="{identifier}"' not in main
-    assert '1 GRAM, 3 GRAM и NFT в ленте — только декорация, не выпадают' in html
-    for item in ('1 GRAM', '3 GRAM', 'NFT'):
-        assert f'{{kind: "PLACEHOLDER", value: "{item}"}}' in js
-    assert 'kind === "PLACEHOLDER" ? "НЕ ВЫПАДАЕТ"' in js
+    for item in ('1', '3'):
+        assert f'{{kind: "GRAM", value: "{item}"}}' in js
+    assert '{kind: "PLACEHOLDER", value: "NFT"}' in js
+    assert 'НЕ ВЫПАДАЕТ' not in js and 'НЕ ВЫПАДАЕТ' not in html
+    assert 'kind === "GRAM" ? " is-gram"' in js
+    assert 'kind === "GRAM" ? "GRAM" : "SENSEI COIN"' in js
+    assert '<small>GRAM</small>' in html
     assert 'const kind = chosen ? (isGram ? "GRAM" : "COIN")' in js
     assert 'closeBonus();' in js and 'aria-expanded' in js

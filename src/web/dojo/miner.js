@@ -2430,11 +2430,11 @@
       {kind: "COIN", value: "300"}, {kind: "COIN", value: "400"},
       {kind: "COIN", value: "500"}, {kind: "GRAM", value: "0.01"},
       {kind: "GRAM", value: "0.02"}, {kind: "GRAM", value: "0.03"},
-      {kind: "PLACEHOLDER", value: "1 GRAM"},
-      {kind: "PLACEHOLDER", value: "3 GRAM"},
+      {kind: "GRAM", value: "1"},
+      {kind: "GRAM", value: "3"},
       {kind: "PLACEHOLDER", value: "NFT"},
     ];
-    // These placeholders are labelled as unavailable and never selected as a result.
+    // The centre cell always displays the server receipt; other cells are decorative.
     for (let i = 0; i < 25; i++) {
       const cell = document.createElement("div");
       const chosen = i === 22;
@@ -2446,7 +2446,7 @@
       icon.textContent = kind === "GRAM" || kind === "PLACEHOLDER" ? "✦" : "◈";
       const number = document.createElement("strong"); number.textContent = value;
       const label = document.createElement("small");
-      label.textContent = kind === "PLACEHOLDER" ? "НЕ ВЫПАДАЕТ" : kind === "GRAM" ? "VIRTUAL GRAM" : "SENSEI COIN";
+      label.textContent = kind === "PLACEHOLDER" ? "ДЕКОР" : kind === "GRAM" ? "GRAM" : "SENSEI COIN";
       cell.append(icon, number, label);
       track.appendChild(cell);
     }
