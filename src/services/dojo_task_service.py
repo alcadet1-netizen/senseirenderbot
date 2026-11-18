@@ -17,6 +17,7 @@ from urllib.parse import urlsplit, urlunsplit
 from pymongo.errors import DuplicateKeyError
 
 from src.services.hedgehog_service import GameError
+from src.services.referral_economy import transaction
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,8 @@ DEFAULT_REWARD = 10_000
 DEFAULT_ENERGY = 100
 MAX_REWARD = 1_000_000
 MAX_ENERGY = 1_000
+MAX_GRAM_HUNDREDTHS = 100_000
+MAX_CHESTS = 1_000
 
 DEFAULT_TASK = {
     '_id': DEFAULT_SLUG,
@@ -217,6 +220,77 @@ class DojoTaskService:
         )
         return self._public({'_id': slug, **doc}, claimed=False)
 
+    async def save_admin_task(self, data: dict, admin_id: int) -> dict:
+        """Create or edit a task without changing its stable claim identity."""
+        await self.ensure_defaults()
+        if not isinstance(data, dict):
+            raise GameError('Некорректные данные задания.')
+        slug = data.get('slug') or ''
+        if not isinstance(slug, str) or (slug and not re.fullmatch(r'[A-Za-z0-9_-]{3,64}', slug)):
+            raise GameError('Неверный идентификатор задания.')
+        is_create = not slug
+        if is_create:
+            key = data.get('create_key')
+            if not isinstance(key, str) or not re.fullmatch(r'[A-Za-z0-9_-]{8,64}', key):
+                raise GameError('Неверный идентификатор создания задания.')
+            slug = 'task-' + hashlib.sha256(f'{admin_id}:{key}'.encode()).hexdigest()[:24]
+        existing = await self.tasks.find_one({'_id': slug})
+        if not is_create and not existing:
+            raise GameError('Задание не найдено.')
+        kind = data.get('kind')
+        title = data.get('title')
+        if kind not in (CHANNEL_KIND, LINK_KIND) or not isinstance(title, str) or not 1 <= len(title.strip()) <= MAX_TITLE:
+            raise GameError('Укажи тип и название задания (до 120 символов).')
+        values = {}
+        for field, maximum in (('reward_coins', MAX_REWARD), ('energy_bonus', MAX_ENERGY),
+                               ('reward_gram_hundredths', MAX_GRAM_HUNDREDTHS), ('reward_chests', MAX_CHESTS)):
+            number = data.get(field, 0)
+            if type(number) is not int or not 0 <= number <= maximum:
+                raise GameError(f'Некорректное значение: {field}.')
+            values[field] = number
+        if not any(values.values()):
+            raise GameError('Укажи хотя бы одну награду.')
+        target = data.get('target')
+        if kind == CHANNEL_KIND:
+            username = normalize_username(target)
+            if not username:
+                raise GameError('Укажи корректный @username канала.')
+            if not self.bot:
+                raise GameError('Проверка канала сейчас недоступна.')
+            try:
+                chat = await self.bot.get_chat(f'@{username}')
+                member = await self.bot.get_chat_member(chat.id, self.bot.id)
+            except Exception:
+                raise GameError('Не вижу канал. Добавь бота администратором и повтори.')
+            if chat.type not in ('channel', 'supergroup') or member.status not in ('creator', 'administrator'):
+                raise GameError('Нужен канал или супергруппа с ботом-администратором.')
+            fields = {'username': username, 'url': f'https://t.me/{username}',
+                      'channel_id': chat.id, 'host': None}
+        else:
+            url = normalize_link_url(target)
+            if not url or len(url) > 2048:
+                raise GameError('Нужна корректная HTTPS-ссылка на приложение (до 2048 символов).')
+            host = (urlsplit(url).hostname or '').lower()
+            fields = {'username': host, 'host': host, 'url': url, 'channel_id': None}
+        now = datetime.now(timezone.utc)
+        doc = {**fields, **values, 'kind': kind, 'title': title.strip(),
+               'reward_schema': 2, 'updated_at': now, 'updated_by': admin_id,
+               'active': bool(existing.get('active')) if existing else True}
+        await self.tasks.update_one({'_id': slug},
+            {'$set': doc, '$setOnInsert': {'created_at': now, 'created_by': admin_id}}, upsert=existing is None)
+        result = self._public({'_id': slug, **doc}, claimed=False)
+        result['active'] = doc['active']
+        return result
+
+    async def set_admin_task_active(self, slug: str, active: bool, admin_id: int) -> None:
+        await self.ensure_defaults()
+        if not isinstance(slug, str) or not re.fullmatch(r'[A-Za-z0-9_-]{3,64}', slug) or type(active) is not bool:
+            raise GameError('Неверное задание или статус.')
+        result = await self.tasks.update_one({'_id': slug}, {'$set': {
+            'active': active, 'updated_at': datetime.now(timezone.utc), 'updated_by': admin_id}})
+        if getattr(result, 'matched_count', 0) != 1:
+            raise GameError('Задание не найдено.')
+
     async def remove_task(self, slug: str) -> bool:
         await self.ensure_defaults()
         raw = (slug or '').strip()
@@ -311,6 +385,8 @@ class DojoTaskService:
             raise GameError(
                 f'Сначала подпишись на @{task["username"]}, потом проверь снова.'
             )
+        if task.get('reward_schema') == 2:
+            return await self._claim_atomic(user_id, task, claim_id)
         reward = max(0, min(MAX_REWARD, int(task.get('reward_coins', DEFAULT_REWARD))))
         energy = max(0, min(MAX_ENERGY, int(task.get('energy_bonus', DEFAULT_ENERGY))))
         claim_doc = {
@@ -374,6 +450,75 @@ class DojoTaskService:
             'new_coins': payout.get('new_coins'),
         }
 
+    async def _claim_atomic(self, user_id: int, task: dict, claim_id: str) -> dict:
+        """Credit all reward components and receipt in one MongoDB transaction."""
+        from src.services.dojo_miner_service import BASE_RATE, ENERGY_PER_HOUR, LOW_POWER, MINING_REWARD, DojoMinerService
+        task_id = task['_id']
+        async def work(session):
+            current = await self.tasks.find_one({'_id': task_id, 'active': True}, session=session)
+            if not current or current != task:
+                raise GameError('Задание изменилось. Обнови список и проверь снова.')
+            if await self.claims.find_one({'_id': claim_id}, session=session):
+                raise GameError('Награда за это задание уже получена.')
+            user = await self.db.users.find_one({'id': user_id}, session=session)
+            if not user or user.get('is_banned'):
+                raise GameError('Награда недоступна для этого профиля.')
+            coins = current['reward_coins']
+            energy = current['energy_bonus']
+            gram = current.get('reward_gram_hundredths', 0)
+            chests = current.get('reward_chests', 0)
+            now = time.time()
+            if coins:
+                debit = await self.db.bank.update_one({'_id': 'single', 'coins': {'$gte': coins}},
+                    {'$inc': {'coins': -coins}}, session=session)
+                if not debit.matched_count:
+                    raise GameError('SenseiBank не может выплатить награду. Попробуй позже.')
+                await self.db.users.update_one({'id': user_id}, {'$inc': {'coins': coins}}, session=session)
+                await self.db.transactions.insert_one({'user_id': user_id, 'tx_type': 'dojo_task',
+                    'coins_change': coins, 'description': f'Dojo task {task_id}',
+                    'created_at': datetime.now(timezone.utc)}, session=session)
+            if gram or chests:
+                await self.db.dojo_daily.update_one({'_id': user_id},
+                    {'$inc': {'gram_hundredths': gram, 'chests': chests}}, upsert=True, session=session)
+            if energy:
+                doc = await self.db.dojo_miners.find_one({'_id': user_id}, session=session)
+                finish = float((doc or {}).get('finish_at', 0) or 0)
+                if doc and not doc.get('collected') and now < finish:
+                    bonuses = list(doc.get('task_energy_bonuses') or [])
+                    bonuses.append({'key': claim_id, 'at': now, 'amount': energy})
+                    rate = float(doc.get('base_rate', BASE_RATE))
+                    hours = min(max(0.0, (finish - now) / 3600), energy / ENERGY_PER_HOUR)
+                    extra = int(rate * hours * (1.0 - LOW_POWER) + 0.5)
+                    circle = DojoMinerService._circle_reward({**doc, 'task_energy_bonuses': bonuses}, now)
+                    amount = int(doc.get('amount', MINING_REWARD)) + extra + circle - int(doc.get('circle_reward', 0))
+                    changes = {'task_energy_bonuses': bonuses, 'amount': amount, 'circle_reward': circle}
+                else:
+                    pending = list((doc or {}).get('task_energy_pending') or [])
+                    pending.append({'key': claim_id, 'at': now, 'amount': energy})
+                    changes = {'task_energy_pending': pending}
+                if doc:
+                    version = doc.get('version')
+                    query = {'_id': user_id, 'version': version if version is not None else {'$exists': False}}
+                    updated = await self.db.dojo_miners.update_one(query,
+                        {'$set': changes, '$inc': {'version': 1}}, session=session)
+                    if not updated.matched_count:
+                        raise GameError('Майнер обновился. Попробуй ещё раз.')
+                else:
+                    await self.db.dojo_miners.insert_one({'_id': user_id, 'collected': True,
+                        'version': 1, **changes}, session=session)
+            await self.claims.insert_one({'_id': claim_id, 'user_id': user_id, 'task_slug': task_id,
+                'kind': current['kind'], 'reward_coins': coins, 'energy_bonus': energy,
+                'reward_gram_hundredths': gram, 'reward_chests': chests, 'claimed_at': now}, session=session)
+            return {'success': True, 'task': self._public(current, claimed=True),
+                    'reward_coins': coins, 'energy_bonus': energy, 'reward_gram_hundredths': gram,
+                    'reward_chests': chests, 'new_coins': user.get('coins', 0) + coins}
+        try:
+            return await transaction(self.container.mongo_client, work)
+        except DuplicateKeyError:
+            if await self.claims.find_one({'_id': claim_id}):
+                raise GameError('Награда за это задание уже получена.')
+            raise GameError('Майнер обновился. Попробуй ещё раз.')
+
     async def _is_subscribed(self, task: dict, user_id: int) -> bool:
         bot = self.bot
         if bot is None:
@@ -402,5 +547,7 @@ class DojoTaskService:
             'url': doc.get('url') or f'https://t.me/{doc.get("username", "")}',
             'reward_coins': int(doc.get('reward_coins', DEFAULT_REWARD)),
             'energy_bonus': int(doc.get('energy_bonus', DEFAULT_ENERGY)),
+            'reward_gram_hundredths': int(doc.get('reward_gram_hundredths', 0) or 0),
+            'reward_chests': int(doc.get('reward_chests', 0) or 0),
             'claimed': bool(claimed),
         }

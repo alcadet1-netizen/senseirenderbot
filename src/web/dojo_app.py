@@ -192,6 +192,9 @@ def setup_dojo(app, container=None):
                 {'error': 'Сенсей на техобслуживании. Попробуйте позже.'},
                 status=503, headers=headers)
         action = request.match_info['action']
+        is_admin = user['id'] in getattr(container.settings, 'admin_ids', ())
+        if action.startswith('admin_') and not is_admin:
+            return web.json_response({'error': 'Доступ только для администраторов.'}, status=403, headers=headers)
         try:
             service = container.dojo_miner_service
             if action == 'state':
@@ -231,6 +234,23 @@ def setup_dojo(app, container=None):
                 else:
                     result = {}
                 result['daily'] = await daily.state(user['id'])
+            elif action == 'admin_tasks':
+                result = {'tasks': await container.dojo_task_service.all_tasks()}
+            elif action == 'admin_save':
+                result = {'task': await container.dojo_task_service.save_admin_task(payload.get('task'), user['id'])}
+            elif action == 'admin_toggle':
+                await container.dojo_task_service.set_admin_task_active(payload.get('slug'), payload.get('active'), user['id'])
+                result = {'success': True}
+            elif action == 'admin_grant':
+                from src.services.dojo_daily_service import DojoDailyService
+                request_id, username, amount = payload.get('request_id'), payload.get('username'), payload.get('amount')
+                if not isinstance(request_id, str) or not re.fullmatch(r'[a-zA-Z0-9_-]{8,64}', request_id):
+                    raise GameError('Неверный идентификатор выдачи.')
+                if not isinstance(username, str):
+                    raise GameError('Укажи @username игрока.')
+                receipt = await DojoDailyService(container.mongo_client).grant_admin_chests(
+                    username.strip().lstrip('@'), amount, user['id'], f'web:{user["id"]}:{request_id}')
+                result = {'username': receipt['username'], 'amount': receipt['amount']}
             elif action == 'tasks':
                 tasks = await container.dojo_task_service.list_tasks(user['id'])
                 result = {'tasks': tasks}
@@ -242,6 +262,8 @@ def setup_dojo(app, container=None):
                 result['task'] = claim['task']
                 result['reward_coins'] = claim['reward_coins']
                 result['energy_bonus'] = claim['energy_bonus']
+                result['reward_gram_hundredths'] = claim.get('reward_gram_hundredths', 0)
+                result['reward_chests'] = claim.get('reward_chests', 0)
                 stats = getattr(container, 'stats_service', None)
                 invalidate = getattr(stats, 'invalidate', None)
                 if invalidate is not None:
@@ -305,6 +327,8 @@ def setup_dojo(app, container=None):
                 invalidate = getattr(stats, 'invalidate', None)
                 if invalidate is not None:
                     invalidate()
+            if isinstance(result, dict) and 'phase' in result:
+                result['is_admin'] = is_admin
             return web.json_response(result, headers=headers)
         except GameError as exc:
             return web.json_response({'error': str(exc)}, status=409, headers=headers)
@@ -322,5 +346,5 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/assets/{asset:sensei\\.webp|loading-hero\\.webp|sensei-style-(?:400|700)\\.woff2}', page)
     app.router.add_post(
-        '/miniapp/dojo/api/{action:state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|share|daily|daily_claim|chest}',
+        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|share|daily|daily_claim|chest}',
         api)

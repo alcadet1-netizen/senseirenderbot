@@ -572,6 +572,37 @@
               <span data-i18n="Банк">Банк</span><b>SenseiBank</b>
             </div>
           </div>
+          <button id="motion-setting" class="motion-setting" type="button" aria-pressed="false">Эффекты: как в системе</button>
+          <p class="motion-setting-note" data-i18n="При системном уменьшении движения можно включить эффекты вручную.">При системном уменьшении движения можно включить эффекты вручную.</p>
+          <button id="admin-open" class="admin-entry" type="button" hidden>⚙ АДМИН-ПАНЕЛЬ</button>
+          <div id="admin-panel" class="admin-panel" hidden>
+            <div class="admin-heading"><div><small>MANAGE · DOJO</small><h3>Админ-панель</h3></div><button id="admin-close" type="button" aria-label="Закрыть админ-панель">×</button></div>
+            <p class="admin-note">Канал проверяется через Telegram. Переход по ссылке приложения не подтверждает выполнение автоматически.</p>
+            <div class="admin-section-head"><h4>Задания</h4><button id="admin-new" type="button">＋ Новое</button></div>
+            <div id="admin-task-list" class="admin-task-list" aria-live="polite"></div>
+            <form id="admin-task-form" class="admin-form" hidden>
+              <h4 id="admin-form-title">Новое задание</h4>
+              <label>Тип<select id="admin-kind"><option value="channel">Подписка на канал</option><option value="link">Ссылка на приложение</option></select></label>
+              <label>Название<input id="admin-title" maxlength="120" required placeholder="Название задания"></label>
+              <label id="admin-target-label">@username канала<input id="admin-target" required placeholder="@channel или HTTPS-ссылка"></label>
+              <div class="admin-rewards">
+                <label>Coin<input id="admin-coins" type="number" min="0" max="1000000" step="1" value="0" required></label>
+                <label>Энергия<input id="admin-energy" type="number" min="0" max="1000" step="1" value="0" required></label>
+                <label>GRAM<input id="admin-gram" type="text" inputmode="decimal" value="0" required></label>
+                <label>Сундуки<input id="admin-chests" type="number" min="0" max="1000" step="1" value="0" required></label>
+              </div>
+              <p class="admin-note">GRAM зачисляется на внутренний баланс; вывод пока недоступен. Энергия разовая, не увеличивает максимум. Уже полученные задания повторно не начисляются.</p>
+              <div class="admin-actions"><button id="admin-save" type="submit">Сохранить</button><button id="admin-cancel" type="button">Отмена</button></div>
+            </form>
+            <form id="admin-grant-form" class="admin-form">
+              <h4>Выдать сундуки</h4>
+              <label>Игрок<input id="admin-username" required placeholder="@username" autocomplete="off"></label>
+              <label>Количество<input id="admin-count" type="number" min="1" max="10000" step="1" value="1" required></label>
+              <button id="admin-grant" type="submit">Начислить сундуки</button>
+              <p class="admin-note">Игрок должен быть зарегистрирован. При неоднозначном нике выдача отменяется.</p>
+            </form>
+            <p id="admin-message" class="admin-message" role="status" aria-live="polite"></p>
+          </div>
         </section>
       </div>
 

@@ -153,3 +153,12 @@ async def test_two_chests_are_credited_in_same_receipt(monkeypatch, free, starti
     assert db.dojo_daily.update_one.call_args.args[1]['$inc']['chests'] == expected
     assert db.dojo_chest_receipts.insert_one.call_args.args[0]['result'] == {'kind': 'chest', 'amount': 2}
     db.bank.update_one.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_admin_grant_rejects_reused_key_with_different_payload(monkeypatch):
+    receipt = {'_id': 'web:7:request-id', 'user_id': 42, 'admin_id': 7, 'amount': 10, 'username': 'SenseiUser'}
+    svc, db = grant_service(monkeypatch, receipt=receipt)
+    with pytest.raises(GameError, match='уже использован'):
+        await svc.grant_admin_chests('SenseiUser', 11, 7, 'web:7:request-id')
+    db.dojo_daily.update_one.assert_not_awaited()

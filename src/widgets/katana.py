@@ -63,9 +63,9 @@ class KatanaUpgrade:
         )
 
 
-def render_upgrade(receipt: KatanaUpgrade, phase: float = 1.0) -> Image.Image:
-    """Compact 760x320 forge receipt, with a curved, single-edged katana."""
-    return render_forge(receipt, phase)
+def render_upgrade(receipt: KatanaUpgrade, phase: float = 1.0, *, scale: int = 2) -> Image.Image:
+    """Compact 760x290 forge receipt, with a curved, single-edged katana."""
+    return render_forge(receipt, phase, scale=scale)
 
 
 def to_upgrade_png(receipt: KatanaUpgrade) -> bytes:
@@ -79,10 +79,10 @@ def to_upgrade_gif(receipt: KatanaUpgrade) -> bytes:
     # Include hot steel, sparks and the cooled blade in one stable palette.
     atlas = Image.new("RGB", (WIDTH, HEIGHT * 6))
     for i, phase in enumerate((0.0, 0.22, 0.46, 0.65, 0.84, 1.0)):
-        atlas.paste(render_upgrade(receipt, phase), (0, i * HEIGHT))
+        atlas.paste(render_upgrade(receipt, phase, scale=1), (0, i * HEIGHT))
     palette = atlas.quantize(colors=192)
     frames = [
-        render_upgrade(receipt, i / (FRAME_COUNT - 1)).quantize(
+        render_upgrade(receipt, i / (FRAME_COUNT - 1), scale=1).quantize(
             palette=palette,
             dither=Image.Dither.NONE,
         )

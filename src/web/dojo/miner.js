@@ -19,6 +19,9 @@
     "Баланс SenseiCoin": "SenseiCoin balance",
     "ТВОИ ОЧКИ": "YOUR POINTS",
     "Энергия майнера": "Miner energy",
+    "Эффекты: включены": "Effects: on",
+    "Эффекты: как в системе": "Effects: system default",
+    "При системном уменьшении движения можно включить эффекты вручную.": "You can manually enable effects when your system reduces motion.",
     "Обведи круг вокруг майнера: +1 энергия · до 50%": "Draw around the miner: +1 energy · up to 50%",
     ЭНЕРГИЯ: "ENERGY",
     "Энергия майнинга": "Mining energy",
@@ -461,7 +464,24 @@
   const motionQuery = window.matchMedia
     ? window.matchMedia("(prefers-reduced-motion: reduce)")
     : null;
-  const reduceMotion = Boolean(motionQuery?.matches);
+  let forceMotion = false;
+  try { forceMotion = localStorage.getItem("sensei_dojo_motion") === "full"; } catch {}
+  document.documentElement.classList.toggle("motion-force", forceMotion);
+  const motionReduced = () => Boolean(motionQuery?.matches && !forceMotion);
+  function paintMotionControl() {
+    const button = $("motion-setting");
+    if (!button) return;
+    button.textContent = forceMotion ? t("Эффекты: включены") : t("Эффекты: как в системе");
+    button.setAttribute("aria-pressed", forceMotion ? "true" : "false");
+  }
+  function changeMotionPreference() {
+    forceMotion = !forceMotion;
+    try { localStorage.setItem("sensei_dojo_motion", forceMotion ? "full" : "auto"); } catch {}
+    document.documentElement.classList.toggle("motion-force", forceMotion);
+    paintMotionControl();
+    if (!motionReduced()) seedAmbient();
+    window.dispatchEvent(new Event("sensei-motion-change"));
+  }
   const MATRIX_GLYPHS =
     "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789";
 
@@ -488,6 +508,8 @@
     let width = 0;
     let height = 0;
     let ratio = 1;
+    let appliedRatio = 0;
+    let resizePending = false;
     let appLeft = 0, appTop = 0, orbX = 0, orbY = 0;
     let geometryDirty = true;
     let geometryFrame = 0;
@@ -510,7 +532,7 @@
           queue.shift();
           if (model && data.started_at === model.started_at && data.server_now >= model.server_now) {
             const needsRender = pending || model.phase !== data.phase ||
-              ["balance", "base_rate", "energy_max", "auto_collect", "pickaxe_level", "boost_until"]
+              ["balance", "base_rate", "energy_max", "auto_collect", "pickaxe_level", "boost_until", "is_admin"]
                 .some(key => model[key] !== data[key]);
             if (needsRender) apply(data);
             else {
@@ -569,14 +591,26 @@
       geometryDirty = false;
     }
     function resizeTrail() {
+      geometryDirty = true;
+      if (pointer !== null) { resizePending = true; return; }
+      resizePending = false;
       const rect = app.getBoundingClientRect();
       width = rect.width; height = rect.height;
       geometryDirty = true;
       ratio = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.max(1, Math.round(width * ratio));
-      canvas.height = Math.max(1, Math.round(height * ratio));
-      dirtyRect = null;
-      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      const pixelWidth = Math.max(1, Math.round(width * ratio));
+      const pixelHeight = Math.max(1, Math.round(height * ratio));
+      // Setting canvas dimensions clears it, even if the value is unchanged.
+      // Mobile WebViews can emit many viewport-resize events during a swipe.
+      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+        canvas.width = pixelWidth; canvas.height = pixelHeight;
+        dirtyRect = null;
+        appliedRatio = 0;
+      }
+      if (appliedRatio !== ratio) {
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        appliedRatio = ratio;
+      }
     }
     function enabled() {
       return !document.hidden && activeTab === "mining" &&
@@ -587,6 +621,7 @@
       pointer = null; previous = null; lastAngle = null; winding = 0; trail.length = 0; sparks.length = 0;
       if (frame) cancelAnimationFrame(frame);
       frame = 0; ctx.clearRect(0, 0, width, height); dirtyRect = null;
+      if (resizePending) resizeTrail();
     }
     function addPoint(x, y, now) {
       const old = previous;
@@ -652,8 +687,8 @@
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       ctx.lineCap = "round"; ctx.lineJoin = "round";
-      // Batch similarly faded segments: at most six blurred strokes instead
-      // of blurring every segment twice on every frame.
+      // Three translucent layers create a luminous trail without per-frame
+      // shadow blurs, which are especially expensive in mobile WebViews.
       for (let bucket = 0; bucket < 6; bucket++) {
         const alpha = (bucket + .5) / 6;
         let hasSegments = false;
@@ -666,11 +701,12 @@
           hasSegments = true;
         }
         if (!hasSegments) continue;
-        ctx.strokeStyle = `rgba(75, 255, 151, ${alpha * .28})`;
-        ctx.lineWidth = 11 * alpha + 2; ctx.shadowColor = "#41ff99"; ctx.shadowBlur = 12;
-        ctx.stroke();
-        ctx.strokeStyle = `rgba(205, 255, 226, ${alpha * .8})`;
-        ctx.lineWidth = 2 * alpha + .5; ctx.shadowBlur = 0; ctx.stroke();
+        ctx.strokeStyle = `rgba(50, 255, 135, ${alpha * .11})`;
+        ctx.lineWidth = 20 * alpha + 4; ctx.stroke();
+        ctx.strokeStyle = `rgba(75, 255, 151, ${alpha * .30})`;
+        ctx.lineWidth = 10 * alpha + 2; ctx.stroke();
+        ctx.strokeStyle = `rgba(220, 255, 234, ${alpha * .88})`;
+        ctx.lineWidth = 2.5 * alpha + .5; ctx.stroke();
       }
       ctx.shadowBlur = 0;
       for (const s of sparks) {
@@ -680,40 +716,83 @@
         ctx.globalAlpha = life * .9;
         ctx.drawImage(sparkSprites[s.diamond ? 1 : 0], x - size / 2, y - size / 2, size, size);
       }
+      if (trail.length) {
+        const tip = trail[trail.length - 1];
+        const life = Math.max(0, 1 - (now - tip.born) / 650);
+        ctx.globalAlpha = life * .8;
+        ctx.drawImage(sparkSprites[1], tip.x - 14, tip.y - 14, 28, 28);
+      }
       ctx.restore();
       if (trail.length || sparks.length) frame = requestAnimationFrame(drawTrail);
     }
     function sample(event, now) {
       recordOrbit(event);
-      if (!motionQuery?.matches) addPoint(event.clientX - appLeft, event.clientY - appTop, now);
+      if (!motionReduced()) addPoint(event.clientX - appLeft, event.clientY - appTop, now);
     }
-    stageEl.addEventListener("pointerdown", event => {
+    function begin(event) {
       const control = event.target.closest("button, a, input, textarea, select, [role=button]");
       if (!enabled() || pointer !== null || (event.pointerType === "mouse" && event.button !== 0) ||
-          (control && !control.disabled)) return;
-      pointer = event.pointerId; previous = null; trail.length = 0;
+          (control && !control.disabled)) return false;
+      pointer = event.pointerId; previous = null; lastAngle = null; winding = 0; trail.length = 0;
       updateGeometry();
       try { stageEl.setPointerCapture(pointer); } catch {}
       sample(event, performance.now());
-    });
-    stageEl.addEventListener("pointermove", event => {
+      return true;
+    }
+    function move(event) {
       if (event.pointerId !== pointer) return;
       if (!enabled()) { resetTrail(); return; }
       if (geometryDirty) updateGeometry();
       const now = performance.now();
-      const samples = event.getCoalescedEvents?.();
+      let samples;
+      try { samples = event.getCoalescedEvents?.(); } catch { samples = null; }
       if (samples && samples.length) { for (const point of samples) sample(point, now); }
       else sample(event, now);
-      // A timer update or another layout change may move the orb without
-      // resizing it. Refresh at most once per frame, never per sample.
       if (!geometryFrame) geometryFrame = requestAnimationFrame(() => {
         geometryFrame = 0; geometryDirty = true;
       });
-    });
-    const stop = event => { if (event.pointerId === pointer) { pointer = null; previous = null; lastAngle = null; winding = 0; } };
-    stageEl.addEventListener("pointerup", event => { if (event.pointerId === pointer && enabled()) { if (geometryDirty) updateGeometry(); sample(event, performance.now()); } stop(event); });
-    stageEl.addEventListener("pointercancel", stop);
-    stageEl.addEventListener("lostpointercapture", stop);
+    }
+    function stop(event, complete = false) {
+      if (event.pointerId !== pointer) return;
+      if (complete && enabled()) {
+        if (geometryDirty) updateGeometry();
+        sample(event, performance.now());
+      }
+      pointer = null; previous = null; lastAngle = null; winding = 0;
+      if (resizePending) resizeTrail();
+    }
+    if (window.PointerEvent) {
+      stageEl.addEventListener("pointerdown", begin);
+      // Window listeners also work if pointer capture is missing or fails.
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", event => stop(event, true));
+      window.addEventListener("pointercancel", stop);
+      stageEl.addEventListener("lostpointercapture", stop);
+    } else {
+      // Older Telegram WebViews may not implement Pointer Events.
+      const touchPoint = (event, id) => Array.from(event.changedTouches || [])
+        .find(touch => id === null || touch.identifier === id);
+      const asPointer = (event, touch) => ({pointerId: touch.identifier, pointerType: "touch",
+        target: event.target, clientX: touch.clientX, clientY: touch.clientY});
+      stageEl.addEventListener("touchstart", event => {
+        const touch = touchPoint(event, null);
+        if (touch && begin(asPointer(event, touch)) && event.cancelable) event.preventDefault();
+      }, {passive: false});
+      window.addEventListener("touchmove", event => {
+        const touch = touchPoint(event, pointer);
+        if (!touch || pointer === null) return;
+        if (event.cancelable) event.preventDefault();
+        move(asPointer(event, touch));
+      }, {passive: false});
+      window.addEventListener("touchend", event => {
+        const touch = touchPoint(event, pointer);
+        if (touch && pointer !== null) stop(asPointer(event, touch), true);
+      });
+      window.addEventListener("touchcancel", event => {
+        const touch = touchPoint(event, pointer);
+        if (touch && pointer !== null) stop(asPointer(event, touch));
+      });
+    }
     window.addEventListener("resize", resizeTrail);
     window.addEventListener("scroll", () => { geometryDirty = true; }, {passive: true});
     window.visualViewport?.addEventListener("scroll", () => { geometryDirty = true; }, {passive: true});
@@ -723,14 +802,19 @@
       observer.observe(orb); observer.observe(stageEl);
     }
     document.addEventListener("visibilitychange", () => { if (document.hidden) resetTrail(); });
-    motionQuery?.addEventListener?.("change", () => { if (motionQuery.matches) resetTrail(); });
+    motionQuery?.addEventListener?.("change", () => {
+      if (motionReduced()) resetTrail(); else seedAmbient();
+    });
+    window.addEventListener("sensei-motion-change", () => { if (motionReduced()) resetTrail(); });
     resizeTrail();
   }
 
+  let ambientSeeded = false;
   function seedAmbient() {
     const sakura = $("sakura");
     const matrix = $("matrix");
-    if (!sakura || !matrix || reduceMotion) return;
+    if (!sakura || !matrix || motionReduced() || ambientSeeded) return;
+    ambientSeeded = true;
     const mist = $("ambient-mist");
     const dust = $("ambient-dust");
     if (mist && !mist.childElementCount) {
@@ -1239,6 +1323,12 @@
   }
 
   function render() {
+    paintMotionControl();
+    const adminOpen = $("admin-open");
+    if (adminOpen) {
+      adminOpen.hidden = !model?.is_admin;
+      if (!model?.is_admin) $("admin-panel").hidden = true;
+    }
     const current = phase();
     app.classList.remove(
       "phase-ready",
@@ -1644,6 +1734,15 @@
         amount: task.energy_bonus,
       });
       chips.append(coinChip, energyChip);
+      if (task.reward_gram_hundredths > 0) {
+        const gram = document.createElement("span"); gram.className = "task-chip";
+        gram.textContent = `${(task.reward_gram_hundredths / 100).toFixed(2)} виртуальных GRAM`;
+        chips.appendChild(gram);
+      }
+      if (task.reward_chests > 0) {
+        const chests = document.createElement("span"); chests.className = "task-chip";
+        chests.textContent = `+${task.reward_chests} сундуков`; chips.appendChild(chests);
+      }
 
       card.append(top, chips);
 
@@ -1728,12 +1827,12 @@
       tasks = tasks.map((item) =>
         item.slug === slug ? { ...item, ...updated, claimed: true } : item,
       );
-      showToast(
-        t("+{amount} SenseiCoin · +{energy} энергии на цикл", {
-          amount: coin(data.reward_coins),
-          energy: data.energy_bonus,
-        }),
-      );
+      const extras = [];
+      if (data.reward_gram_hundredths) extras.push(`+${(data.reward_gram_hundredths / 100).toFixed(2)} виртуальных GRAM`);
+      if (data.reward_chests) extras.push(`+${data.reward_chests} сундуков`);
+      showToast([t("+{amount} SenseiCoin · +{energy} энергии на цикл", {
+        amount: coin(data.reward_coins), energy: data.energy_bonus,
+      }), ...extras].join(" · "));
     } catch (error) {
       showToast(error.message, true);
     } finally {
@@ -1741,6 +1840,129 @@
       renderTasks();
     }
   }
+
+  // The server authorizes every admin request; the hidden control is only UI.
+  let adminTasks = [];
+  let adminEditing = "";
+  let adminCreateKey = "";
+  let adminBusy = false;
+  function adminMessage(text, error = false) {
+    $("admin-message").textContent = text;
+    $("admin-message").classList.toggle("error", error);
+  }
+  function renderAdminTasks() {
+    const list = $("admin-task-list");
+    list.replaceChildren();
+    if (!adminTasks.length) { list.textContent = "Заданий пока нет."; return; }
+    for (const task of adminTasks) {
+      const row = document.createElement("div"); row.className = "admin-task-row";
+      const desc = document.createElement("div");
+      const title = document.createElement("b"); title.textContent = task.title;
+      const detail = document.createElement("small");
+      detail.textContent = `${task.active ? "● ВКЛ" : "○ ВЫКЛ"} · ${task.kind === "channel" ? "Канал" : "Приложение"} · ${task.reward_coins} Coin · ${task.energy_bonus} энергии · ${(task.reward_gram_hundredths / 100).toFixed(2)} GRAM · ${task.reward_chests} сундуков`;
+      desc.append(title, detail);
+      const edit = document.createElement("button"); edit.type = "button"; edit.textContent = "Изменить";
+      edit.addEventListener("click", () => editAdminTask(task));
+      const toggle = document.createElement("button"); toggle.type = "button";
+      toggle.textContent = task.active ? "Выкл" : "Вкл";
+      toggle.addEventListener("click", async () => {
+        if (adminBusy) return;
+        adminBusy = true; toggle.disabled = true;
+        try {
+          await api("admin_toggle", {slug: task.slug, active: !task.active});
+          await loadAdminTasks(); tasksLoaded = false; adminMessage("Статус задания обновлён.");
+        } catch (error) { adminMessage(error.message, true); }
+        finally { adminBusy = false; toggle.disabled = false; }
+      });
+      row.append(desc, edit, toggle); list.appendChild(row);
+    }
+  }
+  async function loadAdminTasks() {
+    const data = await api("admin_tasks");
+    adminTasks = Array.isArray(data.tasks) ? data.tasks : [];
+    renderAdminTasks();
+  }
+  function adminKindLabel() {
+    $("admin-target-label").firstChild.textContent = $("admin-kind").value === "channel" ? "@username канала" : "HTTPS-ссылка приложения";
+  }
+  function editAdminTask(task = null) {
+    adminEditing = task?.slug || "";
+    adminCreateKey = task ? "" : crypto.randomUUID();
+    $("admin-form-title").textContent = task ? "Редактировать задание" : "Новое задание";
+    $("admin-kind").value = task?.kind || "channel";
+    $("admin-title").value = task?.title || "";
+    $("admin-target").value = task ? (task.kind === "channel" ? `@${task.username}` : task.url) : "";
+    $("admin-coins").value = task?.reward_coins ?? 0;
+    $("admin-energy").value = task?.energy_bonus ?? 0;
+    $("admin-gram").value = ((task?.reward_gram_hundredths || 0) / 100).toFixed(2);
+    $("admin-chests").value = task?.reward_chests ?? 0;
+    $("admin-task-form").hidden = false;
+    adminKindLabel(); adminMessage("");
+    $("admin-title").focus();
+  }
+  $("admin-open").addEventListener("click", async () => {
+    if (!model?.is_admin) return;
+    $("admin-panel").hidden = false;
+    adminMessage("Загружаем задания…");
+    try { await loadAdminTasks(); adminMessage(""); }
+    catch (error) { adminMessage(error.message, true); }
+  });
+  $("admin-close").addEventListener("click", () => { $("admin-panel").hidden = true; $("admin-open").focus(); });
+  $("admin-new").addEventListener("click", () => editAdminTask());
+  $("admin-cancel").addEventListener("click", () => { $("admin-task-form").hidden = true; });
+  $("admin-kind").addEventListener("change", adminKindLabel);
+  $("admin-task-form").addEventListener("submit", async event => {
+    event.preventDefault(); if (adminBusy) return;
+    const gramText = $("admin-gram").value.trim().replace(",", ".");
+    if (!/^\d{1,4}(?:\.\d{1,2})?$/.test(gramText)) { adminMessage("GRAM: укажи число с не более чем двумя знаками после запятой.", true); return; }
+    const [whole, fraction = ""] = gramText.split(".");
+    const gram = Number(whole) * 100 + Number((fraction + "00").slice(0, 2));
+    const task = {slug: adminEditing, create_key: adminCreateKey, kind: $("admin-kind").value, title: $("admin-title").value,
+      target: $("admin-target").value, reward_coins: Number($("admin-coins").value),
+      energy_bonus: Number($("admin-energy").value), reward_gram_hundredths: gram,
+      reward_chests: Number($("admin-chests").value)};
+    adminBusy = true; $("admin-save").disabled = true;
+    try {
+      await api("admin_save", {task}); $("admin-task-form").hidden = true;
+      await loadAdminTasks(); tasksLoaded = false; adminMessage("Задание сохранено.");
+    } catch (error) { adminMessage(error.message, true); }
+    finally { adminBusy = false; $("admin-save").disabled = false; }
+  });
+  let grantConfirmation = "";
+  function resetGrantConfirmation() {
+    grantConfirmation = "";
+    $("admin-grant").textContent = "Начислить сундуки";
+  }
+  $("admin-username").addEventListener("input", resetGrantConfirmation);
+  $("admin-count").addEventListener("input", resetGrantConfirmation);
+  $("admin-grant-form").addEventListener("submit", async event => {
+    event.preventDefault(); if (adminBusy) return;
+    const username = $("admin-username").value.trim();
+    const amount = Number($("admin-count").value);
+    const confirmation = `${username}:${amount}`;
+    if (grantConfirmation !== confirmation) {
+      grantConfirmation = confirmation;
+      $("admin-grant").textContent = "Подтвердить выдачу";
+      adminMessage(`Проверь: ${amount} сундуков игроку ${username}. Нажми ещё раз для подтверждения.`);
+      return;
+    }
+    const key = "dojo_admin_grant";
+    let request;
+    try { request = JSON.parse(sessionStorage.getItem(key) || "null"); } catch { request = null; }
+    if (!request || request.username !== username || request.amount !== amount) {
+      request = {username, amount, request_id: crypto.randomUUID()};
+      try { sessionStorage.setItem(key, JSON.stringify(request)); }
+      catch { adminMessage("Не удалось сохранить идентификатор выдачи. Проверь настройки хранения браузера.", true); return; }
+    }
+    adminBusy = true; $("admin-grant").disabled = true;
+    try {
+      const result = await api("admin_grant", request);
+      sessionStorage.removeItem(key);
+      resetGrantConfirmation();
+      adminMessage(`Выдано ${result.amount} сундуков игроку @${result.username}.`);
+    } catch (error) { adminMessage(`${error.message} При повторе сохранится тот же идентификатор выдачи.`, true); }
+    finally { adminBusy = false; $("admin-grant").disabled = false; }
+  });
 
   function upgradeCard(icon, title, level, copy, stats, button, disabled) {
     const card = document.createElement("article");
@@ -2602,7 +2824,7 @@
     const target = track.children[22];
     // Align the exact server-selected result beneath the fixed centre marker.
     const distance = target.offsetLeft + target.offsetWidth / 2 - reel.clientWidth / 2;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduced = motionReduced();
     if (!reduced && !$("chest-sheet").hidden && distance > 0) {
       let scaling = true;
       const magnify = () => {
@@ -2661,6 +2883,8 @@
     if (!document.hidden) refresh(true);
   }, 30000);
 
+  $("motion-setting").addEventListener("click", changeMotionPreference);
+  paintMotionControl();
   setupMagicTrail();
   seedAmbient();
   seedMiningParticles();

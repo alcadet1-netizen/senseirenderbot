@@ -1840,19 +1840,17 @@ button:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ambient {
+  html:not(.motion-force) .ambient {
     display: none;
   }
-
-  *,
-  *::before,
-  *::after {
+  html:not(.motion-force) *,
+  html:not(.motion-force) *::before,
+  html:not(.motion-force) *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
   }
-
-  #energy-bar {
+  html:not(.motion-force) #energy-bar {
     transition: none;
   }
 }
@@ -3378,11 +3376,11 @@ button:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .boost-pill,
-  .burn-flame,
-  #bank-progress,
-  #bank-progress::after,
-  #bank-progress.is-filled {
+  html:not(.motion-force) .boost-pill,
+  html:not(.motion-force) .burn-flame,
+  html:not(.motion-force) #bank-progress,
+  html:not(.motion-force) #bank-progress::after,
+  html:not(.motion-force) #bank-progress.is-filled {
     animation: none;
   }
 }
@@ -3833,17 +3831,16 @@ button:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .boot,
-  .boot-art,
-  .boot-puff,
-  .boot-spark,
-  .boot-bar,
-  .boot-bar::after {
+  html:not(.motion-force) .boot,
+  html:not(.motion-force) .boot-art,
+  html:not(.motion-force) .boot-puff,
+  html:not(.motion-force) .boot-spark,
+  html:not(.motion-force) .boot-bar,
+  html:not(.motion-force) .boot-bar::after {
     animation: none;
     transition: none;
   }
-
-  .boot-art {
+  html:not(.motion-force) .boot-art {
     transform: scale(1.02);
   }
 }
@@ -4524,13 +4521,13 @@ button:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ambient-aura,
-  .ambient-ray,
-  .ambient-puff,
-  .ambient-mote,
-  .timer-colon-dot,
-  .timer-seg,
-  .chain-row.is-new {
+  html:not(.motion-force) .ambient-aura,
+  html:not(.motion-force) .ambient-ray,
+  html:not(.motion-force) .ambient-puff,
+  html:not(.motion-force) .ambient-mote,
+  html:not(.motion-force) .timer-colon-dot,
+  html:not(.motion-force) .timer-seg,
+  html:not(.motion-force) .chain-row.is-new {
     animation: none;
     transition: none;
   }
@@ -4730,13 +4727,15 @@ button:focus-visible {
 .chest-reel { text-align:center; border:1px solid #70e5a0; border-radius:12px; padding:18px; color:#dcffe8; background:#102d1d; font-weight:800; }
 .chest-reel.spinning { animation: chest-pulse .7s ease-in-out; }
 @keyframes chest-pulse { 50% { opacity:.35; transform:scale(.97); } }
-@media (prefers-reduced-motion: reduce) { .chest-reel.spinning { animation:none; } }
+@media (prefers-reduced-motion: reduce) {
+  html:not(.motion-force) .chest-reel.spinning { animation:none; } }
 
 .chest-reel { overflow:hidden; }
 .chest-reel-track { display:flex; width:max-content; gap:12px; animation: chest-slide 1s ease-out forwards; }
 .chest-reel-track span { display:inline-block; min-width:115px; text-align:center; }
 @keyframes chest-slide { from { transform:translateX(0); } to { transform:translateX(calc(-100% + 125px)); } }
-@media (prefers-reduced-motion: reduce) { .chest-reel-track { animation-duration:0.01ms; } }
+@media (prefers-reduced-motion: reduce) {
+  html:not(.motion-force) .chest-reel-track { animation-duration:0.01ms; } }
 
 .daily-calendar { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; }
 .daily-day { display:grid; gap:4px; min-width:0; padding:10px 2px; border:1px solid #244f36; border-radius:10px; background:#092115; text-align:center; }
@@ -4845,9 +4844,12 @@ button:focus-visible {
 @keyframes chest-spark-pop { from { opacity: 0; transform: scale(.3); } 40% { opacity: 1; transform: scale(1.6); } to { opacity: .7; transform: scale(1); } }
 @keyframes chest-reveal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) {
-  .is-opening .chest-art, .is-opening .chest-glow, .is-win .chest-art,
-  .is-win .chest-spark, .chest-result:not(:empty) { animation: none; }
-  .chest-reel-track { transition: none !important; }
+  html:not(.motion-force) .is-opening .chest-art,
+  html:not(.motion-force) .is-opening .chest-glow,
+  html:not(.motion-force) .is-win .chest-art,
+  html:not(.motion-force) .is-win .chest-spark,
+  html:not(.motion-force) .chest-result:not(:empty) { animation: none; }
+  html:not(.motion-force) .chest-reel-track { transition: none !important; }
 }
 
 /* Sensei utility tiles — equal square targets, arranged as a compact corner seal. */
@@ -4946,8 +4948,11 @@ button:focus-visible {
   #chest-sheet .reel-prize-icon { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .rail-path-dot, #daily-open, #chest-open .rail-chest, .utility-rail .burn-flame { animation: none !important; }
-  .rail-path-dot { top: 4px; left: 4px; }
+  html:not(.motion-force) .rail-path-dot,
+  html:not(.motion-force) #daily-open,
+  html:not(.motion-force) #chest-open .rail-chest,
+  html:not(.motion-force) .utility-rail .burn-flame { animation: none !important; }
+  html:not(.motion-force) .rail-path-dot { top: 4px; left: 4px; }
 }
 
 /* Purely decorative canvas: never blocks the controls or changes rewards. */
@@ -4961,7 +4966,8 @@ button:focus-visible {
 }
 #app.phase-mining:not(.tabs-open) .stage { touch-action: none; }
 #app.phase-mining:not(.tabs-open) #action:disabled { pointer-events: none; }
-@media (prefers-reduced-motion: reduce) { .magic-trail { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  html:not(.motion-force) .magic-trail { display: none; } }
 
 /* Bonus launcher and the separate, prominent burn seal. */
 .utility-rail.main-utilities {
@@ -5020,7 +5026,10 @@ button:focus-visible {
   .utility-rail.main-utilities .burn-sticker { width: 62px; height: 62px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .bonus-trigger, .bonus-card, .bonus-grid .daily-sticker, .bonus-grid .roadmap-sticker { animation: none !important; }
+  html:not(.motion-force) .bonus-trigger,
+  html:not(.motion-force) .bonus-card,
+  html:not(.motion-force) .bonus-grid .daily-sticker,
+  html:not(.motion-force) .bonus-grid .roadmap-sticker { animation: none !important; }
 }
 
 /* Put actions in their own row rather than floating over the balance and HUD. */
@@ -5040,5 +5049,41 @@ button:focus-visible {
 }
 #app.tabs-open .utility-rail.main-utilities { display: none; }
 .reel-prize { transition: scale 100ms ease-out; transform-origin: center; }
-@media (prefers-reduced-motion: reduce) { .reel-prize { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  html:not(.motion-force) .reel-prize { transition: none; } }
 #app:not(.tabs-open) .stage { padding-top: 4px; }
+
+/* Profile administration: normal flow, scrollable with the profile tab. */
+.admin-entry, .admin-panel button {
+  color: #d9ffe8; background: linear-gradient(145deg, #174d30, #0a2919);
+  border: 1px solid #5bb982; border-radius: 10px; padding: 10px 13px;
+  font: inherit; font-weight: 700; cursor: pointer;
+}
+.admin-entry { width: 100%; margin: 16px 0 8px; letter-spacing: .08em; }
+.admin-panel { width: 100%; margin: 10px 0 20px; padding: 16px; box-sizing: border-box;
+  border: 1px solid #3f8c61; border-radius: 16px; background: #06170ff2; color: #d9ffe8; }
+.admin-panel[hidden], .admin-entry[hidden], .admin-form[hidden] { display: none; }
+.admin-heading, .admin-section-head, .admin-actions, .admin-task-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.admin-heading h3, .admin-panel h4 { margin: 4px 0 8px; }
+.admin-heading small, .admin-note { color: #9bc9ac; font-size: 11px; line-height: 1.45; }
+.admin-heading button { font-size: 20px; padding: 3px 10px; }
+.admin-section-head { margin-top: 16px; }
+.admin-task-list { display: grid; gap: 7px; }
+.admin-task-row { padding: 10px; border: 1px solid #225b3b; border-radius: 10px; background: #0b2919; }
+.admin-task-row > div { min-width: 0; overflow-wrap: anywhere; }
+.admin-task-row small { display: block; color: #a4c9b0; margin-top: 3px; }
+.admin-task-row button { font-size: 11px; padding: 7px; flex-shrink: 0; }
+.admin-form { display: grid; gap: 9px; margin-top: 15px; padding: 12px; border: 1px solid #245d3d; border-radius: 12px; }
+.admin-form label { display: grid; gap: 4px; color: #b5dbc2; font-size: 12px; }
+.admin-form input, .admin-form select { width: 100%; box-sizing: border-box; border: 1px solid #3e8058;
+  border-radius: 8px; padding: 10px; color: #effff5; background: #03120a; font: inherit; font-size: 16px; }
+.admin-rewards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.admin-actions button { flex: 1; }
+.admin-panel button:disabled { opacity: .5; cursor: wait; }
+.admin-message { min-height: 1em; color: #afffc9; font-size: 12px; overflow-wrap: anywhere; }
+.admin-message.error { color: #ffc6bc; }
+
+.motion-setting { width: 100%; margin-top: 16px; padding: 11px; color: #d9ffe8;
+  background: linear-gradient(145deg, #174d30, #0a2919); border: 1px solid #5bb982;
+  border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer; }
+.motion-setting-note { color: #9bc9ac; font-size: 11px; line-height: 1.4; }

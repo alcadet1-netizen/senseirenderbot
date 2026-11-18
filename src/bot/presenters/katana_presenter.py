@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 async def render_receipt(renderer, receipt):
     # Bound queue time, not the thread itself: releasing a slot while its thread
     # still renders would defeat the CPU concurrency bound.
-    await asyncio.wait_for(RENDER_SLOTS.acquire(), timeout=0.5)
+    await asyncio.wait_for(RENDER_SLOTS.acquire(), timeout=2.0)
     task = asyncio.create_task(asyncio.to_thread(renderer, receipt))
     # Release on actual completion, including when the request is cancelled.
     task.add_done_callback(lambda _: RENDER_SLOTS.release())
@@ -36,8 +36,8 @@ async def send_katana_upgrade(
     if animate:
         try:
             started = time.monotonic()
-            payload = await asyncio.wait_for(render_receipt(to_upgrade_gif, receipt), timeout=2.0)
-            logger.info("Katana GIF rendered version=reference-v2 seconds=%.3f bytes=%s", time.monotonic()-started, len(payload))
+            payload = await asyncio.wait_for(render_receipt(to_upgrade_gif, receipt), timeout=20.0)
+            logger.info("Katana GIF rendered version=compact-v3 seconds=%.3f bytes=%s", time.monotonic()-started, len(payload))
             await message.answer_animation(
                 BufferedInputFile(payload, filename="sensei-katana-upgrade.gif"),
                 caption=caption,
