@@ -51,7 +51,7 @@ async def _send_welcome_message(user, container: Container, event):
         return
     # Отправляем сообщение о стартовых бонусах
     try:
-        bonus_text = Visuals.welcome_bonus_message(name=username)
+        bonus_text = Visuals.welcome_bonus_message(name=username, coins=registration["user"]["coins"])
         await event.answer(bonus_text, parse_mode="HTML")
     except Exception as e:
         logging.error(f"❌ Failed to send welcome bonus message: {e}")

@@ -172,6 +172,16 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
         last_name=message.from_user.last_name,
     )
 
+    if registration.get("created"):
+        try:
+            name = message.from_user.username or message.from_user.first_name or f"User {message.from_user.id}"
+            await message.answer(
+                Visuals.welcome_bonus_message(name, coins=registration["user"]["coins"]),
+                parse_mode="HTML",
+            )
+        except Exception:
+            logger.exception("Failed to send starter kit notice for user %s", message.from_user.id)
+
     if registration.get("created") and not (command.args or '').startswith('ref_'):
         await container.user_service.users.update_one({'id': message.from_user.id},
             {'$set': {'referral_binding_closed': True}})

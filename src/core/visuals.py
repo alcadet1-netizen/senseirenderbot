@@ -996,22 +996,16 @@ class Visuals:
         return f"🥋 НОВЕНЬКИЙ\n{phrase}"
 
     @classmethod
-    def welcome_bonus_message(cls, name: str) -> str:
-        """Компактное уведомление о стартовом наборе для новичка."""
-        w = 22
-
-        lines = [
-            cls.frame_top_left(w),
-            cls.frame_line_left("🎁 СТАРТОВЫЙ НАБОР", w, "center"),
-            cls.frame_separator_left(w),
-            cls.frame_line_left("🥋 Уровень 1", w),
-            cls.frame_line_left("💰 +3 000 монет", w),
-            cls.frame_line_left("🗡 Катана 10 см", w),
-            cls.frame_separator_left(w),
-            cls.frame_line_left("Удачи, новичок!", w, "center"),
-            cls.frame_bottom_left(w),
-        ]
-        return "<pre>\n" + "\n".join(lines) + "\n</pre>"
+    def welcome_bonus_message(cls, name: str, coins: float = 3000) -> str:
+        """Compact starter notice; show the amount actually reserved."""
+        safe_name = cls.escape(" ".join(str(name).split())[:80])
+        amount = f"{coins:,.2f}".rstrip("0").rstrip(".").replace(",", " ").replace(".", ",")
+        coin_line = f"💰 <b>+{amount} Coin</b>" if coins > 0 else "💰 <b>0 Coin</b> · не начислены"
+        return (f"🎁 <b>СТАРТОВЫЙ НАБОР</b>\n"
+                f"🥷 {safe_name}\n\n"
+                f"🥋 Уровень 1\n"
+                f"{coin_line}\n"
+                f"🗡 Катана 10 см")
 
     @classmethod
     def daily_reward(cls, xp: int, coins: float, streak: int, bonus_xp: int = 0, bonus_coins: float = 0.0) -> str:

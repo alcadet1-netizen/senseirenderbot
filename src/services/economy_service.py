@@ -149,6 +149,7 @@ class EconomyService:
                     'referral_activity_days': {'$ne': day}, 'referral_bonus_paid': {'$ne': True}},
                     {'$push': {'referral_activity_days': {'$each': [day], '$slice': -3}}})
             # Get or create user
+            starter_amount = None
             user = await self.users.find_one({"id": user_id})
             if user is None:
                 # Create new user with starter bonuses, but only after the
@@ -185,6 +186,7 @@ class EconomyService:
                     if starter:
                         await self.emission.release(starter, f"starter:{user_id}")
                     raise
+                starter_amount = starter
                 # Refresh the user document
                 user = await self.users.find_one({"id": user_id})
                 logger.info(f"[ECONOMY] Created new user {user_id} with starter bonuses: {STARTER_XP} XP, {starter} coins, {STARTER_KATANA_LENGTH}cm katana")
@@ -295,6 +297,7 @@ class EconomyService:
                 "new_xp": user.get("xp", 0),
                 "new_coins": user.get("coins", 0.0),
                 "messages_count": user.get("messages_count", 0),
+                "starter_coins": starter_amount,
             }
             logger.info(f"[ECONOMY] process_message_reward result for user {user_id}: {result}")
             return result

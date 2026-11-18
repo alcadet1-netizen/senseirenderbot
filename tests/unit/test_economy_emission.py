@@ -86,3 +86,19 @@ async def test_game_win_moves_bank_coins_without_emission():
     # A bank -> player transfer is not minting: the lifetime counter stays put.
     assert bank["total_emitted"] == 1_000.0
     assert bank["emission_cap"] == 10_000_000_000
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('emitted,expected', [(0, 3000), (9_999_999_999, 0)])
+async def test_message_creation_exposes_actual_starter_only_once(emitted, expected):
+    economy_service, db = economy([{
+        '_id': 'single', 'coins': 0, 'total_emitted': emitted,
+        'emission_cap': 10_000_000_000,
+    }], user_coins=0)
+    db.users.docs.clear()
+    first = await economy_service.process_message_reward(8, first_name='New', apply_rewards=False)
+    assert first['success'] is True and first['starter_coins'] == expected
+    assert db.users.docs[8]['coins'] == expected
+    second = await economy_service.process_message_reward(8, first_name='New', apply_rewards=False)
+    assert second['success'] is True and second['starter_coins'] is None
+    assert db.users.docs[8]['coins'] == expected
