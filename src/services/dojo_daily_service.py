@@ -88,7 +88,12 @@ class DojoDailyService:
         today = now.date().isoformat()
         # Fixed, public probabilities, independent of balance and streak.
         roll = secrets.randbelow(1000)
-        prize = ('gram', 1 + secrets.randbelow(3)) if roll < 10 else ('coin', (100, 200, 300, 400, 500)[secrets.randbelow(5)])
+        if roll < 10:
+            prize = ('gram', 1 + secrets.randbelow(3))
+        elif roll < 60:
+            prize = ('chest', 2)
+        else:
+            prize = ('coin', (100, 200, 300, 400, 500)[secrets.randbelow(5)])
         async def work(session):
             old = await self.db.dojo_chest_receipts.find_one({'_id': f'{uid}:{request_id}'}, session=session)
             if old:
@@ -112,7 +117,7 @@ class DojoDailyService:
                     raise GameError('В SenseiBank недостаточно средств. Попробуй позже.')
                 await self.db.users.update_one({'id': uid}, {'$inc': {'coins': amount}}, session=session)
                 await self.db.transactions.insert_one({'user_id': uid, 'tx_type': 'dojo_chest', 'coins_change': amount, 'created_at': now}, session=session)
-            updates = {'$inc': {'chests': 0 if free else -1, 'gram_hundredths': amount if kind == 'gram' else 0}}
+            updates = {'$inc': {'chests': (0 if free else -1) + (amount if kind == 'chest' else 0), 'gram_hundredths': amount if kind == 'gram' else 0}}
             if free:
                 updates['$set'] = {'free_day': today}
             await self.db.dojo_daily.update_one({'_id': uid}, updates, upsert=True, session=session)

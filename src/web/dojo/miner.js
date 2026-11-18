@@ -159,8 +159,8 @@
       "Pickaxe {rate} Coin/h · energy {energy} · {hours} h at full power",
     "Энергия {energy} / {max} · {rate} Coin/ч · после нуля 10%":
       "Energy {energy} / {max} · {rate} Coin/h · 10% after zero",
-    "10 ⭐ · ПОПОЛНИТЬ": "10 ⭐ · REFILL",
-    "Пополнить энергию за 10 ⭐": "Refill energy for 10 ⭐",
+    "5 ⭐ · ПОПОЛНИТЬ": "5 ⭐ · REFILL",
+    "Пополнить энергию за 5 ⭐": "Refill energy for 5 ⭐",
     "Пополняем энергию": "Refilling energy",
     "Энергия пополнена": "Energy refilled",
     "Пополнить можно только при нулевой энергии.":
@@ -842,7 +842,7 @@
       card.setAttribute("aria-disabled", empty ? "false" : "true");
       card.setAttribute(
         "aria-label",
-        empty ? t("Пополнить энергию за 10 ⭐") : t("Энергия майнера"),
+        empty ? t("Пополнить энергию за 5 ⭐") : t("Энергия майнера"),
       );
       card.tabIndex = empty ? 0 : -1;
     }
@@ -2417,8 +2417,9 @@
     const scene = $("chest-scene");
     const result = $("chest-result");
     const isGram = prize.kind === "gram";
+    const isChest = prize.kind === "chest";
     const amount = isGram ? (prize.amount / 100).toFixed(2) : String(prize.amount);
-    const winner = isGram ? `${amount} виртуальных GRAM` : `${amount} Coin`;
+    const winner = isGram ? `${amount} виртуальных GRAM` : isChest ? `${amount} сундука` : `${amount} Coin`;
     result.textContent = "";
     scene.classList.remove("is-win");
     scene.classList.add("is-opening");
@@ -2432,21 +2433,22 @@
       {kind: "GRAM", value: "0.02"}, {kind: "GRAM", value: "0.03"},
       {kind: "GRAM", value: "1"},
       {kind: "GRAM", value: "3"},
+      {kind: "CHEST", value: "2"},
       {kind: "PLACEHOLDER", value: "NFT"},
     ];
     // The centre cell always displays the server receipt; other cells are decorative.
     for (let i = 0; i < 25; i++) {
       const cell = document.createElement("div");
       const chosen = i === 22;
-      const decoration = prizes[(i * 3 + 1) % prizes.length];
-      const kind = chosen ? (isGram ? "GRAM" : "COIN") : decoration.kind;
+      const decoration = prizes[(i * 5 + 1) % prizes.length];
+      const kind = chosen ? (isGram ? "GRAM" : isChest ? "CHEST" : "COIN") : decoration.kind;
       const value = chosen ? amount : decoration.value;
       cell.className = `reel-prize${chosen ? " is-selected" : ""}${kind === "GRAM" ? " is-gram" : ""}${kind === "PLACEHOLDER" ? " is-placeholder" : ""}`;
       const icon = document.createElement("span"); icon.className = "reel-prize-icon";
-      icon.textContent = kind === "GRAM" || kind === "PLACEHOLDER" ? "✦" : "◈";
+      icon.textContent = kind === "CHEST" ? "▣" : kind === "GRAM" || kind === "PLACEHOLDER" ? "✦" : "◈";
       const number = document.createElement("strong"); number.textContent = value;
       const label = document.createElement("small");
-      label.textContent = kind === "PLACEHOLDER" ? "ДЕКОР" : kind === "GRAM" ? "GRAM" : "SENSEI COIN";
+      label.textContent = kind === "PLACEHOLDER" ? "ДЕКОР" : kind === "GRAM" ? "GRAM" : kind === "CHEST" ? "СУНДУКА" : "SENSEI COIN";
       cell.append(icon, number, label);
       track.appendChild(cell);
     }
@@ -2456,6 +2458,18 @@
     const distance = target.offsetLeft + target.offsetWidth / 2 - reel.clientWidth / 2;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!reduced && !$("chest-sheet").hidden && distance > 0) {
+      let scaling = true;
+      const magnify = () => {
+        if (!scaling) return;
+        const centre = reel.getBoundingClientRect().left + reel.clientWidth / 2;
+        for (const cell of track.children) {
+          const box = cell.getBoundingClientRect();
+          const proximity = Math.max(0, 1 - Math.abs(box.left + box.width / 2 - centre) / 150);
+          cell.style.scale = String(1 + proximity * 0.12);
+        }
+        requestAnimationFrame(magnify);
+      };
+      requestAnimationFrame(magnify);
       await new Promise(resolve => {
         requestAnimationFrame(() => {
           track.style.transition = "transform 4.4s cubic-bezier(.12,.68,.10,1)";
@@ -2463,6 +2477,7 @@
         });
         setTimeout(resolve, 4500);
       });
+      scaling = false;
     } else {
       track.style.transform = `translateX(${-Math.max(0, distance)}px)`;
     }
