@@ -10,7 +10,7 @@ from aiogram.filters import ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER
 
 from src.core.container import Container
 from src.core.visuals import Visuals
-from src.texts.phrases import get_random_ban_phrase, get_random_phrase
+from src.texts.phrases import get_random_ban_phrase, get_random_phrase, get_random_welcome
 
 router = Router(name="events")
 
@@ -42,7 +42,10 @@ async def _send_welcome_message(user, container: Container, event):
     name = " ".join((user.first_name or f"User {user.id}").split())[:80]
     mention = f'<a href="tg://user?id={user.id}">{html.escape(name)}</a>'
     try:
-        await _answer_join(event, f"🥋 <b>Добро пожаловать в додзё!</b>\n{mention}, рады видеть тебя в чате.")
+        # Legacy templates prefix usernames with @; the HTML mention already
+        # links to the person, including those without a Telegram username.
+        greeting = get_random_welcome(mention).replace(f"@{mention}", mention)
+        await _answer_join(event, greeting)
         logging.info("Join welcome sent chat=%s user=%s", event.chat.id, user.id)
     except Exception:
         logging.exception("Unable to send welcome to chat %s for user %s", event.chat.id, user.id)

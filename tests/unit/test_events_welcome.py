@@ -77,7 +77,6 @@ async def test_approved_join_request_routes_through_aiogram(existing, coins):
         assert send.await_count == (1 if existing else 2)
         greeting = send.await_args_list[0]
         assert greeting.args[0] == -100
-        assert 'Добро пожаловать' in greeting.args[1]
         assert 'tg://user?id=77' in greeting.args[1]
         assert '&lt;New &amp; student&gt;' in greeting.args[1]
         container.user_service.get_or_create.assert_awaited_once()
@@ -122,7 +121,7 @@ async def test_join_greets_when_registration_or_unban_fails_without_claiming_rew
     )
     await _handle_join(user, container, event)
     event.answer.assert_awaited_once()
-    assert 'Добро пожаловать' in event.answer.await_args.args[0]
+    assert 'tg://user?id=77' in event.answer.await_args.args[0]
     assert 'СТАРТОВЫЙ НАБОР' not in event.answer.await_args.args[0]
 
 
@@ -161,7 +160,7 @@ async def test_service_join_passes_admin_check_but_bypasses_blocking_message_mid
              patch.object(Bot, '__call__', new_callable=AsyncMock) as send:
             await dp.feed_update(bot, update)
         assert send.await_count == 2
-        assert 'Добро пожаловать' in send.await_args_list[0].args[0].text
+        assert 'tg://user?id=77' in send.await_args_list[0].args[0].text
         container.user_service.get_or_create.assert_awaited_once()
     finally:
         group_admin_access.invalidate(bot.id, -100222)
@@ -182,3 +181,29 @@ async def test_diagnostics_record_membership_before_dispatch(caplog):
     with caplog.at_level(logging.INFO):
         await JoinDiagnosticsMiddleware()(AsyncMock(), update, {})
     assert 'Join ingress update=10 chat=-100 user=77 old=left new=member via_request=True' in caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('username,template', [
+    (None, 'Добро пожаловать в додзё, @{username}! 🥋'),
+    ('test_user', '🐉 Дракон приветствует тебя, @{username}!'),
+    (None, '🦑 {username}, игра в кальмара отменяется. У нас игра в «напиши больше всех»!'),
+])
+async def test_random_existing_welcome_templates_use_safe_mention(username, template):
+    from src.bot.handlers.events import _send_welcome_message
+    from src.texts.phrases import WELCOME_PHRASES
+    assert template in WELCOME_PHRASES
+    user = User(id=77, is_bot=False, first_name='<Николай & друг>', username=username)
+    event = SimpleNamespace(chat=SimpleNamespace(id=-100, type='supergroup'), answer=AsyncMock())
+    container = SimpleNamespace(user_service=SimpleNamespace(get_or_create=AsyncMock(
+        return_value={'created': True, 'user': {'coins': 3000}})))
+    with patch('src.texts.phrases.random.choice', return_value=template) as choice:
+        await _send_welcome_message(user, container, event)
+    choice.assert_called_once_with(WELCOME_PHRASES)
+    greeting = event.answer.await_args_list[0].args[0]
+    mention = '<a href="tg://user?id=77">&lt;Николай &amp; друг&gt;</a>'
+    assert greeting == template.replace('@{username}', '{username}').format(username=mention)
+    assert '@<a' not in greeting
+    assert event.answer.await_args_list[0].kwargs['parse_mode'] == 'HTML'
+    assert event.answer.await_count == 2
+    assert 'СТАРТОВЫЙ НАБОР' in event.answer.await_args_list[1].args[0]
