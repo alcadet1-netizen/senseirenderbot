@@ -86,3 +86,58 @@ async def test_chest_all_outcomes_blocked_if_bank_cannot_cover_prizes(monkeypatc
     with pytest.raises(GameError):
         await svc.open_chest(42, 'test-id-123')
     db.dojo_daily.update_one.assert_not_awaited()
+
+
+def grant_service(monkeypatch, users=None, receipt=None):
+    from unittest.mock import MagicMock
+    async def tx(mongo, fn):
+        return await fn('session')
+    monkeypatch.setattr('src.services.dojo_daily_service.transaction', tx)
+    cursor = SimpleNamespace(to_list=AsyncMock(return_value=users or []))
+    cursor.limit = MagicMock(return_value=cursor)
+    db = SimpleNamespace(
+        users=SimpleNamespace(find=MagicMock(return_value=cursor)),
+        dojo_daily=SimpleNamespace(update_one=AsyncMock()),
+        dojo_admin_chest_grants=SimpleNamespace(
+            find_one=AsyncMock(return_value=receipt), insert_one=AsyncMock()),
+    )
+    return DojoDailyService(SimpleNamespace(database=db)), db
+
+
+@pytest.mark.asyncio
+async def test_admin_grants_bonus_chests_and_records_audit(monkeypatch):
+    svc, db = grant_service(monkeypatch, [{'id': 42, 'username': 'SenseiUser'}])
+    result = await svc.grant_admin_chests('senseiuser', 10, 7, '123:456')
+    assert result['user_id'] == 42 and result['admin_id'] == 7 and result['amount'] == 10
+    db.dojo_daily.update_one.assert_awaited_once_with(
+        {'_id': 42}, {'$inc': {'chests': 10}}, upsert=True, session='session')
+    db.dojo_admin_chest_grants.insert_one.assert_awaited_once_with(result, session='session')
+    assert db.users.find.call_args.args[0]['username']['$options'] == 'i'
+
+
+@pytest.mark.asyncio
+async def test_admin_grant_replay_does_not_credit_twice(monkeypatch):
+    receipt = {'_id': '123:456', 'user_id': 42, 'admin_id': 7, 'amount': 10, 'username': 'SenseiUser'}
+    svc, db = grant_service(monkeypatch, receipt=receipt)
+    assert await svc.grant_admin_chests('senseiuser', 10, 7, '123:456') == receipt
+    db.dojo_daily.update_one.assert_not_awaited()
+    db.dojo_admin_chest_grants.insert_one.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('users', [[], [{'id': 1, 'username': 'SenseiUser'}, {'id': 2, 'username': 'senseiuser'}]])
+async def test_admin_grant_rejects_missing_or_ambiguous_user(monkeypatch, users):
+    svc, db = grant_service(monkeypatch, users)
+    with pytest.raises(GameError):
+        await svc.grant_admin_chests('senseiuser', 10, 7, '123:456')
+    db.dojo_daily.update_one.assert_not_awaited()
+    db.dojo_admin_chest_grants.insert_one.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('username,amount', [('not valid', 10), ('sensei', 0), ('sensei', 10001), ('sensei', True)])
+async def test_admin_grant_rejects_invalid_input(monkeypatch, username, amount):
+    svc, db = grant_service(monkeypatch)
+    with pytest.raises(GameError):
+        await svc.grant_admin_chests(username, amount, 7, '123:456')
+    db.users.find.assert_not_called()

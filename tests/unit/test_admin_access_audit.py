@@ -46,3 +46,14 @@ def test_broadcast_bad_request_exception_is_bound():
     from src.bot.handlers import broadcast
     from aiogram.exceptions import TelegramBadRequest
     assert broadcast.TelegramBadRequest is TelegramBadRequest
+
+
+@pytest.mark.asyncio
+async def test_addchance_rejects_non_admin_through_router():
+    from src.bot.handlers.dojo_tasks_admin import router
+    bot = AsyncMock()
+    msg = Message.model_validate(dict(message_id=4, date=1, chat=dict(id=7, type='private'),
+        **{'from': dict(id=7, is_bot=False, first_name='User')}, text='/addchance @example 10')).as_(bot)
+    with patch('src.bot.filters.admin.settings', NS(admin_ids=[], admin_ids_str='')):
+        await router.propagate_event('message', msg, bot=bot, container=NS())
+    bot.assert_not_awaited()

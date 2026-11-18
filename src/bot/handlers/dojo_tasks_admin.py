@@ -8,6 +8,8 @@ from aiogram.types import Message
 
 from src.bot.filters import AdminFilter
 from src.core.container import Container
+from src.services.dojo_daily_service import DojoDailyService
+from src.services.hedgehog_service import GameError
 from src.services.dojo_task_service import (
     DEFAULT_ENERGY,
     DEFAULT_REWARD,
@@ -215,3 +217,30 @@ async def cmd_task_remove(message: Message, container: Container) -> None:
         await message.answer(f'Задание {value} не найдено.')
         return
     await message.answer(f'⚪️ Задание {value} отключено.')
+
+
+@router.message(Command('addchance'))
+async def cmd_addchance(message: Message, container: Container) -> None:
+    """Admin-only: durable and idempotent chest credit by registered username."""
+    parts = (message.text or '').split()
+    if (len(parts) != 3 or not parts[1].startswith('@') or
+            not parts[2].isascii() or not parts[2].isdigit() or len(parts[2]) > 5):
+        await message.answer('Использование: /addchance @username количество (1–10000).', parse_mode=None)
+        return
+    try:
+        receipt = await DojoDailyService(container.mongo_client).grant_admin_chests(
+            parts[1][1:], int(parts[2]), message.from_user.id,
+            f'{message.chat.id}:{message.message_id}')
+    except GameError as exc:
+        await message.answer(str(exc), parse_mode=None)
+        return
+    except Exception:
+        # Never acknowledge an uncertain write as a success. A retry of the
+        # same Telegram update uses the same durable idempotency key.
+        import logging
+        logging.getLogger(__name__).exception('Dojo chest grant failed')
+        await message.answer('Не удалось подтвердить выдачу. Проверь журнал перед повтором.', parse_mode=None)
+        return
+    await message.answer(
+        f'✅ Выдано {receipt["amount"]} сундуков игроку @{receipt["username"]}. '
+        'Они появятся в разделе CHANCE.', parse_mode=None)

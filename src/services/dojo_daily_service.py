@@ -1,5 +1,6 @@
 """Daily Dojo rewards, serialized and paid in MongoDB transactions."""
 import secrets
+import re
 from datetime import datetime, timezone, timedelta
 
 from src.services.hedgehog_service import GameError
@@ -53,6 +54,33 @@ class DojoDailyService:
             await self.db.dojo_daily.update_one({'_id': uid}, {'$set': {'last_day': today.isoformat(), 'streak': day}, '$inc': {'chests': day // 7 if day % 7 == 0 else 0}}, upsert=True, session=session)
             await self.db.transactions.insert_one({'user_id': uid, 'tx_type': 'dojo_daily', 'coins_change': amount, 'created_at': now, 'description': f'Dojo daily day {day}'}, session=session)
             return {'day': day, 'reward': amount, 'chests_added': day // 7 if day % 7 == 0 else 0}
+        return await transaction(self.mongo, work)
+
+    async def grant_admin_chests(self, username, amount, admin_id, request_id):
+        """Atomically credit bonus chests and persist an idempotent audit record."""
+        if (not isinstance(username, str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{4,31}', username)
+                or type(amount) is not int or not 1 <= amount <= 10000):
+            raise GameError('Укажи @username и количество от 1 до 10000.')
+        now = datetime.now(timezone.utc)
+        async def work(session):
+            receipt = await self.db.dojo_admin_chest_grants.find_one({'_id': request_id}, session=session)
+            if receipt:
+                return receipt
+            # Reject ambiguous/stale duplicate usernames rather than credit the wrong player.
+            matches = await self.db.users.find(
+                {'username': {'$regex': '^' + re.escape(username) + '$', '$options': 'i'}},
+                {'id': 1, 'username': 1}, session=session).limit(2).to_list(length=2)
+            if not matches:
+                raise GameError('Пользователь не найден. Он должен сначала зарегистрироваться у бота.')
+            if len(matches) != 1 or type(matches[0].get('id')) is not int:
+                raise GameError('Имя пользователя неоднозначно. Выдача отменена; проверь профиль.')
+            uid = matches[0]['id']
+            await self.db.dojo_daily.update_one(
+                {'_id': uid}, {'$inc': {'chests': amount}}, upsert=True, session=session)
+            receipt = {'_id': request_id, 'admin_id': admin_id, 'user_id': uid,
+                       'username': matches[0]['username'], 'amount': amount, 'created_at': now}
+            await self.db.dojo_admin_chest_grants.insert_one(receipt, session=session)
+            return receipt
         return await transaction(self.mongo, work)
 
     async def open_chest(self, uid, request_id):
