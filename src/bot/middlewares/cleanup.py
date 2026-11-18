@@ -29,7 +29,7 @@ class CommandCleanupMiddleware(BaseMiddleware):
                 and (event.text.startswith('/') or (
                     event.from_user and not event.from_user.is_bot
                     and event.text.lower() in daily_aliases))):
-            logger.info(f"[CLEANUP] Attempting to delete command message: {event.text}")
+            logger.debug("[CLEANUP] Attempting to delete command message")
             try:
                 await event.delete()
                 await campaign_message_deleted(data.get("container"), event.chat.id, event.message_id)

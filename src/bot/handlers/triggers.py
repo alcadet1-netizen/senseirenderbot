@@ -315,8 +315,7 @@ async def catch_all_message(message: Message):
     и с шансом 1% ставит реакцию (👍 или ❤).
     """
     # Debug logging to identify unhandled commands
-    text_repr = repr(message.text) if message.text else "None"
-    logging.info(f"⚠️ [CATCH_ALL] Unhandled message: {text_repr} from {message.from_user.id}")
+    logging.debug("[CATCH_ALL] Ordinary message: type=%s", message.content_type)
 
     # 1. Реакция с шансом 1%
     if random.random() < 0.08:

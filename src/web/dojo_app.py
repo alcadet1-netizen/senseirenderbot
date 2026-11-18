@@ -1,6 +1,9 @@
 """SenseiCoin miner Mini App: one start runs a three-hour bank-funded cycle."""
 import asyncio
 import logging
+import os
+import re
+from urllib.parse import parse_qsl
 import secrets
 from pathlib import Path
 
@@ -58,7 +61,12 @@ async def _referral_link(container, user_id: int) -> str:
     try:
         me = await asyncio.wait_for(bot.get_me(), timeout=5)
         username = getattr(me, 'username', None)
-        return f'https://t.me/{username}?start=ref_{user_id}' if username else ''
+        if not username:
+            return ''
+        # Main Mini App must first be configured in BotFather. Preserve the
+        # working bot deep link until an operator explicitly enables it.
+        parameter = 'startapp' if os.getenv('DOJO_DIRECT_REFERRALS', '').lower() in ('1', 'true', 'yes') else 'start'
+        return f'https://t.me/{username}?{parameter}=ref_{user_id}'
     except Exception:
         # A missing bot username must not make the whole tab unavailable.
         logging.getLogger(__name__).warning('Dojo referrals link unavailable')
@@ -184,6 +192,18 @@ def setup_dojo(app, container=None):
         try:
             service = container.dojo_miner_service
             if action == 'state':
+                # Only use start_param from initData after signature verification.
+                # Bind only on creation, just like /start; existing players must
+                # never be silently reassigned by opening somebody else's link.
+                fields = dict(parse_qsl(payload['initData'], keep_blank_values=True))
+                referral = fields.get('start_param', '')
+                if re.fullmatch(r'ref_[1-9][0-9]{0,19}', referral):
+                    registration = await container.user_service.get_or_create(
+                        user_id=user['id'], username=user.get('username'),
+                        first_name=user.get('first_name', ''), last_name=user.get('last_name'),
+                        is_bot=user.get('is_bot', False))
+                    if registration.get('created'):
+                        await container.referral_service.process_referral(user['id'], referral)
                 result = await service.state(user['id'])
             elif action == 'start':
                 result = await service.start(user['id'])

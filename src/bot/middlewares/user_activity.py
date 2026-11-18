@@ -861,7 +861,7 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
 
         # Skip processing for commands to avoid delay in command responses
         if message.text and message.text.startswith('/'):
-            logger.info(f"[USER_ACTIVITY] Skipping processing for command: {message.text}")
+            logger.debug("[USER_ACTIVITY] Skipping processing for command")
             return
 
         user_id = user.id
