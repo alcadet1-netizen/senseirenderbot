@@ -3,6 +3,7 @@
 """
 
 import math
+import logging
 
 from aiogram import Router, F, Bot
 from aiogram.filters import Command, CommandObject
@@ -187,3 +188,38 @@ async def cmd_popugai(message: Message, command: CommandObject, bot: Bot, contai
         "Запоминаю стикеры и GIF этого чата и отвечаю ими на сообщения.",
         parse_mode="HTML"
     )
+
+@router.message(Command("joindiag"))
+async def cmd_joindiag(message: Message, bot: Bot):
+    """Read-only diagnostics for the bot's membership and update subscription."""
+    if not message.from_user or message.from_user.id not in settings.admin_ids:
+        return
+    if message.chat.type not in ("group", "supergroup"):
+        await message.answer("Запустите /joindiag в нужной группе.")
+        return
+
+    lines = [f"🔎 <b>Диагностика вступлений</b>\nЧат: <code>{message.chat.id}</code>"]
+    try:
+        member = await bot.get_chat_member(message.chat.id, bot.id)
+        lines.append(f"Статус бота: <code>{member.status}</code>")
+        invite = getattr(member, 'can_invite_users', None)
+        if invite is not None:
+            lines.append(f"Право приглашать: {'да' if invite else 'нет'}")
+    except Exception:
+        lines.append("Не удалось проверить статус бота в группе; подробности в журнале.")
+        logging.getLogger(__name__).exception("Join diagnostics: bot membership lookup failed chat=%s", message.chat.id)
+
+    try:
+        info = await bot.get_webhook_info()
+        lines.append(f"Webhook: {'включён' if info.url else 'выключен'}")
+        allowed = info.allowed_updates
+        if allowed is None:
+            lines.append("Типы обновлений Telegram: не возвращены API; подписка неизвестна.")
+        elif not allowed:
+            lines.append("Типы обновлений Telegram: по умолчанию (chat_member не включён).")
+        else:
+            lines.append(f"chat_member в настройке Telegram: {'да' if 'chat_member' in allowed else 'нет'}")
+    except Exception:
+        lines.append("Не удалось прочитать настройки обновлений Telegram; подробности в журнале.")
+        logging.getLogger(__name__).exception("Join diagnostics: webhook info lookup failed chat=%s", message.chat.id)
+    await message.answer("\n".join(lines), parse_mode="HTML")
