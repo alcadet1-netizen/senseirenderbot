@@ -60,12 +60,12 @@ def test_gif_moves_blade_not_numeric_result(success, before, after):
     assert len(payload) < 5 * 1024 * 1024
     with Image.open(BytesIO(payload)) as gif:
         assert gif.format == "GIF" and gif.n_frames > 1
-        assert gif.size == (760, 320)
+        assert gif.size == (760, 290)
         gif.seek(0)
         first = gif.convert("RGB")
         gif.seek(gif.n_frames - 1)
         last = gif.convert("RGB")
-        assert first.crop((0, 201, 760, 320)).tobytes() == last.crop((0, 201, 760, 320)).tobytes()
+        assert first.crop((0, 201, 760, 290)).tobytes() == last.crop((0, 201, 760, 290)).tobytes()
 
         # Count bright blade pixels along its centre; grows on success, shrinks on failure.
         def blade_pixels(image):
@@ -79,7 +79,7 @@ def test_gif_moves_blade_not_numeric_result(success, before, after):
 def test_png_and_html_are_bounded_and_escaped():
     receipt = KatanaUpgrade.from_result("<script>oops</script>", result())
     image = Image.open(BytesIO(to_upgrade_png(receipt)))
-    assert image.size == (760, 320)
+    assert image.size == (760, 290)
     html = to_upgrade_html(receipt)
     assert "&lt;script&gt;" in html
     assert "prefers-reduced-motion" in html
@@ -334,7 +334,7 @@ def test_enchanted_styles_are_deterministic_and_keep_receipt_readable(length):
     assert final.tobytes() == render_upgrade(receipt).tobytes()
     for phase in (0.23, 0.47, 0.66, 0.85):
         frame = render_upgrade(receipt, phase)
-        assert frame.crop((0, 201, 760, 320)).tobytes() == final.crop((0, 201, 760, 320)).tobytes()
+        assert frame.crop((0, 201, 760, 290)).tobytes() == final.crop((0, 201, 760, 290)).tobytes()
         assert frame.crop((0, 0, 760, 90)).tobytes() == final.crop((0, 0, 760, 90)).tobytes()
 
 
@@ -351,7 +351,7 @@ def test_reference_art_is_bundled_and_used_without_mutating_cached_source(school
     original = art.tobytes()
     length = school * 20 + 5
     frame = render_upgrade(KatanaUpgrade('Name', length, length + 0.3, 100, True))
-    assert frame.size == (760, 320)
+    assert frame.size == (760, 290)
     assert katana_art(school).tobytes() == original
     assert art.width > 500 and art.height > 100
 
@@ -418,3 +418,43 @@ async def test_cancelled_request_keeps_render_slot_until_thread_finishes():
             # Completion callback, not cancellation, must release this slot.
             await asyncio.wait_for(semaphore.acquire(), timeout=3)
             semaphore.release()
+
+
+def test_compact_receipt_contains_no_schematic_caption():
+    from unittest.mock import patch
+    from PIL import ImageDraw
+    text_drawn = []
+    original = ImageDraw.ImageDraw.text
+    def record(draw, xy, text, *args, **kwargs):
+        text_drawn.append(text)
+        return original(draw, xy, text, *args, **kwargs)
+    with patch.object(ImageDraw.ImageDraw, 'text', record):
+        image = render_upgrade(KatanaUpgrade('Name', 20, 20.4, 100, True))
+    assert image.size == (760, 290)
+    assert not any('схематично' in str(text).lower() for text in text_drawn)
+    assert any('Попытка:' in str(text) for text in text_drawn)
+
+
+@pytest.mark.asyncio
+async def test_gif_render_taking_more_than_two_seconds_is_still_sent():
+    import asyncio
+    msg = message()
+    async def slow_render(renderer, receipt):
+        assert renderer is to_upgrade_gif
+        await asyncio.sleep(2.1)
+        return b'GIF89a'
+    with patch('src.bot.presenters.katana_presenter.render_receipt', side_effect=slow_render):
+        await send_katana_upgrade(msg, 7, 'Name', result(), animate=True)
+    msg.answer_animation.assert_awaited_once()
+    msg.answer_photo.assert_not_awaited()
+
+
+def test_render_scales_are_independent_and_thread_safe():
+    from concurrent.futures import ThreadPoolExecutor
+    from src.widgets.forge import katana_handle
+    receipt = KatanaUpgrade('Name', 24.9, 25.2, 100, True)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        images = list(pool.map(lambda scale: render_upgrade(receipt, 0.35, scale=scale), [1, 2]))
+    assert all(image.size == (760, 290) for image in images)
+    assert katana_handle(1, 1).size == (145, 95)
+    assert katana_handle(1, 2).size == (290, 190)

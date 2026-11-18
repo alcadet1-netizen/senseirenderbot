@@ -65,6 +65,9 @@ class DojoDailyService:
         async def work(session):
             receipt = await self.db.dojo_admin_chest_grants.find_one({'_id': request_id}, session=session)
             if receipt:
+                if (receipt.get('admin_id') != admin_id or receipt.get('amount') != amount
+                        or str(receipt.get('username', '')).lower() != username.lower()):
+                    raise GameError('Этот идентификатор уже использован для другой выдачи.')
                 return receipt
             # Reject ambiguous/stale duplicate usernames rather than credit the wrong player.
             matches = await self.db.users.find(

@@ -12,7 +12,7 @@ from src.core.visuals import Visuals
 from src.widgets.katana_models import katana_name, model_index, model_path
 from src.widgets.rendering import PALETTES, font
 
-WIDTH, HEIGHT = 760, 320
+WIDTH, HEIGHT = 760, 290
 SCALE = 2
 STRIKES = (0.22, 0.46)
 FRAME_COUNT = 40
@@ -51,9 +51,9 @@ def katana_layers(school):
     return art.crop((0, 0, 340, art.height)), art.crop((340, 0, art.width, art.height))
 
 
-@lru_cache(maxsize=15)
-def katana_handle(school):
-    return katana_layers(school)[0].resize((145*SCALE, 95*SCALE), Image.Resampling.LANCZOS)
+@lru_cache(maxsize=30)
+def katana_handle(school, scale=SCALE):
+    return katana_layers(school)[0].resize((145*scale, 95*scale), Image.Resampling.LANCZOS)
 
 
 def model_mix(before, after, phase):
@@ -63,13 +63,13 @@ def model_mix(before, after, phase):
     return old, new, t
 
 
-def paint_katana(image, school, length):
+def paint_katana(image, school, length, scale=SCALE):
     # Transparent weapon layers: the workshop itself never stretches.
-    handle = katana_handle(school)
+    handle = katana_handle(school, scale)
     blade = katana_layers(school)[1].resize(
-        (round((length+12)*SCALE), 95*SCALE), Image.Resampling.LANCZOS)
-    image.paste(handle, (40*SCALE, 96*SCALE), handle)
-    image.paste(blade, (185*SCALE, 96*SCALE), blade)
+        (round((length+12)*scale), 95*scale), Image.Resampling.LANCZOS)
+    image.paste(handle, (40*scale, 96*scale), handle)
+    image.paste(blade, (185*scale, 96*scale), blade)
     return image
 
 
@@ -92,7 +92,7 @@ def blade_length(receipt, phase):
     return 425
 
 
-def render_forge(receipt, phase=1.0):
+def render_forge(receipt, phase=1.0, *, scale=SCALE):
     phase = max(0.0, min(1.0, phase))
     c = PALETTES["dark"]
     # Cosmetic schools are deterministic, never another economic roll.
@@ -103,37 +103,37 @@ def render_forge(receipt, phase=1.0):
         "#ff9b43", "#bcefff", "#ff6c94", "#c08cff", "#ffe1a0",
     )[school]
     accent = aura if receipt.success else "#ffc078"
-    image = Image.new("RGB", (WIDTH * SCALE, HEIGHT * SCALE), c["bg"])
+    image = Image.new("RGB", (WIDTH * scale, HEIGHT * scale), c["bg"])
     draw = ImageDraw.Draw(image)
 
     def box(coords, fill, radius=0, outline=None, width=1):
-        coords = tuple(round(v * SCALE) for v in coords)
+        coords = tuple(round(v * scale) for v in coords)
         if radius:
             draw.rounded_rectangle(
-                coords, radius=radius * SCALE, fill=fill, outline=outline, width=width * SCALE
+                coords, radius=radius * scale, fill=fill, outline=outline, width=width * scale
             )
         else:
             draw.rectangle(coords, fill=fill)
 
     def poly(points, fill):
-        draw.polygon([(round(x * SCALE), round(y * SCALE)) for x, y in points], fill=fill)
+        draw.polygon([(round(x * scale), round(y * scale)) for x, y in points], fill=fill)
 
     def line(points, fill, width=1):
         draw.line(
-            [(round(x * SCALE), round(y * SCALE)) for x, y in points],
+            [(round(x * scale), round(y * scale)) for x, y in points],
             fill=fill,
-            width=width * SCALE,
+            width=width * scale,
         )
 
     def text(x, y, value, size, fill):
-        draw.text((x * SCALE, y * SCALE), value, font=font(size * SCALE), fill=fill)
+        draw.text((x * scale, y * scale), value, font=font(size * scale), fill=fill)
 
-    box((10, 8, 750, 312), c["panel"], 22)
+    box((10, 8, 750, 284), c["panel"], 22)
     text(28, 20, "SENSEI  /  КУЗНИЦА", 12, accent)
     text(28, 42, receipt.status, 20, c["text"])
     # Name is secondary; shorten by measured width with an explicit ellipsis.
     name = receipt.name
-    while name and draw.textlength(name, font=font(14 * SCALE)) > 690 * SCALE:
+    while name and draw.textlength(name, font=font(14 * scale)) > 690 * scale:
         name = name[:-2] + "…"
     text(28, 70, name, 14, c["muted"])
 
@@ -159,22 +159,22 @@ def render_forge(receipt, phase=1.0):
         glow = Image.new("RGBA", image.size)
         gd = ImageDraw.Draw(glow)
         gd.ellipse(
-            (270 * SCALE, 125 * SCALE, 535 * SCALE, 176 * SCALE),
+            (270 * scale, 125 * scale, 535 * scale, 176 * scale),
             fill=(255, 95, 24, int(100 * heat)),
         )
-        glow = glow.filter(ImageFilter.GaussianBlur(14 * SCALE))
+        glow = glow.filter(ImageFilter.GaussianBlur(14 * scale))
         clipped = Image.new("RGBA", image.size)
-        clipped.paste(glow.crop((0, 96 * SCALE, WIDTH * SCALE, 191 * SCALE)), (0, 96 * SCALE))
+        clipped.paste(glow.crop((0, 96 * scale, WIDTH * scale, 191 * scale)), (0, 96 * scale))
         image = Image.alpha_composite(image.convert("RGBA"), clipped).convert("RGB")
         draw = ImageDraw.Draw(image)
     # Reference artwork replaces the old schematic line blade entirely.
     old_school, new_school, mix = model_mix(receipt.before, receipt.after, phase)
     if old_school != new_school and mix < 1:
-        old_image = paint_katana(image.copy(), old_school, length)
-        new_image = paint_katana(image.copy(), new_school, length)
+        old_image = paint_katana(image.copy(), old_school, length, scale)
+        new_image = paint_katana(image.copy(), new_school, length, scale)
         image = Image.blend(old_image, new_image, mix)
     else:
-        image = paint_katana(image, new_school, length)
+        image = paint_katana(image, new_school, length, scale)
     draw = ImageDraw.Draw(image)
 
     # Two actual hammer swings. Particles are ballistic and deterministic.
@@ -227,19 +227,19 @@ def render_forge(receipt, phase=1.0):
         # Follow the actual bright steel/ornaments, not the obsolete schematic
         # outline. Restrict the mask to the blade half of the art viewport.
         mask = Image.new("L", image.size)
-        steel = image.convert("L").crop((185*SCALE, 96*SCALE,
-                                        round((197+length)*SCALE), 191*SCALE))
+        steel = image.convert("L").crop((185*scale, 96*scale,
+                                        round((197+length)*scale), 191*scale))
         steel = steel.point(lambda v: min(255, max(0, (v-75)*2)))
-        mask.paste(steel, (185*SCALE, 96*SCALE))
+        mask.paste(steel, (185*scale, 96*scale))
         streak = Image.new("RGB", image.size, "#ffffff")
         band = Image.new("L", image.size)
         x = 185 + length * (phase - 0.70) / 0.28
         ImageDraw.Draw(band).polygon(
             [
-                (int((x - 20) * SCALE), 110 * SCALE),
-                (int((x - 7) * SCALE), 110 * SCALE),
-                (int((x + 13) * SCALE), 170 * SCALE),
-                (int(x * SCALE), 170 * SCALE),
+                (int((x - 20) * scale), 110 * scale),
+                (int((x - 7) * scale), 110 * scale),
+                (int((x + 13) * scale), 170 * scale),
+                (int(x * scale), 170 * scale),
             ],
             fill=210,
         )
@@ -256,15 +256,15 @@ def render_forge(receipt, phase=1.0):
         rgb = ImageColor.getrgb(aura if receipt.success else "#ed9265")
         for j in range(12):
             u = (j + 0.5) / 12
-            x = (190 + length * u) * SCALE
-            y = (145 - 15*u*u + math.sin(j*2.4)*19* t) * SCALE
-            r = (1 + 2*intensity) * SCALE
+            x = (190 + length * u) * scale
+            y = (145 - 15*u*u + math.sin(j*2.4)*19* t) * scale
+            r = (1 + 2*intensity) * scale
             alpha = round(200 * intensity)
-            fd.line((x-r, y, x+r, y), fill=(*rgb, alpha), width=SCALE)
-            fd.line((x, y-r, x, y+r), fill=(*rgb, alpha), width=SCALE)
-        fx = Image.alpha_composite(fx.filter(ImageFilter.GaussianBlur(2*SCALE)), fx)
+            fd.line((x-r, y, x+r, y), fill=(*rgb, alpha), width=scale)
+            fd.line((x, y-r, x, y+r), fill=(*rgb, alpha), width=scale)
+        fx = Image.alpha_composite(fx.filter(ImageFilter.GaussianBlur(2*scale)), fx)
         viewport = Image.new("RGBA", image.size)
-        viewport.paste(fx.crop((0, 96*SCALE, WIDTH*SCALE, 191*SCALE)), (0, 96*SCALE))
+        viewport.paste(fx.crop((0, 96*scale, WIDTH*scale, 191*scale)), (0, 96*scale))
         image = Image.alpha_composite(image.convert("RGBA"), viewport).convert("RGB")
         draw = ImageDraw.Draw(image)
 
@@ -279,14 +279,13 @@ def render_forge(receipt, phase=1.0):
         box((x, 201, x + 228, 259), c["tile"], 10)
         text(x + 12, 207, title, 10, c["muted"])
         size = 21
-        while size > 11 and draw.textlength(value, font=font(size * SCALE)) > 204 * SCALE:
+        while size > 11 and draw.textlength(value, font=font(size * scale)) > 204 * scale:
             size -= 1
         text(x + 12, 226, value, size, accent if i == 1 else c["text"])
     blade, rank = Visuals.get_katana_art(receipt.after)
     summary = f"{katana_name(receipt.after)} · {school+1}/15  |  Попытка: {receipt.cost:,.0f} монет"
     size = 13
-    while size > 10 and draw.textlength(summary, font=font(size * SCALE)) > 704 * SCALE:
+    while size > 10 and draw.textlength(summary, font=font(size * scale)) > 704 * scale:
         size -= 1
-    text(28, 270, summary, size, c["text"])
-    text(28, 291, "Ковка показана схематично · не в масштабе", 10, c["muted"])
-    return image.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+    text(28, 266, summary, size, c["text"])
+    return image if scale == 1 else image.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)

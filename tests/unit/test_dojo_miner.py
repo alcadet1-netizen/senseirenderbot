@@ -368,7 +368,8 @@ async def test_daily_and_chest_interface_describes_prizes_without_percentages():
     assert 'Лента — анимация, результат определяет сервер.' in daily
     assert 'track.children[22]' in js and 'target.offsetWidth / 2' in js
     assert 'prefers-reduced-motion: reduce' in js
-    assert js.index('await animateChest(data.prize)') < js.index('sessionStorage.removeItem(key)')
+    chest_handler = js.split('$("chest-spin").addEventListener', 1)[1]
+    assert chest_handler.index('await animateChest(data.prize)') < chest_handler.index('sessionStorage.removeItem(key)')
 
 
 @pytest.mark.asyncio
@@ -411,7 +412,10 @@ async def test_magic_trail_supports_circle_energy_and_respects_reduced_motion():
     assert 'motionQuery?.matches' in js and 'document.hidden' in js
     assert 'phase-mining' in js and 'activeTab === "mining"' in js
     assert 'touch-action: none' in css and 'pointer-events: none' in css
-    assert '.magic-trail { display: none; }' in css
+    assert 'html:not(.motion-force) .magic-trail { display: none; }' in css
+    assert 'id="motion-setting"' in html and 'sensei_dojo_motion' in js
+    assert 'motionReduced()' in js and 'touchstart' in js and 'touchmove' in js
+    assert 'resizePending' in js and 'canvas.width !== pixelWidth' in js
 
 
 @pytest.mark.asyncio
