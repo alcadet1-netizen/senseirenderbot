@@ -257,6 +257,7 @@ async def main() -> None:
 
     # Startup failures must also close the health server and DB resources.
     auto_task = None
+    join_watch_task = None
     try:
         await on_startup(bot, container)
         await container.dojo_miner_service.ensure_indexes()
@@ -266,8 +267,13 @@ async def main() -> None:
         await container.referral_service.ensure_indexes()
         from src.services.fly_service import FlyService
         await FlyService(container).ensure_indexes()
+        from src.services.join_request_watch import JoinRequestWatch
+        join_watch = JoinRequestWatch(container, bot)
+        await join_watch.ensure_indexes()
+        container._join_request_watch = join_watch
+        join_watch_task = asyncio.create_task(join_watch.run())
         from src.bot.campaign_polling import install_campaign_admission
-        install_campaign_admission(dp, container.comment_campaign_service)
+        install_campaign_admission(dp, container.comment_campaign_service, join_watch)
 
         async def polling():
             logger.info("🔄 Starting polling...")
@@ -276,7 +282,7 @@ async def main() -> None:
             logger.info("Join notifications enabled: polling subscribes to message and chat_member")
             await dp.start_polling(
                 bot,
-                allowed_updates=list(dict.fromkeys([*dp.resolve_used_update_types(), "channel_post", "message", "chat_member", "pre_checkout_query", "widget_query", "shared_widget_query"])),
+                allowed_updates=list(dict.fromkeys([*dp.resolve_used_update_types(), "channel_post", "message", "chat_member", "chat_join_request", "pre_checkout_query", "widget_query", "shared_widget_query"])),
                 close_bot_session=True,
             )
 
@@ -288,6 +294,9 @@ async def main() -> None:
         else:
             await polling()
     finally:
+        if join_watch_task is not None:
+            join_watch_task.cancel()
+            await asyncio.gather(join_watch_task, return_exceptions=True)
         if auto_task is not None:
             auto_task.cancel()
             try:

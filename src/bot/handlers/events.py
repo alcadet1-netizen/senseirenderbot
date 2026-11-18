@@ -56,6 +56,15 @@ async def _send_welcome_message(user, container: Container, event):
             logging.exception("Unable to send starter notice to chat %s for user %s", event.chat.id, user.id)
 
 
+async def _clear_pending_join(container, chat_id, user_id):
+    watch = getattr(container, "__dict__", {}).get("_join_request_watch")
+    if watch is not None:
+        try:
+            await watch.confirmed(chat_id, user_id)
+        except Exception:
+            logging.exception("Unable to clear pending join chat=%s user=%s", chat_id, user_id)
+
+
 async def _handle_join(user, container: Container, event):
     if user.is_bot:
         return
@@ -91,6 +100,7 @@ async def on_new_chat_members(message: Message, container: Container):
         return
     for user in message.new_chat_members:
         await _handle_join(user, container, message)
+        await _clear_pending_join(container, message.chat.id, user.id)
 
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
@@ -99,6 +109,7 @@ async def on_user_join(event: ChatMemberUpdated, container: Container):
     if event.chat.type not in ("group", "supergroup"):
         return
     await _handle_join(event.new_chat_member.user, container, event)
+    await _clear_pending_join(container, event.chat.id, event.new_chat_member.user.id)
 
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_MEMBER >> IS_NOT_MEMBER))
