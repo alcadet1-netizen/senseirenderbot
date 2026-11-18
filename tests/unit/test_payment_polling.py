@@ -17,7 +17,7 @@ def test_production_polling_subscribes_to_middleware_payment_updates():
     # Middleware-only events are absent from router-derived subscriptions.
     assert 'pre_checkout_query' not in dp.resolve_used_update_types()
     updates = eval(compile(ast.Expression(expression), '<polling subscription>', 'eval'), {'dp': dp})
-    assert {'pre_checkout_query', 'message', 'channel_post',
+    assert {'pre_checkout_query', 'message', 'chat_member', 'channel_post',
             'widget_query', 'shared_widget_query'} <= set(updates)
     assert set(dp.resolve_used_update_types()) <= set(updates)
     assert len(updates) == len(set(updates))

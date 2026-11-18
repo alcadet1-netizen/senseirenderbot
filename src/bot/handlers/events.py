@@ -43,6 +43,7 @@ async def _send_welcome_message(user, container: Container, event):
     mention = f'<a href="tg://user?id={user.id}">{html.escape(name)}</a>'
     try:
         await _answer_join(event, f"🥋 <b>Добро пожаловать в додзё!</b>\n{mention}, рады видеть тебя в чате.")
+        logging.info("Join welcome sent chat=%s user=%s", event.chat.id, user.id)
     except Exception:
         logging.exception("Unable to send welcome to chat %s for user %s", event.chat.id, user.id)
 
@@ -65,6 +66,7 @@ async def _handle_join(user, container: Container, event):
         first = await container.throttle_service.throttle(
             key=f"{event.chat.id}:{user.id}", limit_seconds=15, scope="join_welcome")
         if not first:
+            logging.info("Join welcome duplicate suppressed chat=%s user=%s", event.chat.id, user.id)
             return
     except Exception:
         logging.exception("Join deduplication unavailable for chat %s", event.chat.id)

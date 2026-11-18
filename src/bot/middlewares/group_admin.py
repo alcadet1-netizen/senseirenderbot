@@ -1,5 +1,6 @@
 """Fail-closed group access policy; private chats and payment receipts are unaffected."""
 import asyncio
+import logging
 from collections import OrderedDict
 import time
 from weakref import WeakValueDictionary
@@ -7,6 +8,8 @@ from weakref import WeakValueDictionary
 from aiogram import BaseMiddleware
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import Update
+
+logger = logging.getLogger(__name__)
 
 
 def access_denied(exc):
@@ -106,8 +109,12 @@ class GroupAdminMiddleware(BaseMiddleware):
             if message and message.chat.type in {'group', 'supergroup'}:
                 try:
                     if not await group_admin_access.allowed(bot, message.chat.id):
+                        if message.new_chat_members:
+                            logger.warning("Join service message blocked: bot is not verified as admin chat=%s", message.chat.id)
                         return None
                 except Exception:
+                    if message.new_chat_members:
+                        logger.exception("Join service message blocked: admin verification failed chat=%s", message.chat.id)
                     # No API response/rewards when membership cannot be verified.
                     return None
         return await handler(event, data)
