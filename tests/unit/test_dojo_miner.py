@@ -356,7 +356,7 @@ async def test_daily_and_chest_interface_describes_prizes_without_percentages():
     assert 'day <= Math.min(weekStart + 6, 90)' in js
     assert 'Твоя награда:' in js
     assert 'class="chest-pointer"' in daily and 'class="chest-art"' in daily
-    assert 'Лента — анимация, результат определяет сервер.' in daily
+    assert 'Результат определяет сервер.' in daily
     assert 'track.children[22]' in js and 'target.offsetWidth / 2' in js
     assert 'prefers-reduced-motion: reduce' in js
     assert js.index('await animateChest(data.prize)') < js.index('sessionStorage.removeItem(key)')
