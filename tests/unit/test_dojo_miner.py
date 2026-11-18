@@ -262,6 +262,10 @@ async def test_miner_keeps_action_slot_and_renders_new_layers():
     assert 'AIRDROP' in html and 'Q4 2026' in html
     assert 'id="roadmap-sheet"' in html and 'roadmap-screen' in html
     assert 'TGE · FINISH MINE' in html and 'WHEN ALL COINS ARE MINED' in html
+    assert 'DEX LISTING' in html and 'PLANNED · NO DATE' in html
+    assert 'No listing or trading is guaranteed.' in html
+    assert 'Three-hour mining cycles.' in html
+    assert 'Four-hour mining cycles.' not in html
     assert 'id="energy-card"' in html and 'id="energy-refill"' in html
     assert '10 ⭐ · ПОПОЛНИТЬ' in html
     assert 'Баланс (как в чате)' not in html
@@ -335,3 +339,24 @@ async def test_signed_direct_referral_binds_only_new_player():
         forged = signed(now=int(time.time())) + '&start_param=ref_99'
         assert (await client.post('/miniapp/dojo/api/state', json={'initData': forged})).status == 401
         bind.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_daily_and_chest_interface_describes_prizes_without_percentages():
+    app = web.Application()
+    setup_dojo(app)
+    async with TestClient(TestServer(app)) as client:
+        html = await (await client.get('/miniapp/dojo')).text()
+        js = await (await client.get('/miniapp/dojo/miner.js')).text()
+    daily = html.split('<div id="daily-sheet"', 1)[1].split('<div id="roadmap-sheet"', 1)[0]
+    assert 'id="daily-calendar"' in daily and 'id="daily-milestone"' in daily
+    assert 'id="chest-result"' in daily and 'Виртуальный GRAM не является реальным активом' in daily
+    assert 'Вероятности наград различаются' in daily and '%' not in daily
+    assert 'id="chest-spin"' in daily and 'ВЫВОД ОТ 3 GRAM · НЕДОСТУПЕН' in daily
+    assert 'day <= Math.min(weekStart + 6, 90)' in js
+    assert 'Твоя награда:' in js
+    assert 'class="chest-pointer"' in daily and 'class="chest-art"' in daily
+    assert 'Лента — анимация, результат определяет сервер.' in daily
+    assert 'track.children[22]' in js and 'target.offsetWidth / 2' in js
+    assert 'prefers-reduced-motion: reduce' in js
+    assert js.index('await animateChest(data.prize)') < js.index('sessionStorage.removeItem(key)')

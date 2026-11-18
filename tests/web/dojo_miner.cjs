@@ -298,6 +298,8 @@ const { chromium } = require("playwright-core");
   assert.match(roadmapModal, /TGE · FINISH MINE/);
   assert.match(roadmapModal, /WHEN ALL COINS ARE MINED/);
   assert.match(roadmapModal, /10,000,000,000/);
+  assert.match(roadmapModal, /DEX LISTING/);
+  assert.match(roadmapModal, /PLANNED · NO DATE/);
   await page.click("#roadmap-sheet .sheet-done");
   assert.equal(await page.locator("#roadmap-sheet").isVisible(), false);
   const readyBox = await page.locator("#orb").boundingBox();

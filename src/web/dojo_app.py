@@ -207,6 +207,19 @@ def setup_dojo(app, container=None):
                 result = await service.state(user['id'])
             elif action == 'start':
                 result = await service.start(user['id'])
+            elif action in ('daily', 'daily_claim', 'chest'):
+                from src.services.dojo_daily_service import DojoDailyService
+                daily = DojoDailyService(container.mongo_client)
+                if action == 'daily_claim':
+                    result = {'claim': await daily.claim(user['id'])}
+                elif action == 'chest':
+                    request_id = payload.get('request_id')
+                    if not isinstance(request_id, str) or not re.fullmatch(r'[a-zA-Z0-9_-]{8,64}', request_id):
+                        raise GameError('Неверный идентификатор открытия.')
+                    result = {'prize': await daily.open_chest(user['id'], request_id)}
+                else:
+                    result = {}
+                result['daily'] = await daily.state(user['id'])
             elif action == 'tasks':
                 tasks = await container.dojo_task_service.list_tasks(user['id'])
                 result = {'tasks': tasks}
@@ -298,5 +311,5 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/assets/{asset:sensei\\.webp|loading-hero\\.webp}', page)
     app.router.add_post(
-        '/miniapp/dojo/api/{action:state|start|collect|tasks|task|upgrades|buy|bank|burn|referrals|share}',
+        '/miniapp/dojo/api/{action:state|start|collect|tasks|task|upgrades|buy|bank|burn|referrals|share|daily|daily_claim|chest}',
         api)

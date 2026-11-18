@@ -2205,7 +2205,129 @@
       closeSheet();
       closeBurn();
       $("roadmap-sheet").hidden = true;
+      $("daily-sheet").hidden = true;
+      $("chest-sheet").hidden = true;
     }
+  });
+
+  // A retained request id makes retries safe after a lost response.
+  let dailyBusy = false;
+  function paintDaily(data) {
+    $("daily-info").textContent = `День ${data.streak}/90 · ${data.claimed ? "Сегодня получено" : `Сегодня ${data.reward} Coin`}`;
+    $("daily-claim").disabled = data.claimed;
+    $("daily-claim").textContent = data.claimed ? "СЕГОДНЯ ПОЛУЧЕНО" : `ПОЛУЧИТЬ ${data.reward} COIN`;
+    const current = Math.min(90, Math.max(1, Number(data.streak) || 1));
+    const weekStart = Math.floor((current - 1) / 7) * 7 + 1;
+    const calendar = $("daily-calendar");
+    calendar.replaceChildren();
+    for (let day = weekStart; day <= Math.min(weekStart + 6, 90); day++) {
+      const tile = document.createElement("div");
+      tile.className = "daily-day";
+      if (day < current || (day === current && data.claimed)) tile.classList.add("is-complete");
+      if (day === current) tile.classList.add("is-current");
+      const label = document.createElement("span");
+      label.textContent = `ДЕНЬ ${day}`;
+      const reward = document.createElement("b");
+      reward.textContent = `${day === 1 ? 100 : day === 2 ? 200 : 600}`;
+      const coin = document.createElement("small");
+      coin.textContent = day % 7 === 0 ? `🎁 ×${day / 7}` : "COIN";
+      tile.append(label, reward, coin);
+      calendar.appendChild(tile);
+    }
+    const nextChest = data.claimed ? Math.floor(current / 7 + 1) * 7 : Math.ceil(current / 7) * 7;
+    $("daily-milestone").textContent = nextChest <= 90
+      ? `🎁 День ${nextChest} · ${nextChest / 7} сундук(а)`
+      : "🏁 До конца серии остались последние дни";
+    $("chest-info").textContent = `Бесплатный сегодня: ${data.free_chest ? "доступен" : "использован"} · бонусных: ${data.bonus_chests}`;
+    $("gram-info").textContent = `Виртуальный GRAM: ${(data.gram_hundredths / 100).toFixed(2)} · вывод пока недоступен.`;
+    $("chest-spin").disabled = !data.free_chest && !data.bonus_chests && !sessionStorage.getItem("dojo_chest_request");
+  }
+  async function loadDaily() {
+    $("daily-claim").disabled = true;
+    $("chest-spin").disabled = true;
+    try { paintDaily((await api("daily")).daily); }
+    catch (error) {
+      $("daily-info").textContent = "Не удалось загрузить. Закрой и открой окно снова.";
+      $("chest-info").textContent = "Не удалось загрузить. Закрой и открой окно снова.";
+      showToast(error.message, true);
+    }
+  }
+  $("daily-open").addEventListener("click", () => { $("daily-sheet").hidden = false; loadDaily(); });
+  $("chest-open").addEventListener("click", () => { $("chest-sheet").hidden = false; loadDaily(); });
+  document.querySelectorAll("[data-close-daily]").forEach(el => el.addEventListener("click", () => { $("daily-sheet").hidden = true; }));
+  document.querySelectorAll("[data-close-chest]").forEach(el => el.addEventListener("click", () => { $("chest-sheet").hidden = true; }));
+  $("daily-claim").addEventListener("click", async () => {
+    if (dailyBusy) return;
+    dailyBusy = true;
+    try { const data = await api("daily_claim"); paintDaily(data.daily); showToast(`+${data.claim.reward} Coin`); refresh(true); }
+    catch (error) { showToast(error.message, true); }
+    finally { dailyBusy = false; }
+  });
+  async function animateChest(prize) {
+    const reel = $("chest-reel");
+    const scene = $("chest-scene");
+    const result = $("chest-result");
+    const isGram = prize.kind === "gram";
+    const amount = isGram ? (prize.amount / 100).toFixed(2) : String(prize.amount);
+    const winner = isGram ? `${amount} виртуальных GRAM` : `${amount} Coin`;
+    result.textContent = "";
+    scene.classList.remove("is-win");
+    scene.classList.add("is-opening");
+    reel.replaceChildren();
+    const track = document.createElement("div");
+    track.className = "chest-reel-track";
+    const prizes = [100, 200, 300, 400, 500];
+    // Decorative cells are only possible rewards, not odds or the draw itself.
+    for (let i = 0; i < 25; i++) {
+      const cell = document.createElement("div");
+      const chosen = i === 22;
+      const kind = chosen && isGram ? "GRAM" : "COIN";
+      const value = chosen ? amount : String(prizes[(i * 3 + 1) % prizes.length]);
+      cell.className = `reel-prize${chosen ? " is-selected" : ""}${kind === "GRAM" ? " is-gram" : ""}`;
+      const icon = document.createElement("span"); icon.className = "reel-prize-icon";
+      icon.textContent = kind === "GRAM" ? "✦" : "◈";
+      const number = document.createElement("strong"); number.textContent = value;
+      const label = document.createElement("small"); label.textContent = kind === "GRAM" ? "VIRTUAL GRAM" : "SENSEI COIN";
+      cell.append(icon, number, label);
+      track.appendChild(cell);
+    }
+    reel.appendChild(track);
+    const target = track.children[22];
+    // Align the exact server-selected result beneath the fixed centre marker.
+    const distance = target.offsetLeft + target.offsetWidth / 2 - reel.clientWidth / 2;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reduced && !$("chest-sheet").hidden && distance > 0) {
+      await new Promise(resolve => {
+        requestAnimationFrame(() => {
+          track.style.transition = "transform 3.2s cubic-bezier(.12,.7,.12,1)";
+          track.style.transform = `translateX(${-distance}px)`;
+        });
+        setTimeout(resolve, 3300);
+      });
+    } else {
+      track.style.transform = `translateX(${-Math.max(0, distance)}px)`;
+    }
+    target.classList.add("is-winner");
+    scene.classList.remove("is-opening");
+    scene.classList.add("is-win");
+    result.textContent = `Твоя награда: ${winner}`;
+  }
+  $("chest-spin").addEventListener("click", async () => {
+    if (dailyBusy) return;
+    dailyBusy = true;
+    $("chest-spin").disabled = true;
+    try {
+      const key = "dojo_chest_request";
+      let request = sessionStorage.getItem(key);
+      if (!request) { request = crypto.randomUUID(); sessionStorage.setItem(key, request); }
+      const data = await api("chest", {request_id: request});
+      // Keep the receipt key until the animation has displayed its result.
+      // A failed/interrupted presentation can then replay the same server receipt.
+      await animateChest(data.prize);
+      sessionStorage.removeItem(key);
+      paintDaily(data.daily); refresh(true);
+    } catch (error) { showToast(error.message, true); await loadDaily(); }
+    finally { dailyBusy = false; }
   });
 
   document.addEventListener("visibilitychange", () => {
