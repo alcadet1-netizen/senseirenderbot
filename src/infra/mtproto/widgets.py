@@ -285,6 +285,10 @@ class MtprotoWidgets:
         return accepted
 
     async def on_update(self, update):
+        if isinstance(update, getattr(self.types, 'UpdateChannelParticipant', ())):
+            from src.infra.mtproto.join_updates import handle_channel_participant
+            await handle_channel_participant(update, self)
+            return
         if isinstance(update, self.types.UpdateBotInlineQuery):
             self.inline_enabled = True
             from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure
