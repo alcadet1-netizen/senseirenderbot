@@ -44,6 +44,8 @@ def setup_routers() -> Router:
     """Настройка и объединение всех роутеров."""
     main_router = Router(name="main")
 
+    # Service messages about joins must not be consumed by general text routers.
+    main_router.include_router(events_router)
     main_router.include_router(dojo_router)
     main_router.include_router(dojo_tasks_admin_router)
     main_router.include_router(fly_router)
@@ -90,7 +92,6 @@ def setup_routers() -> Router:
     # 4. Callbacks и триггеры (низкий приоритет, отрабатывают последними)
     main_router.include_router(callbacks_router)
     main_router.include_router(triggers_router)
-    main_router.include_router(events_router)
 
     return main_router
 

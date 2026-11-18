@@ -35,7 +35,7 @@ async def test_welcome_only_announces_kit_for_new_profile(created, answers):
     from src.bot.handlers.events import _send_welcome_message
     user = NS(id=7, is_bot=False, username='newuser', first_name='New', last_name=None)
     container = NS(user_service=NS(get_or_create=AsyncMock(return_value={'created': created, 'user': {'coins': 3000}})))
-    event = NS(chat=NS(type='supergroup', username='airchatton'), answer=AsyncMock())
+    event = NS(chat=NS(id=-100, type='supergroup', username='airchatton'), answer=AsyncMock())
     await _send_welcome_message(user, container, event)
     assert event.answer.await_count == answers
     if created:
@@ -121,7 +121,7 @@ async def test_existing_start_does_not_announce_or_regrant_kit():
 async def test_zero_starter_coins_notice_on_group_join():
     from src.bot.handlers.events import _send_welcome_message
     user = NS(id=7, is_bot=False, username='newuser', first_name='New', last_name=None)
-    event = NS(chat=NS(type='group'), answer=AsyncMock())
+    event = NS(chat=NS(id=-100, type='group'), answer=AsyncMock())
     container = NS(user_service=NS(get_or_create=AsyncMock(return_value={
         'created': True, 'user': {'coins': 0}})))
     await _send_welcome_message(user, container, event)
