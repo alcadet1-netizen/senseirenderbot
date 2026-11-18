@@ -488,6 +488,13 @@
     let width = 0;
     let height = 0;
     let ratio = 1;
+    let appLeft = 0, appTop = 0, orbX = 0, orbY = 0;
+    let geometryDirty = true;
+    let geometryFrame = 0;
+    let dirtyRect = null;
+    let circlePaintFrame = 0;
+    const orb = $("orb");
+    const sheets = Array.from(document.querySelectorAll(".sheet"));
     let lastAngle = null;
     let winding = 0;
     let queue = [];
@@ -501,7 +508,23 @@
         try {
           const data = await api("circle", {cycle: item.cycle, request_id: item.request_id});
           queue.shift();
-          if (model && data.started_at === model.started_at && data.server_now >= model.server_now) apply(data);
+          if (model && data.started_at === model.started_at && data.server_now >= model.server_now) {
+            const needsRender = pending || model.phase !== data.phase ||
+              ["balance", "base_rate", "energy_max", "auto_collect", "pickaxe_level", "boost_until"]
+                .some(key => model[key] !== data[key]);
+            if (needsRender) apply(data);
+            else {
+              // Do not tear down the animated phase or repaint the entire app
+              // for every orbit. Coalesce server updates into one frame.
+              model = data;
+              skew = Date.now() - data.server_now * 1000;
+              if (!circlePaintFrame) circlePaintFrame = requestAnimationFrame(() => {
+                circlePaintFrame = 0;
+                $("profile-reward").textContent = `${coin(model?.reward)} Coin`;
+                tick();
+              });
+            }
+          }
           if (data.circle.added) showToast("+1 энергия");
           else queue = queue.filter(next => next.cycle !== item.cycle);
         } catch (error) {
@@ -520,9 +543,8 @@
           !(model.circle_available || Math.floor(energyValue()) <= 0)) {
         lastAngle = null; winding = 0; return;
       }
-      const box = $("orb").getBoundingClientRect();
-      const x = event.clientX - (box.left + box.width / 2);
-      const y = event.clientY - (box.top + box.height / 2);
+      const x = event.clientX - orbX;
+      const y = event.clientY - orbY;
       if (Math.hypot(x, y) < 8) { lastAngle = null; winding = 0; return; }
       const angle = Math.atan2(y, x);
       if (lastAngle !== null) {
@@ -539,23 +561,32 @@
       lastAngle = angle;
     }
 
+    function updateGeometry() {
+      const rect = app.getBoundingClientRect();
+      const box = orb.getBoundingClientRect();
+      appLeft = rect.left; appTop = rect.top;
+      orbX = box.left + box.width / 2; orbY = box.top + box.height / 2;
+      geometryDirty = false;
+    }
     function resizeTrail() {
       const rect = app.getBoundingClientRect();
       width = rect.width; height = rect.height;
+      geometryDirty = true;
       ratio = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.max(1, Math.round(width * ratio));
       canvas.height = Math.max(1, Math.round(height * ratio));
+      dirtyRect = null;
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     }
     function enabled() {
       return !document.hidden && activeTab === "mining" &&
         app.classList.contains("phase-mining") &&
-        !Array.from(document.querySelectorAll(".sheet")).some(sheet => !sheet.hidden);
+        !sheets.some(sheet => !sheet.hidden);
     }
     function resetTrail() {
       pointer = null; previous = null; lastAngle = null; winding = 0; trail.length = 0; sparks.length = 0;
       if (frame) cancelAnimationFrame(frame);
-      frame = 0; ctx.clearRect(0, 0, width, height);
+      frame = 0; ctx.clearRect(0, 0, width, height); dirtyRect = null;
     }
     function addPoint(x, y, now) {
       const old = previous;
@@ -575,64 +606,122 @@
       previous = {x, y};
       if (!frame) frame = requestAnimationFrame(drawTrail);
     }
+    // The glow for each particle is rasterized once, not blurred on every frame.
+    function makeSparkSprite(diamond) {
+      const sprite = document.createElement("canvas");
+      sprite.width = 32; sprite.height = 32;
+      const paint = sprite.getContext("2d");
+      const glow = paint.createRadialGradient(16, 16, 0, 16, 16, 16);
+      glow.addColorStop(0, "rgba(182,255,209,.9)");
+      glow.addColorStop(.25, "rgba(47,255,135,.55)");
+      glow.addColorStop(1, "rgba(47,255,135,0)");
+      paint.fillStyle = glow; paint.fillRect(0, 0, 32, 32);
+      paint.fillStyle = "#b6ffd1"; paint.beginPath();
+      if (diamond) {
+        paint.moveTo(16, 9); paint.lineTo(20, 16);
+        paint.lineTo(16, 23); paint.lineTo(12, 16); paint.closePath();
+      } else paint.arc(16, 16, 3, 0, Math.PI * 2);
+      paint.fill();
+      return sprite;
+    }
+    const sparkSprites = [makeSparkSprite(false), makeSparkSprite(true)];
     function drawTrail(now) {
       frame = 0;
       if (!enabled()) { resetTrail(); return; }
-      ctx.clearRect(0, 0, width, height);
+      if (dirtyRect) ctx.clearRect(dirtyRect.x, dirtyRect.y, dirtyRect.w, dirtyRect.h);
       while (trail.length && now - trail[0].born > 650) trail.shift();
       while (sparks.length && now - sparks[0].born > 800) sparks.shift();
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      ctx.lineCap = "round"; ctx.lineJoin = "round";
-      for (let i = 1; i < trail.length; i++) {
-        const p = trail[i], before = trail[i - 1];
-        const alpha = Math.max(0, 1 - (now - p.born) / 650);
-        ctx.beginPath(); ctx.moveTo(before.x, before.y); ctx.lineTo(p.x, p.y);
-        ctx.strokeStyle = `rgba(75, 255, 151, ${alpha * .28})`;
-        ctx.lineWidth = 11 * alpha + 2; ctx.shadowColor = "#41ff99"; ctx.shadowBlur = 12;
-        ctx.stroke();
-        ctx.strokeStyle = `rgba(205, 255, 226, ${alpha * .8})`;
-        ctx.lineWidth = 2 * alpha + .5; ctx.shadowBlur = 4; ctx.stroke();
+      // Clear only the region painted in this frame next time. The margin
+      // covers both blurred strokes and the moving pre-rendered sparks.
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const p of trail) {
+        minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
       }
       for (const s of sparks) {
         const life = Math.max(0, 1 - (now - s.born) / 800);
         const x = s.x + s.dx * (1 - life), y = s.y + s.dy * (1 - life);
-        ctx.globalAlpha = life * .9; ctx.fillStyle = "#b6ffd1";
-        ctx.shadowColor = "#2fff87"; ctx.shadowBlur = 8;
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      }
+      if (Number.isFinite(minX)) {
+        const x = Math.max(0, Math.floor(minX - 36)), y = Math.max(0, Math.floor(minY - 36));
+        dirtyRect = {x, y, w: Math.max(0, Math.min(width, Math.ceil(maxX + 36)) - x),
+                     h: Math.max(0, Math.min(height, Math.ceil(maxY + 36)) - y)};
+      } else dirtyRect = null;
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      // Batch similarly faded segments: at most six blurred strokes instead
+      // of blurring every segment twice on every frame.
+      for (let bucket = 0; bucket < 6; bucket++) {
+        const alpha = (bucket + .5) / 6;
+        let hasSegments = false;
         ctx.beginPath();
-        if (s.diamond) {
-          const r = s.radius * 2; ctx.moveTo(x, y - r); ctx.lineTo(x + r * .55, y);
-          ctx.lineTo(x, y + r); ctx.lineTo(x - r * .55, y); ctx.closePath();
-        } else ctx.arc(x, y, s.radius, 0, Math.PI * 2);
-        ctx.fill();
+        for (let i = 1; i < trail.length; i++) {
+          const p = trail[i], before = trail[i - 1];
+          const life = Math.max(0, Math.min(.9999, 1 - (now - p.born) / 650));
+          if (Math.floor(life * 6) !== bucket) continue;
+          ctx.moveTo(before.x, before.y); ctx.lineTo(p.x, p.y);
+          hasSegments = true;
+        }
+        if (!hasSegments) continue;
+        ctx.strokeStyle = `rgba(75, 255, 151, ${alpha * .28})`;
+        ctx.lineWidth = 11 * alpha + 2; ctx.shadowColor = "#41ff99"; ctx.shadowBlur = 12;
+        ctx.stroke();
+        ctx.strokeStyle = `rgba(205, 255, 226, ${alpha * .8})`;
+        ctx.lineWidth = 2 * alpha + .5; ctx.shadowBlur = 0; ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+      for (const s of sparks) {
+        const life = Math.max(0, 1 - (now - s.born) / 800);
+        const x = s.x + s.dx * (1 - life), y = s.y + s.dy * (1 - life);
+        const size = s.radius * 7;
+        ctx.globalAlpha = life * .9;
+        ctx.drawImage(sparkSprites[s.diamond ? 1 : 0], x - size / 2, y - size / 2, size, size);
       }
       ctx.restore();
       if (trail.length || sparks.length) frame = requestAnimationFrame(drawTrail);
     }
-    function sample(event) {
-      const rect = app.getBoundingClientRect();
+    function sample(event, now) {
       recordOrbit(event);
-      if (!motionQuery?.matches) addPoint(event.clientX - rect.left, event.clientY - rect.top, performance.now());
+      if (!motionQuery?.matches) addPoint(event.clientX - appLeft, event.clientY - appTop, now);
     }
     stageEl.addEventListener("pointerdown", event => {
       const control = event.target.closest("button, a, input, textarea, select, [role=button]");
       if (!enabled() || pointer !== null || (event.pointerType === "mouse" && event.button !== 0) ||
           (control && !control.disabled)) return;
       pointer = event.pointerId; previous = null; trail.length = 0;
+      updateGeometry();
       try { stageEl.setPointerCapture(pointer); } catch {}
-      sample(event);
+      sample(event, performance.now());
     });
     stageEl.addEventListener("pointermove", event => {
       if (event.pointerId !== pointer) return;
       if (!enabled()) { resetTrail(); return; }
+      if (geometryDirty) updateGeometry();
+      const now = performance.now();
       const samples = event.getCoalescedEvents?.();
-      if (samples && samples.length) samples.forEach(sample); else sample(event);
+      if (samples && samples.length) { for (const point of samples) sample(point, now); }
+      else sample(event, now);
+      // A timer update or another layout change may move the orb without
+      // resizing it. Refresh at most once per frame, never per sample.
+      if (!geometryFrame) geometryFrame = requestAnimationFrame(() => {
+        geometryFrame = 0; geometryDirty = true;
+      });
     });
     const stop = event => { if (event.pointerId === pointer) { pointer = null; previous = null; lastAngle = null; winding = 0; } };
-    stageEl.addEventListener("pointerup", event => { if (event.pointerId === pointer && enabled()) sample(event); stop(event); });
+    stageEl.addEventListener("pointerup", event => { if (event.pointerId === pointer && enabled()) { if (geometryDirty) updateGeometry(); sample(event, performance.now()); } stop(event); });
     stageEl.addEventListener("pointercancel", stop);
     stageEl.addEventListener("lostpointercapture", stop);
     window.addEventListener("resize", resizeTrail);
+    window.addEventListener("scroll", () => { geometryDirty = true; }, {passive: true});
+    window.visualViewport?.addEventListener("scroll", () => { geometryDirty = true; }, {passive: true});
+    window.visualViewport?.addEventListener("resize", resizeTrail, {passive: true});
+    if (window.ResizeObserver) {
+      const observer = new ResizeObserver(() => { geometryDirty = true; });
+      observer.observe(orb); observer.observe(stageEl);
+    }
     document.addEventListener("visibilitychange", () => { if (document.hidden) resetTrail(); });
     motionQuery?.addEventListener?.("change", () => { if (motionQuery.matches) resetTrail(); });
     resizeTrail();
