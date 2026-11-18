@@ -83,7 +83,7 @@
     "Всего в экономике": "Total in economy",
     "Баланс банка": "Bank balance",
     "В обороте": "In circulation",
-    Игроков: "Players",
+    Холдеров: "Holders",
     "ОБНОВИТЬ ДАННЫЕ": "REFRESH DATA",
     "Баланс игрока один и тот же здесь и в чате (/balance). Данные /senseibank обновляются с задержкой до минуты.":
       "The player balance is the same here and in chat (/balance). /senseibank data may be up to a minute old.",
@@ -310,8 +310,8 @@
     "1 ⭐ · +1 ЧАС · 1 РАЗ ЗА ЦИКЛ": "1 ⭐ · +1 HOUR · ONCE PER CYCLE",
     "{stars} ⭐ · УСКОРИТЬ": "{stars} ⭐ · SPEED UP",
     "Скорость +50% · осталось {time}": "Speed +50% · {time} left",
-    "Сожжено {amount} Coin. Эмиссия уменьшена навсегда.":
-      "Burned {amount} Coin. Emission is permanently reduced.",
+    "Сожжено {amount} Coin. Текущая эмиссия уменьшена.":
+      "Burned {amount} Coin. Current emission is reduced.",
     "Скорость +50% активирована": "Speed +50% activated",
     "СЖИГАЕМ…": "BURNING…",
     "СЖЕЧЬ НАВСЕГДА": "BURN FOREVER",
@@ -345,6 +345,11 @@
       "Invalid burn request. Reopen the window and try again.",
     "Сжигание уже обрабатывается. Подожди и обнови экран.":
       "The burn is already being processed. Wait and refresh the screen.",
+    "ТЕКУЩАЯ ЭМИССИЯ": "CURRENT EMISSION",
+    "ДО ЛИМИТА ЭМИССИИ": "UNTIL EMISSION CAP",
+    "Есть расхождение в учёте или превышение лимита. Требуется проверка данных.": "Accounting discrepancy or cap exceeded. The data needs investigation.",
+    "Автобан возвращает Coin в SenseiBank. Сжигание уменьшает текущую эмиссию, но освобождённый лимит может использоваться снова.": "Autoban returns Coin to SenseiBank. Burning reduces current emission, but the freed capacity can be used again.",
+    "Сожжённые Coin исчезают безвозвратно. Текущая эмиссия уменьшается, но освободившийся лимит может использоваться снова. Это добровольный вклад, а не инвестиция и не обещание цены или листинга.": "Burned Coin are gone permanently. Current emission decreases, but the freed capacity can be used again. This is a voluntary contribution, not an investment or a promise of price or listing.",
     НАМАЙНЕНО: "MINED",
     "ЭМИССИИ ВЫПУЩЕНО": "OF EMISSION RELEASED",
     "ОСТАЛОСЬ ДО КОНЦА МАЙНИНГА": "LEFT UNTIL MINING ENDS",
@@ -2203,7 +2208,7 @@
       if (model) model.balance = Number(data.balance ?? data.burn?.balance);
       closeBurn();
       showToast(
-        t("Сожжено {amount} Coin. Эмиссия уменьшена навсегда.", {
+        t("Сожжено {amount} Coin. Текущая эмиссия уменьшена.", {
           amount: coin(burned),
         }),
       );
@@ -2238,7 +2243,12 @@
     $("bank-circulation").textContent = `${coin(bank.circulation)} Coin`;
     $("bank-burned").textContent = `${coin(bank.burned)} Coin`;
     $("bank-confiscated").textContent = `${coin(bank.confiscated)} Coin`;
-    $("bank-users").textContent = coin(bank.users);
+    $("bank-holders").textContent = coin(bank.holders);
+    const warning = $("bank-warning");
+    if (warning) {
+      warning.hidden = !bank.supply_over_cap && !(cap && emitted > cap) && Math.abs(emitted - Number(bank.total_supply || 0)) < 1;
+      warning.textContent = t("Есть расхождение в учёте или превышение лимита. Требуется проверка данных.");
+    }
     $("bank-mined-label").textContent = `${coin(emitted)} Coin`;
     $("bank-remaining-label").textContent = `${coin(remaining)} Coin`;
     $("bank-progress-percent").textContent =

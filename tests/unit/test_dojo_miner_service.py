@@ -1,5 +1,6 @@
 """Серверный трёхчасовой цикл: старт, ожидание, выплата из банка."""
 import copy
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -9,7 +10,35 @@ from src.core.container import Container
 from src.services import dojo_miner_service as miner
 from src.services.dojo_miner_service import DojoMinerService
 from src.services.hedgehog_service import GameError
-from tests.unit.test_hedgehog_game import Collection
+from tests.unit.test_hedgehog_game import Collection as BaseCollection
+
+
+class Collection(BaseCollection):
+    async def find_one(self, query, **kwargs):
+        return await super().find_one(query)
+
+    async def update_one(self, query, changes, **kwargs):
+        value = await self.find_one_and_update(query, changes, **kwargs)
+        return SimpleNamespace(matched_count=int(value is not None))
+
+    async def insert_one(self, doc, **kwargs):
+        self.docs[doc.get("_id", len(self.docs))] = copy.deepcopy(doc)
+
+
+@pytest.fixture(autouse=True)
+def mock_mongo_transaction(monkeypatch):
+    lock = asyncio.Lock()
+    async def tx(mongo, callback):
+        async with lock:
+            return await atomic(mongo, callback)
+    async def atomic(mongo, callback):
+        collections = [mongo.database.users, mongo.database.dojo_miners, mongo.database.bank, mongo.database.transactions]
+        snapshots = [copy.deepcopy(c.docs) for c in collections]
+        try: return await callback("session")
+        except BaseException:
+            for collection, saved in zip(collections, snapshots): collection.docs = saved
+            raise
+    monkeypatch.setattr("src.services.dojo_miner_service.transaction", tx)
 
 
 class Miners(Collection):
@@ -21,6 +50,8 @@ def service():
     db = SimpleNamespace(
         dojo_miners=Miners(),
         users=Collection([{'id': 7, 'coins': 500}]),
+        bank=Collection([{'_id': 'single', 'coins': 1000}]),
+        transactions=Collection(),
     )
     economy = SimpleNamespace(process_game_win=AsyncMock(return_value={
         'success': True, 'new_coins': 620}))
@@ -93,17 +124,17 @@ async def test_collect_pays_once_from_bank_and_reopens_cycle():
     with patch.object(miner.time, 'time', return_value=11800):
         result = await dojo.collect(7)
     assert result['mined'] == 18
-    assert result['balance'] == 620
+    assert result['balance'] == 518
     assert result['phase'] == 'ready'
-    economy.process_game_win.assert_awaited_once()
-    assert economy.process_game_win.await_args.kwargs['coins'] == 18
-    assert '3h' in economy.process_game_win.await_args.kwargs['description']
+    assert dojo.mongo.database.bank.docs['single']['coins'] == 982
+    assert len(dojo.mongo.database.transactions.docs) == 1
+    economy.process_game_win.assert_not_awaited()
     with patch.object(miner.time, 'time', return_value=30000):
         with pytest.raises(GameError, match='уже получена'):
             await dojo.collect(7)
         again = await dojo.start(7)
     assert again['phase'] == 'mining'
-    assert economy.process_game_win.await_count == 1
+    economy.process_game_win.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -121,7 +152,7 @@ async def test_finished_uncollected_state_is_ready_to_collect():
 @pytest.mark.asyncio
 async def test_bank_failure_rolls_back_so_reward_is_not_lost():
     _, dojo, economy = service()
-    economy.process_game_win.return_value = {'success': False, 'reason': 'banned'}
+    dojo.mongo.database.users.docs[7]['is_banned'] = True
     with patch.object(miner.time, 'time', return_value=1000):
         await dojo.start(7)
     with patch.object(miner.time, 'time', return_value=11800):
@@ -137,7 +168,7 @@ async def test_bank_failure_rolls_back_so_reward_is_not_lost():
 @pytest.mark.asyncio
 async def test_bank_exception_rolls_back_so_reward_is_not_lost():
     _, dojo, economy = service()
-    economy.process_game_win.side_effect = RuntimeError('bank offline')
+    dojo.mongo.database.transactions.insert_one = AsyncMock(side_effect=RuntimeError('log offline'))
     with patch.object(miner.time, 'time', return_value=1000):
         await dojo.start(7)
     with patch.object(miner.time, 'time', return_value=11800):
@@ -326,3 +357,46 @@ async def test_circle_limit_uses_permanent_energy_cap_not_task_energy():
         assert (await dojo.add_circle_energy(7, 1000, 'with-task-cap'))['added'] == 0
     with patch.object(miner.time, 'time', return_value=6418):
         assert (await dojo.add_circle_energy(7, 1000, 'with-task-partial'))['added'] == pytest.approx(.5)
+
+
+@pytest.mark.asyncio
+async def test_miner_transaction_split_bank_and_rollback():
+    _, dojo, _ = service()
+    bank = dojo.mongo.database.bank
+    bank.docs['single']['coins'] = 10
+    bank.docs['main'] = {'_id': 'main', 'balance': 8}
+    with patch.object(miner.time, 'time', return_value=1000):
+        await dojo.start(7)
+    with patch.object(miner.time, 'time', return_value=11800):
+        result = await dojo.collect(7)
+    assert result['balance'] == 518
+    assert bank.docs['single']['coins'] == 0 and bank.docs['main']['balance'] == 0
+    assert len(dojo.mongo.database.transactions.docs) == 1
+
+
+@pytest.mark.asyncio
+async def test_miner_partial_bank_debit_is_rolled_back():
+    _, dojo, _ = service()
+    dojo.mongo.database.bank.docs['single']['coins'] = 10
+    with patch.object(miner.time, 'time', return_value=1000):
+        await dojo.start(7)
+    with patch.object(miner.time, 'time', return_value=11800):
+        with pytest.raises(GameError, match='SenseiBank'): await dojo.collect(7)
+    assert dojo.mongo.database.bank.docs['single']['coins'] == 10
+    assert dojo.mongo.database.users.docs[7]['coins'] == 500
+    assert not dojo.miners.docs[7]['collected']
+    assert not dojo.mongo.database.transactions.docs
+
+
+@pytest.mark.asyncio
+async def test_miner_two_workers_pay_cycle_only_once():
+    mongo, first, _ = service()
+    second = DojoMinerService(mongo, first.economy)
+    with patch.object(miner.time, 'time', return_value=1000):
+        await first.start(7)
+    with patch.object(miner.time, 'time', return_value=11800):
+        results = await asyncio.gather(first.collect(7), second.collect(7), return_exceptions=True)
+    assert sum(isinstance(r, dict) for r in results) == 1
+    assert mongo.database.users.docs[7]['coins'] == 518
+    assert mongo.database.bank.docs['single']['coins'] == 982
+    assert len(mongo.database.transactions.docs) == 1

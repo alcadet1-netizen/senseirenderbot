@@ -269,21 +269,22 @@ def _build_finished_message(
             f"━━━━━━━━━━━━━━━━━━━\n\n"
             f'<tg-emoji emoji-id="5453957997418004470">😱</tg-emoji><tg-emoji emoji-id="5453957997418004470">😱</tg-emoji><tg-emoji emoji-id="5453957997418004470">😱</tg-emoji> <b>ПРОВАЛ!</b> <tg-emoji emoji-id="5453957997418004470">😱</tg-emoji><tg-emoji emoji-id="5453957997418004470">😱</tg-emoji><tg-emoji emoji-id="5453957997418004470">😱</tg-emoji>\n\n'
             f"{Visuals.cross()} Никто не успел!\n\n"
-            f"💸 <b>{total:,}</b> монет\n"
-            f"<i>сгорели в огне...</i>\n\n"
+            f"💰 <b>{total:,}</b> Coin остались в банке.\n\n"
             f"{Visuals.fire_raw() * 7}\n\n"
             f"<i>В следующий раз будьте быстрее!</i> 🏃"
         )
     else:
-        status = '<tg-emoji emoji-id="5260469398610657764">⏰</tg-emoji> <b>ВРЕМЯ ВЫШЛО!</b>' if is_timeout else f'{Visuals.check()} <b>ВСЕ МЕСТА!</b>'
+        status = ('<tg-emoji emoji-id="5260469398610657764">⏰</tg-emoji> <b>ВРЕМЯ ВЫШЛО!</b>' if is_timeout
+                  else f'{Visuals.check()} <b>ВЫПЛАТЫ ЗАВЕРШЕНЫ</b>')
         
         # Топ-3 с бонусами
         top3_text = ""
         for i, w in enumerate(winners_list[:3], 1):
             name = w.get("name", "???")[:12]
             bonus = w.get("bonus", 0)
-            pos_emoji = _get_position_emoji(i)
-            mult = _get_position_bonus(i)
+            position = w.get("position", i)
+            pos_emoji = _get_position_emoji(position)
+            mult = _get_position_bonus(position)
             if mult > 1:
                 top3_text += f"   {pos_emoji} {name}: <b>+{bonus:,}</b> (x{mult})\n"
             else:
@@ -296,7 +297,7 @@ def _build_finished_message(
             for i, w in enumerate(winners_list[3:7], 4):
                 name = w.get("name", "???")[:12]
                 bonus = w.get("bonus", 0)
-                others_text += f"   #{i} {name}: <b>+{bonus:,}</b>\n"
+                others_text += f"   #{w.get('position', i)} {name}: <b>+{bonus:,}</b>\n"
             
             if actual_winners > 7:
                 others_text += f"   <i>...и ещё {actual_winners - 7} чел.</i>\n"
@@ -433,14 +434,8 @@ async def cmd_senseibomb(message: Message, container: Container):
             )
             return
 
-        logger.info(f"👉 [BOMB] Step 7c: Withdrawing {total} from bank")
-        success = await economy_service._withdraw_from_bank(total)
-        if not success:
-            # This should not happen if we checked balance, but just in case
-            logger.error(f"👉 [BOMB] Withdrawal failed despite sufficient balance")
-            await message.answer(f"{Visuals.cross()} Ошибка банка при снятии средств!", parse_mode="HTML")
-            return
-        logger.info(f"👉 [BOMB] Step 7d: Bank transaction committed!")
+        # Do not debit a volatile in-memory reservation. Each confirmed win
+        # is paid atomically by process_game_win at settlement time.
     except Exception as e:
         logger.error(f"👉 [BOMB] Step 7e: Bank error: {e}", exc_info=True)
         await message.answer(f"{Visuals.cross()} Ошибка банка: {e}")
@@ -567,47 +562,39 @@ async def _finish_bomb(bot: Bot, chat_id: int, container: Container, is_timeout:
     # Кулдаун
     _bomb_cooldowns[chat_id] = time.time() + BOMB_COOLDOWN
     
-    # Начисляем награды и возвращаем остаток через сервис экономики
-    try:
-        economy_service = container.economy_service
+    # Each prize is a bank-to-player transfer. There is no prior reservation
+    # or refund, so a crash cannot strand a pre-debited in-memory pool.
+    paid_winners = []
+    failed_rewards = 0
+    for winner in winners:
+        try:
+            result = await container.economy_service.process_game_win(
+                user_id=winner["user_id"], coins=winner["bonus"], xp=0,
+                description=f'Бонус-бомба #{winner.get("position", 0)}')
+            if result.get('success'):
+                paid_winners.append(winner)
+            else:
+                failed_rewards += 1
+                logger.error('Bomb prize rejected user=%s result=%s', winner['user_id'], result)
+        except Exception:
+            failed_rewards += 1
+            logger.exception('Bomb prize requires review user=%s', winner['user_id'])
+    total_distributed = sum(winner['bonus'] for winner in paid_winners)
 
-        # 1. Раздача победителям
-        for winner in winners:
-            user_id = winner["user_id"]
-            bonus = winner["bonus"]
-            position = winner.get("position", 0)
-            desc = f"Бонус-бомба #{position}"
-
-            result = await economy_service.process_game_win(
-                user_id=user_id,
-                coins=bonus,
-                xp=0,  # Бомба не дает XP
-                description=desc
-            )
-            if not result["success"]:
-                logger.error(f"Failed to award bomb prize to user {user_id}: {result}")
-
-        # 2. Возврат остатка в банк
-        refund = bomb["total"] - total_distributed
-        if refund > 0:
-            # Депозит в банк через экономический сервис
-            await economy_service._deposit_to_bank(refund)
-            logger.info(f"Refunding {refund} to bank")
-            await bot.send_message(chat_id, f"🏦 Неразыгранные {refund:,} монет вернулись в банк!", parse_mode="HTML")
-
-    except Exception as e:
-        logger.error(f"Error processing bomb rewards: {e}")
-    
     # Финальное сообщение
     final_msg = _build_finished_message(
         bomb["total"],
         bomb["per_user"],
-        winners,
+        paid_winners,
         bomb["max_winners"],
         total_distributed,
         is_timeout
     )
     
+    if failed_rewards and not paid_winners:
+        final_msg = "💣 <b>БОНУС-БОМБА</b>\nНи одна выплата не подтверждена."
+    if failed_rewards:
+        final_msg += f"\n⚠️ Не подтверждено выплат: {failed_rewards}. Обратитесь к администратору."
     try:
         await bot.edit_message_text(
             final_msg,
