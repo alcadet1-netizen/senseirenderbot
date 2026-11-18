@@ -2814,7 +2814,8 @@ button:focus-visible {
   box-shadow: inset 0 0 22px rgba(45, 255, 137, 0.06);
 }
 
-.roadmap-step.is-tge {
+.roadmap-step.is-tge,
+.roadmap-step.is-dex {
   border-color: rgba(174, 255, 205, 0.32);
 }
 
@@ -4700,4 +4701,135 @@ button:focus-visible {
     min-height: 11px;
     font-size: 7px;
   }
+}
+
+/* Daily reward controls stay outside the mining feed. */
+.daily-sticker { color:#dffff0; background:linear-gradient(145deg,#174e30,#071d12); border:1px solid #5bac79; border-radius:12px; padding:9px 8px; font-size:10px; font-weight:800; cursor:pointer; box-shadow:0 4px 15px #0008; }
+.daily-card p { color:#b2cbbd; font-size:12px; line-height:1.5; }
+.daily-schedule { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+.daily-schedule span { text-align:center; background:#123322; border-radius:10px; padding:9px 3px; font-size:10px; color:#8cc5a3; }
+.daily-schedule b { display:block; margin-top:4px; color:#edfff5; }
+.daily-card .sheet-done { margin-top:10px; }
+.daily-card .sheet-done:disabled { opacity:.45; cursor:not-allowed; }
+.chest-reel { text-align:center; border:1px solid #70e5a0; border-radius:12px; padding:18px; color:#dcffe8; background:#102d1d; font-weight:800; }
+.chest-reel.spinning { animation: chest-pulse .7s ease-in-out; }
+@keyframes chest-pulse { 50% { opacity:.35; transform:scale(.97); } }
+@media (prefers-reduced-motion: reduce) { .chest-reel.spinning { animation:none; } }
+
+.chest-reel { overflow:hidden; }
+.chest-reel-track { display:flex; width:max-content; gap:12px; animation: chest-slide 1s ease-out forwards; }
+.chest-reel-track span { display:inline-block; min-width:115px; text-align:center; }
+@keyframes chest-slide { from { transform:translateX(0); } to { transform:translateX(calc(-100% + 125px)); } }
+@media (prefers-reduced-motion: reduce) { .chest-reel-track { animation-duration:0.01ms; } }
+
+.daily-calendar { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; }
+.daily-day { display:grid; gap:4px; min-width:0; padding:10px 2px; border:1px solid #244f36; border-radius:10px; background:#092115; text-align:center; }
+.daily-day span { color:#94b8a1; font-size:8px; white-space:nowrap; }
+.daily-day b { font-size:12px; color:#eafff3; }
+.daily-day small { color:#8db49a; font-size:8px; }
+.daily-day.is-complete { opacity:.6; }
+.daily-day.is-current { border-color:#8affbe; box-shadow:inset 0 0 15px #35e88133; opacity:1; }
+.daily-card .daily-milestone, .daily-card .chest-result { color:#a9ffd0; font-weight:700; }
+.chest-result:empty { display:none; }
+
+/* Chest animation is visual only: the server selects and credits the prize. */
+.chest-scene {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 116px;
+  isolation: isolate;
+}
+.chest-glow {
+  position: absolute;
+  width: 145px;
+  height: 86px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, #40ff9a77, transparent 70%);
+  filter: blur(13px);
+  z-index: -1;
+}
+.chest-art {
+  width: 128px;
+  height: 96px;
+  filter: drop-shadow(0 8px 12px #000a) drop-shadow(0 0 9px #4cff9a44);
+  transform-origin: center bottom;
+}
+.chest-spark {
+  position: absolute;
+  color: #baffd6;
+  text-shadow: 0 0 12px #39ff8c;
+  opacity: .7;
+}
+.chest-spark-1 { top: 16px; left: calc(50% - 87px); font-size: 14px; }
+.chest-spark-2 { top: 30px; right: calc(50% - 92px); font-size: 20px; }
+.chest-spark-3 { bottom: 16px; right: calc(50% - 75px); font-size: 10px; }
+.is-opening .chest-art { animation: chest-shake .45s ease-in-out infinite alternate; }
+.is-opening .chest-glow { animation: chest-glow-pulse .8s ease-in-out infinite alternate; }
+.is-win .chest-art { animation: chest-celebrate .7s ease-out both; }
+.is-win .chest-spark { animation: chest-spark-pop .9s ease-out both; }
+.chest-reel-wrap { position: relative; padding-top: 10px; }
+.chest-pointer {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 2px;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 12px solid #a8ffd0;
+  filter: drop-shadow(0 0 6px #40ff98);
+}
+.chest-reel {
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+  height: 100px;
+  border: 1px solid #64ce8c;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #031109, #0c2819 50%, #04140b);
+  box-shadow: inset 0 0 22px #000c, 0 0 18px #2bff8a22;
+}
+.chest-placeholder { display: grid; place-items: center; height: 100%; color: #a2d4b2; font-size: 11px; letter-spacing: 1px; }
+.chest-reel-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: max-content;
+  height: 100%;
+  gap: 8px;
+  padding: 7px;
+  animation: none;
+  will-change: transform;
+}
+.reel-prize {
+  display: grid;
+  place-content: center;
+  gap: 1px;
+  flex: 0 0 104px;
+  width: 104px;
+  height: 84px;
+  border: 1px solid #3a8457;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #164b2e, #06180e);
+  color: #eafff2;
+  text-align: center;
+}
+.reel-prize-icon { color: #9effbd; font-size: 22px; line-height: 1; text-shadow: 0 0 10px #4eff95; }
+.reel-prize strong { font-size: 15px; line-height: 1.2; }
+.reel-prize small { font-size: 8px; letter-spacing: .5px; color: #95caa9; }
+.reel-prize.is-gram { border-color: #b8ffe1; background: linear-gradient(145deg, #2b7651, #0b291a); }
+.reel-prize.is-winner { border-color: #d5ffe5; box-shadow: inset 0 0 20px #49ff9840, 0 0 14px #70ffa766; }
+.chest-result:not(:empty) { text-align: center; animation: chest-reveal .5s ease-out both; }
+@keyframes chest-shake { from { transform: rotate(-3deg); } to { transform: rotate(3deg); } }
+@keyframes chest-glow-pulse { from { transform: scale(.85); opacity: .65; } to { transform: scale(1.3); opacity: 1; } }
+@keyframes chest-celebrate { 35% { transform: translateY(-9px) scale(1.08); } }
+@keyframes chest-spark-pop { from { opacity: 0; transform: scale(.3); } 40% { opacity: 1; transform: scale(1.6); } to { opacity: .7; transform: scale(1); } }
+@keyframes chest-reveal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .is-opening .chest-art, .is-opening .chest-glow, .is-win .chest-art,
+  .is-win .chest-spark, .chest-result:not(:empty) { animation: none; }
+  .chest-reel-track { transition: none !important; }
 }

@@ -159,8 +159,9 @@
           </span>
           <b class="burn-title">BURN</b>
         </button>
+        <button type="button" id="daily-open" class="daily-sticker">🔥 DAILY STREAK</button>
+        <button type="button" id="chest-open" class="daily-sticker">🎁 СУНДУК</button>
       </div>
-
       <div class="stage">
         <section
           class="balance"
@@ -846,6 +847,52 @@
         </section>
       </div>
 
+      <div id="daily-sheet" class="sheet" hidden>
+        <div class="sheet-backdrop" data-close-daily></div>
+        <section class="sheet-card daily-card" role="dialog" aria-modal="true" aria-labelledby="daily-title">
+          <button class="sheet-close" data-close-daily aria-label="Закрыть">×</button>
+          <p class="view-eyebrow">ЕЖЕДНЕВНАЯ НАГРАДА · UTC</p>
+          <h2 id="daily-title">🔥 DAILY STREAK</h2>
+          <p id="daily-info" aria-live="polite">Загрузка…</p>
+          <div id="daily-calendar" class="daily-calendar" aria-label="Ближайшие дни серии"></div>
+          <p id="daily-milestone" class="daily-milestone"></p>
+          <p>Каждые 7 дней серия приносит дополнительные сундуки: 1, 2, 3 и далее. Пропуск дня или завершение 90 дней начинает новую серию.</p>
+          <button id="daily-claim" class="sheet-done" disabled>ПОЛУЧИТЬ</button>
+        </section>
+      </div>
+      <div id="chest-sheet" class="sheet" hidden>
+        <div class="sheet-backdrop" data-close-chest></div>
+        <section class="sheet-card daily-card" role="dialog" aria-modal="true" aria-labelledby="chest-title">
+          <button class="sheet-close" data-close-chest aria-label="Закрыть">×</button>
+          <p class="view-eyebrow">ЕЖЕДНЕВНЫЙ СУНДУК</p>
+          <h2 id="chest-title">🎁 СОКРОВИЩНИЦА</h2>
+          <p id="chest-info" aria-live="polite">Загрузка…</p>
+          <div id="chest-scene" class="chest-scene" aria-hidden="true">
+            <span class="chest-glow"></span>
+            <span class="chest-spark chest-spark-1">✦</span>
+            <span class="chest-spark chest-spark-2">✧</span>
+            <span class="chest-spark chest-spark-3">✦</span>
+            <svg class="chest-art" viewBox="0 0 160 120" fill="none">
+              <defs><linearGradient id="chest-metal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#71ffc0"/><stop offset="1" stop-color="#1b7349"/></linearGradient></defs>
+              <path d="M22 48C22 29 33 19 53 19h54c20 0 31 10 31 29v11H22V48Z" fill="#103f28" stroke="url(#chest-metal)" stroke-width="4"/>
+              <path d="M18 58h124v41c0 7-5 11-12 11H30c-7 0-12-4-12-11V58Z" fill="#0a2a1a" stroke="url(#chest-metal)" stroke-width="4"/>
+              <path d="M18 67h124M38 22v86M122 22v86" stroke="#43b77a" stroke-width="4"/>
+              <rect x="66" y="53" width="28" height="27" rx="5" fill="#3bbd7c" stroke="#b5ffce" stroke-width="3"/>
+              <circle cx="80" cy="64" r="3" fill="#092b1a"/><path d="M80 66v6" stroke="#092b1a" stroke-width="3"/>
+            </svg>
+          </div>
+          <div class="chest-reel-wrap" aria-label="Лента рулетки">
+            <span class="chest-pointer" aria-hidden="true"></span>
+            <div id="chest-reel" class="chest-reel" aria-hidden="true"><div class="chest-placeholder">✦ ОТКРОЙ СУНДУК ✦</div></div>
+          </div>
+          <p id="chest-result" class="chest-result" role="status" aria-live="polite"></p>
+          <p>Один бесплатный сундук в день UTC плюс сундуки за серию. Возможные награды: 100–500 Coin или 0,01–0,03 виртуальных GRAM. Виртуальный GRAM не является реальным активом. Вероятности наград различаются и не зависят от баланса. Лента — анимация, результат определяет сервер.</p>
+          <p id="gram-info">Виртуальный GRAM · вывод пока недоступен.</p>
+          <button class="sheet-done" disabled title="Вывод пока недоступен">ВЫВОД ОТ 3 GRAM · НЕДОСТУПЕН</button>
+          <button id="chest-spin" class="sheet-done" disabled>ОТКРЫТЬ СУНДУК</button>
+        </section>
+      </div>
+
       <div id="roadmap-sheet" class="sheet roadmap-screen" hidden>
         <div class="sheet-backdrop" data-close="roadmap-sheet"></div>
         <section
@@ -877,7 +924,7 @@
               <div>
                 <b>MINER START</b>
                 <strong>LIVE</strong>
-                <p>Four-hour mining cycles. Rewards come from SenseiBank.</p>
+                <p>Three-hour mining cycles. Rewards come from SenseiBank.</p>
               </div>
             </article>
             <article class="roadmap-step is-tge">
@@ -886,8 +933,21 @@
                 <b>TGE · FINISH MINE</b>
                 <strong>WHEN ALL COINS ARE MINED</strong>
                 <p>
-                  Token Generation Event unlocks after the mine is finished: all
-                  10,000,000,000 SenseiCoin mined.
+                  A potential token launch after the mine is finished is under
+                  consideration. The 10,000,000,000 Coin figure is an emission
+                  cap, not a guarantee of a token launch or conversion.
+                </p>
+              </div>
+            </article>
+            <article class="roadmap-step is-dex">
+              <span class="roadmap-step-num">04</span>
+              <div>
+                <b>DEX LISTING</b>
+                <strong>PLANNED · NO DATE</strong>
+                <p>
+                  Explore a decentralized exchange listing after a potential TGE,
+                  subject to token design, security, liquidity and legal review.
+                  No listing or trading is guaranteed.
                 </p>
               </div>
             </article>

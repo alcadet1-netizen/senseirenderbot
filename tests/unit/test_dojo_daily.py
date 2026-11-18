@@ -1,0 +1,88 @@
+from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+
+from src.services.dojo_daily_service import DojoDailyService, day_number, reward_for_day
+from src.services.hedgehog_service import GameError
+
+
+def test_streak_and_rewards():
+    today = date(2026, 1, 10)
+    assert day_number(today, None, 0) == 1
+    assert day_number(today, today - timedelta(days=2), 70) == 1
+    assert day_number(today, today - timedelta(days=1), 89) == 90
+    assert day_number(today, today - timedelta(days=1), 90) == 1
+    assert day_number(today, today, 7) == 7
+    assert [reward_for_day(n) for n in (1, 2, 3, 7, 90)] == [100, 200, 600, 600, 600]
+
+
+def service(monkeypatch, doc=None, bank_ok=True):
+    async def tx(mongo, fn):
+        return await fn('session')
+    monkeypatch.setattr('src.services.dojo_daily_service.transaction', tx)
+    users = SimpleNamespace(find_one=AsyncMock(return_value={'id': 42}), update_one=AsyncMock())
+    bank = SimpleNamespace(find_one=AsyncMock(return_value={'coins': 1000}), update_one=AsyncMock(return_value=SimpleNamespace(matched_count=int(bank_ok))))
+    daily = SimpleNamespace(find_one=AsyncMock(return_value=doc), update_one=AsyncMock())
+    receipts = SimpleNamespace(find_one=AsyncMock(return_value=None), insert_one=AsyncMock())
+    transactions = SimpleNamespace(insert_one=AsyncMock())
+    db = SimpleNamespace(users=users, bank=bank, dojo_daily=daily, dojo_chest_receipts=receipts, transactions=transactions)
+    return DojoDailyService(SimpleNamespace(database=db)), db
+
+
+@pytest.mark.asyncio
+async def test_claim_weekly_chests(monkeypatch):
+    yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
+    svc, db = service(monkeypatch, {'last_day': yesterday, 'streak': 13})
+    result = await svc.claim(42)
+    assert result == {'day': 14, 'reward': 600, 'chests_added': 2}
+    assert db.dojo_daily.update_one.call_args.args[1]['$inc']['chests'] == 2
+    assert db.bank.update_one.call_args.args[1] == {'$inc': {'coins': -600}}
+
+
+@pytest.mark.asyncio
+async def test_failed_bank_does_not_pay(monkeypatch):
+    svc, db = service(monkeypatch, bank_ok=False)
+    with pytest.raises(GameError):
+        await svc.claim(42)
+    db.users.update_one.assert_not_awaited()
+    db.dojo_daily.update_one.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_chest_replay_returns_recorded_prize(monkeypatch):
+    svc, db = service(monkeypatch)
+    db.dojo_chest_receipts.find_one.return_value = {'result': {'kind': 'coin', 'amount': 300}}
+    assert await svc.open_chest(42, 'test-id-123') == {'kind': 'coin', 'amount': 300}
+    db.bank.update_one.assert_not_awaited()
+    db.dojo_daily.update_one.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_chest_cannot_open_twice_without_bonus(monkeypatch):
+    svc, db = service(monkeypatch, {'free_day': datetime.now(timezone.utc).date().isoformat(), 'chests': 0})
+    with pytest.raises(GameError):
+        await svc.open_chest(42, 'test-id-123')
+    db.bank.update_one.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_virtual_gram_is_credited_without_bank_debit(monkeypatch):
+    svc, db = service(monkeypatch)
+    monkeypatch.setattr('src.services.dojo_daily_service.secrets.randbelow', lambda n: 0)
+    result = await svc.open_chest(42, 'test-id-123')
+    assert result == {'kind': 'gram', 'amount': 1}
+    assert db.dojo_daily.update_one.call_args.args[1]['$inc']['gram_hundredths'] == 1
+    db.bank.update_one.assert_not_awaited()
+    db.dojo_chest_receipts.insert_one.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_chest_all_outcomes_blocked_if_bank_cannot_cover_prizes(monkeypatch):
+    svc, db = service(monkeypatch)
+    db.bank.find_one.return_value = {'coins': 499}
+    monkeypatch.setattr('src.services.dojo_daily_service.secrets.randbelow', lambda n: 0)
+    with pytest.raises(GameError):
+        await svc.open_chest(42, 'test-id-123')
+    db.dojo_daily.update_one.assert_not_awaited()
