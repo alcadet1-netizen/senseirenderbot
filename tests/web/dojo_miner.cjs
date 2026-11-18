@@ -312,9 +312,13 @@ const { chromium } = require("playwright-core");
   const burnFlame = await page.locator(".burn-flame").boundingBox();
   const burnTitle = await page.locator(".burn-title").boundingBox();
   assert.ok(
-    burnTitle.x >= burnFlame.x + burnFlame.width - 1,
-    "BURN caption must sit clear of the animated flame",
+    burnTitle.y >= burnFlame.y + burnFlame.height - 1,
+    "BURN caption must sit below the flame",
   );
+  for (const selector of ["#roadmap", "#burn", "#daily-open", "#chest-open"]) {
+    const box = await page.locator(selector).boundingBox();
+    assert.ok(Math.abs(box.width - box.height) < 1, `${selector} must be square`);
+  }
   const readyFit = await page.evaluate(() => {
     const stage = document.querySelector(".stage");
     const action = document.querySelector("#action").getBoundingClientRect();
@@ -338,6 +342,28 @@ const { chromium } = require("playwright-core");
     () => document.querySelector("#app").classList.contains("phase-mining"),
     { timeout: 5000 },
   );
+  const stageForTrail = await page.locator("#orb").boundingBox();
+  const x = stageForTrail.x + stageForTrail.width / 2;
+  const y = stageForTrail.y + stageForTrail.height / 2;
+  await page.mouse.move(x - 35, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 35, y + 15, { steps: 12 });
+  await page.waitForTimeout(80);
+  assert.ok(await page.locator("#magic-trail").evaluate(canvas => {
+    const pixels = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let i = 3; i < pixels.length; i += 4) if (pixels[i] > 0) return true;
+    return false;
+  }), "moving while pressed should draw a trail");
+  await page.mouse.up();
+  await page.waitForTimeout(1000);
+  assert.ok(await page.locator("#magic-trail").evaluate(canvas => {
+    const pixels = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let i = 3; i < pixels.length; i += 4) if (pixels[i] > 0) return false;
+    return true;
+  }), "trail must fade after release");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  assert.equal(await page.locator("#magic-trail").isVisible(), false);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   assert.match(
     await page.locator("#action-label").textContent(),
     /^\d\d:\d\d:\d\d$/,

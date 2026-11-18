@@ -28,6 +28,8 @@ ASSETS = {
     'miner.js',
     'assets/sensei.webp',
     'assets/loading-hero.webp',
+    'assets/sensei-style-400.woff2',
+    'assets/sensei-style-700.woff2',
 }
 
 
@@ -167,7 +169,7 @@ def setup_dojo(app, container=None):
             response.headers['Content-Type'] = 'image/webp'
         response.headers['Content-Security-Policy'] = (
             "default-src 'none'; script-src 'self' https://telegram.org; style-src 'self'; "
-            "img-src 'self' data:; connect-src 'self'; base-uri 'none'; "
+            "img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; "
             "form-action 'none'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org"
         )
         return response
@@ -309,7 +311,7 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/{asset:style\\.css|miner\\.js}', page)
     app.router.add_get(
-        '/miniapp/dojo/assets/{asset:sensei\\.webp|loading-hero\\.webp}', page)
+        '/miniapp/dojo/assets/{asset:sensei\\.webp|loading-hero\\.webp|sensei-style-(?:400|700)\\.woff2}', page)
     app.router.add_post(
         '/miniapp/dojo/api/{action:state|start|collect|tasks|task|upgrades|buy|bank|burn|referrals|share|daily|daily_claim|chest}',
         api)
