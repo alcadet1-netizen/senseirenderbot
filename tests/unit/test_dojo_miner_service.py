@@ -235,8 +235,7 @@ async def test_circle_energy_rapid_replay_cap_and_new_cycle():
     _, dojo, _ = service()
     with patch.object(miner.time, 'time', return_value=1000):
         await dojo.start(7)
-        with pytest.raises(GameError, match='энергия закончилась'):
-            await dojo.add_circle_energy(7, 1000, 'circle-early')
+        assert (await dojo.add_circle_energy(7, 1000, 'circle-early'))['added'] == 0
     with patch.object(miner.time, 'time', return_value=4600):
         for i in range(50):
             assert (await dojo.add_circle_energy(7, 1000, f'circle-{i:04}'))['added'] == 1
@@ -284,3 +283,46 @@ async def test_circle_access_rejects_banned_player():
     with patch.object(miner.time, 'time', return_value=4600):
         with pytest.raises(GameError, match='Профиль'):
             await dojo.add_circle_energy(7, 1000, 'circle-test')
+
+
+@pytest.mark.asyncio
+async def test_circle_available_below_half_before_empty_and_partial_credit_replays():
+    _, dojo, _ = service()
+    with patch.object(miner.time, 'time', return_value=1000):
+        await dojo.start(7)
+    for now in (2799, 2800):
+        with patch.object(miner.time, 'time', return_value=now):
+            state = await dojo.state(7)
+            assert state['circle_available'] is False
+            assert (await dojo.add_circle_energy(7, 1000, f'above-{now}'))['added'] == 0
+    with patch.object(miner.time, 'time', return_value=2818):
+        state = await dojo.state(7)
+        assert state['circle_energy'] == pytest.approx(49.5)
+        assert state['circle_available'] is True
+        result = await dojo.add_circle_energy(7, 1000, 'partial-circle')
+        assert result['added'] == pytest.approx(0.5)
+        assert (await dojo.add_circle_energy(7, 1000, 'partial-circle')) == {
+            'added': result['added'], 'replayed': True}
+        state = await dojo.state(7)
+        assert state['energy'] == pytest.approx(50)
+        assert state['circle_available'] is False
+        assert (await dojo.add_circle_energy(7, 1000, 'at-cap-again'))['added'] == 0
+    with patch.object(miner.time, 'time', return_value=2854):
+        assert (await dojo.state(7))['circle_available'] is True
+        assert (await dojo.add_circle_energy(7, 1000, 'after-drain'))['added'] == 1
+
+
+@pytest.mark.asyncio
+async def test_circle_limit_uses_permanent_energy_cap_not_task_energy():
+    _, dojo, _ = service()
+    with patch.object(miner.time, 'time', return_value=1000):
+        await dojo.apply_task_energy(7, 100, 'test-task-before-start')
+        await dojo.start(7)
+    with patch.object(miner.time, 'time', return_value=6400):
+        state = await dojo.state(7)
+        assert state['circle_energy'] == pytest.approx(50)
+        assert state['energy_max'] == 100
+        assert state['circle_available'] is False
+        assert (await dojo.add_circle_energy(7, 1000, 'with-task-cap'))['added'] == 0
+    with patch.object(miner.time, 'time', return_value=6418):
+        assert (await dojo.add_circle_energy(7, 1000, 'with-task-partial'))['added'] == pytest.approx(.5)

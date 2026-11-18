@@ -146,18 +146,18 @@ class DojoMinerService:
                 if not doc or float(doc.get('started_at') or 0) != cycle:
                     raise GameError('Цикл изменился. Обнови экран.')
                 events = list(doc.get('circle_energy_events') or [])
-                if any(item.get('key') == request_id for item in events):
-                    return {'added': 1, 'replayed': True}
+                existing = next((item for item in events if item.get('key') == request_id), None)
+                if existing is not None:
+                    return {'added': existing.get('amount', 1), 'replayed': True}
                 finish = float(doc.get('finish_at') or 0)
                 if doc.get('collected') or now >= finish:
                     raise GameError('Майнинг не запущен.')
                 energy, _ = self._energy_timeline(doc, now)
-                if not events and int(energy) > 0:
-                    raise GameError('Круги доступны, когда энергия закончилась.')
                 cap = max(0, int(doc.get('energy_max', BASE_ENERGY))) / 2
-                if energy + 1 > cap + 1e-9:
+                added = min(1.0, max(0.0, cap - energy))
+                if added <= 1e-9:
                     return {'added': 0, 'replayed': False}
-                events.append({'key': request_id, 'at': now, 'amount': 1})
+                events.append({'key': request_id, 'at': now, 'amount': added})
                 candidate = {**doc, 'circle_energy_events': events}
                 bonus = self._circle_reward(candidate, now)
                 old_bonus = int(doc.get('circle_reward', 0))
@@ -168,7 +168,7 @@ class DojoMinerService:
                      '$inc': {'version': 1}},
                 )
                 if updated:
-                    return {'added': 1, 'replayed': False}
+                    return {'added': added, 'replayed': False}
             raise GameError('Не удалось сохранить энергию. Попробуй ещё раз.')
 
     @staticmethod
@@ -258,6 +258,7 @@ class DojoMinerService:
         if boost_active and energy > 0:
             current_rate *= 1.0 + SPEED_BOOST_BONUS
         boost_cycle_key = self._boost_cycle_key(doc, now)
+        circle_energy = self._energy_timeline(doc, now)[0] if phase == 'mining' else energy
         return {
             'phase': phase,
             'server_now': now,
@@ -273,7 +274,8 @@ class DojoMinerService:
             'energy_refill_stars': ENERGY_REFILL_STARS,
             'energy_refill_amount': ENERGY_REFILL_AMOUNT,
             'energy_refill_available': phase == 'mining' and energy <= 0,
-            'circle_available': phase == 'mining' and (energy <= 0 or bool(doc.get('circle_energy_events'))),
+            'circle_energy': circle_energy,
+            'circle_available': phase == 'mining' and circle_energy < energy_cap / 2,
             'circle_energy_limit': energy_cap // 2,
             'base_rate': base_rate,
             'current_rate': current_rate,

@@ -9,7 +9,7 @@ assert.ok(start >= 0 && end > start);
 function harness(pointerEvents = true) {
   const stageEvents = {}, windowEvents = {}, frames = new Map(), clears = [];
   let frameId = 0, ids = 0, rectReads = 0, strokes = 0, apiCalls = 0, resizes = 0;
-  let appWidth = 400, forced = false;
+  let appWidth = 400, forced = false, circleEnergy = 0;
   const ctx = {setTransform() {}, clearRect(...rect) { clears.push(rect); }, save() {}, restore() {}, beginPath() {},
     moveTo() {}, lineTo() {}, closePath() {}, arc() {}, fill() {}, fillRect() {}, drawImage() {},
     stroke() { strokes++; }, createRadialGradient() { return {addColorStop() {}}; }};
@@ -31,14 +31,14 @@ function harness(pointerEvents = true) {
   const api = () => { apiCalls++; return new Promise(() => {}); };
   const fn = new Function('$', 'stageEl', 'app', 'document', 'window', 'motionQuery', 'motionReduced',
     'requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'crypto', 'api', 'seedAmbient',
-    'model', 'activeTab', 'initData', 'energyValue', 'rnd', 'showToast', 'apply', 'tick', 'coin', 'pending',
+    'model', 'activeTab', 'initData', 'energyValue', 'circleEnergyValue', 'energyMax', 'rnd', 'showToast', 'apply', 'tick', 'coin', 'pending',
     source.slice(start, end) + '\nsetupMagicTrail();');
   fn(id => id === 'magic-trail' ? canvas : id === 'orb' ? orb : {textContent: ''}, stageEl, app, document, window,
     motionQuery, () => motionQuery.matches && !forced, requestAnimationFrame, cancelAnimationFrame, {now: () => 100}, crypto, api, () => {},
-    model, 'mining', () => 'signed', () => 0, (a, b) => (a + b) / 2, () => {}, () => {}, () => {}, String, null);
+    model, 'mining', () => 'signed', () => 0, () => circleEnergy, () => 100, (a, b) => (a + b) / 2, () => {}, () => {}, () => {}, String, null);
   return {stageEvents, windowEvents, frames, canvas, motionQuery, clears,
     get ids() { return ids; }, get rectReads() { return rectReads; }, get strokes() { return strokes; },
-    get apiCalls() { return apiCalls; }, get resizes() { return resizes; }, setWidth(v) { appWidth = v; }, forceMotion(v) { forced = v; }};
+    get apiCalls() { return apiCalls; }, get resizes() { return resizes; }, setWidth(v) { appWidth = v; }, forceMotion(v) { forced = v; }, setEnergy(v) { circleEnergy = v; }};
 }
 const target = {closest() { return null; }};
 function points(turns) {
@@ -101,3 +101,21 @@ legacy.windowEvents.touchend(touchEvent(220, 150));
 assert.equal(legacy.ids, 1, 'touch fallback must count an orbit');
 assert.ok(prevented > 0 && legacy.frames.size > 0, 'touch fallback must draw and suppress page scrolling');
 console.log('Trail: pointer, touch fallback, fast circles, resize and batched drawing passed.');
+
+// The visual trail remains active even when other motion effects are disabled.
+const disabled = harness();
+disabled.motionQuery.matches = true;
+disabled.stageEvents.pointerdown({pointerId: 41, pointerType: 'touch', target, clientX: 220, clientY: 150});
+disabled.windowEvents.pointermove({pointerId: 41, getCoalescedEvents: () => points(1)});
+for (const callback of [...disabled.frames.values()]) callback(150);
+assert.ok(disabled.strokes > 0, 'trail must remain visible when effects are off');
+assert.equal(disabled.ids, 1, 'circles still work with effects off');
+disabled.windowEvents.pointerup({pointerId: 41, clientX: 220, clientY: 150});
+
+for (const [energy, expected] of [[60, 0], [50, 0], [49.5, 1], [1, 1], [0, 1]]) {
+  const current = harness(); current.setEnergy(energy);
+  current.stageEvents.pointerdown({pointerId: 1, pointerType: 'touch', target, clientX: 220, clientY: 150});
+  current.windowEvents.pointermove({pointerId: 1, getCoalescedEvents: () => points(1)});
+  current.windowEvents.pointerup({pointerId: 1, clientX: 220, clientY: 150});
+  assert.equal(current.ids, expected, `circle eligibility at ${energy} energy`);
+}

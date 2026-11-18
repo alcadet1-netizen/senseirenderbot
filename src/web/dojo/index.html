@@ -9,6 +9,7 @@
     <meta name="theme-color" content="#020806" />
     <title data-i18n="SenseiCoin · Майнер">SenseiCoin · Майнер</title>
     <link rel="icon" type="image/webp" href="/miniapp/dojo/assets/sensei.webp" />
+    <script src="/miniapp/dojo/motion.js"></script>
     <link rel="stylesheet" href="/miniapp/dojo/style.css" />
   </head>
   <body>
@@ -89,29 +90,39 @@
       <canvas id="magic-trail" class="magic-trail" aria-hidden="true"></canvas>
 
       <header class="top">
-        <div
-          class="lang-switch"
-          role="group"
-          aria-label="Язык интерфейса"
-          data-i18n-aria="Язык интерфейса"
-        >
-          <button
-            class="lang-option"
-            data-lang="en"
-            type="button"
-            aria-pressed="false"
+        <div class="top-controls">
+          <div
+            class="lang-switch"
+            role="group"
+            aria-label="Язык интерфейса"
+            data-i18n-aria="Язык интерфейса"
           >
-            ENG
-          </button>
-          <span class="lang-sep" aria-hidden="true">/</span>
+            <button
+              class="lang-option"
+              data-lang="en"
+              type="button"
+              aria-pressed="false"
+            >
+              ENG
+            </button>
+            <span class="lang-sep" aria-hidden="true">/</span>
+            <button
+              class="lang-option active"
+              data-lang="ru"
+              type="button"
+              aria-pressed="true"
+            >
+              RUS
+            </button>
+          </div>
           <button
-            class="lang-option active"
-            data-lang="ru"
+            id="motion-setting"
+            class="motion-setting"
             type="button"
             aria-pressed="true"
-          >
-            RUS
-          </button>
+            aria-label="Эффекты: включены"
+            title="Эффекты: включены"
+          >EFFECT · ON</button>
         </div>
         <div class="logo">
           <svg class="icon torii" viewBox="0 0 40 32" aria-hidden="true">
@@ -119,7 +130,7 @@
               d="M3 6c7 2 27 2 34 0M6 6v5M34 6v5M5 11h30M10 11v16M30 11v16M16 11v7M24 11v7"
             />
           </svg>
-          <span>SENSEICOIN</span>
+          <img class="logo-wordmark" src="/miniapp/dojo/assets/senseicoin-wordmark.svg" alt="SENSEICOIN" />
         </div>
         <button
           id="info"
@@ -260,15 +271,7 @@
                 aria-hidden="true"
                 hidden
               >
-                <svg
-                  id="timer-digits"
-                  class="timer-digits"
-                  viewBox="0 0 181 48"
-                  role="presentation"
-                  focusable="false"
-                >
-                  <g id="timer-glyphs"></g>
-                </svg>
+                <span id="timer-digits" class="timer-digits">00:00:00</span>
               </span>
               <span id="action-label" class="orb-label">ЗАГРУЗКА</span>
               <span id="orb-sub" class="orb-sub"></span>
@@ -572,8 +575,6 @@
               <span data-i18n="Банк">Банк</span><b>SenseiBank</b>
             </div>
           </div>
-          <button id="motion-setting" class="motion-setting" type="button" aria-pressed="false">Эффекты: как в системе</button>
-          <p class="motion-setting-note" data-i18n="При системном уменьшении движения можно включить эффекты вручную.">При системном уменьшении движения можно включить эффекты вручную.</p>
           <button id="admin-open" class="admin-entry" type="button" hidden>⚙ АДМИН-ПАНЕЛЬ</button>
           <div id="admin-panel" class="admin-panel" hidden>
             <div class="admin-heading"><div><small>MANAGE · DOJO</small><h3>Админ-панель</h3></div><button id="admin-close" type="button" aria-label="Закрыть админ-панель">×</button></div>

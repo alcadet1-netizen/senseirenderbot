@@ -21,8 +21,9 @@
     "Энергия майнера": "Miner energy",
     "Эффекты: включены": "Effects: on",
     "Эффекты: как в системе": "Effects: system default",
-    "При системном уменьшении движения можно включить эффекты вручную.": "You can manually enable effects when your system reduces motion.",
-    "Обведи круг вокруг майнера: +1 энергия · до 50%": "Draw around the miner: +1 energy · up to 50%",
+    "Эффекты: выключены": "Effects: off",
+    "Обведи круг вокруг майнера: до +1 энергии · до 50%": "Draw around the miner: up to +1 energy · up to 50%",
+    "+{amount} энергии": "+{amount} energy",
     ЭНЕРГИЯ: "ENERGY",
     "Энергия майнинга": "Mining energy",
     "ПРОГРЕСС ЦИКЛА": "CYCLE PROGRESS",
@@ -420,64 +421,33 @@
       <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>`,
   };
 
-  const TIMER_SEGMENTS = {
-    top: "M7 4 H17",
-    upperLeft: "M4 7 V19",
-    upperRight: "M20 7 V19",
-    middle: "M7 22 H17",
-    lowerLeft: "M4 25 V37",
-    lowerRight: "M20 25 V37",
-    bottom: "M7 40 H17",
-  };
-  const TIMER_DIGITS = {
-    0: ["top", "upperLeft", "upperRight", "lowerLeft", "lowerRight", "bottom"],
-    1: ["upperRight", "lowerRight"],
-    2: ["top", "upperRight", "middle", "lowerLeft", "bottom"],
-    3: ["top", "upperRight", "middle", "lowerRight", "bottom"],
-    4: ["upperLeft", "upperRight", "middle", "lowerRight"],
-    5: ["top", "upperLeft", "middle", "lowerRight", "bottom"],
-    6: ["top", "upperLeft", "middle", "lowerLeft", "lowerRight", "bottom"],
-    7: ["top", "upperRight", "lowerRight"],
-    8: [
-      "top",
-      "upperLeft",
-      "upperRight",
-      "middle",
-      "lowerLeft",
-      "lowerRight",
-      "bottom",
-    ],
-    9: ["top", "upperLeft", "upperRight", "middle", "lowerRight", "bottom"],
-  };
-  const TIMER_LAYOUT = [
-    { kind: "digit", x: 0 },
-    { kind: "digit", x: 27 },
-    { kind: "colon", x: 56 },
-    { kind: "digit", x: 66 },
-    { kind: "digit", x: 93 },
-    { kind: "colon", x: 122 },
-    { kind: "digit", x: 132 },
-    { kind: "digit", x: 159 },
-  ];
-  const timerDigitNodes = [];
-
   const motionQuery = window.matchMedia
     ? window.matchMedia("(prefers-reduced-motion: reduce)")
     : null;
-  let forceMotion = false;
-  try { forceMotion = localStorage.getItem("sensei_dojo_motion") === "full"; } catch {}
-  document.documentElement.classList.toggle("motion-force", forceMotion);
-  const motionReduced = () => Boolean(motionQuery?.matches && !forceMotion);
+  let motionPreference = "full";
+  try { motionPreference = localStorage.getItem("sensei_dojo_motion") || "full"; } catch {}
+  if (!["full", "off", "auto"].includes(motionPreference)) motionPreference = "full";
+  const motionReduced = () => motionPreference === "off" ||
+    Boolean(motionPreference === "auto" && motionQuery?.matches);
+  function syncMotionClass() {
+    document.documentElement.classList.toggle("motion-reduced", motionReduced());
+  }
+  syncMotionClass();
   function paintMotionControl() {
     const button = $("motion-setting");
     if (!button) return;
-    button.textContent = forceMotion ? t("Эффекты: включены") : t("Эффекты: как в системе");
-    button.setAttribute("aria-pressed", forceMotion ? "true" : "false");
+    const label = motionPreference === "auto" ? "Эффекты: как в системе" :
+      motionPreference === "off" ? "Эффекты: выключены" : "Эффекты: включены";
+    const reduced = motionReduced();
+    button.textContent = reduced ? "EFFECT · OFF" : "EFFECT · ON";
+    button.setAttribute("aria-label", t(label));
+    button.setAttribute("title", t(label));
+    button.setAttribute("aria-pressed", reduced ? "false" : "true");
   }
   function changeMotionPreference() {
-    forceMotion = !forceMotion;
-    try { localStorage.setItem("sensei_dojo_motion", forceMotion ? "full" : "auto"); } catch {}
-    document.documentElement.classList.toggle("motion-force", forceMotion);
+    motionPreference = motionReduced() ? "full" : "off";
+    try { localStorage.setItem("sensei_dojo_motion", motionPreference); } catch {}
+    syncMotionClass();
     paintMotionControl();
     if (!motionReduced()) seedAmbient();
     window.dispatchEvent(new Event("sensei-motion-change"));
@@ -547,7 +517,10 @@
               });
             }
           }
-          if (data.circle.added) showToast("+1 энергия");
+          if (data.circle.added) {
+            const amount = Number(data.circle.added);
+            showToast(t("+{amount} энергии", {amount: amount < 0.001 ? "<0.001" : coinExact(amount)}));
+          }
           else queue = queue.filter(next => next.cycle !== item.cycle);
         } catch (error) {
           // Retry with the same id: an interrupted response may already be credited.
@@ -562,7 +535,7 @@
     }
     function recordOrbit(event) {
       if (!model || model.phase !== "mining" || !initData() ||
-          !(model.circle_available || Math.floor(energyValue()) <= 0)) {
+          circleEnergyValue() >= energyMax() / 2) {
         lastAngle = null; winding = 0; return;
       }
       const x = event.clientX - orbX;
@@ -727,7 +700,7 @@
     }
     function sample(event, now) {
       recordOrbit(event);
-      if (!motionReduced()) addPoint(event.clientX - appLeft, event.clientY - appTop, now);
+      addPoint(event.clientX - appLeft, event.clientY - appTop, now);
     }
     function begin(event) {
       const control = event.target.closest("button, a, input, textarea, select, [role=button]");
@@ -802,10 +775,6 @@
       observer.observe(orb); observer.observe(stageEl);
     }
     document.addEventListener("visibilitychange", () => { if (document.hidden) resetTrail(); });
-    motionQuery?.addEventListener?.("change", () => {
-      if (motionReduced()) resetTrail(); else seedAmbient();
-    });
-    window.addEventListener("sensei-motion-change", () => { if (motionReduced()) resetTrail(); });
     resizeTrail();
   }
 
@@ -997,6 +966,17 @@
     return Math.max(0, energy - drain * elapsed);
   }
 
+  // The server computes circle eligibility from the precise, shared reservoir;
+  // interpolate it between state responses instead of relying on a stale flag.
+  function circleEnergyValue() {
+    if (!model || model.phase !== "mining") return energyValue();
+    const energy = Number(model.circle_energy);
+    if (!Number.isFinite(energy)) return energyValue();
+    const elapsed = Math.max(0, (serverNow() - model.server_now * 1000) / 3600000);
+    const drain = Number(model.energy_per_hour) || 100;
+    return Math.max(0, energy - drain * elapsed);
+  }
+
   function percent() {
     if (!model) return 0;
     if (model.phase === "ready_to_collect") return 100;
@@ -1029,8 +1009,8 @@
   function paintMiningHint() {
     if (!model) return;
     const energy = energyValue();
-    if (model.phase === "mining" && (model.circle_available || Math.floor(energy) <= 0) && energy < energyMax() / 2) {
-      $("hint").textContent = t("Обведи круг вокруг майнера: +1 энергия · до 50%");
+    if (model.phase === "mining" && circleEnergyValue() < energyMax() / 2) {
+      $("hint").textContent = t("Обведи круг вокруг майнера: до +1 энергии · до 50%");
       return;
     }
     const base = Number(model.base_rate) || 0;
@@ -1256,51 +1236,9 @@
     bpmNode.textContent = `${bpm} BPM`;
   }
 
-  function buildTimerFace() {
-    const svg = $("timer-digits");
-    const glyphs = $("timer-glyphs");
-    if (!svg || !glyphs || timerDigitNodes.length) return;
-    const ns = "http://www.w3.org/2000/svg";
-    TIMER_LAYOUT.forEach((slot) => {
-      if (slot.kind === "colon") {
-        const group = document.createElementNS(ns, "g");
-        group.setAttribute("transform", `translate(${slot.x} 0)`);
-        [16, 31].forEach((cy) => {
-          const dot = document.createElementNS(ns, "circle");
-          dot.setAttribute("cx", "3");
-          dot.setAttribute("cy", String(cy));
-          dot.setAttribute("r", "2.8");
-          dot.setAttribute("class", "timer-colon-dot");
-          group.appendChild(dot);
-        });
-        glyphs.appendChild(group);
-        return;
-      }
-      const group = document.createElementNS(ns, "g");
-      group.setAttribute("transform", `translate(${slot.x} 0)`);
-      const segments = {};
-      Object.entries(TIMER_SEGMENTS).forEach(([name, pathData]) => {
-        const path = document.createElementNS(ns, "path");
-        path.setAttribute("d", pathData);
-        path.setAttribute("class", "timer-seg");
-        group.appendChild(path);
-        segments[name] = path;
-      });
-      glyphs.appendChild(group);
-      timerDigitNodes.push(segments);
-    });
-  }
-
   function paintTimerFace(value) {
-    if (!timerDigitNodes.length) buildTimerFace();
-    if (!timerDigitNodes.length) return;
-    const digits = String(value).replace(/\D/g, "").slice(0, 6);
-    timerDigitNodes.forEach((segments, index) => {
-      const active = TIMER_DIGITS[digits[index]] || [];
-      Object.entries(segments).forEach(([name, path]) => {
-        path.classList.toggle("is-on", active.includes(name));
-      });
-    });
+    const digits = $("timer-digits");
+    if (digits) digits.textContent = value;
   }
 
   function paintAction(icon, label, sub, timer = false, disabled = true) {
@@ -2883,12 +2821,19 @@
     if (!document.hidden) refresh(true);
   }, 30000);
 
+  const onMotionSystemChange = () => {
+    syncMotionClass();
+    paintMotionControl();
+    if (!motionReduced()) seedAmbient();
+    window.dispatchEvent(new Event("sensei-motion-change"));
+  };
+  if (motionQuery?.addEventListener) motionQuery.addEventListener("change", onMotionSystemChange);
+  else motionQuery?.addListener?.(onMotionSystemChange);
   $("motion-setting").addEventListener("click", changeMotionPreference);
   paintMotionControl();
   setupMagicTrail();
   seedAmbient();
   seedMiningParticles();
-  buildTimerFace();
   setInterval(paintChain, 1000);
   applyTranslations();
   seedBoot();

@@ -1,18 +1,4 @@
-/* Sensei Style: a compact, forward-leaning derivative of Exo 2 (SIL OFL). */
-@font-face {
-  font-family: "Sensei Style";
-  src: url("/miniapp/dojo/assets/sensei-style-400.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Sensei Style";
-  src: url("/miniapp/dojo/assets/sensei-style-700.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-}
+/* Jade Signal uses locally served Golos Text, Unbounded and DSEG7 Classic. */
 :root {
   --bg: #010503;
   --panel: rgba(3, 16, 9, 0.82);
@@ -1839,18 +1825,19 @@ button:focus-visible {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  html:not(.motion-force) .ambient {
+/* The motion-reduced class also reflects prefers-reduced-motion in legacy auto mode. */
+@media all {
+  html.motion-reduced .ambient {
     display: none;
   }
-  html:not(.motion-force) *,
-  html:not(.motion-force) *::before,
-  html:not(.motion-force) *::after {
+  html.motion-reduced *,
+  html.motion-reduced *::before,
+  html.motion-reduced *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
   }
-  html:not(.motion-force) #energy-bar {
+  html.motion-reduced #energy-bar {
     transition: none;
   }
 }
@@ -3375,12 +3362,12 @@ button:focus-visible {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  html:not(.motion-force) .boost-pill,
-  html:not(.motion-force) .burn-flame,
-  html:not(.motion-force) #bank-progress,
-  html:not(.motion-force) #bank-progress::after,
-  html:not(.motion-force) #bank-progress.is-filled {
+@media all {
+  html.motion-reduced .boost-pill,
+  html.motion-reduced .burn-flame,
+  html.motion-reduced #bank-progress,
+  html.motion-reduced #bank-progress::after,
+  html.motion-reduced #bank-progress.is-filled {
     animation: none;
   }
 }
@@ -3830,17 +3817,17 @@ button:focus-visible {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  html:not(.motion-force) .boot,
-  html:not(.motion-force) .boot-art,
-  html:not(.motion-force) .boot-puff,
-  html:not(.motion-force) .boot-spark,
-  html:not(.motion-force) .boot-bar,
-  html:not(.motion-force) .boot-bar::after {
+@media all {
+  html.motion-reduced .boot,
+  html.motion-reduced .boot-art,
+  html.motion-reduced .boot-puff,
+  html.motion-reduced .boot-spark,
+  html.motion-reduced .boot-bar,
+  html.motion-reduced .boot-bar::after {
     animation: none;
     transition: none;
   }
-  html:not(.motion-force) .boot-art {
+  html.motion-reduced .boot-art {
     transform: scale(1.02);
   }
 }
@@ -4139,7 +4126,7 @@ button:focus-visible {
   height: min(46vw, 182px);
 }
 
-/* The timer uses a bespoke seven-segment blade alphabet drawn in SVG. */
+/* A dedicated clock is centered in the fixed-size orb. */
 .orb-button.is-timer {
   display: grid;
   grid-template-rows: 1fr;
@@ -4190,41 +4177,6 @@ button:focus-visible {
   height: auto;
   overflow: visible;
   filter: drop-shadow(0 0 5px rgba(76, 255, 155, 0.4));
-}
-
-.timer-seg {
-  fill: none;
-  stroke: rgba(139, 255, 190, 0.1);
-  stroke-width: 3.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition:
-    stroke 0.16s ease,
-    opacity 0.16s ease;
-}
-
-.timer-seg.is-on {
-  stroke: #cdffe0;
-  opacity: 1;
-  filter: drop-shadow(0 0 4px rgba(86, 255, 166, 0.85));
-}
-
-.timer-colon-dot {
-  fill: #baffd6;
-  filter: drop-shadow(0 0 4px rgba(86, 255, 166, 0.85));
-  animation: timer-colon 1.8s ease-in-out infinite;
-}
-
-@keyframes timer-colon {
-  0%,
-  100% {
-    opacity: 0.45;
-  }
-
-  45%,
-  65% {
-    opacity: 1;
-  }
 }
 
 /* Layered atmosphere: aura, slow light sweep, mist, dust, petals and code. */
@@ -4520,14 +4472,14 @@ button:focus-visible {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  html:not(.motion-force) .ambient-aura,
-  html:not(.motion-force) .ambient-ray,
-  html:not(.motion-force) .ambient-puff,
-  html:not(.motion-force) .ambient-mote,
-  html:not(.motion-force) .timer-colon-dot,
-  html:not(.motion-force) .timer-seg,
-  html:not(.motion-force) .chain-row.is-new {
+@media all {
+  html.motion-reduced .ambient-aura,
+  html.motion-reduced .ambient-ray,
+  html.motion-reduced .ambient-puff,
+  html.motion-reduced .ambient-mote,
+  html.motion-reduced .timer-colon-dot,
+  html.motion-reduced .timer-seg,
+  html.motion-reduced .chain-row.is-new {
     animation: none;
     transition: none;
   }
@@ -4727,15 +4679,15 @@ button:focus-visible {
 .chest-reel { text-align:center; border:1px solid #70e5a0; border-radius:12px; padding:18px; color:#dcffe8; background:#102d1d; font-weight:800; }
 .chest-reel.spinning { animation: chest-pulse .7s ease-in-out; }
 @keyframes chest-pulse { 50% { opacity:.35; transform:scale(.97); } }
-@media (prefers-reduced-motion: reduce) {
-  html:not(.motion-force) .chest-reel.spinning { animation:none; } }
+@media all {
+  html.motion-reduced .chest-reel.spinning { animation:none; } }
 
 .chest-reel { overflow:hidden; }
 .chest-reel-track { display:flex; width:max-content; gap:12px; animation: chest-slide 1s ease-out forwards; }
 .chest-reel-track span { display:inline-block; min-width:115px; text-align:center; }
 @keyframes chest-slide { from { transform:translateX(0); } to { transform:translateX(calc(-100% + 125px)); } }
-@media (prefers-reduced-motion: reduce) {
-  html:not(.motion-force) .chest-reel-track { animation-duration:0.01ms; } }
+@media all {
+  html.motion-reduced .chest-reel-track { animation-duration:0.01ms; } }
 
 .daily-calendar { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; }
 .daily-day { display:grid; gap:4px; min-width:0; padding:10px 2px; border:1px solid #244f36; border-radius:10px; background:#092115; text-align:center; }
@@ -4843,13 +4795,13 @@ button:focus-visible {
 @keyframes chest-celebrate { 35% { transform: translateY(-9px) scale(1.08); } }
 @keyframes chest-spark-pop { from { opacity: 0; transform: scale(.3); } 40% { opacity: 1; transform: scale(1.6); } to { opacity: .7; transform: scale(1); } }
 @keyframes chest-reveal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) {
-  html:not(.motion-force) .is-opening .chest-art,
-  html:not(.motion-force) .is-opening .chest-glow,
-  html:not(.motion-force) .is-win .chest-art,
-  html:not(.motion-force) .is-win .chest-spark,
-  html:not(.motion-force) .chest-result:not(:empty) { animation: none; }
-  html:not(.motion-force) .chest-reel-track { transition: none !important; }
+@media all {
+  html.motion-reduced .is-opening .chest-art,
+  html.motion-reduced .is-opening .chest-glow,
+  html.motion-reduced .is-win .chest-art,
+  html.motion-reduced .is-win .chest-spark,
+  html.motion-reduced .chest-result:not(:empty) { animation: none; }
+  html.motion-reduced .chest-reel-track { transition: none !important; }
 }
 
 /* Sensei utility tiles — equal square targets, arranged as a compact corner seal. */
@@ -4947,12 +4899,12 @@ button:focus-visible {
   #chest-sheet .reel-prize { height: 42px; }
   #chest-sheet .reel-prize-icon { display: none; }
 }
-@media (prefers-reduced-motion: reduce) {
-  html:not(.motion-force) .rail-path-dot,
-  html:not(.motion-force) #daily-open,
-  html:not(.motion-force) #chest-open .rail-chest,
-  html:not(.motion-force) .utility-rail .burn-flame { animation: none !important; }
-  html:not(.motion-force) .rail-path-dot { top: 4px; left: 4px; }
+@media all {
+  html.motion-reduced .rail-path-dot,
+  html.motion-reduced #daily-open,
+  html.motion-reduced #chest-open .rail-chest,
+  html.motion-reduced .utility-rail .burn-flame { animation: none !important; }
+  html.motion-reduced .rail-path-dot { top: 4px; left: 4px; }
 }
 
 /* Purely decorative canvas: never blocks the controls or changes rewards. */
@@ -4966,8 +4918,6 @@ button:focus-visible {
 }
 #app.phase-mining:not(.tabs-open) .stage { touch-action: none; }
 #app.phase-mining:not(.tabs-open) #action:disabled { pointer-events: none; }
-@media (prefers-reduced-motion: reduce) {
-  html:not(.motion-force) .magic-trail { display: none; } }
 
 /* Bonus launcher and the separate, prominent burn seal. */
 .utility-rail.main-utilities {
@@ -5025,11 +4975,11 @@ button:focus-visible {
   .bonus-trigger { width: 48px; height: 48px; }
   .utility-rail.main-utilities .burn-sticker { width: 62px; height: 62px; }
 }
-@media (prefers-reduced-motion: reduce) {
-  html:not(.motion-force) .bonus-trigger,
-  html:not(.motion-force) .bonus-card,
-  html:not(.motion-force) .bonus-grid .daily-sticker,
-  html:not(.motion-force) .bonus-grid .roadmap-sticker { animation: none !important; }
+@media all {
+  html.motion-reduced .bonus-trigger,
+  html.motion-reduced .bonus-card,
+  html.motion-reduced .bonus-grid .daily-sticker,
+  html.motion-reduced .bonus-grid .roadmap-sticker { animation: none !important; }
 }
 
 /* Put actions in their own row rather than floating over the balance and HUD. */
@@ -5049,8 +4999,8 @@ button:focus-visible {
 }
 #app.tabs-open .utility-rail.main-utilities { display: none; }
 .reel-prize { transition: scale 100ms ease-out; transform-origin: center; }
-@media (prefers-reduced-motion: reduce) {
-  html:not(.motion-force) .reel-prize { transition: none; } }
+@media all {
+  html.motion-reduced .reel-prize { transition: none; } }
 #app:not(.tabs-open) .stage { padding-top: 4px; }
 
 /* Profile administration: normal flow, scrollable with the profile tab. */
@@ -5083,7 +5033,150 @@ button:focus-visible {
 .admin-message { min-height: 1em; color: #afffc9; font-size: 12px; overflow-wrap: anywhere; }
 .admin-message.error { color: #ffc6bc; }
 
-.motion-setting { width: 100%; margin-top: 16px; padding: 11px; color: #d9ffe8;
-  background: linear-gradient(145deg, #174d30, #0a2919); border: 1px solid #5bb982;
-  border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer; }
-.motion-setting-note { color: #9bc9ac; font-size: 11px; line-height: 1.4; }
+.top {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 6px;
+}
+.top-controls {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.motion-setting {
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid rgba(105, 255, 171, .45);
+  border-radius: 999px;
+  background: rgba(8, 43, 24, .86);
+  color: #a8ffcb;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .25px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.motion-setting[aria-pressed="true"] {
+  color: #03170a;
+  border-color: #8affbe;
+  background: #6dffab;
+  box-shadow: 0 0 12px rgba(64, 255, 150, .35);
+}
+.motion-setting[aria-pressed="false"] {
+  color: #82b396;
+  border-color: rgba(92, 255, 166, .25);
+  background: rgba(2, 13, 7, .8);
+}
+.motion-setting:focus-visible {
+  outline: 2px solid #d0ffe2;
+  outline-offset: 2px;
+}
+@media (max-width: 420px) {
+  .top { padding-inline: 12px; gap: 4px; }
+  .logo { gap: 3px; padding-left: 0; font-size: 10px; letter-spacing: 1px; }
+  .logo .torii { width: 21px; }
+  .motion-setting { padding-inline: 6px; font-size: 7px; }
+}
+@media (max-width: 340px) {
+  .logo .torii { display: none; }
+}
+
+/* Jade Signal: local, licensed typefaces, with digital segments only on the clock. */
+@font-face {
+  font-family: "Golos Text";
+  src: url("/miniapp/dojo/assets/golos-text-variable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Unbounded";
+  src: url("/miniapp/dojo/assets/unbounded-variable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "DSEG7 Classic";
+  src: url("/miniapp/dojo/assets/dseg7-classic-regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+html, body { font-family: "Golos Text", system-ui, sans-serif; }
+.logo { font: 600 14px/18px "Unbounded", sans-serif; letter-spacing: .12em; min-width: 0; }
+.logo-wordmark { display: block; width: 112px; max-width: 100%; height: auto; min-width: 0; }
+#balance, #app.tabs-open #balance {
+  font-size: clamp(30px, 10.67vw, 40px);
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  color: #e5ffef;
+  text-shadow: none;
+}
+.balance-label, .balance-sub, .energy-title, .mine-meter-head {
+  color: #a7c6b3;
+  text-shadow: none;
+}
+.energy-title, .mine-meter-head {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: .08em;
+}
+.energy-value, .mine-meter-head b {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  text-shadow: none;
+}
+.tab, .bonus-trigger b, .burn-title {
+  font-family: "Golos Text", system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-shadow: none;
+}
+.timer-digits {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  color: #e5ffef;
+  font-family: "DSEG7 Classic", monospace;
+  font-size: clamp(20px, 7.5vw, 28px);
+  line-height: 34px;
+  font-weight: 400;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-shadow: 0 0 8px rgba(76, 255, 155, .45);
+  filter: none;
+}
+@media (max-width: 420px) {
+  .logo { gap: 3px; }
+  .logo-wordmark { width: 100px; }
+  .tab { font-size: clamp(8px, 2.55vw, 10px); line-height: 14px; }
+}
+@media (max-width: 340px) {
+  .logo-wordmark { width: 90px; }
+}
+
+/* Keep interface copy crisp; only the clock has a green text glow. */
+.chain-copy span, .chain-bpm, .ref-link, .roadmap-step-num, .chain-row {
+  font-family: "Golos Text", system-ui, sans-serif;
+}
+#app :not(.timer-digits):not(.matrix-col) { text-shadow: none; }
+@media (max-height: 640px) {
+  .timer-digits { font-size: min(22px, 7vw); }
+}
+@media (max-height: 520px) {
+  .timer-digits { font-size: min(20px, 6.5vw); }
+}
+#app.tabs-open #balance { font-size: clamp(26px, 8.3vw, 31px); }
+.boot-word { font-family: "Unbounded", sans-serif; font-weight: 600; }
