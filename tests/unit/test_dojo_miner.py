@@ -360,3 +360,44 @@ async def test_daily_and_chest_interface_describes_prizes_without_percentages():
     assert 'track.children[22]' in js and 'target.offsetWidth / 2' in js
     assert 'prefers-reduced-motion: reduce' in js
     assert js.index('await animateChest(data.prize)') < js.index('sessionStorage.removeItem(key)')
+
+
+@pytest.mark.asyncio
+async def test_sensei_font_and_compact_chest_assets():
+    app = web.Application()
+    setup_dojo(app)
+    async with TestClient(TestServer(app)) as client:
+        for weight in (400, 700):
+            response = await client.get(f'/miniapp/dojo/assets/sensei-style-{weight}.woff2')
+            assert response.status == 200
+            assert (await response.read()).startswith(b'wOF2')
+            assert "font-src 'self'" in response.headers['Content-Security-Policy']
+        html = await (await client.get('/miniapp/dojo')).text()
+        css = await (await client.get('/miniapp/dojo/style.css')).text()
+        js = await (await client.get('/miniapp/dojo/miner.js')).text()
+    assert 'rail-path-dot' in html and 'id="chest-open"' in html
+    assert '@font-face' in css and 'font-family: "Sensei Style"' in css
+    assert 'sensei-border-dot' in css and 'sensei-tile-pulse' in css
+    assert '#chest-sheet .daily-card' in css and 'overflow: hidden' in css
+    assert 'class="chest-prizes"' in html
+    for reward in ('0.01', '0.02', '0.03'):
+        assert reward in html and reward in js
+    assert 'track.children[22]' in js
+
+
+@pytest.mark.asyncio
+async def test_magic_trail_is_visual_only_bounded_and_respects_reduced_motion():
+    app = web.Application()
+    setup_dojo(app)
+    async with TestClient(TestServer(app)) as client:
+        html = await (await client.get('/miniapp/dojo')).text()
+        js = await (await client.get('/miniapp/dojo/miner.js')).text()
+        css = await (await client.get('/miniapp/dojo/style.css')).text()
+    assert 'id="magic-trail"' in html and 'aria-hidden="true"' in html
+    assert 'function setupMagicTrail()' in js
+    assert 'MAX_POINTS = 64' in js and 'MAX_SPARKS = 90' in js
+    assert 'pointercancel' in js and 'lostpointercapture' in js
+    assert 'motionQuery?.matches' in js and 'document.hidden' in js
+    assert 'phase-mining' in js and 'activeTab === "mining"' in js
+    assert 'touch-action: none' in css and 'pointer-events: none' in css
+    assert '.magic-trail { display: none; }' in css

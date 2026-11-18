@@ -86,6 +86,8 @@
         <div class="ambient-scan"></div>
       </div>
 
+      <canvas id="magic-trail" class="magic-trail" aria-hidden="true"></canvas>
+
       <header class="top">
         <div
           class="lang-switch"
@@ -137,7 +139,8 @@
           aria-label="ROAD MAP"
           title="ROAD MAP"
         >
-          <span class="roadmap-tape" aria-hidden="true"></span>
+          <span class="rail-path-dot" aria-hidden="true"></span>
+          <span class="rail-icon" aria-hidden="true">⌁</span>
           <b class="roadmap-title">ROAD MAP</b>
         </button>
 
@@ -159,8 +162,8 @@
           </span>
           <b class="burn-title">BURN</b>
         </button>
-        <button type="button" id="daily-open" class="daily-sticker">🔥 DAILY STREAK</button>
-        <button type="button" id="chest-open" class="daily-sticker">🎁 СУНДУК</button>
+        <button type="button" id="daily-open" class="daily-sticker" aria-label="Ежедневная серия"><span class="rail-icon" aria-hidden="true">✧</span><b>DAILY</b></button>
+        <button type="button" id="chest-open" class="daily-sticker" aria-label="Сундуки"><span class="rail-icon rail-chest" aria-hidden="true">▣</span><b>CHANCE</b></button>
       </div>
       <div class="stage">
         <section
@@ -886,7 +889,11 @@
             <div id="chest-reel" class="chest-reel" aria-hidden="true"><div class="chest-placeholder">✦ ОТКРОЙ СУНДУК ✦</div></div>
           </div>
           <p id="chest-result" class="chest-result" role="status" aria-live="polite"></p>
-          <p>Один бесплатный сундук в день UTC плюс сундуки за серию. Возможные награды: 100–500 Coin или 0,01–0,03 виртуальных GRAM. Виртуальный GRAM не является реальным активом. Вероятности наград различаются и не зависят от баланса. Лента — анимация, результат определяет сервер.</p>
+          <div class="chest-prizes" aria-label="Возможные награды">
+            <span>100</span><span>200</span><span>300</span><span>400</span><span>500</span><small>COIN</small>
+            <span>0.01</span><span>0.02</span><span>0.03</span><small>VIRTUAL GRAM</small>
+          </div>
+          <p class="chest-disclaimer">1 бесплатный сундук в день UTC + бонусы серии. Вероятности наград различаются и не зависят от баланса. Лента — анимация, результат определяет сервер. Виртуальный GRAM не является реальным активом.</p>
           <p id="gram-info">Виртуальный GRAM · вывод пока недоступен.</p>
           <button class="sheet-done" disabled title="Вывод пока недоступен">ВЫВОД ОТ 3 GRAM · НЕДОСТУПЕН</button>
           <button id="chest-spin" class="sheet-done" disabled>ОТКРЫТЬ СУНДУК</button>

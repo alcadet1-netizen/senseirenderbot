@@ -471,6 +471,120 @@
       () => MATRIX_GLYPHS[Math.floor(Math.random() * MATRIX_GLYPHS.length)],
     ).join("");
 
+  // Cosmetic, bounded and local-only: it never changes mining or rewards.
+  function setupMagicTrail() {
+    const canvas = $("magic-trail");
+    if (!canvas || !stageEl) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const trail = [];
+    const sparks = [];
+    const MAX_POINTS = 64;
+    const MAX_SPARKS = 90;
+    let pointer = null;
+    let frame = 0;
+    let previous = null;
+    let width = 0;
+    let height = 0;
+    let ratio = 1;
+
+    function resizeTrail() {
+      const rect = app.getBoundingClientRect();
+      width = rect.width; height = rect.height;
+      ratio = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.max(1, Math.round(width * ratio));
+      canvas.height = Math.max(1, Math.round(height * ratio));
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+    function enabled() {
+      return !motionQuery?.matches && !document.hidden && activeTab === "mining" &&
+        app.classList.contains("phase-mining") &&
+        !Array.from(document.querySelectorAll(".sheet")).some(sheet => !sheet.hidden);
+    }
+    function resetTrail() {
+      pointer = null; previous = null; trail.length = 0; sparks.length = 0;
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0; ctx.clearRect(0, 0, width, height);
+    }
+    function addPoint(x, y, now) {
+      const old = previous;
+      if (old && Math.hypot(x - old.x, y - old.y) < 4) return;
+      const steps = old ? Math.min(12, Math.ceil(Math.hypot(x - old.x, y - old.y) / 10)) : 1;
+      for (let i = 1; i <= steps; i++) {
+        const p = {x: old ? old.x + (x - old.x) * i / steps : x,
+                   y: old ? old.y + (y - old.y) * i / steps : y, born: now};
+        trail.push(p);
+        if (trail.length > MAX_POINTS) trail.shift();
+        if (i % 2 === 0 || !old) {
+          sparks.push({x: p.x, y: p.y, born: now, dx: rnd(-18, 18),
+                       dy: rnd(-28, -5), radius: rnd(1, 2.7), diamond: Math.random() < .25});
+          if (sparks.length > MAX_SPARKS) sparks.shift();
+        }
+      }
+      previous = {x, y};
+      if (!frame) frame = requestAnimationFrame(drawTrail);
+    }
+    function drawTrail(now) {
+      frame = 0;
+      if (!enabled()) { resetTrail(); return; }
+      ctx.clearRect(0, 0, width, height);
+      while (trail.length && now - trail[0].born > 650) trail.shift();
+      while (sparks.length && now - sparks[0].born > 800) sparks.shift();
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      for (let i = 1; i < trail.length; i++) {
+        const p = trail[i], before = trail[i - 1];
+        const alpha = Math.max(0, 1 - (now - p.born) / 650);
+        ctx.beginPath(); ctx.moveTo(before.x, before.y); ctx.lineTo(p.x, p.y);
+        ctx.strokeStyle = `rgba(75, 255, 151, ${alpha * .28})`;
+        ctx.lineWidth = 11 * alpha + 2; ctx.shadowColor = "#41ff99"; ctx.shadowBlur = 12;
+        ctx.stroke();
+        ctx.strokeStyle = `rgba(205, 255, 226, ${alpha * .8})`;
+        ctx.lineWidth = 2 * alpha + .5; ctx.shadowBlur = 4; ctx.stroke();
+      }
+      for (const s of sparks) {
+        const life = Math.max(0, 1 - (now - s.born) / 800);
+        const x = s.x + s.dx * (1 - life), y = s.y + s.dy * (1 - life);
+        ctx.globalAlpha = life * .9; ctx.fillStyle = "#b6ffd1";
+        ctx.shadowColor = "#2fff87"; ctx.shadowBlur = 8;
+        ctx.beginPath();
+        if (s.diamond) {
+          const r = s.radius * 2; ctx.moveTo(x, y - r); ctx.lineTo(x + r * .55, y);
+          ctx.lineTo(x, y + r); ctx.lineTo(x - r * .55, y); ctx.closePath();
+        } else ctx.arc(x, y, s.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      if (trail.length || sparks.length) frame = requestAnimationFrame(drawTrail);
+    }
+    function sample(event) {
+      const rect = app.getBoundingClientRect();
+      addPoint(event.clientX - rect.left, event.clientY - rect.top, performance.now());
+    }
+    stageEl.addEventListener("pointerdown", event => {
+      const control = event.target.closest("button, a, input, textarea, select, [role=button]");
+      if (!enabled() || pointer !== null || (event.pointerType === "mouse" && event.button !== 0) ||
+          (control && !control.disabled)) return;
+      pointer = event.pointerId; previous = null; trail.length = 0;
+      try { stageEl.setPointerCapture(pointer); } catch {}
+      sample(event);
+    });
+    stageEl.addEventListener("pointermove", event => {
+      if (event.pointerId !== pointer) return;
+      if (!enabled()) { resetTrail(); return; }
+      sample(event);
+    });
+    const stop = event => { if (event.pointerId === pointer) { pointer = null; previous = null; } };
+    stageEl.addEventListener("pointerup", stop);
+    stageEl.addEventListener("pointercancel", stop);
+    stageEl.addEventListener("lostpointercapture", stop);
+    window.addEventListener("resize", resizeTrail);
+    document.addEventListener("visibilitychange", () => { if (document.hidden) resetTrail(); });
+    motionQuery?.addEventListener?.("change", () => { if (motionQuery.matches) resetTrail(); });
+    resizeTrail();
+  }
+
   function seedAmbient() {
     const sakura = $("sakura");
     const matrix = $("matrix");
@@ -2252,8 +2366,22 @@
       showToast(error.message, true);
     }
   }
+  function alignChestWinner() {
+    const reel = $("chest-reel");
+    const target = reel.querySelector(".reel-prize.is-winner");
+    const track = reel.querySelector(".chest-reel-track");
+    if (!target || !track || $("chest-sheet").hidden || dailyBusy) return;
+    const offset = target.offsetLeft + target.offsetWidth / 2 - reel.clientWidth / 2;
+    track.style.transition = "none";
+    track.style.transform = `translateX(${-Math.max(0, offset)}px)`;
+  }
   $("daily-open").addEventListener("click", () => { $("daily-sheet").hidden = false; loadDaily(); });
-  $("chest-open").addEventListener("click", () => { $("chest-sheet").hidden = false; loadDaily(); });
+  $("chest-open").addEventListener("click", () => {
+    $("chest-sheet").hidden = false;
+    requestAnimationFrame(alignChestWinner);
+    loadDaily();
+  });
+  window.addEventListener("resize", alignChestWinner);
   document.querySelectorAll("[data-close-daily]").forEach(el => el.addEventListener("click", () => { $("daily-sheet").hidden = true; }));
   document.querySelectorAll("[data-close-chest]").forEach(el => el.addEventListener("click", () => { $("chest-sheet").hidden = true; }));
   $("daily-claim").addEventListener("click", async () => {
@@ -2276,13 +2404,19 @@
     reel.replaceChildren();
     const track = document.createElement("div");
     track.className = "chest-reel-track";
-    const prizes = [100, 200, 300, 400, 500];
+    const prizes = [
+      {kind: "COIN", value: "100"}, {kind: "COIN", value: "200"},
+      {kind: "COIN", value: "300"}, {kind: "COIN", value: "400"},
+      {kind: "COIN", value: "500"}, {kind: "GRAM", value: "0.01"},
+      {kind: "GRAM", value: "0.02"}, {kind: "GRAM", value: "0.03"},
+    ];
     // Decorative cells are only possible rewards, not odds or the draw itself.
     for (let i = 0; i < 25; i++) {
       const cell = document.createElement("div");
       const chosen = i === 22;
-      const kind = chosen && isGram ? "GRAM" : "COIN";
-      const value = chosen ? amount : String(prizes[(i * 3 + 1) % prizes.length]);
+      const decoration = prizes[(i * 3 + 1) % prizes.length];
+      const kind = chosen ? (isGram ? "GRAM" : "COIN") : decoration.kind;
+      const value = chosen ? amount : decoration.value;
       cell.className = `reel-prize${chosen ? " is-selected" : ""}${kind === "GRAM" ? " is-gram" : ""}`;
       const icon = document.createElement("span"); icon.className = "reel-prize-icon";
       icon.textContent = kind === "GRAM" ? "✦" : "◈";
@@ -2299,10 +2433,10 @@
     if (!reduced && !$("chest-sheet").hidden && distance > 0) {
       await new Promise(resolve => {
         requestAnimationFrame(() => {
-          track.style.transition = "transform 3.2s cubic-bezier(.12,.7,.12,1)";
+          track.style.transition = "transform 4.4s cubic-bezier(.12,.68,.10,1)";
           track.style.transform = `translateX(${-distance}px)`;
         });
-        setTimeout(resolve, 3300);
+        setTimeout(resolve, 4500);
       });
     } else {
       track.style.transform = `translateX(${-Math.max(0, distance)}px)`;
@@ -2341,6 +2475,7 @@
     if (!document.hidden) refresh(true);
   }, 30000);
 
+  setupMagicTrail();
   seedAmbient();
   seedMiningParticles();
   buildTimerFace();
