@@ -88,3 +88,36 @@ async def test_default_preview_persists_before_real_polling_offset_advances(tmp_
         assert offsets==[None,102]
     finally:
         await env.close()
+
+
+@pytest.mark.asyncio
+async def test_join_request_is_persisted_before_polling_offset_advances():
+    update = Update.model_validate({'update_id': 31, 'chat_join_request': {
+        'chat': {'id': -100, 'type': 'supergroup', 'title': 'Dojo'},
+        'from': {'id': 77, 'is_bot': False, 'first_name': 'New'},
+        'date': 1700000000, 'user_chat_id': 77}})
+    offsets = []
+    class Bot:
+        id = 123
+        session = SimpleNamespace(timeout=30)
+        async def __call__(self, request, **kwargs):
+            offsets.append(request.offset)
+            if len(offsets) == 1:
+                return [update]
+            raise asyncio.CancelledError
+    gate = asyncio.Event()
+    entered = asyncio.Event()
+    async def save(event):
+        entered.set()
+        await gate.wait()
+    dp = Dispatcher()
+    install_campaign_admission(dp, SimpleNamespace(capture=AsyncMock()), SimpleNamespace(capture=save))
+    stream = dp._listen_updates(Bot())
+    task = asyncio.create_task(anext(stream))
+    await asyncio.wait_for(entered.wait(), 1)
+    assert offsets == [None] and not task.done()
+    gate.set()
+    assert (await task).update_id == 31
+    with pytest.raises(asyncio.CancelledError):
+        await anext(stream)
+    assert offsets == [None, 32]
