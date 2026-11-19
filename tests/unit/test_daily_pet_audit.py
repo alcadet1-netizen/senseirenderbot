@@ -111,21 +111,26 @@ async def test_shared_bank_race_must_not_mint_unfunded_base_daily():
     db.users.docs[8] = {**copy.deepcopy(db.users.docs[7]), 'id': 8}
     db.bank.docs['main']['balance'] = 55
     before = sum(db.users.docs[uid]['coins'] for uid in (7,8))
-    read = db.bank.find_one
-    both = asyncio.Event()
-    reads = 0
-
-    async def concurrent_balance(query):
-        nonlocal reads
-        snapshot = await read(query)
-        reads += 1
-        if reads == 2:
-            both.set()
-        await asyncio.wait_for(both.wait(), 2)
-        return snapshot
-
-    with patch.object(db.bank, 'find_one', side_effect=concurrent_balance):
-        await asyncio.gather(*(DailyService(mongo).settle_hedgehog(uid,True,utc_day(),ordinary=True) for uid in (7,8)))
+    # The rollback-capable fake serializes transactions. Real concurrent Mongo
+    # write conflicts and retries are covered by the replica-set integration test.
+    await asyncio.gather(*(DailyService(mongo).settle_hedgehog(uid, True, utc_day(), ordinary=True)
+                           for uid in (7, 8)))
     credited = sum(db.users.docs[uid]['coins'] for uid in (7,8))-before
     debited = 55-db.bank.docs['main']['balance']
     assert credited == debited  # Currently 110 credited, only 55 debited.
+
+
+@pytest.mark.asyncio
+async def test_daily_journal_failure_rolls_back_bank_and_receipt():
+    from src.services.daily_service import DailyService
+    from src.services.hedgehog_service import utc_day
+    db, _, _, mongo = setup()
+    before = copy.deepcopy(db.users.docs[7])
+    bank_before = db.bank.docs['main']['balance']
+    async def fail(*args, **kwargs): raise RuntimeError('journal unavailable')
+    with patch.object(db.transactions, 'update_one', side_effect=fail):
+        with pytest.raises(RuntimeError, match='journal unavailable'):
+            await DailyService(mongo).settle_hedgehog(7, True, utc_day(), ordinary=True)
+    assert db.users.docs[7] == before
+    assert db.bank.docs['main']['balance'] == bank_before
+    assert not db.daily_claims.docs

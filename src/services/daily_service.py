@@ -253,26 +253,25 @@ class DailyService:
         return True, None
 
     async def settle_hedgehog(self, user_id: int, won: bool, day: str, *, tap_count: int = 0, pet_once: bool = False, ordinary: bool = False) -> dict:
-        """Atomically apply a day's game result to the user, never subtract funds.
-
-        The receipt and the balance/streak change live in ONE Mongo document.
-        Optional ledger writes follow that atomic commit; retries return the
-        stored receipt rather than re-crediting after a network failure.
-        """
+        """Settle bank debit, daily receipt and journals in one transaction."""
         from pymongo import ReturnDocument
         from src.services.hedgehog_service import FAILURE_MESSAGE, GameError, utc_day
+        from src.services.referral_economy import transaction
+        from src.services.bank_ledger import _matched
+        from decimal import Decimal
+        import math
 
         if day != utc_day():
             raise GameError('Наступил новый день. Откройте /senseidaily заново.')
-        lock = await self._get_user_lock(user_id)
-        async with lock:
-            user = await self.users.find_one({'id': user_id})
+        claim_date = datetime.combine(date.fromisoformat(day), datetime.min.time())
+
+        async def settle(session):
+            user = await self.users.find_one({'id': user_id}, session=session)
             if not user or user.get('is_banned'):
                 raise GameError('Профиль недоступен.')
             if user.get('hedgehog_day') == day:
                 return user['hedgehog_result']
-            claim_date = datetime.combine(date.fromisoformat(day), datetime.min.time())
-            if await self.daily_claims.find_one({'user_id': user_id, 'claim_date': claim_date}):
+            if await self.daily_claims.find_one({'user_id': user_id, 'claim_date': claim_date}, session=session):
                 raise DailyAlreadyClaimedError('завтра после 00:00 UTC')
             streak = 0
             if won:
@@ -291,25 +290,31 @@ class DailyService:
             bounded_taps = max(0, min(5, int(tap_count))) if won else 0
             desired_extra = base_coins * bounded_taps // 10
             total_coins = 0
-            standard_coins = 0
             extra_coins = 0
-            debited = 0
             if won:
-                # Debit first, then credit the user.  Under a race the atomic
-                # debit fails, so the second player cannot mint an unfunded
-                # reward; a failed user CAS refunds the reservation.
-                for _ in range(4):
-                    available_coins = max(0, int(await self.ledger.balance()))
-                    if available_coins <= 0:
-                        break
-                    candidate = min(base_coins + desired_extra, available_coins)
-                    if candidate <= 0:
-                        break
-                    if await self.ledger.try_withdraw(candidate):
-                        total_coins, debited = candidate, candidate
-                        standard_coins = min(base_coins, candidate)
-                        extra_coins = max(0, candidate - standard_coins)
-                        break
+                accounts = []
+                for bank_id, field in (('single', 'coins'), ('main', 'balance')):
+                    doc = await self.bank.find_one({'_id': bank_id}, session=session) or {}
+                    balance = float(doc.get(field, 0) or 0)
+                    if not math.isfinite(balance):
+                        raise ValueError('Invalid bank balance')
+                    accounts.append((bank_id, field, Decimal(str(max(0.0, balance)))))
+                available = int(sum((item[2] for item in accounts), Decimal(0)))
+                total_coins = min(base_coins + desired_extra, available)
+                extra_coins = max(0, total_coins - min(base_coins, total_coins))
+                remaining = Decimal(total_coins)
+                for bank_id, field, balance in accounts:
+                    take = min(remaining, balance)
+                    if take <= 0:
+                        continue
+                    debit = await self.bank.update_one(
+                        {'_id': bank_id, field: {'$gte': float(take)}},
+                        {'$inc': {field: -float(take)}}, session=session)
+                    if not _matched(debit):
+                        raise RuntimeError('Bank changed during daily reward')
+                    remaining -= take
+                if remaining > 0:
+                    raise RuntimeError('Daily reward was not fully funded')
             result = {
                 'success': won, 'streak': streak, 'ordinary_daily': ordinary,
                 'xp': DAILY_BASE_XP if won else 0, 'coins': DAILY_BASE_COINS if won else 0,
@@ -327,31 +332,22 @@ class DailyService:
                 changes['$inc'] = {'xp': total_xp, 'coins': total_coins}
             committed = await self.users.find_one_and_update(
                 {'id': user_id, 'is_banned': {'$ne': True}, 'hedgehog_day': {'$ne': day}},
-                changes, return_document=ReturnDocument.AFTER,
-            )
+                changes, return_document=ReturnDocument.AFTER, session=session)
             if committed is None:
-                # The reservation was not delivered to this request; return it
-                # to the bank instead of leaving a one-sided debit.
-                if debited:
-                    await self.ledger.refund(debited, 'daily_receipt_race')
-                cached = await self.users.find_one({'id': user_id, 'hedgehog_day': day})
-                if cached:
-                    return cached['hedgehog_result']
                 raise GameError('Не удалось записать результат. Попробуйте ещё раз.')
-            # The user receipt is authoritative. Journal writes below are
-            # best-effort; the bank was already debited before the credit.
-            try:
-                key = f'hedgehog:{user_id}:{day}'
-                await self.daily_claims.update_one({'_id': key}, {'$setOnInsert': {
-                    'user_id': user_id, 'claim_date': claim_date, 'xp_received': total_xp,
-                    'coins_received': total_coins, 'streak_at_claim': streak,
-                    'game_result': result, 'created_at': now,
-                }}, upsert=True)
-                if won:
-                    await self.transactions.update_one({'_id': key}, {'$setOnInsert': {
-                        'user_id': user_id, 'tx_type': 'daily_bonus', 'xp_change': total_xp,
-                        'coins_change': total_coins, 'description': 'Hedgehog daily game', 'created_at': now,
-                    }}, upsert=True)
-            except Exception:
-                logger.exception('Hedgehog receipt committed; daily journal needs reconciliation: user=%s day=%s', user_id, day)
+            key = f'hedgehog:{user_id}:{day}'
+            await self.daily_claims.update_one({'_id': key}, {'$setOnInsert': {
+                'user_id': user_id, 'claim_date': claim_date, 'xp_received': total_xp,
+                'coins_received': total_coins, 'streak_at_claim': streak,
+                'game_result': result, 'created_at': now,
+            }}, upsert=True, session=session)
+            if won:
+                await self.transactions.update_one({'_id': key}, {'$setOnInsert': {
+                    'user_id': user_id, 'tx_type': 'daily_bonus', 'xp_change': total_xp,
+                    'coins_change': total_coins, 'description': 'Hedgehog daily game', 'created_at': now,
+                }}, upsert=True, session=session)
             return result
+
+        lock = await self._get_user_lock(user_id)
+        async with lock:
+            return await transaction(self.mongo_client, settle)
