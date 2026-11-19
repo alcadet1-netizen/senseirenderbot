@@ -223,6 +223,16 @@ class DuelService:
                 return True
         return False
 
+    async def _duel_rejection_after_receipt_check(self, escrow_id, fallback):
+        """Prefer a confirmed request receipt over an outdated rejection."""
+        try:
+            if await self.escrow.escrows.find_one({'_id': escrow_id}):
+                return '❜ Этот вызов уже обработан. Повторного списания нет.'
+        except Exception:
+            logger.exception('Could not recheck duel request after rejection: escrow=%s', escrow_id)
+            return f'⚠️ Не удалось проверить вызов. Не повторяйте до проверки. ID: {escrow_id}'
+        return fallback
+
     async def create_duel(self, challenger_id: int, opponent_id: int, bet: int, chat_id: int, bot: Bot, *, request_id: Optional[str] = None) -> Union[Duel, str]:
         # Let an in-flight escrow finish registration before shutdown snapshots it.
         async with self._lifecycle_lock:
@@ -254,7 +264,10 @@ class DuelService:
 
         # 1. Check eligibility
         error = await self._check_eligibility(challenger_id, opponent_id, bet)
-        if error: return error
+        if error:
+            if bet > 0 and request_id:
+                return await self._duel_rejection_after_receipt_check(escrow_id, error)
+            return error
 
         # Generate the durable key before any money moves; it is independent
         # of the short display ID, which can repeat after a restart.
@@ -277,7 +290,10 @@ class DuelService:
                     opponent_id,
                     bet,
                 )
-                return "❜ Недостаточно средств для ставки."
+                rejection = "❜ Недостаточно средств для ставки."
+                if request_id:
+                    return await self._duel_rejection_after_receipt_check(escrow_id, rejection)
+                return rejection
 
         # 3. Create
         duel = Duel(

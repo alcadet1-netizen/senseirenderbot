@@ -158,3 +158,47 @@ async def test_same_duel_command_reserves_once_across_processes_and_restart(atte
     finally:
         await client.drop_database(name)
         client.close()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_after_stake_consumed_all_balance_reports_saved_receipt():
+    from unittest.mock import AsyncMock
+    from src.services.duel_service import DuelService, Duel
+    uri = os.environ.get('CAMPAIGN_TEST_MONGO_URI')
+    if not uri:
+        pytest.skip('MongoDB replica set required')
+    client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=5000)
+    name = 'sensei_duel_replay_' + uuid.uuid4().hex
+    db = client[name]
+    try:
+        await db.users.insert_many([{'id': 7, 'coins': 300}, {'id': 8, 'coins': 300}])
+        await db.create_collection('duel_escrows')
+        await db.create_collection('transactions')
+        container = NS(mongo_client=NS(database=db), user_service=NS(), economy_service=NS())
+        first, duplicate = DuelService(container), DuelService(container)
+        checked, release = asyncio.Event(), asyncio.Event()
+        check = duplicate._check_eligibility
+        async def wait_after_receipt_check(*args):
+            checked.set()
+            await release.wait()
+            return await check(*args)
+        duplicate._check_eligibility = wait_after_receipt_check
+        retry = asyncio.create_task(duplicate.create_duel(7, 8, 300, -100, AsyncMock(), request_id='-100:42'))
+        try:
+            await asyncio.wait_for(checked.wait(), 5)
+            duel = await first.create_duel(7, 8, 300, -100, AsyncMock(), request_id='-100:42')
+            assert isinstance(duel, Duel)
+        finally:
+            release.set()
+        response = await retry
+        assert 'уже обработан' in response
+        assert (await db.users.find_one({'id': 7}))['coins'] == 0
+        assert (await db.users.find_one({'id': 8}))['coins'] == 0
+        assert await db.duel_escrows.count_documents({}) == 1
+        assert await db.transactions.count_documents({'tx_type': 'duel_escrow'}) == 2
+        await first.shutdown()
+        assert (await db.users.find_one({'id': 7}))['coins'] == 300
+        assert (await db.users.find_one({'id': 8}))['coins'] == 300
+    finally:
+        await client.drop_database(name)
+        client.close()
