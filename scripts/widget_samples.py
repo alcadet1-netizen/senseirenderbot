@@ -1,5 +1,6 @@
 """Generate demo data only; never export real users or secrets into the repo."""
 import argparse
+import asyncio
 from dataclasses import replace
 from pathlib import Path
 
@@ -16,11 +17,25 @@ def main():
     args = parser.parse_args()
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
-    (output / "hedgehog.html").write_text(to_hedgehog_html("A" * 32, Path("src/infra/storage/ega")), encoding="utf-8")
-    (output / "daily-pet.html").write_text(to_daily_pet_html("A" * 32, Path("src/infra/storage/ega"),
-        dict(state='playing', remaining_ms=6000, taps=0, extra_coins=0, base_coins=55)), encoding='utf-8')
-    (output / "daily-pet-demo.html").write_text(to_daily_pet_html("A" * 32, Path("src/infra/storage/ega"),
-        dict(state='playing', remaining_ms=15000, taps=0, extra_coins=0, base_coins=55), demo=True), encoding='utf-8')
+    # The sandbox samples use a bundled image, not production MongoDB.
+    class SampleImages:
+        def __init__(self):
+            self.path = next(iter(sorted(Path('src/infra/storage/ega').glob('*.jpg'))))
+
+        async def get_random_image(self):
+            return {'id': self.path}
+
+        async def get_image_by_id(self, image_id):
+            return image_id.read_bytes()
+
+    async def render_hedgehogs():
+        images = SampleImages()
+        (output / "hedgehog.html").write_text(await to_hedgehog_html("A" * 32, images), encoding="utf-8")
+        (output / "daily-pet.html").write_text(await to_daily_pet_html("A" * 32, None,
+            dict(state='playing', remaining_ms=6000, taps=0, extra_coins=0, base_coins=55)), encoding='utf-8')
+        (output / "daily-pet-demo.html").write_text(await to_daily_pet_html("A" * 32, None,
+            dict(state='playing', remaining_ms=15000, taps=0, extra_coins=0, base_coins=55), demo=True), encoding='utf-8')
+    asyncio.run(render_hedgehogs())
     from src.widgets.fly import fly_html
     (output / "fly.html").write_text(fly_html(), encoding="utf-8")
     cards = {

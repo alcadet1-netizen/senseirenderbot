@@ -18,8 +18,11 @@ from tests.unit.test_hedgehog_game import services
 def setup():
     db, daily, _ = services()
     mongo = SimpleNamespace(database=db)
-    service = DailyPetService(mongo, daily)
-    container = SimpleNamespace(daily_pet_service=service, daily_service=daily,
+    gridfs = SimpleNamespace(list_images=AsyncMock(return_value=[{'filename': 'a.jpg'}, {'filename': 'b.jpg'}]),
+        get_image=AsyncMock(return_value=b'image'),
+        get_random_image=AsyncMock(return_value={'id': 'a'}), get_image_by_id=AsyncMock(return_value=b'image'))
+    service = DailyPetService(mongo, daily, gridfs)
+    container = SimpleNamespace(daily_pet_service=service, daily_service=daily, hedgehog_gridfs=gridfs,
         settings=SimpleNamespace(BASE_DIR=Path(__file__).resolve().parents[2], maintenance_mode=False, mini_app_url='https://bot.example'),
         user_service=SimpleNamespace(get_or_create=AsyncMock()))
     return db, service, container, mongo
@@ -55,7 +58,7 @@ async def test_deadline_includes_travel_no_reset_no_pet_keeps_standard():
     with patch('src.services.daily_pet_service.time.time', return_value=114.999):
         payload = await service.widget_action(token, 7, 'v', '')
         assert payload['taps'] == 0
-    restarted = DailyPetService(mongo, service.daily)
+    restarted = DailyPetService(mongo, service.daily, service.hedgehog_gridfs)
     assert (await restarted.activate(token, 7, 109))['deadline'] == 115
     with patch('src.services.daily_pet_service.time.time', return_value=115):
         payload = await restarted.widget_action(token, 7, 'p', 'late')
@@ -70,7 +73,7 @@ async def test_idempotence_duplicate_queries_restart_and_repeated_claim():
     result, token = await issue(service)
     with patch('src.services.daily_pet_service.time.time', return_value=101):
         await asyncio.gather(*(service.tap(token, 7, 'one-id') for _ in range(8)))
-        restarted = DailyPetService(mongo, service.daily)
+        restarted = DailyPetService(mongo, service.daily, service.hedgehog_gridfs)
         await restarted.tap(token, 7, 'one-id')
     assert db.users.docs[7]['daily_pet']['taps'] == 1
     await service.mark_delivered(token, 7)
@@ -228,10 +231,11 @@ async def test_retired_group_inline_search_returns_empty_without_creating_a_game
     assert not db.hedgehog_games.docs and not db.users.writes
 
 
-def test_private_native_markup_sizes_and_tap_protocol():
+@pytest.mark.asyncio
+async def test_private_native_markup_sizes_and_tap_protocol():
     import zlib
     from src.widgets.daily_pet import to_daily_pet_html
-    html = to_daily_pet_html('A'*32, Path('src/infra/storage/ega'),
+    html = await to_daily_pet_html('A'*32, Path('src/infra/storage/ega'),
         dict(state='playing', remaining_ms=5000, taps=3, extra_coins=16, base_coins=55))
     assert len(zlib.compress(html.encode(), 9)) <= 3900
     assert 'dp:' in html and '7 секунд' not in html
@@ -296,11 +300,12 @@ async def test_historical_ten_second_receipt_is_not_extended():
         assert (await service.widget_action(token, 7, 'p', 'late'))['taps'] == 0
 
 
-def test_hedgehog_uses_single_canvas_without_css_transform_geometry():
+@pytest.mark.asyncio
+async def test_hedgehog_uses_single_canvas_without_css_transform_geometry():
     import zlib
     from src.widgets.daily_pet import to_daily_pet_html
     for demo in (False, True):
-        html = to_daily_pet_html('Q'*32, Path('.'),
+        html = await to_daily_pet_html('Q'*32, Path('.'),
             dict(state='playing', remaining_ms=15000, taps=149, extra_coins=819, base_coins=55), demo=demo)
         assert html.count('<canvas ') == 1
         assert 'class="spike"' not in html and 'transform-origin' not in html
@@ -314,12 +319,12 @@ async def test_notice_reservation_survives_restart_and_deadline():
     db, service, _, mongo = setup()
     result, token = await issue(service)
     coins = db.users.docs[7]['coins']
-    other = DailyPetService(mongo, service.daily)
+    other = DailyPetService(mongo, service.daily, service.hedgehog_gridfs)
     claims = await asyncio.gather(service.reserve_notice(token, 7), other.reserve_notice(token, 7))
     assert sum(claims) == 1
     # Do not release a send claim even after the play window expires or a restart.
     with patch('src.services.daily_pet_service.time.time', return_value=1000):
-        assert not await DailyPetService(mongo, service.daily).reserve_notice(token, 7)
+        assert not await DailyPetService(mongo, service.daily, service.hedgehog_gridfs).reserve_notice(token, 7)
     assert db.users.docs[7]['coins'] == coins
     await service.mark_delivered(token, 7)
     assert (await service.owned(token, 7))['notice_state'] == 'sent'
@@ -342,7 +347,7 @@ async def test_concurrent_reward_notices_send_one_photo_even_if_first_send_slow(
     await asyncio.wait_for(started.wait(), 2)
     # A second worker sees the same session while Telegram hasn't replied yet.
     second_container = SimpleNamespace(**vars(container))
-    second_container.daily_pet_service = DailyPetService(mongo,service.daily)
+    second_container.daily_pet_service = DailyPetService(mongo,service.daily,service.hedgehog_gridfs)
     await send_reward_notice(message,user,second_container,result,session)
     release.set()
     await first

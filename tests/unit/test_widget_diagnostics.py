@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from tests.unit.hedgehog_test_gridfs import ImageStore
 from aiogram.exceptions import TelegramBadRequest, TelegramNotFound, TelegramRetryAfter, TelegramNetworkError
 
 from src.bot.native_widgets import SendWidget
@@ -51,7 +52,7 @@ def test_error_logs_and_admin_text_redact_secrets(caplog):
 def setup_probe(admin=True, private=True):
     settings = SimpleNamespace(admin_ids=[7] if admin else [], telegram_widget_beta=False,
                                BASE_DIR=Path(__file__).resolve().parents[2])
-    container = SimpleNamespace(settings=settings)
+    container = SimpleNamespace(settings=settings, hedgehog_gridfs=ImageStore())
     message = SimpleNamespace(from_user=SimpleNamespace(id=7),
                               chat=SimpleNamespace(id=7, type='private' if private else 'supergroup'),
                               bot=AsyncMock(), answer=AsyncMock())

@@ -8,6 +8,7 @@ import pytest
 from motor.motor_asyncio import AsyncIOMotorClient
 from src.services.paid_hedgehog_service import PaidHedgehogService
 from src.services.hedgehog_service import utc_day
+from src.services.hedgehog_gridfs import HedgehogGridFS
 
 
 @pytest.mark.asyncio
@@ -23,7 +24,10 @@ async def test_paid_receipt_concurrency_and_anchor_preserve_bank_total():
         await db.users.insert_one(dict(id=7,coins=100,xp=50,hedgehog_day=utc_day(),
             hedgehog_result=reward,daily_streak=3,daily_pet=dict(state='active',deadline=1,delivered=True)))
         await db.bank.insert_one(dict(_id='single',coins=1000))
-        services=[PaidHedgehogService(NS(database=db)) for _ in range(8)]
+        mongo = NS(database=db)
+        gridfs = HedgehogGridFS(mongo)
+        await gridfs.upload_image('test.jpg', b'test image')
+        services=[PaidHedgehogService(mongo, gridfs) for _ in range(8)]
         svc=services[0]
         order=await svc.quote(7)
         assert order['stars']==1

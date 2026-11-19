@@ -52,10 +52,11 @@ async def test_ega_reports_local_error():
     assert 'Не удалось собрать' in message.answer.call_args.args[0]
 
 
-def test_production_renderer_still_uses_server_requests():
+@pytest.mark.asyncio
+async def test_production_renderer_still_uses_server_requests():
     snapshot = dict(state='playing', remaining_ms=15000, taps=0, extra_coins=0, base_coins=55)
-    live = to_daily_pet_html('B'*32, Path('.'), snapshot)
-    demo = to_daily_pet_html('B'*32, Path('.'), snapshot, demo=True)
+    live = await to_daily_pet_html('B'*32, Path('.'), snapshot)
+    demo = await to_daily_pet_html('B'*32, Path('.'), snapshot, demo=True)
     assert 'TelegramWidget.request' in live and 'TelegramWidget.request' not in demo
     assert 'B'*32 not in demo
     assert 'Тест завершён. Награды не начислялись.' in demo

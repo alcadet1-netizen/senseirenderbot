@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 from unittest.mock import patch
 
 import pytest
+from tests.unit.hedgehog_test_gridfs import ImageStore
 
 from src.core.exceptions import DailyAlreadyClaimedError
 from src.services.daily_service import DailyService
@@ -213,7 +214,7 @@ async def test_http_routes_auth_identity_and_reward_picture():
     from src.web.hedgehog_app import setup_hedgehog
     db, daily, game = services()
     token = (await game.issue(7))['token']
-    container = SimpleNamespace(hedgehog_service=game, settings=SimpleNamespace(
+    container = SimpleNamespace(hedgehog_service=game, hedgehog_gridfs=ImageStore(), settings=SimpleNamespace(
         BASE_DIR=Path(__file__).resolve().parents[2], bot_token='test-token', maintenance_mode=False))
     app = web.Application(client_max_size=16 * 1024)
     setup_hedgehog(app, container)
@@ -253,7 +254,7 @@ async def test_launch_native_widget_in_private_and_group_without_https():
     from src.bot.native_widgets import SendWidget
     db, daily, game = services()
     user = SimpleNamespace(id=7, username='petter', first_name='Ёж', last_name=None, is_bot=False)
-    container = SimpleNamespace(settings=SimpleNamespace(BASE_DIR=Path(__file__).resolve().parents[2]),
+    container = SimpleNamespace(hedgehog_gridfs=ImageStore(), settings=SimpleNamespace(BASE_DIR=Path(__file__).resolve().parents[2]),
                                 user_service=SimpleNamespace(get_or_create=AsyncMock()), hedgehog_service=game)
     bot = AsyncMock()
     message = SimpleNamespace(chat=SimpleNamespace(type='private', id=7), answer=AsyncMock(), bot=bot)
@@ -290,21 +291,22 @@ async def test_crash_after_user_commit_recovers_without_double_credit():
     assert len(db.users.writes) == 1
 
 
-def test_native_html_limits_inline_image_and_no_miniapp():
+@pytest.mark.asyncio
+async def test_native_html_limits_inline_image_and_no_miniapp():
     import re
     import zlib
     from pathlib import Path
     from src.widgets.hedgehog import to_hedgehog_html
-    images = Path(__file__).resolve().parents[2] / 'src/infra/storage/ega'
+    images = ImageStore()
     for token in ['A' * 32, 'z' * 32, '_' * 32, '-' * 32]:
-        html = to_hedgehog_html(token, images)
+        html = await to_hedgehog_html(token, images)
         assert len(html.encode()) <= 32768
         assert len(zlib.compress(html.encode(), 9)) <= 4096
         assert 'data:image/jpeg;base64,' in html
         assert 'TelegramWidget.request' in html
         assert not re.search(r'https?://|fetch\(|WebApp|<iframe', html)
     with pytest.raises(ValueError):
-        to_hedgehog_html('</script>', images)
+        await to_hedgehog_html('</script>', images)
 
 
 @pytest.mark.asyncio
@@ -390,7 +392,7 @@ async def test_native_unsupported_api_does_not_spend_attempt_or_open_webapp():
     from src.bot.presenters.hedgehog_presenter import launch_legacy_hedgehog as launch_hedgehog
     db, daily, game = services()
     user = SimpleNamespace(id=7, username=None, first_name='Ёж', last_name=None, is_bot=False)
-    container = SimpleNamespace(settings=SimpleNamespace(BASE_DIR=Path(__file__).resolve().parents[2]),
+    container = SimpleNamespace(hedgehog_gridfs=ImageStore(), settings=SimpleNamespace(BASE_DIR=Path(__file__).resolve().parents[2]),
                                 user_service=SimpleNamespace(get_or_create=AsyncMock()), hedgehog_service=game)
     bot = AsyncMock(side_effect=TelegramNotFound(method=SendWidget(chat_id=7, html=''), message='Not Found'))
     message = SimpleNamespace(chat=SimpleNamespace(id=7), bot=bot, answer=AsyncMock())
@@ -567,10 +569,11 @@ async def test_pet_exactly_at_deadline_is_standard_not_bonus():
         assert response['result']['tap_count'] == 0
 
 
-def test_concept_widget_keeps_art_and_seven_second_copy():
+@pytest.mark.asyncio
+async def test_concept_widget_keeps_art_and_seven_second_copy():
     from pathlib import Path
     from src.widgets.hedgehog import to_hedgehog_html
-    html = to_hedgehog_html('A' * 32, Path(__file__).resolve().parents[2] / 'src/infra/storage/ega')
+    html = await to_hedgehog_html('A' * 32, ImageStore())
     assert 'id="animal"' in html and 'id="hand"' in html
     assert '#faf1e2' in html and '#99a776' in html
     assert '7 секунд' in html and '+10%' in html
@@ -621,7 +624,7 @@ async def test_group_rejection_explains_actual_rights_without_spending(can_send_
     from src.bot.presenters.hedgehog_presenter import launch_legacy_hedgehog as launch_hedgehog
     db, daily, game = services()
     user = SimpleNamespace(id=7, username=None, first_name='Ёж', last_name=None, is_bot=False)
-    container = SimpleNamespace(settings=SimpleNamespace(BASE_DIR=Path(__file__).resolve().parents[2]),
+    container = SimpleNamespace(hedgehog_gridfs=ImageStore(), settings=SimpleNamespace(BASE_DIR=Path(__file__).resolve().parents[2]),
                                 user_service=SimpleNamespace(get_or_create=AsyncMock()), hedgehog_service=game)
     bot = AsyncMock(side_effect=MtprotoWidgetError('INPUT_MEDIA_WIDGET_NOT_ALLOWED'))
     bot.get_chat_member.return_value = SimpleNamespace(status='member')

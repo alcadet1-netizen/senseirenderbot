@@ -64,7 +64,7 @@ class Container:
     def paid_hedgehog_service(self):
         if getattr(self, '_paid_hedgehog_service', None) is None:
             from src.services.paid_hedgehog_service import PaidHedgehogService
-            self._paid_hedgehog_service = PaidHedgehogService(self.mongo_client)
+            self._paid_hedgehog_service = PaidHedgehogService(self.mongo_client, self.hedgehog_gridfs)
         return self._paid_hedgehog_service
 
     @property
