@@ -147,3 +147,23 @@ async def test_shutdown_without_container_closes_bot_session():
     bot=SimpleNamespace(session=SimpleNamespace(close=AsyncMock()))
     await on_shutdown(bot)
     bot.session.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_duel_recovery_background_stops_before_shutdown():
+    _, service = setup_duels()
+    service.duels.clear()
+    started = asyncio.Event()
+    async def scan():
+        started.set()
+        await asyncio.Event().wait()
+    service.escrow.recover_decided = AsyncMock(side_effect=scan)
+    await service.start_recovery()
+    task = service._recovery_task
+    await asyncio.wait_for(started.wait(), 1)
+    await service.start_recovery()
+    assert service._recovery_task is task
+    await service.shutdown()
+    assert task.cancelled()
+    await service.start_recovery()
+    assert service._recovery_task is None

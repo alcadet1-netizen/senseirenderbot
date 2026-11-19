@@ -1,10 +1,14 @@
 """Durable, transactional player-funded duel escrow (no bank or emission)."""
+import logging
 from datetime import datetime, timezone
 
 from pymongo.errors import DuplicateKeyError
 
 from src.services.bank_ledger import _matched
 from src.services.referral_economy import transaction
+
+
+logger = logging.getLogger(__name__)
 
 
 class DuelEscrow:
@@ -95,3 +99,21 @@ class DuelEscrow:
                 raise RuntimeError('Duel escrow state changed')
             return {**entry, 'state': 'settled', 'winner_id': winner_id, 'settled_at': now}
         return await transaction(self.mongo, apply)
+
+    async def recover_decided(self):
+        """Complete recorded decisions only; never decide or refund live fights.
+
+        Multiple workers may scan the same rows: settle is idempotent and
+        the Mongo transaction serializes credits against the escrow document.
+        A corrupt record or missing recipient cannot prevent other recoveries.
+        """
+        recovered = 0
+        async for entry in self.escrows.find({'state': 'decided'}):
+            try:
+                if 'winner_id' not in entry:
+                    raise ValueError('Duel decision has no winner field')
+                await self.settle(entry['_id'], entry['winner_id'])
+                recovered += 1
+            except Exception:
+                logger.exception('Duel decision recovery failed: escrow=%s', entry.get('_id'))
+        return recovered

@@ -103,3 +103,26 @@ async def test_live_service_creates_and_pays_player_to_player():
     assert len([tx for tx in db.transactions.docs.values() if tx['tx_type'] == 'duel_bet_payout']) == 1
     assert db.bank.docs['main']['balance'] == 100000
     await asyncio.sleep(0)
+
+
+@pytest.mark.asyncio
+async def test_recovery_only_completes_decided_and_skips_corrupt_records():
+    db, escrow = setup()
+    await escrow.reserve('decided', 7, 8, 300, 1)
+    async def fail(*args, **kwargs): raise RuntimeError('journal unavailable')
+    with patch.object(escrow.transactions, 'insert_one', side_effect=fail):
+        with pytest.raises(RuntimeError):
+            await escrow.settle('decided', 7)
+    await escrow.reserve('still-active', 7, 8, 300, 2)
+    db.duel_escrows.docs['corrupt'] = {'_id': 'corrupt', 'state': 'decided'}
+    async def rows():
+        for doc in list(db.duel_escrows.docs.values()):
+            if doc['state'] == 'decided':
+                yield copy.deepcopy(doc)
+    with patch.object(db.duel_escrows, 'find', create=True, side_effect=lambda *a, **k: rows()):
+        assert await escrow.recover_decided() == 1
+        assert await escrow.recover_decided() == 0
+    assert db.duel_escrows.docs['still-active']['state'] == 'reserved'
+    assert db.duel_escrows.docs['corrupt']['state'] == 'decided'
+    assert db.users.docs[7]['coins'] == 1000
+    assert db.users.docs[8]['coins'] == 400

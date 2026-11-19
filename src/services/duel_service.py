@@ -133,6 +133,7 @@ class DuelService:
         self.duels: Dict[int, Duel] = {} # int ID
         self._closing = False
         self._lifecycle_lock = asyncio.Lock()
+        self._recovery_task: Optional[asyncio.Task] = None
 
         # Get references to services we'll need
         self.user_service = container.user_service
@@ -146,6 +147,20 @@ class DuelService:
 
     # --- Core Public Methods ---
 
+    async def start_recovery(self):
+        """Retry only already-decided settlements; leave active stakes alone."""
+        if self._recovery_task is not None or self._closing:
+            return
+        self._recovery_task = asyncio.create_task(self._recovery_loop(), name='duel-settlement-recovery')
+
+    async def _recovery_loop(self):
+        while True:
+            try:
+                await self.escrow.recover_decided()
+            except Exception:
+                logger.exception('Duel recovery scan failed; will retry')
+            await asyncio.sleep(60)
+
     async def shutdown(self):
         """Refund live escrow under each duel lock before the database closes.
 
@@ -156,6 +171,12 @@ class DuelService:
             self._closing = True
             pending = list(self.duels.values())
         timers, failures = [], []
+        if self._recovery_task is not None:
+            self._recovery_task.cancel()
+            timers.append(self._recovery_task)
+            self._recovery_task = None
+            await asyncio.gather(*timers, return_exceptions=True)
+            timers.clear()
         for duel in pending:
             async with duel.lock:
                 timer = duel.timeout_task

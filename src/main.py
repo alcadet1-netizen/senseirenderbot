@@ -71,6 +71,7 @@ async def on_startup(bot: Bot, container: Container) -> None:
     logger.info("✅ MongoDB connected")
 
     await container.hedgehog_service.ensure_indexes()
+    await container.duel_service.start_recovery()
 
     # Reconcile the one global emission counter before any coins can be minted.
     await container.emission_service.bootstrap()

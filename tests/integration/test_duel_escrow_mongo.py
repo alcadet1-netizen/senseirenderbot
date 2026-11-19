@@ -67,3 +67,36 @@ async def test_duel_escrow_races_and_recovery_after_journal_error():
     finally:
         await client.drop_database(name)
         client.close()
+
+
+@pytest.mark.asyncio
+async def test_recovery_retries_decided_concurrently_without_touching_live_escrow():
+    uri = os.environ.get('CAMPAIGN_TEST_MONGO_URI')
+    if not uri:
+        pytest.skip('MongoDB replica set required')
+    client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=5000)
+    name = 'sensei_duel_recovery_' + uuid.uuid4().hex
+    db = client[name]
+    try:
+        await db.users.insert_many([{'id': uid, 'coins': 1000} for uid in (7, 8, 9, 10)])
+        workers = [DuelEscrow(NS(database=db)) for _ in range(6)]
+        await workers[0].reserve('finished', 7, 8, 300, 1)
+        await workers[0].reserve('active', 9, 10, 300, 2)
+        broken = DuelEscrow(NS(database=db))
+        async def fail(*args, **kwargs): raise RuntimeError('journal unavailable')
+        broken.transactions = NS(insert_one=fail)
+        with pytest.raises(RuntimeError):
+            await broken.settle('finished', 7)
+        assert (await db.duel_escrows.find_one({'_id': 'finished'}))['state'] == 'decided'
+        await asyncio.gather(*(w.recover_decided() for w in workers))
+        await DuelEscrow(NS(database=db)).recover_decided()
+        assert (await db.duel_escrows.find_one({'_id': 'finished'}))['state'] == 'settled'
+        assert (await db.duel_escrows.find_one({'_id': 'active'}))['state'] == 'reserved'
+        assert (await db.users.find_one({'id': 7}))['coins'] == 1300
+        assert (await db.users.find_one({'id': 8}))['coins'] == 700
+        assert (await db.users.find_one({'id': 9}))['coins'] == 700
+        assert (await db.users.find_one({'id': 10}))['coins'] == 700
+        assert await db.transactions.count_documents({'escrow_id': 'finished', 'tx_type': 'duel_bet_payout'}) == 1
+    finally:
+        await client.drop_database(name)
+        client.close()
