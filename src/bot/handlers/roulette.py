@@ -718,3 +718,8 @@ async def check_roulette_response(message: Message, container: Container):
         f"{speed_bonus}",
         parse_mode="HTML"
     )
+
+
+# Keep game handling while allowing the daily alias to reach its reward.
+from src.bot.middlewares.game_daily import GameDailyMiddleware
+router.message.middleware(GameDailyMiddleware("check_roulette_response"))

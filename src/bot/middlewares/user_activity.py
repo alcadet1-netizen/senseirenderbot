@@ -16,7 +16,7 @@ import logging
 import random
 import time
 from abc import ABC, abstractmethod
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import (
@@ -46,6 +46,18 @@ from src.texts.donate_prompts import get_random_donate_phrase
 #                                 CONFIGURATION
 #
 logger: Final[logging.Logger] = logging.getLogger(__name__)
+
+@contextmanager
+def _timed_activity_stage(stage: str):
+    """Log slow awaited stages without changing their ordering or outcome."""
+    started = time.monotonic()
+    try:
+        yield
+    finally:
+        elapsed = time.monotonic() - started
+        if elapsed >= 1.0:
+            logger.warning("[USER_ACTIVITY] Slow stage=%s duration_ms=%.0f", stage, elapsed * 1000)
+
 
 # Type aliases
 HandlerType: TypeAlias = Callable[[Union[Message, CallbackQuery], Dict[str, Any]], Awaitable[Any]]
@@ -599,7 +611,8 @@ class ActivityProcessor:
         notifications: List[Notification] = []
 
         # Обрабатываем награду за сообщение
-        result = await self._process_reward(user, apply_rewards, chat_id)
+        with _timed_activity_stage("reward"):
+            result = await self._process_reward(user, apply_rewards, chat_id)
 
         if not result.success:
             logger.debug(f"Reward processing failed for {user.id}: {result.error}")
@@ -628,9 +641,10 @@ class ActivityProcessor:
 
         # Проверяем достижения
         if self._config.enable_achievements:
-            achievement_notifications = await self._check_achievements(
-                user, chat_id, result
-            )
+            with _timed_activity_stage("achievements"):
+                achievement_notifications = await self._check_achievements(
+                    user, chat_id, result
+                )
             notifications.extend(achievement_notifications)
 
         return notifications
@@ -892,14 +906,16 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
             return
 
         # Update user activity in chat
-        await container.chat_activity_service.update_user_activity(chat_id, user_id)
+        with _timed_activity_stage("chat_activity"):
+            await container.chat_activity_service.update_user_activity(chat_id, user_id)
 
         # Если пользователь забанен в боте, но пишет сообщение и не забанен в чате — снимаем бан в боте
-        unban_check = await container.moderation_service.unban_if_active_in_chat(
-            bot=bot,
-            chat_id=chat_id,
-            user_id=user_id
-        )
+        with _timed_activity_stage("unban_check"):
+            unban_check = await container.moderation_service.unban_if_active_in_chat(
+                bot=bot,
+                chat_id=chat_id,
+                user_id=user_id
+            )
         if unban_check["success"]:
             logger.info(f"🔓 User {user_id} auto-unbanned on message activity (was banned in DB, active in chat)")
 
@@ -910,11 +926,12 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
         can_reward = False
 
         if not is_private:
-            can_reward = await self.throttle.throttle(
-                key=str(user_id),
-                limit_seconds=self.config.throttle_seconds,
-                scope="message_rewards"
-            )
+            with _timed_activity_stage("reward_throttle"):
+                can_reward = await self.throttle.throttle(
+                    key=str(user_id),
+                    limit_seconds=self.config.throttle_seconds,
+                    scope="message_rewards"
+                )
         logger.info(f"[THROTTLE_CHECK] User {user_id} can_reward={can_reward} (throttle_seconds={self.config.throttle_seconds})")
 
         # Создаём процессор активности
@@ -934,11 +951,13 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
             self._notification_queue.add(notification)
 
         # Отправляем уведомления
-        await self._send_notifications(bot)
+        with _timed_activity_stage("notifications"):
+            await self._send_notifications(bot)
 
         # Обрабатываем случайные фразы
         if self.config.enable_random_phrases and random.random() < self.config.random_phrase_chance:
-            await self._handle_random_phrase(message, user, chat_id)
+            with _timed_activity_stage("random_phrase"):
+                await self._handle_random_phrase(message, user, chat_id)
 
     async def _send_notifications(self, bot: Bot) -> None:
         """Отправляет накопленные уведомления."""

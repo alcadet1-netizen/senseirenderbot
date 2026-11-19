@@ -365,3 +365,43 @@ async def test_ambiguous_photo_failure_never_resends_same_notice():
     await send_reward_notice(message,user,container,result,session)
     message.answer_photo.assert_awaited_once()
     assert db.users.docs[7]['coins'] == coins
+
+
+@pytest.mark.asyncio
+async def test_explicit_telegram_photo_rejection_releases_notice_for_safe_retry():
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.methods import SendPhoto
+    from src.bot.presenters.daily_hedgehog import send_daily_hedgehog
+    db, service, container, _ = setup()
+    user = SimpleNamespace(id=7, username=None, first_name='H', last_name=None, is_bot=False)
+    message = SimpleNamespace(chat=SimpleNamespace(id=-100, type='supergroup'), answer=AsyncMock(),
+                              answer_photo=AsyncMock())
+    message.answer_photo.side_effect = [
+        TelegramBadRequest(method=SendPhoto(chat_id=-100, photo='invalid'), message='Bad Request: wrong file identifier'),
+        None,
+    ]
+    await send_daily_hedgehog(message, user, container)
+    coins = db.users.docs[7]['coins']
+    assert 'награда сохранена' in message.answer.await_args.args[0].lower()
+    assert not db.users.docs[7]['daily_pet'].get('notice_state')
+    await send_daily_hedgehog(message, user, container)
+    assert message.answer_photo.await_count == 2
+    assert db.users.docs[7]['daily_pet']['delivered']
+    assert db.users.docs[7]['coins'] == coins
+
+
+@pytest.mark.asyncio
+async def test_repeated_command_after_ambiguous_delivery_explains_without_resend():
+    from src.bot.presenters.daily_hedgehog import send_daily_hedgehog
+    db, service, container, _ = setup()
+    user = SimpleNamespace(id=7, username=None, first_name='H', last_name=None, is_bot=False)
+    message = SimpleNamespace(chat=SimpleNamespace(id=-100, type='supergroup'), answer=AsyncMock(),
+                              answer_photo=AsyncMock(side_effect=TimeoutError()))
+    with pytest.raises(TimeoutError):
+        await send_daily_hedgehog(message, user, container)
+    coins = db.users.docs[7]['coins']
+    await send_daily_hedgehog(message, user, container)
+    message.answer_photo.assert_awaited_once()
+    assert 'не подтверждена' in message.answer.await_args.args[0]
+    assert db.users.docs[7]['coins'] == coins
+    assert db.users.docs[7]['daily_pet']['notice_state'] == 'sending'

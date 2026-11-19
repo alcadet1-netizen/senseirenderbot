@@ -38,3 +38,33 @@ async def test_notice_single_winner_across_workers_and_restart():
     finally:
         await client.drop_database(name)
         client.close()
+
+
+@pytest.mark.asyncio
+async def test_rejected_notice_release_preserves_reward_and_allows_one_retry():
+    uri = os.environ.get('CAMPAIGN_TEST_MONGO_URI')
+    if not uri:
+        pytest.skip('CI Mongo required')
+    client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=5000)
+    name = 'sensei_notice_retry_' + uuid.uuid4().hex
+    db = client[name]
+    token = 'b' * 32
+    try:
+        session = dict(token=token, day='2026-11-09', state='active', deadline=1,
+                       delivered=False, taps=0, extra_coins=0)
+        await db.users.insert_one(dict(id=7, hedgehog_day=session['day'], daily_pet=session,
+                                       coins=500, xp=200))
+        service = DailyPetService(NS(database=db), None, None)
+        assert await service.reserve_notice(token, 7)
+        assert await service.release_rejected_notice(token, 7)
+        workers = [DailyPetService(NS(database=db), None, None) for _ in range(12)]
+        assert sum(await asyncio.gather(*(worker.reserve_notice(token, 7) for worker in workers))) == 1
+        await service.mark_delivered(token, 7)
+        assert not await service.release_rejected_notice(token, 7)
+        assert not await service.reserve_notice(token, 7)
+        user = await db.users.find_one({'id': 7})
+        assert user['coins'] == 500 and user['xp'] == 200
+        assert await db.transactions.count_documents({}) == 0
+    finally:
+        await client.drop_database(name)
+        client.close()

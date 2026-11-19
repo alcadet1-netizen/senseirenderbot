@@ -147,12 +147,15 @@ async def deliver(message, container, receipt):
         await payment_status(message, container, receipt['order_id'], 'Эта оплаченная попытка уже учтена. Повторного начисления нет.')
         return
     if session.get('delivered'):
-        return
+        return True
     order = await container.paid_hedgehog_service.orders.find_one(
         {'_id': receipt['order_id'], 'user_id': receipt['user_id']})
     notice = (order or {}).get('notice')
     from src.bot.presenters.daily_hedgehog import send_reward_notice
-    await send_reward_notice(message, message.from_user, container, receipt['reward'], session, notice=notice)
+    delivered = await send_reward_notice(message, message.from_user, container, receipt['reward'], session, notice=notice)
+    if not delivered:
+        logger.warning('Paid hedgehog delivery already reserved or delivered user=%s', receipt['user_id'])
+    return delivered
 
 
 async def successful_payment(message, container):

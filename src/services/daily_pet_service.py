@@ -101,6 +101,22 @@ class DailyPetService:
                 return True
         raise GameError('Уведомление готовится. Повторное начисление не выполняется.')
 
+    async def release_rejected_notice(self, token, user_id):
+        """Release only after Telegram explicitly rejected this send.
+
+        A timeout, cancellation or connection failure is ambiguous and must not
+        use this path: Telegram may already have delivered the photo.
+        """
+        session = await self.owned(token, user_id)
+        if session.get('delivered') or session.get('notice_state') != 'sending':
+            return False
+        released = {**session}
+        released.pop('notice_state', None)
+        saved = await self.users.find_one_and_update(
+            {'id': user_id, 'daily_pet': session},
+            {'$set': {'daily_pet': released}}, return_document=ReturnDocument.AFTER)
+        return bool(saved)
+
     async def mark_delivered(self, token, user_id):
         for _ in range(8):
             session = await self.owned(token, user_id)
