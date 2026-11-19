@@ -126,7 +126,7 @@ async def test_duel_winner_gets_xp_and_katana_and_loser_loses_katana():
         await db.transactions.insert_one({'user_id': winner, 'tx_type': 'duel_bet_payout', 'coins_change': 600.0})
         await db.transactions.insert_one({'user_id': winner, 'tx_type': 'duel_win', 'coins_change': 0.0, 'xp_change': 50})
         await db.transactions.insert_one({'user_id': loser_id, 'tx_type': 'duel_loss', 'coins_change': 0.0})
-        return {'result_details': {'winner_name': 'winner', 'loser_name': 'loser',
+        return {'award_version': 1, 'result_details': {'winner_name': 'winner', 'loser_name': 'loser',
                                    'winner_has_katana': True, 'loser_has_katana': True}}
     service.escrow.settle = AsyncMock(side_effect=settle_escrow)
 

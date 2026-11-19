@@ -163,3 +163,27 @@ async def test_existing_escrow_without_award_marker_does_not_add_new_awards():
     assert db.users.docs[7]['xp'] == 500
     assert db.users.docs[7].get('wins', 0) == 0
     assert not any(tx['tx_type'] == 'duel_win' for tx in db.transactions.docs.values())
+
+
+@pytest.mark.asyncio
+async def test_duplicate_duel_message_creates_at_most_one_fight_across_workers():
+    from unittest.mock import AsyncMock
+    from src.services.duel_service import Duel, DuelService
+    db, _ = setup()
+    mongo = NS(database=db)
+    container = NS(mongo_client=mongo, user_service=NS(), economy_service=NS())
+    services_ = [DuelService(container) for _ in range(6)]
+    results = await asyncio.gather(*(service.create_duel(7, 8, 300, -100, AsyncMock(), request_id='-100:42')
+                                     for service in services_))
+    fights = [item for item in results if isinstance(item, Duel)]
+    assert len(fights) == 1
+    assert all(isinstance(item, Duel) or 'уже обработан' in item for item in results)
+    assert db.users.docs[7]['coins'] == db.users.docs[8]['coins'] == 700
+    assert len(db.duel_escrows.docs) == 1
+    assert len([tx for tx in db.transactions.docs.values() if tx['tx_type'] == 'duel_escrow']) == 2
+    restarted = DuelService(container)
+    assert 'уже обработан' in await restarted.create_duel(7, 8, 300, -100, AsyncMock(), request_id='-100:42')
+    owner = next(s for s in services_ if fights[0].id in s.duels)
+    await owner.shutdown()
+    assert db.users.docs[7]['coins'] == db.users.docs[8]['coins'] == 1000
+    assert 'уже обработан' in await restarted.create_duel(7, 8, 300, -100, AsyncMock(), request_id='-100:42')

@@ -103,7 +103,7 @@ async def test_shutdown_waits_for_inflight_creation_escrow_registration():
     service.duels.clear()
     service._check_eligibility = AsyncMock(return_value=None)
     entered, release = asyncio.Event(), asyncio.Event()
-    async def escrow(*args):
+    async def escrow(*args, **kwargs):
         entered.set()
         await release.wait()
         return True

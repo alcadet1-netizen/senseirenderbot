@@ -73,7 +73,8 @@ async def cmd_trade(message: Message, command: CommandObject, container: Contain
         pass
 
     # 2. Play Game (Atomic via Service)
-    result = await container.trade_service.play_game(user_id, bet)
+    result = await container.trade_service.play_game(
+        user_id, bet, request_id=f"{message.chat.id}:{message.message_id}")
     
     if not result["success"]:
         if result.get("error") == "rate_limit":

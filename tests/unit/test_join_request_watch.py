@@ -89,3 +89,79 @@ async def test_check_error_keeps_request_for_retry():
     with patch('src.services.join_request_watch.group_admin_access.allowed', new=AsyncMock(return_value=True)):
         await watch.check_one()
     collection.delete_many.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('description', ['Bad Request: member not found', 'member not found'])
+async def test_member_not_found_remains_pending_without_error_or_welcome(description, caplog):
+    import logging
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.methods import GetChatMember
+
+    watch, collection, bot = setup_watch()
+    bot.get_chat_member.side_effect = TelegramBadRequest(
+        method=GetChatMember(chat_id=-100, user_id=77), message=description)
+    with caplog.at_level(logging.DEBUG, logger='src.services.join_request_watch'), \
+         patch('src.services.join_request_watch.group_admin_access.allowed', new=AsyncMock(return_value=True)), \
+         patch('src.services.join_request_watch._handle_join', new_callable=AsyncMock) as welcome:
+        assert await watch.check_one()
+    welcome.assert_not_awaited()
+    bot.send_message.assert_not_awaited()
+    collection.delete_many.assert_not_awaited()
+    assert not any(record.levelno >= logging.ERROR for record in caplog.records)
+    claim = collection.find_one_and_update.await_args.args
+    assert 'next_check' in claim[1]['$set']
+
+
+@pytest.mark.asyncio
+async def test_pending_member_not_found_can_later_be_confirmed():
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.methods import GetChatMember
+    watch, collection, bot = setup_watch()
+    bot.get_chat_member.side_effect = [
+        TelegramBadRequest(method=GetChatMember(chat_id=-100, user_id=77), message='Bad Request: member not found'),
+        NS(status='member', is_member=True),
+    ]
+    with patch('src.services.join_request_watch.group_admin_access.allowed', new=AsyncMock(return_value=True)), \
+         patch('src.services.join_request_watch._handle_join', new_callable=AsyncMock) as welcome:
+        await watch.check_one()
+        welcome.assert_not_awaited()
+        collection.delete_many.assert_not_awaited()
+        await watch.check_one()
+    welcome.assert_awaited_once()
+    collection.delete_many.assert_awaited_once_with({'chat_id': -100, 'user_id': 77})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('description', ['Bad Request: chat not found', 'Bad Request: not enough rights',
+                                         'Bad Request: member not found in this chat'])
+async def test_other_telegram_bad_requests_are_not_silenced(description, caplog):
+    import logging
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.methods import GetChatMember
+    watch, collection, bot = setup_watch()
+    bot.get_chat_member.side_effect = TelegramBadRequest(
+        method=GetChatMember(chat_id=-100, user_id=77), message=description)
+    with caplog.at_level(logging.ERROR, logger='src.services.join_request_watch'), \
+         patch('src.services.join_request_watch.group_admin_access.allowed', new=AsyncMock(return_value=True)), \
+         patch('src.services.join_request_watch._handle_join', new_callable=AsyncMock) as welcome:
+        assert await watch.check_one()
+    welcome.assert_not_awaited()
+    collection.delete_many.assert_not_awaited()
+    assert any('Join request check failed' in record.message for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_member_not_found_from_admin_check_is_not_hidden(caplog):
+    import logging
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.methods import GetChatMember
+    watch, collection, bot = setup_watch()
+    error = TelegramBadRequest(method=GetChatMember(chat_id=-100, user_id=1),
+                               message='Bad Request: member not found')
+    with caplog.at_level(logging.ERROR, logger='src.services.join_request_watch'), \
+         patch('src.services.join_request_watch.group_admin_access.allowed', new=AsyncMock(side_effect=error)):
+        await watch.check_one()
+    bot.get_chat_member.assert_not_awaited()
+    collection.delete_many.assert_not_awaited()
+    assert any('Join request check failed' in record.message for record in caplog.records)

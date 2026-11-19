@@ -105,3 +105,38 @@ async def test_recovery_retries_decided_concurrently_without_touching_live_escro
     finally:
         await client.drop_database(name)
         client.close()
+
+
+@pytest.mark.asyncio
+async def test_same_duel_command_reserves_once_across_processes_and_restart():
+    from unittest.mock import AsyncMock
+    from src.services.duel_service import DuelService, Duel
+    uri = os.environ.get('CAMPAIGN_TEST_MONGO_URI')
+    if not uri:
+        pytest.skip('MongoDB replica set required')
+    client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=5000)
+    name = 'sensei_duel_request_' + uuid.uuid4().hex
+    db = client[name]
+    try:
+        await db.users.insert_many([{'id': 7, 'coins': 1000}, {'id': 8, 'coins': 1000}])
+        container = NS(mongo_client=NS(database=db), user_service=NS(), economy_service=NS())
+        workers = [DuelService(container) for _ in range(8)]
+        results = await asyncio.gather(*(w.create_duel(7, 8, 300, -100, AsyncMock(), request_id='-100:42')
+                                         for w in workers))
+        fights = [r for r in results if isinstance(r, Duel)]
+        assert len(fights) == 1
+        assert all(isinstance(r, Duel) or 'уже обработан' in r for r in results)
+        assert (await db.users.find_one({'id': 7}))['coins'] == 700
+        assert (await db.users.find_one({'id': 8}))['coins'] == 700
+        assert await db.duel_escrows.count_documents({}) == 1
+        assert await db.transactions.count_documents({'tx_type': 'duel_escrow'}) == 2
+        owner = next(w for w in workers if fights[0].id in w.duels)
+        await owner.shutdown()
+        assert (await db.users.find_one({'id': 7}))['coins'] == 1000
+        assert (await db.users.find_one({'id': 8}))['coins'] == 1000
+        after_restart = await DuelService(container).create_duel(7, 8, 300, -100, AsyncMock(), request_id='-100:42')
+        assert 'уже обработан' in after_restart
+        assert await db.duel_escrows.count_documents({}) == 1
+    finally:
+        await client.drop_database(name)
+        client.close()

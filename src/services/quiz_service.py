@@ -3,6 +3,9 @@
 """
 
 import asyncio
+import copy
+import math
+from decimal import Decimal
 import logging
 import textwrap
 from typing import Optional, Dict, List
@@ -17,7 +20,8 @@ from src.core.constants import (
 from src.core.exceptions import BankInsufficientFundsError
 from src.core.visuals import Visuals
 from src.infra.mongo.client import MongoClient
-from src.services.bank_ledger import BankLedger
+from src.services.bank_ledger import BankLedger, _matched, _valid
+from src.services.referral_economy import transaction
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +46,7 @@ class QuizService:
         self.tickets = self.db.tickets  # For ticket tracking
         # Locks for concurrency control - we'll use asyncio.Lock per chat for simplicity
         self._chat_locks = {}
+        self._loop_locks = {}
         self._lock = asyncio.Lock()  # Lock for managing the _chat_locks dict
 
     async def _get_chat_lock(self, chat_id: int) -> asyncio.Lock:
@@ -53,9 +58,13 @@ class QuizService:
 
     async def run_quiz_loop(self, chat_id: int, bot):
         """Цикл викторины."""
-        chat_lock = await self._get_chat_lock(chat_id)
-
-        async with chat_lock:
+        # The long-running question loop must not hold the answer lock while
+        # waiting for players; otherwise check_answer can never run.
+        async with self._lock:
+            loop_lock = self._loop_locks.setdefault(chat_id, asyncio.Lock())
+        if loop_lock.locked():
+            return
+        async with loop_lock:
             try:
                 # Задержка перед первым вопросом
                 await asyncio.sleep(20)
@@ -272,109 +281,79 @@ class QuizService:
         }
 
     async def check_answer(self, chat_id: int, user_id: int, user_name: str, text: str) -> Optional[Dict]:
-        """Проверить ответ."""
+        """Settle one correct answer, bank payout, stats and journal together."""
+        from src.core.constants import EXCHANGE_COINS_TO_TICKET
+
         chat_lock = await self._get_chat_lock(chat_id)
-
         async with chat_lock:
-            state = await self.quiz_states.find_one({"chat_id": chat_id})
-            if not state:
-                return None
-
-            # Check if quiz is waiting for answer
-            if state.get("status") != "waiting_answer":
-                return None
-
-            correct_answer = state.get("answer", "").lower().strip()
-            user_answer = text.lower().strip()
-
-            # Check if answer is correct
-            if user_answer != correct_answer:
-                return None
-
-            # Answer is correct, process reward
-            # Get user
-            user = await self.users.find_one({"id": user_id})
-            if not user:
-                return None
-
-            reward_amount = self.QUIZ_REWARD
-            # Atomic debit before the user credit: a concurrent payout cannot
-            # make this answer mint an unfunded reward.
-            paid = (await self.ledger.balance()) >= reward_amount
-            paid = paid and await self.ledger.try_withdraw(reward_amount)
-            if paid:
-                try:
-                    await self.users.update_one(
-                        {"id": user_id},
-                        {"$inc": {"coins": reward_amount}}
-                    )
-                except Exception:
-                    await self.ledger.refund(reward_amount, "quiz_user_credit_failed")
-                    raise
-
-                # Record transaction
-                transaction_doc = {
-                    "user_id": user_id,
-                    "amount": reward_amount,
-                    "type": "quiz_win",
-                    "timestamp": datetime.now(timezone.utc)
-                }
-                await self.transactions.insert_one(transaction_doc)
-
-                # Award ticket (1 ticket per 1000 coins won, based on exchange rate)
-                from src.core.constants import EXCHANGE_COINS_TO_TICKET
-                tickets_earned = int(reward_amount // EXCHANGE_COINS_TO_TICKET)
-                if tickets_earned > 0:
-                    ticket_doc = {
-                        "user_id": user_id,
-                        "amount": tickets_earned,
-                        "source": "quiz",
-                        "timestamp": datetime.now(timezone.utc)
-                    }
-                    await self.tickets.insert_one(ticket_doc)
-
-            # Update quiz state - mark as answered and update stats
-            used_questions = state.get("used_questions", [])
-            current_question_id = state.get("current_question_id")
-            if current_question_id and current_question_id not in used_questions:
-                used_questions.append(current_question_id)
-
-            # Update stats
-            stats = state.get("stats", {
-                "total_questions": 0,
-                "total_coins": 0,
-                "total_tickets": 0,
-                "winners": {}
-            })
-            stats["total_questions"] = stats.get("total_questions", 0) + 1
-            stats["total_coins"] = stats.get("total_coins", 0) + (reward_amount if paid else 0)
-
-            # Update winners
-            winners = stats.get("winners", {})
-            winner_key = str(user_id)
-            if winner_key not in winners:
-                winners[winner_key] = {"name": user_name, "wins": 0, "coins": 0.0}
-            winners[winner_key]["wins"] = winners[winner_key].get("wins", 0) + 1
-            winners[winner_key]["coins"] = winners[winner_key].get("coins", 0.0) + (reward_amount if paid else 0)
-            stats["winners"] = winners
-
-            # Update quiz state
-            await self.quiz_states.update_one(
-                {"chat_id": chat_id},
-                {"$set": {
-                    "status": "answered",
-                    "used_questions": used_questions,
-                    "stats": stats,
-                    "updated_at": datetime.now(timezone.utc)
-                }}
-            )
-
-            # Return result
-            return {
-                "user_id": user_id,
-                "reward": reward_amount,
-                "balance": user.get("coins", 0.0) + (reward_amount if paid else 0.0)
-            }
+            async def settle(tx):
+                state = await self.quiz_states.find_one({'chat_id': chat_id}, session=tx)
+                if not state or state.get('status') != 'waiting_answer':
+                    return None
+                if text.lower().strip() != state.get('answer', '').lower().strip():
+                    return None
+                user = await self.users.find_one({'id': user_id}, session=tx)
+                if not user:
+                    return None
+                accounts = []
+                for bank_id, field in (('single', 'coins'), ('main', 'balance')):
+                    doc = await self.bank.find_one({'_id': bank_id}, session=tx)
+                    if not _valid(doc, bank_id, field):
+                        continue
+                    balance = float(doc.get(field, 0) or 0)
+                    if not math.isfinite(balance) or balance < 0:
+                        raise ValueError('Invalid quiz bank balance')
+                    accounts.append((bank_id, field, Decimal(str(balance))))
+                if not accounts:
+                    raise RuntimeError('Quiz bank account is missing')
+                reward = Decimal(str(self.QUIZ_REWARD))
+                paid = sum((item[2] for item in accounts), Decimal(0)) >= reward
+                amount = float(reward) if paid else 0.0
+                if paid:
+                    remaining = reward
+                    for bank_id, field, balance in accounts:
+                        take = min(remaining, balance)
+                        if take <= 0:
+                            continue
+                        debit = await self.bank.update_one({'_id': bank_id, field: {'$gte': float(take)}},
+                            {'$inc': {field: -float(take)}}, session=tx)
+                        if not _matched(debit):
+                            raise RuntimeError('Quiz bank debit missed')
+                        remaining -= take
+                    if remaining:
+                        raise RuntimeError('Quiz bank withdrawal incomplete')
+                    credit = await self.users.update_one({'id': user_id}, {'$inc': {'coins': amount}}, session=tx)
+                    if not _matched(credit):
+                        raise RuntimeError('Quiz winner missing')
+                    await self.transactions.insert_one({'user_id': user_id, 'amount': amount,
+                        'type': 'quiz_win', 'timestamp': datetime.now(timezone.utc)}, session=tx)
+                tickets_earned = int(amount // EXCHANGE_COINS_TO_TICKET)
+                if tickets_earned:
+                    await self.tickets.insert_one({'user_id': user_id, 'amount': tickets_earned,
+                        'source': 'quiz', 'timestamp': datetime.now(timezone.utc)}, session=tx)
+                used = copy.deepcopy(state.get('used_questions', []))
+                question_id = state.get('current_question_id')
+                if question_id and question_id not in used:
+                    used.append(question_id)
+                stats = copy.deepcopy(state.get('stats') or {})
+                stats['total_questions'] = stats.get('total_questions', 0) + 1
+                stats['total_coins'] = stats.get('total_coins', 0) + amount
+                stats['total_tickets'] = stats.get('total_tickets', 0) + tickets_earned
+                winners = stats.get('winners', {})
+                winner = winners.setdefault(str(user_id), {'name': user_name, 'wins': 0, 'coins': 0.0})
+                winner['wins'] = winner.get('wins', 0) + 1
+                winner['coins'] = winner.get('coins', 0.0) + amount
+                stats['winners'] = winners
+                changed = await self.quiz_states.update_one(
+                    {'chat_id': chat_id, 'status': 'waiting_answer', 'current_question_id': question_id,
+                     'round': state.get('round')},
+                    {'$set': {'status': 'answered', 'used_questions': used, 'stats': stats,
+                              'updated_at': datetime.now(timezone.utc)}}, session=tx)
+                if not _matched(changed):
+                    raise RuntimeError('Quiz question changed')
+                return {'user_id': user_id, 'reward': amount, 'tickets': tickets_earned,
+                        'balance': user.get('coins', 0.0) + amount}
+            return await transaction(self.mongo_client, settle)
 
     async def generate_summary(self, chat_id: int) -> str:
         """Генерировать итоги викторины."""
