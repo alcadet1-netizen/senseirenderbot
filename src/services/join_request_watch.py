@@ -8,6 +8,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import User
 from pymongo import ReturnDocument
 
@@ -64,7 +65,18 @@ class JoinRequestWatch:
             if not await group_admin_access.allowed(self.bot, chat_id):
                 logger.warning('Join request check skipped: bot admin not verified chat=%s', chat_id)
                 return True
-            member = await self.bot.get_chat_member(chat_id, user_id)
+            try:
+                member = await self.bot.get_chat_member(chat_id, user_id)
+            except TelegramBadRequest as exc:
+                # Telegram may not expose a member record for an unresolved
+                # join request. This is NOT proof of a join, a rejection or a
+                # departure: keep the leased request until confirmation/expiry.
+                description = exc.message.strip().casefold()
+                if description in {'bad request: member not found', 'member not found'}:
+                    logger.debug('Join request membership not found yet chat=%s user=%s; will retry',
+                                 chat_id, user_id)
+                    return True
+                raise
             status = member.status
             is_member = status in ('member', 'administrator', 'creator') or (
                 status == 'restricted' and getattr(member, 'is_member', False))
