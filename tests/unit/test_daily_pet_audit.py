@@ -35,7 +35,7 @@ async def test_additive_rounding_and_coin_conservation(base):
 async def test_independent_workers_cas_and_query_replay_conserve_money():
     db, service, _, mongo = setup()
     _, token = await issue(service)
-    workers = [DailyPetService(mongo, service.daily) for _ in range(4)]
+    workers = [DailyPetService(mongo, service.daily, service.hedgehog_gridfs) for _ in range(4)]
     before = db.users.docs[7]['coins']
     bank = db.bank.docs['main']['balance']
     read = db.users.find_one
@@ -62,7 +62,7 @@ async def test_shared_bank_race_must_not_mint_unfunded_bonus():
     _, token7 = await issue(service)
     _, session8 = await service.claim(8)
     await service.activate(session8['token'], 8, 100)
-    other = DailyPetService(mongo, service.daily)
+    other = DailyPetService(mongo, service.daily, service.hedgehog_gridfs)
     db.bank.docs['main']['balance'] = 5
     before = sum(db.users.docs[uid]['coins'] for uid in (7,8))
     read = db.bank.find_one

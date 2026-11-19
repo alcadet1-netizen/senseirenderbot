@@ -23,24 +23,27 @@ async def to_hedgehog_html(token: str, hedgehog_gridfs, *, template=None) -> str
     if not isinstance(token, str) or not re.fullmatch(r'[A-Za-z0-9_-]{32}', token):
         raise ValueError('Invalid daily token')
 
-    # Get random image from GridFS (deterministic by token hash)
-    file_info = await hedgehog_gridfs.get_random_image()
-    if not file_info:
-        # Fallback: no images in GridFS
+    if '__IMAGE__' not in (TEMPLATE if template is None else template):
         candidates = ['']
     else:
-        # Get the selected image content
-        content = await hedgehog_gridfs.get_image_by_id(file_info['id'])
-        if not content:
+        # Only templates with a photo need to access the image store.
+        file_info = await hedgehog_gridfs.get_random_image()
+        if not file_info:
+            # Fallback: no images in GridFS
             candidates = ['']
         else:
-            candidates = []
-            with Image.open(io.BytesIO(content)) as original:
-                for size, quality in ((128, 30), (96, 25), (64, 18), (48, 18), (32, 16)):
-                    thumb = ImageOps.contain(original.convert('RGB'), (size, size))
-                    buffer = io.BytesIO()
-                    thumb.save(buffer, 'JPEG', quality=quality, optimize=True)
-                    candidates.append('data:image/jpeg;base64,' + base64.b64encode(buffer.getvalue()).decode('ascii'))
+            # Get the selected image content
+            content = await hedgehog_gridfs.get_image_by_id(file_info['id'])
+            if not content:
+                candidates = ['']
+            else:
+                candidates = []
+                with Image.open(io.BytesIO(content)) as original:
+                    for size, quality in ((128, 30), (96, 25), (64, 18), (48, 18), (32, 16)):
+                        thumb = ImageOps.contain(original.convert('RGB'), (size, size))
+                        buffer = io.BytesIO()
+                        thumb.save(buffer, 'JPEG', quality=quality, optimize=True)
+                        candidates.append('data:image/jpeg;base64,' + base64.b64encode(buffer.getvalue()).decode('ascii'))
 
     for image in candidates:
         html = (TEMPLATE if template is None else template).replace('__TOKEN__', json.dumps(token)).replace('__IMAGE__', image)

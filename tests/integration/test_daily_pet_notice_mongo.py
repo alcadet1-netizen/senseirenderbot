@@ -23,10 +23,10 @@ async def test_notice_single_winner_across_workers_and_restart():
                        delivered=False, taps=0, extra_coins=0)
         await db.users.insert_one(dict(id=7, hedgehog_day=session['day'], daily_pet=session,
                                        coins=500, xp=200))
-        workers = [DailyPetService(NS(database=db), None) for _ in range(20)]
+        workers = [DailyPetService(NS(database=db), None, None) for _ in range(20)]
         winners = await asyncio.gather(*(worker.reserve_notice(token, 7) for worker in workers))
         assert sum(winners) == 1
-        restarted = DailyPetService(NS(database=db), None)
+        restarted = DailyPetService(NS(database=db), None, None)
         assert not await restarted.reserve_notice(token, 7)
         await restarted.mark_delivered(token, 7)
         assert not await restarted.reserve_notice(token, 7)

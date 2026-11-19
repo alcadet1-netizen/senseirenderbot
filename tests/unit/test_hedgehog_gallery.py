@@ -3,31 +3,36 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from src.services.hedgehog_gallery import select_image
+from tests.unit.hedgehog_test_gridfs import ImageStore
 from src.services.hedgehog_service import GameError
 from tests.unit.test_paid_hedgehog import fixture, payment
 
 
-def test_shuffle_bag_has_no_repeats_until_exhausted(tmp_path):
+@pytest.mark.asyncio
+async def test_shuffle_bag_has_no_repeats_until_exhausted(tmp_path):
     names = ['a.jpg', 'b.png', 'c.jpeg', 'd.jpg']
     for name in names:
         (tmp_path / name).write_bytes(b'image')
+    gridfs = ImageStore({name: b'image' for name in names})
     user = dict(id=7, daily_pet={'image_name': 'a.jpg'}, hedgehog_images_seen=['a.jpg'])
     chosen = []
     for _ in range(3):
-        image, seen = select_image(user, tmp_path)
+        image, seen = await select_image(user, gridfs)
         chosen.append(image)
         user.update(daily_pet={'image_name': image}, hedgehog_images_seen=seen)
     assert set(chosen) == set(names) - {'a.jpg'}
-    image, seen = select_image(user, tmp_path)
+    image, seen = await select_image(user, gridfs)
     assert image != chosen[-1]
     assert len(seen) == 2
 
 
-def test_missing_and_single_image_gallery(tmp_path):
+@pytest.mark.asyncio
+async def test_missing_and_single_image_gallery(tmp_path):
+    gridfs = ImageStore({})
     with pytest.raises(GameError):
-        select_image({'id': 7}, tmp_path)
-    (tmp_path / 'one.png').write_bytes(b'image')
-    assert select_image({'id': 7}, tmp_path) == ('one.png', ['one.png'])
+        await select_image({'id': 7}, gridfs)
+    gridfs.images['one.png'] = b'image'
+    assert await select_image({'id': 7}, gridfs) == ('one.png', ['one.png'])
 
 
 @pytest.mark.asyncio
@@ -48,17 +53,16 @@ async def test_paid_repeat_persists_new_image_and_recovery_does_not_reroll():
         assert db.users.docs[7]['hedgehog_images_seen'] == history
 
 
-def test_picture_uses_saved_filename_and_rejects_missing_or_traversal(tmp_path):
+@pytest.mark.asyncio
+async def test_picture_uses_saved_filename_and_rejects_missing_or_traversal():
     from src.bot.presenters.daily_hedgehog import picture
-    gallery = tmp_path / 'src/infra/storage/ega'
-    gallery.mkdir(parents=True)
-    (gallery / 'a.jpg').write_bytes(b'image')
-    (gallery / 'b.png').write_bytes(b'image')
-    container = NS(settings=NS(BASE_DIR=tmp_path))
-    assert picture(container, '7', 'b.png').path.name == 'b.png'
+    gridfs = ImageStore({'a.jpg': b'first', 'b.png': b'second'})
+    container = NS(hedgehog_gridfs=gridfs)
+    photo = await picture(container, '7', 'b.png')
+    assert photo.data == b'second'
     for name in ('removed.jpg', '../b.png'):
         with pytest.raises(GameError):
-            picture(container, '7', name)
+            await picture(container, '7', name)
 
 
 @pytest.mark.asyncio

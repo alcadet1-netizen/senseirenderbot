@@ -23,7 +23,11 @@ def price(paid_count):
 
 
 class PaidHedgehogService:
-    def __init__(self, mongo):
+    def __init__(self, mongo, hedgehog_gridfs=None):
+        if hedgehog_gridfs is None:
+            from src.services.hedgehog_gridfs import HedgehogGridFS
+            hedgehog_gridfs = HedgehogGridFS(mongo)
+        self.hedgehog_gridfs = hedgehog_gridfs
         self.db = mongo.database
         self.users = self.db.users
         self.orders = self.db.paid_pet_orders
@@ -42,7 +46,7 @@ class PaidHedgehogService:
 
     async def quote(self, uid):
         from src.services.hedgehog_gallery import gallery_files
-        gallery_files()  # Fail before showing an invoice if no reward image exists.
+        await gallery_files(self.hedgehog_gridfs)  # Fail before showing an invoice if no reward image exists.
         await self.available()
         day = utc_day()
 
@@ -92,7 +96,7 @@ class PaidHedgehogService:
 
     async def checkout(self, oid, uid, amount, query_id):
         from src.services.hedgehog_gallery import gallery_files
-        gallery_files()
+        await gallery_files(self.hedgehog_gridfs)
         await self.available()
 
         async def check(tx):
@@ -167,7 +171,7 @@ class PaidHedgehogService:
                 await self.orders.update_one({'_id': oid}, {'$set': {'state': 'ready', 'checkout_id': None, 'checkout_at': 0}}, session=tx)
                 return {**receipt, 'state': 'refund_required'}
             from src.services.hedgehog_gallery import select_image
-            image_name, images_seen = select_image(user)
+            image_name, images_seen = await select_image(user, self.hedgehog_gridfs)
             session = dict(day=user['hedgehog_day'], token=secrets.token_urlsafe(24), state='pending',
                 deadline=None, duration=15, delivered=False, taps=0, extra_coins=0, queries=[],
                 base_coins=coins, paid_order=oid, reward=reward, image_name=image_name)

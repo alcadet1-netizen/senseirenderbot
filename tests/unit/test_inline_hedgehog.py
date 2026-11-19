@@ -9,6 +9,7 @@ import pytest
 from src.infra.mtproto.widgets import MtprotoWidgets, MtprotoWidgetError
 from tests.unit.test_mtproto_widgets import tl, connected_client
 from tests.unit.test_hedgehog_game import services
+from tests.unit.hedgehog_test_gridfs import ImageStore
 
 
 def setup(tl):
@@ -16,7 +17,7 @@ def setup(tl):
     game.reward_mode = 'pet_once'
     container = SimpleNamespace(
         settings=SimpleNamespace(maintenance_mode=False, BASE_DIR=Path(__file__).resolve().parents[2]),
-        hedgehog_service=game)
+        hedgehog_service=game, hedgehog_gridfs=ImageStore())
     client = connected_client(return_value=True)
     transport = MtprotoWidgets(client, container, tl.types, tl.functions, tl.utils)
     # Historical protocol tests retain the retired builder explicitly. Production clears inline results.

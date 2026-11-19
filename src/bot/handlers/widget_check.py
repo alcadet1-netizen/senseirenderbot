@@ -100,7 +100,7 @@ async def cmd_ega(message, container):
                          'балансы, серия и ежедневная попытка не меняются.', parse_mode=None)
     try:
         async with RENDER_SLOTS:
-            html = await to_daily_pet_html('A' * 32, container.hedgehog_gridfs,
+            html = await to_daily_pet_html('A' * 32, None,
                 dict(state='playing', remaining_ms=15000, taps=0, extra_coins=0, base_coins=55),
                 demo=True,
             )

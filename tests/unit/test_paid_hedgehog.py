@@ -48,11 +48,14 @@ async def fixture():
     # Recreate daily against replacement collections.
     from src.services.daily_service import DailyService
     daily=DailyService(mongo)
-    free=DailyPetService(mongo,daily)
+    from unittest.mock import AsyncMock
+    gridfs = NS(list_images=AsyncMock(return_value=[{'filename': 'a.jpg'}, {'filename': 'b.jpg'}]),
+                get_image=AsyncMock(return_value=b'image'))
+    free=DailyPetService(mongo,daily,gridfs)
     result,pet=await free.claim(7)
     await free.activate(pet['token'],7,100)
     db.bank.docs['single']={'_id':'single','coins':100000}
-    return db,free,PaidHedgehogService(mongo),result
+    return db,free,PaidHedgehogService(mongo,gridfs),result
 
 
 def payment(order, charge='charge1'):
@@ -207,7 +210,7 @@ async def test_real_payment_dispatch_and_duplicate_receipt_do_not_reset_or_repay
     with patch('src.services.paid_hedgehog_service.time.time',return_value=120):
         order=await paid.quote(7)
         await paid.bind_notice(order['_id'],7,7,91)
-    container=NS(paid_hedgehog_service=paid,daily_pet_service=free,
+    container=NS(paid_hedgehog_service=paid,daily_pet_service=free,hedgehog_gridfs=paid.hedgehog_gridfs,
         settings=NS(maintenance_mode=False,BASE_DIR=Path('.')))
     dp=Dispatcher();session=AsyncMock(return_value=True)
     bot=Bot('123456:TEST',session=session)
@@ -316,7 +319,7 @@ async def test_payment_edits_one_persisted_notice_and_replay_is_silent():
         receipt=await paid.receive(7,payment(order))
     bot=NS(me=AsyncMock(return_value=NS(username='bot')),edit_message_media=AsyncMock())
     message=NS(bot=bot,from_user=NS(id=7,first_name='Test'),answer_photo=AsyncMock(),answer=AsyncMock())
-    container=NS(paid_hedgehog_service=paid,daily_pet_service=free,settings=NS(BASE_DIR=Path('.')))
+    container=NS(paid_hedgehog_service=paid,daily_pet_service=free,hedgehog_gridfs=paid.hedgehog_gridfs,settings=NS(BASE_DIR=Path('.')))
     await deliver(message,container,receipt)
     deadline=(await free.owned(receipt['pet_token'],7))['deadline']
     await deliver(message,container,receipt)
@@ -422,3 +425,36 @@ async def test_latest_notice_does_not_move_back_and_checkout_freezes_it():
         await paid.receive(7,payment(order))
         fulfilled=await paid.bind_notice(order['_id'],7,7,102)
         assert fulfilled['notice']==latest['notice']
+
+@pytest.mark.asyncio
+async def test_gallery_is_checked_before_paid_order_and_checkout():
+    db, free, paid, _ = await fixture()
+    paid.hedgehog_gridfs.list_images.return_value = []
+    with patch('src.services.paid_hedgehog_service.time.time', return_value=120):
+        with pytest.raises(GameError, match='Картинки ежа'):
+            await paid.quote(7)
+        assert not db.paid_pet_orders.docs
+        paid.hedgehog_gridfs.list_images.return_value = [{'filename': 'a.jpg'}]
+        order = await paid.quote(7)
+        paid.hedgehog_gridfs.list_images.return_value = []
+        with pytest.raises(GameError, match='Картинки ежа'):
+            await paid.checkout(order['_id'], 7, order['stars'], 'q')
+        assert db.paid_pet_orders.docs[order['_id']]['state'] == 'ready'
+
+
+@pytest.mark.asyncio
+async def test_missing_gallery_during_settlement_keeps_receipt_retryable():
+    db, free, paid, _ = await fixture()
+    with patch('src.services.paid_hedgehog_service.time.time', return_value=120):
+        order = await paid.quote(7)
+        before = copy.deepcopy(db.users.docs[7])
+        bank = db.bank.docs['single']['coins']
+        paid.hedgehog_gridfs.list_images.return_value = []
+        with pytest.raises(GameError, match='Картинки ежа'):
+            await paid.receive(7, payment(order))
+        assert db.users.docs[7] == before
+        assert db.bank.docs['single']['coins'] == bank
+        receipt = next(iter(db.paid_pet_payments.docs.values()))
+        assert receipt['state'] == 'received'
+        paid.hedgehog_gridfs.list_images.return_value = [{'filename': 'a.jpg'}]
+        assert (await paid.settle(receipt['_id'], 7))['state'] == 'fulfilled'

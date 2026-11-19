@@ -145,7 +145,7 @@ class DailyPetService:
                 session = await self.owned(token, user_id)
                 if session.get('paid_order'):
                     from src.services.paid_hedgehog_service import PaidHedgehogService
-                    return await PaidHedgehogService(self.mongo).tap(token, user_id, query_id, received_at=received_at, rate_limit=rate_limit)
+                    return await PaidHedgehogService(self.mongo, self.hedgehog_gridfs).tap(token, user_id, query_id, received_at=received_at, rate_limit=rate_limit)
                 if session['state'] == 'pending':
                     raise GameError('Ёж ещё готовится. Нажмите ещё раз.')
                 if query_id in session['queries']:
