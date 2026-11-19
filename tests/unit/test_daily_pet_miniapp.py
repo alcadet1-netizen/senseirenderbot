@@ -17,42 +17,21 @@ from tests.unit.test_hedgehog_game import signed
 @pytest.mark.asyncio
 async def test_miniapp_assets_hmac_owner_and_immutable_reward_window():
     db, service, container, _ = setup()
-    container.settings.bot_token = 'test-token'
-    reward, session = await service.claim(7)
-    token = session['token']
-    now = time.time()
-    await service.activate(token, 7, now)
-    app = web.Application(client_max_size=16*1024)
+    reward, token = await issue(service)
+    before = db.users.docs[7]['coins']
+    app = web.Application()
     setup_daily_pet(app, container)
     async with TestClient(TestServer(app)) as client:
         for path in ('', '/app.css', '/app.js', '/art.webp'):
-            response = await client.get('/miniapp/daily-pet'+path)
-            assert response.status == 200
+            response = await client.get('/miniapp/daily-pet' + path)
+            assert response.status == 410
             assert response.headers['Cache-Control'] == 'no-store'
-            assert response.headers['Referrer-Policy'] == 'no-referrer'
-        assert (await client.get('/miniapp/daily-pet/../telegram_auth.py')).status == 404
-        url = '/miniapp/daily-pet/api/tap'
-        assert (await client.post(url, json={'session': token, 'user_id': 7})).status == 401
-        body = dict(session=token, initData=signed(8, int(now)), request_id='foreign-owner')
-        assert (await client.post(url, json=body)).status == 409
-        body.update(initData=signed(7,int(now)), user_id=999, taps=1000, coins=1e9, received_at=now-100)
-        assert (await client.post(url, json={**body,'request_id':'bad'})).status == 400
-        body['request_id']='unique-touch-one'
-        response = await client.post(url, json=body)
-        assert response.status == 200
-        data = await response.json()
-        assert data['taps'] == 1 and data['extra_coins'] == reward['total_coins']//10
-        duplicate = await client.post(url,json=body)
-        assert (await duplicate.json())['taps'] == 1
-        assert db.users.docs[7]['daily_pet']['deadline'] == now+15
-        db.users.docs[7]['daily_pet']['deadline'] = now-1
-        late = await client.post(url,json={**body,'request_id':'late-touch-two','received_at':now-2})
-        data = await late.json()
-        assert data['state'] == 'done' and data['taps'] == 1
-        assert db.users.docs[7]['xp'] == 500+reward['total_xp']
-        assert (await client.post(url,data='x'*20000)).status == 413
-        container.settings.maintenance_mode = True
-        assert (await client.post(url,json=body)).status == 503
+        for action in ('view', 'tap'):
+            response = await client.post('/miniapp/daily-pet/api/' + action,
+                                         json={'session': token, 'request_id': 'old-request'})
+            assert response.status == 410
+        assert db.users.docs[7]['coins'] == before
+        assert db.users.docs[7]['daily_pet']['taps'] == 0
 
 
 @pytest.mark.asyncio
@@ -91,8 +70,8 @@ async def test_private_native_widget_does_not_require_render_origin(monkeypatch)
     monkeypatch.delenv('RENDER_EXTERNAL_URL', raising=False)
     message = SimpleNamespace(chat=SimpleNamespace(id=7,type='private'),answer=AsyncMock(),bot=AsyncMock())
     await open_pet(message,SimpleNamespace(id=7),container,token)
-    assert isinstance(message.bot.call_args.args[0], SendWidget)
-    message.answer.assert_not_called()
+    message.bot.assert_not_awaited()
+    message.answer.assert_awaited_once()
     assert db.users.docs[7]['daily_pet']['taps'] == 0
 
 

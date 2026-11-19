@@ -1,17 +1,10 @@
-"""Ordinary photo reward in chat; private native touch widget."""
-import hashlib
-import asyncio
+"""Daily hedgehog reward delivered as a photo in chat."""
 import time
 
+from aiogram.types import InputMediaPhoto, BufferedInputFile
 
-from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, BufferedInputFile
-
-from src.bot.native_widgets import send_native_widget
-from src.widgets.daily_pet import to_daily_pet_html
-from src.widgets.limits import RENDER_SLOTS
 from src.core.exceptions import DailyAlreadyClaimedError
 from src.services.hedgehog_service import GameError
-from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure
 
 
 async def _get_random_image_from_gridfs(container) -> bytes:
@@ -51,7 +44,6 @@ async def send_daily_hedgehog(message, user, container):
             last_name=user.last_name, is_bot=user.is_bot)
         # Resolve everything fallible we can before awarding the daily reward.
         await picture(container, str(user.id))
-        await message.bot.me()
         paid = getattr(container, 'paid_hedgehog_service', None)
         if paid is not None:
             receipt = await paid.pending(user.id)
@@ -72,46 +64,22 @@ async def send_daily_hedgehog(message, user, container):
 
 
 async def open_pet(message, user, container, token):
-    if message.chat.type != 'private' or message.chat.id != user.id:
-        await message.answer('Поглаживания доступны только в личном чате с ботом.', parse_mode=None)
-        return
-    try:
-        session = await container.daily_pet_service.owned(token, user.id)
-        if session['state'] == 'pending':
-            raise GameError('Сначала получите обычное уведомление ежа в чате.')
-        snapshot = await container.daily_pet_service.widget_action(token, user.id, 'v', '')
-        async with RENDER_SLOTS:
-            html = await to_daily_pet_html(token, container.hedgehog_gridfs, snapshot)
-        await send_native_widget(message.bot, container, user.id, html)
-    except GameError as exc:
-        await message.answer(str(exc), parse_mode=None)
-    except WIDGET_TRANSPORT_ERRORS as exc:
-        failure = describe_failure(exc, message.bot)
-        await message.answer('Не удалось открыть личного ежа. Основная награда уже ваша. '
-                             f'Диагностика: {failure.category} / {failure.reference}', parse_mode=None)
-    except (OSError, ValueError):
-        await message.answer('Не удалось подготовить личного ежа. Основная награда уже начислена.', parse_mode=None)
+    # Existing deep links can still be opened after deployment. They must not
+    # create another payout or open the retired interactive widget.
+    await message.answer('Поглаживания больше недоступны. Ежедневная награда показывается с картинкой в чате.', parse_mode=None)
 
 
 async def send_reward_notice(message, user, container, result, session, *, notice=None):
-    me = await message.bot.me()
-    link = f'https://t.me/{me.username}?start=pet_{session["token"]}'
-    reward_caption = (f'🦔 {user.first_name or "Друг"}, награда ваша!\n'
-                      f"+{result['total_xp']} XP · +{result['total_coins']} монет\n"
-                      f"🔥 Серия: {result['streak']} дн.")
+    caption = (f'🦔 {user.first_name or "Друг"}, награда ваша!\n'
+               f"+{result['total_xp']} XP · +{result['total_coins']} монет\n"
+               f"🔥 Серия: {result['streak']} дн.")
     if session.get('paid_order'):
         from src.texts.payment_thanks import payment_thanks
-        reward_caption += '\n' + payment_thanks(session['token'])
-    caption = (reward_caption + '\n\nВ личке: 15 сек. на переход и ласку.\n'
-               'Принятый тап → +10% монет.')
-    markup = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text='Погладить ёжика · 15 сек.', url=link)]])
-    # Start before the send attempt, not on /start or on the first pet.
-    # Retrying delivery can never renew this deadline.
-    active = await container.daily_pet_service.activate(session['token'], user.id, time.time())
-    if time.time() >= active['deadline']:
-        caption = reward_caption + '\n\nВремя ласки вышло. До завтра ♡'
-        markup = None
+        caption += '\n' + payment_thanks(session['token'])
+    # Retain the existing session lifecycle for payment/recovery, but expire
+    # the now-retired touch window immediately for newly delivered notices.
+    await container.daily_pet_service.activate(
+        session['token'], user.id, time.time() - session.get('duration', 10))
     photo = await picture(container, str(user.id), session.get("image_name"))
     # Both free and Stars delivery pass here. Claim in Mongo, not a process lock:
     # another update/process may already be sending this session's notice.
@@ -120,7 +88,7 @@ async def send_reward_notice(message, user, container, result, session, *, notic
     if notice:
         await message.bot.edit_message_media(
             chat_id=notice['chat_id'], message_id=notice['message_id'],
-            media=InputMediaPhoto(media=photo, caption=caption, parse_mode=None), reply_markup=markup)
+            media=InputMediaPhoto(media=photo, caption=caption, parse_mode=None), reply_markup=None)
     else:
-        await message.answer_photo(photo, caption=caption, reply_markup=markup, parse_mode=None)
+        await message.answer_photo(photo, caption=caption, reply_markup=None, parse_mode=None)
     await container.daily_pet_service.mark_delivered(session['token'], user.id)

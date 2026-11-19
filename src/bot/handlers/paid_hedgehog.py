@@ -69,7 +69,7 @@ async def offer(query, container):
         # separate invoice message. No reward on this action.
         stage = 'create_invoice_link'
         link = await query.bot.create_invoice_link(title='Ещё одна Ежа',
-            description=f"Полная награда и 15 секунд ласки. Попытка №{order['number']}; серия не увеличивается.",
+            description=f"Полная награда с картинкой. Попытка №{order['number']}; серия не увеличивается.",
             payload=f"petbuy:{order['_id']}", currency='XTR', provider_token='',
             prices=[LabeledPrice(label='Повторная Ежа', amount=order['stars'])])
         markup = InlineKeyboardMarkup(inline_keyboard=[[
