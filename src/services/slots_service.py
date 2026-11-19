@@ -1,183 +1,114 @@
-"""
-🎰 Сервис слотов.
-"""
-
-import random
+"""Slot spins settled atomically against the two existing bank accounts."""
 import asyncio
-import time
-from typing import Dict, Any
-from datetime import datetime, timezone
-
-from src.core.config import settings
-from src.infra.mongo.client import MongoClient
-from src.services.bank_ledger import BankLedger
 import logging
+import math
+import random
+import time
+from datetime import datetime, timezone
+from decimal import Decimal
+from typing import Any, Dict
+
+from src.services.bank_ledger import _matched
+from src.services.referral_economy import transaction
 
 logger = logging.getLogger(__name__)
 
 
 class SlotsService:
-    """Сервис для игры в слоты."""
-
-    def __init__(self, mongo_client: MongoClient):
+    def __init__(self, mongo_client):
         self.mongo_client = mongo_client
         self.db = mongo_client.database
-        # Collections
         self.users = self.db.users
         self.transactions = self.db.transactions
-        self.bank = self.db.bank  # legacy {_id: "main", balance: X}
-        self.ledger = BankLedger(mongo_client)
-        # For rate limiting, we'll use a simple in-memory cache with timestamps
-        self._slots_timestamps = {}  # user_id -> last_slots_time
-        self._throttle_lock = asyncio.Lock()  # Lock for managing the timestamps dict
+        self.bank = self.db.bank
+        self._slots_timestamps = {}
+        self._throttle_lock = asyncio.Lock()
 
     async def play_slots(self, user_id: int, bet_amount: int) -> Dict[str, Any]:
-        """
-        Игра в слоты.
-        1. Списание ставки.
-        2. Комиссия 5% в банк.
-        3. Розыгрыш (33% шанс).
-        4. Начисление выигрыша (если есть).
-        """
-        # Rate Limit - Simple implementation using timestamps (5 second cooldown)
         async with self._throttle_lock:
             now = time.time()
-            last_slots = self._slots_timestamps.get(user_id, 0)
-            if now - last_slots < 5:  # 5 second cooldown
-                ttl = int(5 - (now - last_slots))
-                return {"success": False, "error": "rate_limit", "ttl": ttl}
+            last = self._slots_timestamps.get(user_id, 0)
+            if now - last < 5:
+                return {'success': False, 'reason': 'rate_limit', 'error': 'rate_limit', 'ttl': int(5 - (now - last))}
             self._slots_timestamps[user_id] = now
-
-        # 2. Validation
-        if bet_amount < 1:
-            return {"success": False, "reason": "Ставка должна быть больше 0!"}
-
-        # Max bet (could move to settings)
+        if not isinstance(bet_amount, int) or isinstance(bet_amount, bool) or bet_amount < 1:
+            return {'success': False, 'reason': 'Ставка должна быть больше 0!'}
         if bet_amount > 1_000_000:
-            return {"success": False, "reason": "Максимальная ставка: 1 000 000 монет"}
+            return {'success': False, 'reason': 'Максимальная ставка: 1 000 000 монет'}
+
+        # Choose once, outside the callback: the Mongo driver can retry it.
+        symbols = ['🍒', '🍋', '🍊', '💎', '⭐', '7️⃣']
+        multipliers = {'🍒': 3, '🍋': 4, '🍊': 5, '💎': 10, '⭐': 15, '7️⃣': 20}
+        roll = random.random()
+        if roll < .01:
+            result_symbols = ['7️⃣'] * 3
+        elif roll < .33:
+            result_symbols = [random.choice(symbols[:-1])] * 3
+        else:
+            result_symbols = random.sample(symbols, 3)
+        is_win = roll < .33
+        prize = bet_amount * multipliers[result_symbols[0]] if is_win else 0
+        fee = int(bet_amount * .05)
+
+        async def settle(tx):
+            user = await self.users.find_one({'id': user_id}, session=tx)
+            if not user:
+                return {'success': False, 'reason': 'user_not_found'}
+            if user.get('coins', 0) < bet_amount:
+                return {'success': False, 'reason': 'insufficient_funds', 'balance': user.get('coins', 0)}
+            accounts = []
+            for bank_id, field in (('single', 'coins'), ('main', 'balance')):
+                doc = await self.bank.find_one({'_id': bank_id}, session=tx)
+                if doc is None:
+                    continue
+                value = float(doc.get(field, 0) or 0)
+                if not math.isfinite(value) or value < 0:
+                    raise ValueError('Invalid bank balance')
+                accounts.append([bank_id, field, Decimal(str(value))])
+            if not accounts:
+                raise ValueError('Bank account is missing')
+            # The stake goes to the canonical account first, or legacy if the
+            # canonical account does not exist, as in BankLedger.deposit.
+            accounts[0][2] += Decimal(bet_amount)
+            if sum((account[2] for account in accounts), Decimal(0)) < prize:
+                # Nothing has been written: the bet stays with the player.
+                return {'success': False, 'reason': 'bank_empty'}
+            debit = await self.users.update_one({'id': user_id, 'coins': {'$gte': bet_amount}},
+                                                {'$inc': {'coins': -bet_amount}}, session=tx)
+            if not _matched(debit):
+                raise RuntimeError('Slot bet debit missed')
+            deposit = await self.bank.update_one({'_id': accounts[0][0]},
+                {'$inc': {accounts[0][1]: bet_amount}}, session=tx)
+            if not _matched(deposit):
+                raise RuntimeError('Slot bank deposit missed')
+            remaining = Decimal(prize)
+            for bank_id, field, available in accounts:
+                take = min(remaining, available)
+                if take > 0:
+                    withdrawn = await self.bank.update_one({'_id': bank_id, field: {'$gte': float(take)}},
+                        {'$inc': {field: -float(take)}}, session=tx)
+                    if not _matched(withdrawn):
+                        raise RuntimeError('Slot bank withdrawal missed')
+                    remaining -= take
+            if remaining:
+                raise RuntimeError('Slot bank withdrawal incomplete')
+            if prize:
+                credited = await self.users.update_one({'id': user_id}, {'$inc': {'coins': prize}}, session=tx)
+                if not _matched(credited):
+                    raise RuntimeError('Slot user credit missed')
+            now_utc = datetime.now(timezone.utc)
+            await self.transactions.insert_one({'user_id': user_id, 'tx_type': 'slots_bet',
+                'coins_change': -float(bet_amount), 'description': 'Slots bet', 'created_at': now_utc}, session=tx)
+            if is_win:
+                await self.transactions.insert_one({'user_id': user_id, 'tx_type': 'slots_win',
+                    'coins_change': float(prize), 'description': f"Slots win: {''.join(result_symbols)}",
+                    'created_at': now_utc}, session=tx)
+            updated = await self.users.find_one({'id': user_id}, session=tx)
+            return {'success': True, 'is_win': is_win, 'prize': prize, 'bet': bet_amount,
+                    'fee': fee, 'symbols': result_symbols, 'balance': updated['coins']}
 
         try:
-            # Get user
-            user = await self.users.find_one({"id": user_id})
-            if not user:
-                return {"success": False, "reason": "Пользователь не найден"}
-
-            user_coins = user.get("coins", 0)
-            if user_coins < bet_amount:
-                return {"success": False, "reason": "Недостаточно монет!", "balance": user_coins}
-
-            # 1. Deduct bet from user. Conditional so two concurrent spins
-            # cannot both spend the same coins and drive the balance negative.
-            debited = await self.users.update_one(
-                {"id": user_id, "coins": {"$gte": bet_amount}},
-                {"$inc": {"coins": -bet_amount}},
-            )
-            if getattr(debited, "matched_count", 1) != 1:
-                return {"success": False, "reason": "Недостаточно монет!"}
-
-            # Log bet transaction (deduction)
-            bet_tx = {
-                "user_id": user_id,
-                "tx_type": "slots_bet",
-                "coins_change": -float(bet_amount),
-                "description": f"Slots bet",
-                "created_at": datetime.now(timezone.utc),
-            }
-            await self.transactions.insert_one(bet_tx)
-
-            # 2. All funds go to bank (closed-loop economy)
-            fee = int(bet_amount * 0.05)
-            base = bet_amount - fee  # Not actually used in payout calculation but kept for clarity
-
-            await self.ledger.deposit(bet_amount)
-
-            # 3. Determine outcome
-            symbols = ["🍒", "🍋", "🍊", "💎", "⭐", "7️⃣"]
-            multipliers = {
-                "🍒": 3,
-                "🍋": 4,
-                "🍊": 5,
-                "💎": 10,
-                "⭐": 15,
-                "7️⃣": 20
-            }
-
-            # Chances
-            JACKPOT_CHANCE = 0.01  # 1%
-            WIN_CHANCE = 0.33      # 33% (including jackpot)
-
-            r = random.random()
-
-            result_symbols = []
-            is_win = False
-            prize = 0
-
-            if r < JACKPOT_CHANCE:
-                # Jackpot 777
-                winning_symbol = "7️⃣"
-                result_symbols = [winning_symbol, winning_symbol, winning_symbol]
-                is_win = True
-                prize = bet_amount * multipliers[winning_symbol]
-            elif r < WIN_CHANCE:
-                # Win (3 identical non-777)
-                winning_symbol = random.choice([s for s in symbols if s != "7️⃣"])
-                result_symbols = [winning_symbol, winning_symbol, winning_symbol]
-                is_win = True
-                prize = bet_amount * multipliers.get(winning_symbol, 3)
-            else:
-                # Loss (3 different)
-                result_symbols = random.sample(symbols, 3)
-                is_win = False
-                prize = 0
-
-            # 4. Award winnings if won.  The bank debit is the admission
-            # ticket: credit the player only after the prize was actually
-            # reserved, otherwise two races could mint unfunded coins.
-            if is_win:
-                covered = (await self.ledger.balance()) >= prize
-                if not covered or not await self.ledger.try_withdraw(prize):
-                    # Return the original bet from the bank to the player.
-                    if await self.ledger.try_withdraw(bet_amount):
-                        await self.users.update_one(
-                            {"id": user_id},
-                            {"$inc": {"coins": bet_amount}},
-                        )
-                    return {"success": False, "reason": "Банк пуст! Попробуйте позже."}
-
-                try:
-                    await self.users.update_one(
-                        {"id": user_id},
-                        {"$inc": {"coins": prize}},
-                    )
-                except Exception:
-                    # The player was not credited; put the reserved prize back.
-                    await self.ledger.refund(prize, "slots_user_credit_failed")
-                    raise
-
-                # Log win transaction
-                win_tx = {
-                    "user_id": user_id,
-                    "tx_type": "slots_win",
-                    "coins_change": float(prize),
-                    "description": f"Slots win: {''.join(result_symbols)}",
-                    "created_at": datetime.now(timezone.utc),
-                }
-                await self.transactions.insert_one(win_tx)
-
-            # Get final balance
-            user_updated = await self.users.find_one({"id": user_id})
-            final_balance = user_updated.get("coins", 0) if user_updated else 0
-
-            return {
-                "success": True,
-                "is_win": is_win,
-                "prize": prize,
-                "bet": bet_amount,
-                "fee": fee,
-                "symbols": result_symbols,
-                "balance": final_balance
-            }
-
-        except Exception as e:
-            logger.error(f"Error in slots service play_slots: {e}")
-            return {"success": False, "reason": "Внутренняя ошибка игры"}
+            return await transaction(self.mongo_client, settle)
+        except Exception:
+            logger.exception('Slot outcome could not be confirmed for user=%s', user_id)
+            return {'success': False, 'reason': 'unconfirmed'}

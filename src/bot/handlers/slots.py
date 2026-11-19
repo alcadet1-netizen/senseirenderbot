@@ -73,8 +73,12 @@ async def cmd_slots(message: Message, command: CommandObject, container: Contain
             await message.answer(f"{mention}\n\n❌ Профиль не найден. Напишите сообщение в чат.", parse_mode="HTML")
         elif reason == "insufficient_funds":
             await message.answer(f"{mention}\n\n❌ Недостаточно средств! Баланс: {result['balance']:,.0f}", parse_mode="HTML")
+        elif reason == "bank_empty":
+            await message.answer(f"{mention}\n\n❌ Банк не покрывает выигрыш. Ставка не списана.", parse_mode="HTML")
+        elif reason == "rate_limit":
+            await message.answer(f"{mention}\n\n⏳ Подождите перед следующей игрой.", parse_mode="HTML")
         else:
-            await message.answer(f"{mention}\n\n❌ Ошибка игры.", parse_mode="HTML")
+            await message.answer(f"{mention}\n\n⚠️ Результат не подтверждён. Проверьте баланс и журнал перед повтором.", parse_mode="HTML")
         return
 
     # 2. Анимация
