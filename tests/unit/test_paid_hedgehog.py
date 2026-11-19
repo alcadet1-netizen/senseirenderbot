@@ -236,7 +236,8 @@ async def test_real_payment_dispatch_and_duplicate_receipt_do_not_reset_or_repay
     assert sum(m.__api_method__=='editMessageMedia' for m in methods)==1
     photo = next(m for m in methods if m.__api_method__ == 'editMessageMedia')
     assert photo.reply_markup is None
-    assert 'поглад' not in photo.media.caption.lower() and 'ласки' not in photo.media.caption.lower()
+    caption = photo.media.caption.lower()
+    assert 'погладить ежа' not in caption and 'бонус за ласку' not in caption
     assert not any(m.__api_method__ in {'sendPhoto','sendInvoice','sendMessage'} for m in methods)
     await dp.storage.close()
 

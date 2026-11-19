@@ -125,7 +125,7 @@ async def test_same_duel_command_reserves_once_across_processes_and_restart():
                                          for w in workers))
         fights = [r for r in results if isinstance(r, Duel)]
         assert len(fights) == 1
-        assert all(isinstance(r, Duel) or 'уже обработан' in r for r in results)
+        assert all(isinstance(r, Duel) or 'уже обработан' in r for r in results), results
         assert (await db.users.find_one({'id': 7}))['coins'] == 700
         assert (await db.users.find_one({'id': 8}))['coins'] == 700
         assert await db.duel_escrows.count_documents({}) == 1
