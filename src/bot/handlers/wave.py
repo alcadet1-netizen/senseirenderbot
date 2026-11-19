@@ -887,3 +887,8 @@ async def _delete_after(message: Message, seconds: float):
         await message.delete()
     except Exception:
         pass
+
+
+# Keep game handling while allowing the daily alias to reach its reward.
+from src.bot.middlewares.game_daily import GameDailyMiddleware
+router.message.middleware(GameDailyMiddleware("count_wave_message"))

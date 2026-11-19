@@ -692,3 +692,8 @@ async def check_bomb_participant(message: Message, container: Container):
             container,
             is_timeout=False
         ))
+
+
+# Keep game handling while allowing the daily alias to reach its reward.
+from src.bot.middlewares.game_daily import GameDailyMiddleware
+router.message.middleware(GameDailyMiddleware("check_bomb_participant"))

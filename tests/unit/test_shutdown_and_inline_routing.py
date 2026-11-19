@@ -167,3 +167,35 @@ async def test_duel_recovery_background_stops_before_shutdown():
     assert task.cancelled()
     await service.start_recovery()
     assert service._recovery_task is None
+
+
+@pytest.mark.asyncio
+async def test_polling_drain_waits_for_active_update_before_return():
+    from src.main import drain_polling_updates
+    entered, release = asyncio.Event(), asyncio.Event()
+    async def update():
+        entered.set()
+        await release.wait()
+    task = asyncio.create_task(update())
+    await entered.wait()
+    drain = asyncio.create_task(drain_polling_updates(SimpleNamespace(_handle_update_tasks={task}), timeout=1))
+    await asyncio.sleep(0)
+    assert not drain.done() and not task.done()
+    release.set()
+    await drain
+    assert task.done() and not task.cancelled()
+
+
+@pytest.mark.asyncio
+async def test_polling_drain_cancels_and_joins_overdue_update():
+    from src.main import drain_polling_updates
+    cancelled = asyncio.Event()
+    async def update():
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+    task = asyncio.create_task(update())
+    await asyncio.sleep(0)
+    await drain_polling_updates(SimpleNamespace(_handle_update_tasks={task}), timeout=0, cancel_timeout=1)
+    assert task.cancelled() and cancelled.is_set()

@@ -173,6 +173,28 @@ async def run_with_widget_startup(polling, start_widgets):
                 task.cancel()
         await asyncio.gather(polling_task, widgets_task, return_exceptions=True)
 
+async def drain_polling_updates(dispatcher, *, timeout=25.0, cancel_timeout=3.0):
+    """Finish in-flight updates while MongoDB and the Bot API session are alive.
+
+    aiogram versions do not all wait for update tasks by default. After the
+    grace period, cancel and join them before closing shared resources where
+    possible. A hard process kill can still interrupt any outstanding operation.
+    """
+    tasks = set(getattr(dispatcher, '_handle_update_tasks', ()))
+    tasks = {task for task in tasks if not task.done()}
+    if not tasks:
+        return
+    logger.info('Waiting for %s in-flight Telegram updates', len(tasks))
+    _, pending = await asyncio.wait(tasks, timeout=timeout)
+    if pending:
+        logger.warning('Cancelling %s updates after shutdown grace period', len(pending))
+        for task in pending:
+            task.cancel()
+        _, pending = await asyncio.wait(pending, timeout=cancel_timeout)
+        if pending:
+            logger.error('%s update tasks did not stop before resource shutdown', len(pending))
+
+
 async def main() -> None:
     """Главная функция."""
     # Создаём бота и диспетчер
@@ -286,11 +308,15 @@ async def main() -> None:
             # Financial pre-checkout is handled by update middleware, so router
             # introspection does not discover it. Telegram must still deliver it.
             logger.info("Join notifications enabled: polling subscribes to message and chat_member")
-            await dp.start_polling(
-                bot,
-                allowed_updates=list(dict.fromkeys([*dp.resolve_used_update_types(), "channel_post", "message", "chat_member", "chat_join_request", "pre_checkout_query", "widget_query", "shared_widget_query"])),
-                close_bot_session=True,
-            )
+            try:
+                await dp.start_polling(
+                    bot,
+                    allowed_updates=list(dict.fromkeys([*dp.resolve_used_update_types(), "channel_post", "message", "chat_member", "chat_join_request", "pre_checkout_query", "widget_query", "shared_widget_query"])),
+                    # Keep the session open until in-flight handlers have drained.
+                    close_bot_session=False,
+                )
+            finally:
+                await drain_polling_updates(dp)
 
         if settings.native_widget_transport == 'mtproto':
             async def start_widgets():

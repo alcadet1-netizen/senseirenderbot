@@ -521,7 +521,7 @@ async def cmd_topkatana(message: Message, container: Container):
 @router.message(F.text.lower().in_({"ежа", "фарм", "фармить", "фарма", "ферма"}))
 @router.message(F.text == "🎁 Бонус", PrivateChatFilter())
 async def cmd_daily(message: Message, container: Container):
-    """Обычный ежедневный приз с фото и десятисекундным личным виджетом."""
+    """Обычный ежедневный приз с фото в чате."""
     if message.from_user:
         await launch_hedgehog(message, message.from_user, container)
 
