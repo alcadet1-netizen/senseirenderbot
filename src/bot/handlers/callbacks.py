@@ -548,7 +548,7 @@ async def cb_exchange_coins_to_ticket(query: CallbackQuery, callback_data: MenuC
         return
         
     try:
-        result = await container.exchange_service.coins_to_ticket(query.from_user.id)
+        result = await container.exchange_service.coins_to_ticket(query.from_user.id, request_id=query.id)
         
         if result["success"]:
             text = Visuals.exchange_result(
@@ -559,7 +559,11 @@ async def cb_exchange_coins_to_ticket(query: CallbackQuery, callback_data: MenuC
                 currency_to="🎫"
             )
             text += f"\n\n🎫 Ваш билет: <code>{result['ticket_code']}</code>"
-            await query.message.edit_text(text, parse_mode="HTML", reply_markup=get_exchange_keyboard(query.from_user.id))
+            try:
+                await query.message.edit_text(text, parse_mode="HTML", reply_markup=get_exchange_keyboard(query.from_user.id))
+            except Exception:
+                await query.answer("Билет куплен, но экран не обновился. Не повторяйте обмен; проверьте билет.", show_alert=True)
+                return
             try:
                 await query.answer("🎫 Билет куплен!")
             except TelegramBadRequest:
@@ -595,7 +599,7 @@ async def cb_exchange_ticket_to_coins(query: CallbackQuery, callback_data: MenuC
     mention = f"@{username}" if username else f"<b>{query.from_user.full_name}</b>"
 
     try:
-        result = await container.exchange_service.ticket_to_coins(query.from_user.id)
+        result = await container.exchange_service.ticket_to_coins(query.from_user.id, request_id=query.id)
         
         if result["success"]:
             text = Visuals.exchange_result(
@@ -605,7 +609,11 @@ async def cb_exchange_ticket_to_coins(query: CallbackQuery, callback_data: MenuC
                 currency_from="🎫",
                 currency_to="💰"
             )
-            await query.message.edit_text(f"{mention}\n\n{text}", parse_mode="HTML", reply_markup=get_exchange_keyboard(query.from_user.id))
+            try:
+                await query.message.edit_text(f"{mention}\n\n{text}", parse_mode="HTML", reply_markup=get_exchange_keyboard(query.from_user.id))
+            except Exception:
+                await query.answer("Обмен выполнен, но экран не обновился. Не повторяйте обмен; проверьте баланс.", show_alert=True)
+                return
             try:
                 await query.answer(f"💰 Получено {result['coins_received']} монет!")
             except TelegramBadRequest:
