@@ -5368,3 +5368,23 @@ html.motion-reduced .chain-panel.is-live .chain-ecg path {
 #view-bank .bank-refresh { min-height: 44px; margin-top: 14px; font-size: 11px; }
 #view-bank .bank-refresh:disabled { opacity: .6; cursor: wait; }
 .bank-refresh-status { min-height: 1.4em; margin: 8px 0 0; color: #b1d4bd; font-size: 11px; line-height: 1.4; }
+
+/* Bank: consistent reading rhythm and resilient mobile number wrapping. */
+#view-bank { padding: 20px clamp(13px, 4vw, 20px) 22px; }
+#view-bank .view-copy { max-width: 38ch; margin-inline: auto; }
+#view-bank .mining-progress {
+  margin-bottom: 0;
+  border-color: rgba(112, 226, 156, .28);
+  background: linear-gradient(155deg, rgba(12, 49, 29, .86), rgba(2, 16, 9, .94));
+}
+#view-bank .mining-progress-head b { color: #e5ffef; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+#view-bank .bank-grid { gap: 8px; }
+#view-bank .bank-stat-wide { background: rgba(10, 42, 24, .8); border-color: rgba(112, 226, 156, .27); }
+#view-bank .bank-stat b, #view-bank .mining-progress-head b { word-break: normal; overflow-wrap: anywhere; }
+#view-bank .bank-warning { margin-top: 14px; }
+#view-bank .bank-warning summary:focus-visible, #view-bank .bank-refresh:focus-visible {
+  outline: 2px solid #b5ffd0;
+  outline-offset: 3px;
+}
+#view-bank .bank-refresh { transition: border-color .2s ease, background .2s ease; }
+#view-bank .bank-refresh:not(:disabled):active { background: rgba(18, 73, 40, .9); }

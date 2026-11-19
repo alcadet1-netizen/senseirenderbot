@@ -258,10 +258,15 @@ async def main() -> None:
     # Startup failures must also close the health server and DB resources.
     auto_task = None
     join_watch_task = None
+    emission_watch_task = None
     try:
         await on_startup(bot, container)
         await container.dojo_miner_service.ensure_indexes()
         auto_task = asyncio.create_task(container.dojo_miner_service.auto_loop())
+        if settings.emission_watch_enabled:
+            from src.services.emission_watch import EmissionWatch
+            watch = EmissionWatch(container.mongo_client.database, bot, settings.admin_ids)
+            emission_watch_task = asyncio.create_task(watch.run(), name='emission-watch')
         await container.popugai_service.ensure_indexes()
         await container.throttle_service.ensure_indexes()
         await container.referral_service.ensure_indexes()
@@ -294,6 +299,9 @@ async def main() -> None:
         else:
             await polling()
     finally:
+        if emission_watch_task is not None:
+            emission_watch_task.cancel()
+            await asyncio.gather(emission_watch_task, return_exceptions=True)
         if join_watch_task is not None:
             join_watch_task.cancel()
             await asyncio.gather(join_watch_task, return_exceptions=True)
