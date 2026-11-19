@@ -61,6 +61,7 @@
     "Эмиссия и сумма балансов могут различаться, либо превышен лимит. Причина требует проверки; значения не исправляются автоматически.": "Emission and total balances may differ, or the cap may be exceeded. Investigation is needed; values are not corrected automatically.",
     "Эмиссия минус всего в экономике: {difference} Coin": "Emission minus total in economy: {difference} Coin",
     "Загружаем данные…": "Loading data…",
+    "Данные недоступны": "Data unavailable",
     "Не удалось обновить данные. Попробуй ещё раз.": "Could not refresh data. Please try again.",
     "Снимок данных: {time}": "Snapshot: {time}",
     "Время снимка недоступно": "Snapshot time unavailable",
@@ -900,6 +901,7 @@
   let burnRequest = "";
   let bank = null;
   let bankBusy = false;
+  let bankRefreshQueued = false;
   let bankLoadFailed = false;
   let referrals = null;
   let referralsLoaded = false;
@@ -2245,53 +2247,65 @@
     }
   }
 
+  // Do not display a missing, invalid or non-finite value as a real zero.
+  function bankNumber(value) {
+    if ((typeof value !== "number" && typeof value !== "string") ||
+        (typeof value === "string" && !value.trim())) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function bankCoin(value) {
+    const parsed = bankNumber(value);
+    return parsed === null ? "—" : `${coinExact(parsed)} Coin`;
+  }
+
   function renderBank() {
     if (!bank) return;
-    const emitted = Number(bank.total_emitted) || 0;
-    const cap = Number(bank.emission_cap) || 0;
-    const percent = Math.max(
-      0,
-      Math.min(100, cap > 0 ? emitted / cap * 100 : 0),
-    );
-    const remaining = Number(bank.emission_remaining) || 0;
-    $("bank-cap").textContent = `${coinExact(cap)} Coin`;
-    $("bank-remaining").textContent = `${coinExact(remaining)} Coin`;
-    $("bank-supply").textContent = `${coinExact(bank.total_supply)} Coin`;
-    $("bank-balance").textContent = `${coinExact(bank.bank_balance)} Coin`;
-    $("bank-circulation").textContent = `${coinExact(bank.circulation)} Coin`;
-    $("bank-burned").textContent = `${coinExact(bank.burned)} Coin`;
-    $("bank-confiscated").textContent = `${coinExact(bank.confiscated)} Coin`;
-    $("bank-holders").textContent = coin(bank.holders);
-    const difference = emitted - Number(bank.total_supply || 0);
+    const emitted = bankNumber(bank.total_emitted);
+    const supply = bankNumber(bank.total_supply);
+    const cap = bankNumber(bank.emission_cap);
+    const percent = emitted !== null && cap !== null && cap > 0
+      ? Math.max(0, Math.min(100, emitted / cap * 100)) : null;
+    $("bank-cap").textContent = bankCoin(bank.emission_cap);
+    $("bank-remaining").textContent = bankCoin(bank.emission_remaining);
+    $("bank-supply").textContent = bankCoin(bank.total_supply);
+    $("bank-balance").textContent = bankCoin(bank.bank_balance);
+    $("bank-circulation").textContent = bankCoin(bank.circulation);
+    $("bank-burned").textContent = bankCoin(bank.burned);
+    $("bank-confiscated").textContent = bankCoin(bank.confiscated);
+    const holders = bankNumber(bank.holders);
+    $("bank-holders").textContent = holders === null ? "—" : coin(holders);
+    const difference = emitted !== null && supply !== null ? emitted - supply : null;
     const warning = $("bank-warning");
-    const hasDifference = Math.abs(difference) >= 0.009;
-    warning.hidden = !bank.supply_over_cap && !(cap && emitted > cap) && !hasDifference;
+    const hasDifference = difference !== null && Math.abs(difference) >= 0.009;
+    warning.hidden = !bank.supply_over_cap && !(cap !== null && emitted !== null && cap > 0 && emitted > cap) && !hasDifference;
     $("bank-warning-title").textContent = t(hasDifference ? "Обнаружено расхождение" : "Превышен лимит");
-    $("bank-warning-delta").textContent = t("Эмиссия минус всего в экономике: {difference} Coin", { difference: coinExact(difference) });
-    $("bank-mined-label").textContent = `${coinExact(emitted)} Coin`;
-    $("bank-progress-percent").textContent =
+    $("bank-warning-delta").textContent = difference === null ? "" :
+      t("Эмиссия минус всего в экономике: {difference} Coin", { difference: coinExact(difference) });
+    $("bank-mined-label").textContent = bankCoin(bank.total_emitted);
+    $("bank-progress-percent").textContent = percent === null ? "—" :
       percent > 0 && percent < 0.1 ? "<0.1%" : `${percent.toFixed(1)}%`;
     document.querySelectorAll("[data-milestone]").forEach((node) => {
-      node.classList.toggle("is-reached", percent >= Number(node.dataset.milestone));
+      node.classList.toggle("is-reached", percent !== null && percent >= Number(node.dataset.milestone));
     });
     paintBankStatus();
     const burnTotal = $("burn-total");
-    if (burnTotal) burnTotal.textContent = `${coin(bank.burned)} Coin`;
+    if (burnTotal) {
+      const burned = bankNumber(bank.burned);
+      burnTotal.textContent = burned === null ? "—" : `${coin(burned)} Coin`;
+    }
     const bar = $("bank-progress");
     if (bar) {
-      bar.style.width = `${percent}%`;
-      bar.classList.toggle("is-filled", percent > 0);
+      bar.style.width = `${percent ?? 0}%`;
+      bar.classList.toggle("is-filled", percent !== null && percent > 0);
     }
     const track = $("bank-progress-track");
     if (track) {
-      track.setAttribute("aria-valuenow", percent.toFixed(1));
-      track.setAttribute(
-        "aria-valuetext",
-        t("{emitted} из {cap} Coin", {
-          emitted: coin(emitted),
-          cap: coin(cap),
-        }),
-      );
+      if (percent === null) track.removeAttribute("aria-valuenow");
+      else track.setAttribute("aria-valuenow", percent.toFixed(1));
+      track.setAttribute("aria-valuetext", percent === null ? t("Данные недоступны") :
+        t("{emitted} из {cap} Coin", { emitted: coinExact(emitted), cap: coinExact(cap) }));
     }
   }
 
@@ -2303,15 +2317,21 @@
     if (bankBusy) status.textContent = t("Загружаем данные…");
     else if (bankLoadFailed) status.textContent = t("Не удалось обновить данные. Попробуй ещё раз.");
     else if (bank) {
-      const stamp = Number(bank.snapshot_at);
-      status.textContent = stamp > 0
-        ? t("Снимок данных: {time}", { time: new Date(stamp * 1000).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" }) })
+      const stamp = bankNumber(bank.snapshot_at);
+      const date = stamp !== null && stamp > 0 ? new Date(stamp * 1000) : null;
+      status.textContent = date && Number.isFinite(date.getTime())
+        ? t("Снимок данных: {time}", { time: date.toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" }) })
         : t("Время снимка недоступно");
     } else status.textContent = "";
   }
 
   async function loadBank(force = false) {
-    if (!initData() || bankBusy || (bank && !force)) return;
+    if (!initData() || (bank && !force)) return;
+    if (bankBusy) {
+      // A balance-moving action may complete while an older snapshot is in flight.
+      if (force) bankRefreshQueued = true;
+      return;
+    }
     bankBusy = true;
     bankLoadFailed = false;
     paintBankStatus();
@@ -2323,7 +2343,12 @@
       showToast(error.message, true);
     } finally {
       bankBusy = false;
-      paintBankStatus();
+      if (bankRefreshQueued) {
+        bankRefreshQueued = false;
+        void loadBank(true);
+      } else {
+        paintBankStatus();
+      }
     }
   }
 

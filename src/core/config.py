@@ -86,6 +86,9 @@ class Settings(BaseSettings):
     # Новая одиночная игра «Последний рубеж».
     dojo_app_url: str = Field(default="", alias="DOJO_APP_URL")
 
+    # Read-only monitoring: one projected bank read every 15 minutes.
+    emission_watch_enabled: bool = Field(default=True, alias="EMISSION_WATCH_ENABLED")
+
     # BANK
     bank_initial_coins: float = Field(default=1_000_000_000.0, alias="BANK_INITIAL_COINS")
 

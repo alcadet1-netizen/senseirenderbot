@@ -73,6 +73,24 @@ async def cmd_health(message: Message, container: Container) -> None:
     await message.answer(msg, parse_mode="HTML")
 
 
+@router.message(Command("emissionwatch"))
+async def cmd_emission_watch(message: Message, container: Container) -> None:
+    """Private, read-only view of the accounted emission counters."""
+    if not message.from_user or message.from_user.id not in container.settings.admin_ids:
+        return
+    if message.chat.type != "private":
+        await message.answer("Открой /emissionwatch в личном чате с ботом.")
+        return
+    from src.services.emission_watch import read_report, format_report
+    try:
+        report = await asyncio.wait_for(read_report(container.mongo_client.database), timeout=10)
+    except Exception as exc:
+        logger.warning("Emission watch command failed: %s", type(exc).__name__)
+        await message.answer("Не удалось прочитать данные банка. Попробуй позже.", parse_mode=None)
+        return
+    await message.answer(format_report(report), parse_mode=None)
+
+
 @router.message(Command("senseichats", "chats", "группы"))
 async def cmd_admin_chats(message: Message, container: Container):
     """Список групп, где есть бот (из активного мониторинга)."""
