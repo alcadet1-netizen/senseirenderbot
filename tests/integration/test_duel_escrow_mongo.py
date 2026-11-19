@@ -127,8 +127,9 @@ async def test_same_duel_command_reserves_once_across_processes_and_restart(atte
         fights = [r for r in results if isinstance(r, Duel)]
         assert len(fights) == 1
         unexpected = [r for r in results if not isinstance(r, Duel) and 'уже обработан' not in r]
-        errors = [(r.getMessage(), repr(r.exc_info[1]) if r.exc_info else None)
-                  for r in caplog.records if r.levelname == 'ERROR']
+        errors = [(type(r.exc_info[1]).__name__, getattr(r.exc_info[1], 'code', None),
+                   str(r.exc_info[1]).split('full error:')[0][:400])
+                  for r in caplog.records if r.levelname == 'ERROR' and r.exc_info]
         assert not unexpected, (unexpected, errors)
         assert (await db.users.find_one({'id': 7}))['coins'] == 700
         assert (await db.users.find_one({'id': 8}))['coins'] == 700
