@@ -56,3 +56,32 @@ async def test_slots_concurrent_balance_funding_and_failed_journal():
     finally:
         await client.drop_database(name)
         client.close()
+
+
+@pytest.mark.asyncio
+async def test_redelivered_slot_command_credits_once_across_workers_and_restart():
+    uri = os.environ.get('CAMPAIGN_TEST_MONGO_URI')
+    if not uri:
+        pytest.skip('MongoDB replica set required')
+    client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=5000)
+    name = 'sensei_slots_replay_' + uuid.uuid4().hex
+    db = client[name]
+    try:
+        await db.bank.insert_one({'_id': 'single', 'coins': 1000})
+        await db.users.insert_one({'id': 7, 'coins': 1000})
+        workers = [SlotsService(NS(database=db)) for _ in range(8)]
+        with patch('src.services.slots_service.random.random', return_value=.1), \
+             patch('src.services.slots_service.random.choice', return_value='🍒'):
+            results = await asyncio.gather(*(w.play_slots(7, 100, request_id='chat:42') for w in workers))
+            restart = await SlotsService(NS(database=db)).play_slots(7, 100, request_id='chat:42')
+        assert all(result == results[0] and result['success'] for result in results)
+        assert restart == results[0]
+        assert (await db.users.find_one({'id': 7}))['coins'] == 1200
+        assert (await db.bank.find_one({'_id': 'single'}))['coins'] == 800
+        assert await db.transactions.count_documents({'tx_type': 'slots_bet'}) == 1
+        assert await db.transactions.count_documents({'tx_type': 'slots_win'}) == 1
+        conflict = await workers[0].play_slots(7, 200, request_id='chat:42')
+        assert conflict['reason'] == 'request_conflict'
+    finally:
+        await client.drop_database(name)
+        client.close()

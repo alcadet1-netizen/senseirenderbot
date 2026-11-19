@@ -44,7 +44,7 @@ async def cmd_slots(message: Message, command: CommandObject, container: Contain
             
             # Разрешаем float ввод, например 1.5k
             bet = int(float(arg) * multiplier)
-        except ValueError:
+        except (ValueError, OverflowError):
             await message.answer(f"{mention}\n\n❌ Неверная ставка. Используйте число (например, /senseislots 100 или 1k).", parse_mode="HTML")
             return
 
@@ -65,7 +65,8 @@ async def cmd_slots(message: Message, command: CommandObject, container: Contain
     await container.message_cleanup_service.cleanup_previous(message.chat.id, user_id, "slots", message.bot)
 
     # 1. Запускаем игру (атомарно списываем, считаем результат)
-    result = await container.slots_service.play_slots(user_id, bet)
+    result = await container.slots_service.play_slots(
+        user_id, bet, request_id=f"{message.chat.id}:{message.message_id}")
 
     if not result["success"]:
         reason = result["reason"]

@@ -11,7 +11,7 @@ from tests.unit.test_hedgehog_game import Collection, services
 
 class Transactions(Collection):
     async def insert_one(self, doc, **kwargs):
-        self.docs[len(self.docs)] = copy.deepcopy(doc)
+        self.docs[doc.get('_id', len(self.docs))] = copy.deepcopy(doc)
 
 
 @pytest.mark.asyncio
@@ -53,3 +53,19 @@ async def test_failed_win_journal_aborts_all_movements():
     assert db.users.docs[7]['coins'] == 1000
     assert db.bank.docs['main']['balance'] == 1000
     assert not db.transactions.docs
+
+
+@pytest.mark.asyncio
+async def test_same_message_replay_does_not_charge_twice_even_during_cooldown():
+    db, _, _ = services()
+    db.transactions = Transactions()
+    service = SlotsService(SimpleNamespace(database=db))
+    with patch('src.services.slots_service.random.random', return_value=.5):
+        first = await service.play_slots(7, 100, request_id='chat:message')
+        replay = await service.play_slots(7, 100, request_id='chat:message')
+        mismatch = await service.play_slots(7, 200, request_id='chat:message')
+    assert first == replay and first['success']
+    assert mismatch['reason'] == 'request_conflict'
+    assert db.users.docs[7]['coins'] == 900
+    assert db.bank.docs['main']['balance'] == 100100
+    assert len(db.transactions.docs) == 1

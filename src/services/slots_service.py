@@ -1,5 +1,6 @@
 """Slot spins settled atomically against the two existing bank accounts."""
 import asyncio
+import hashlib
 import logging
 import math
 import random
@@ -7,6 +8,8 @@ import time
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict
+
+from pymongo.errors import DuplicateKeyError
 
 from src.services.bank_ledger import _matched
 from src.services.referral_economy import transaction
@@ -24,7 +27,24 @@ class SlotsService:
         self._slots_timestamps = {}
         self._throttle_lock = asyncio.Lock()
 
-    async def play_slots(self, user_id: int, bet_amount: int) -> Dict[str, Any]:
+    @staticmethod
+    def _prior(prior, user_id, bet_amount):
+        if prior.get('user_id') != user_id or prior.get('slot_bet') != bet_amount:
+            return {'success': False, 'reason': 'request_conflict'}
+        return prior['slot_result']
+
+    async def play_slots(self, user_id: int, bet_amount: int, *, request_id=None) -> Dict[str, Any]:
+        if request_id is not None and (not isinstance(request_id, str) or not 1 <= len(request_id) <= 256):
+            return {'success': False, 'reason': 'request_conflict'}
+        receipt_id = ('slots:' + hashlib.sha256(request_id.encode()).hexdigest()) if request_id else None
+        if receipt_id:
+            try:
+                prior = await self.transactions.find_one({'_id': receipt_id})
+            except Exception:
+                logger.exception('Slot receipt could not be read for user=%s', user_id)
+                return {'success': False, 'reason': 'unconfirmed'}
+            if prior:
+                return self._prior(prior, user_id, bet_amount)
         async with self._throttle_lock:
             now = time.time()
             last = self._slots_timestamps.get(user_id, 0)
@@ -51,6 +71,10 @@ class SlotsService:
         fee = int(bet_amount * .05)
 
         async def settle(tx):
+            if receipt_id:
+                prior = await self.transactions.find_one({'_id': receipt_id}, session=tx)
+                if prior:
+                    return self._prior(prior, user_id, bet_amount)
             user = await self.users.find_one({'id': user_id}, session=tx)
             if not user:
                 return {'success': False, 'reason': 'user_not_found'}
@@ -97,18 +121,31 @@ class SlotsService:
                 if not _matched(credited):
                     raise RuntimeError('Slot user credit missed')
             now_utc = datetime.now(timezone.utc)
-            await self.transactions.insert_one({'user_id': user_id, 'tx_type': 'slots_bet',
-                'coins_change': -float(bet_amount), 'description': 'Slots bet', 'created_at': now_utc}, session=tx)
+            updated = await self.users.find_one({'id': user_id}, session=tx)
+            result = {'success': True, 'is_win': is_win, 'prize': prize, 'bet': bet_amount,
+                      'fee': fee, 'symbols': result_symbols, 'balance': updated['coins']}
+            entry = {'user_id': user_id, 'tx_type': 'slots_bet', 'coins_change': -float(bet_amount),
+                     'description': 'Slots bet', 'created_at': now_utc}
+            if receipt_id:
+                entry.update(_id=receipt_id, slot_bet=bet_amount, slot_result=result)
+            await self.transactions.insert_one(entry, session=tx)
             if is_win:
                 await self.transactions.insert_one({'user_id': user_id, 'tx_type': 'slots_win',
                     'coins_change': float(prize), 'description': f"Slots win: {''.join(result_symbols)}",
                     'created_at': now_utc}, session=tx)
-            updated = await self.users.find_one({'id': user_id}, session=tx)
-            return {'success': True, 'is_win': is_win, 'prize': prize, 'bet': bet_amount,
-                    'fee': fee, 'symbols': result_symbols, 'balance': updated['coins']}
+            return result
 
         try:
             return await transaction(self.mongo_client, settle)
+        except DuplicateKeyError:
+            if receipt_id:
+                try:
+                    prior = await self.transactions.find_one({'_id': receipt_id})
+                    if prior:
+                        return self._prior(prior, user_id, bet_amount)
+                except Exception:
+                    logger.exception('Slot receipt could not be confirmed for user=%s', user_id)
+            return {'success': False, 'reason': 'unconfirmed'}
         except Exception:
             logger.exception('Slot outcome could not be confirmed for user=%s', user_id)
             return {'success': False, 'reason': 'unconfirmed'}
