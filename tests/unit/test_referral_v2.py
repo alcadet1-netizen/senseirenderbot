@@ -76,7 +76,7 @@ def test_card_has_three_levels_and_honest_conditions():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('mode', ['self', 'existing', 'cycle', 'closed', 'valid'])
+@pytest.mark.parametrize('mode', ['self', 'existing', 'cycle', 'closed', 'valid', 'linked', 'banned', 'bot'])
 async def test_binding_constraints(mode):
     user = dict(id=7, created_at=datetime.now(timezone.utc))
     parent = dict(id=8)
@@ -87,14 +87,24 @@ async def test_binding_constraints(mode):
         user['referral_binding_closed'] = True
     if mode == 'cycle':
         parent['referrer_id'] = 7
+    if mode == 'linked':
+        user['referrer_id'] = 9
+    if mode == 'banned':
+        parent['is_banned'] = True
+    if mode == 'bot':
+        user['is_bot'] = True
     docs = {7: user, 8: parent}
-    db = NS(users=NS(find_one=AsyncMock(side_effect=lambda q, **kw: docs.get(q['id'])), update_one=AsyncMock()))
+    db = NS(users=NS(find_one=AsyncMock(side_effect=lambda q, **kw: docs.get(q['id'])), update_one=AsyncMock()),
+            referral_locks=NS(update_one=AsyncMock()))
     async def transact(mongo, callback):
         return await callback('tx')
     with patch('src.services.referral_economy.transaction', side_effect=transact):
         result = await bind(NS(database=db), 7, 7 if mode == 'self' else 8)
-    assert result['success'] is (mode == 'valid')
-    if mode != 'valid':
+    accepted = mode in ('valid', 'existing', 'closed')
+    assert result['success'] is accepted
+    if mode != 'linked':
+        assert db.referral_locks.update_one.await_args_list[-1].kwargs['session'] == 'tx'
+    if not accepted:
         db.users.update_one.assert_not_awaited()
     else:
         assert db.users.update_one.call_args_list[0].args[1]['$set']['referrer_id'] == 8

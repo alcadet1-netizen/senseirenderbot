@@ -204,17 +204,17 @@ def setup_dojo(app, container=None):
             service = container.dojo_miner_service
             if action == 'state':
                 # Only use start_param from initData after signature verification.
-                # Bind only on creation, just like /start; existing players must
-                # never be silently reassigned by opening somebody else's link.
+                # Existing users without a referrer may bind; already-linked
+                # users are never reassigned by the server-side transaction.
                 fields = dict(parse_qsl(payload['initData'], keep_blank_values=True))
                 referral = fields.get('start_param', '')
-                if re.fullmatch(r'ref_[1-9][0-9]{0,19}', referral):
-                    registration = await container.user_service.get_or_create(
+                from src.services.referral_service import parse_referrer_code
+                if parse_referrer_code(referral) is not None:
+                    await container.user_service.get_or_create(
                         user_id=user['id'], username=user.get('username'),
                         first_name=user.get('first_name', ''), last_name=user.get('last_name'),
                         is_bot=user.get('is_bot', False))
-                    if registration.get('created'):
-                        await container.referral_service.process_referral(user['id'], referral)
+                    await container.referral_service.process_referral(user['id'], referral)
                 result = await service.state(user['id'])
             elif action == 'start':
                 result = await service.start(user['id'])

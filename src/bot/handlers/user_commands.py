@@ -182,10 +182,6 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
         except Exception:
             logger.exception("Failed to send starter kit notice for user %s", message.from_user.id)
 
-    if registration.get("created") and not (command.args or '').startswith('ref_'):
-        await container.user_service.users.update_one({'id': message.from_user.id},
-            {'$set': {'referral_binding_closed': True}})
-
     if command.args == 'referrals_menu':
         from src.bot.handlers.referral import cmd_ref
         await cmd_ref(message, container)
@@ -202,14 +198,13 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
 
     # Обработка реферальной ссылки
     args = command.args
-    if args and args.startswith("ref_") and registration.get("created"):
+    if args and args.startswith("ref_"):
         # Используем ReferralService
-        res, msg = await container.referral_service.process_referral(message.from_user.id, args)
-        if res:
-             try:
-                await message.answer(msg, parse_mode="HTML")
-             except Exception as e:
-                logger.error(f"❌ Failed to send referral message: {e}")
+        _, msg = await container.referral_service.process_referral(message.from_user.id, args)
+        try:
+            await message.answer(msg, parse_mode="HTML")
+        except Exception as e:
+            logger.error(f"❌ Failed to send referral message: {e}")
 
     # Обработка ссылки на активацию чека
     elif args and args.startswith("check_"):

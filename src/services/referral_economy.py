@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_DOWN
 
+from pymongo.errors import DuplicateKeyError
 from pymongo.read_concern import ReadConcern
 from pymongo.write_concern import WriteConcern
 
@@ -54,16 +55,29 @@ async def distribute(db, user, cost, event, session):
 
 
 async def bind(mongo, uid, parent_id):
+    # Every graph change must serialize, including links through intermediate
+    # ancestors. Touching only the two endpoints allows longer concurrent
+    # cycles (write skew under Mongo snapshot isolation).
+    db = mongo.database
+    # Mini App initData may retain a start parameter on each refresh. Linked
+    # accounts are immutable, so avoid serializing every later refresh.
+    existing = await db.users.find_one({'id': uid})
+    if not existing or existing.get('referrer_id'):
+        return {'success': False, 'error': 'Приглашение недоступно'}
+    try:
+        await db.referral_locks.update_one(
+            {'_id': 'graph'}, {'$setOnInsert': {'revision': 0}}, upsert=True)
+    except DuplicateKeyError:
+        # Another worker created the lock concurrently.
+        pass
+
     async def execute(tx):
-        db = mongo.database
+        await db.referral_locks.update_one(
+            {'_id': 'graph'}, {'$inc': {'revision': 1}}, session=tx)
         user = await db.users.find_one({'id': uid}, session=tx)
         parent = await db.users.find_one({'id': parent_id}, session=tx)
-        if not user or not parent or parent.get('is_banned') or parent.get('is_bot') or user.get('is_banned') or user.get('is_bot') or uid == parent_id or user.get('referrer_id') or user.get('referral_binding_closed'):
+        if not user or not parent or parent.get('is_banned') or parent.get('is_bot') or user.get('is_banned') or user.get('is_bot') or uid == parent_id or user.get('referrer_id'):
             return {'success': False, 'error': 'Приглашение недоступно'}
-        # Only a newly registered profile can be bound. Existing/legacy profiles fail closed.
-        created = user.get('created_at')
-        if not created or (datetime.now(timezone.utc) - created.replace(tzinfo=timezone.utc)).total_seconds() > 60:
-            return {'success': False, 'error': 'Приглашение доступно только при регистрации'}
         seen = {uid}
         cursor = parent
         for _ in range(100):
@@ -78,8 +92,11 @@ async def bind(mongo, uid, parent_id):
                 break
         else:
             return {'success': False, 'error': 'Слишком длинная цепочка'}
-        await db.users.update_one({'id': uid}, {'$set': {'referrer_id': parent_id, 'referral_binding_closed': True, 'referral_version': 2}}, session=tx)
-        # Touch parent as a serialization point against concurrent cycle creation.
+        await db.users.update_one({'id': uid}, {'$set': {
+            'referrer_id': parent_id, 'referral_binding_closed': True,
+            'referral_version': 2, 'referral_activity_days': [],
+            'referral_paid_upgrade': False}}, session=tx)
+        # Keep the direct-referral counter in the same transaction as the link.
         await db.users.update_one({'id': parent_id}, {'$inc': {'referral_count': 1}}, session=tx)
         return {'success': True, 'referrer_reward': {}, 'referral_reward': {}}
     return await transaction(mongo, execute)
