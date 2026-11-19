@@ -42,6 +42,8 @@ async def test_admin_32_concurrent_requests_one_refresh_four_database_operations
     svc=StatsService(NS(database=NS(users=users,bank=bank,tickets=tickets,transactions=transactions)))
     results=await asyncio.gather(*(svc.get_admin_stats() for _ in range(32)))
     assert all(x==results[0] for x in results)
+    assert results[0]['snapshot_at'] == svc._cache_timestamp
+    assert (await svc.get_bank_summary())['snapshot_at'] == results[0]['snapshot_at']
     assert results[0]['users']=={'total':3,'holders':2} and results[0]['circulation']==450
     assert results[0]['messages']=={'total':29} and results[0]['tickets']=={'active':4}
     assert users.aggregate.call_count==transactions.aggregate.call_count==1

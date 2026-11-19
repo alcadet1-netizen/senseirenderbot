@@ -55,6 +55,7 @@ class StatsService:
                 stats = await transaction(self.mongo_client, self._read_admin_stats)
                 self._admin_stats_cache = stats
                 self._cache_timestamp = datetime.now(timezone.utc).timestamp()
+                stats['snapshot_at'] = self._cache_timestamp
                 return stats
             except Exception:
                 logger.error('Admin statistics refresh failed', exc_info=True)
@@ -138,6 +139,7 @@ class StatsService:
         emitted = max(0.0, _to_float(bank.get('total_emitted_raw',
                                                bank.get('total_emitted')), total_supply))
         return {
+            'snapshot_at': stats.get('snapshot_at'),
             'bank_balance': round(balance, 2),
             'single_balance': round(max(0.0, _to_float(bank.get('single_balance'), balance)), 2),
             'legacy_balance': round(max(0.0, _to_float(bank.get('legacy_balance'), 0.0)), 2),
