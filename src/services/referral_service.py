@@ -3,12 +3,21 @@
 """
 
 import logging
+import re
 from typing import Tuple, Optional
 
 from src.core.config import settings
 from src.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
+
+
+def parse_referrer_code(code):
+    """Decode one canonical deep-link payload without overflowing Mongo IDs."""
+    if not isinstance(code, str) or not re.fullmatch(r'ref_[1-9][0-9]{0,18}', code):
+        return None
+    user_id = int(code[4:])
+    return user_id if user_id <= 2**63 - 1 else None
 
 
 class ReferralService:
@@ -35,12 +44,8 @@ class ReferralService:
             logger.error("UserService not set in ReferralService")
             return False, "Internal error"
 
-        # Extract referrer ID from code
-        if not referrer_code or not referrer_code.startswith("ref_"):
-            return False, "❌ Неверный код"
-        try:
-            referrer_id = int(referrer_code[4:])
-        except ValueError:
+        referrer_id = parse_referrer_code(referrer_code)
+        if referrer_id is None:
             return False, "❌ Неверный код"
 
         # Use the user_service to process the referral

@@ -154,8 +154,8 @@ async def _show_referral_menu(
     else:
         await message.answer(text, parse_mode="HTML", reply_markup=keyboard, link_preview_options=preview)
 
-@router.message(Command("senseireferal", "referral", "ref", "referal", "реферал"))
-@router.message(F.text.regexp(r"(?i)(?:^|\s)/senseireferal(@\w+)?\b"))
+@router.message(Command("senseireferal", "rsenseireferal", "referral", "ref", "referal", "реферал"))
+@router.message(F.text.regexp(r"(?i)(?:^|\s)/r?senseireferal(@\w+)?\b"))
 async def cmd_ref(msg: Message, container: Container):
     if not msg.from_user:
         return
@@ -264,7 +264,7 @@ async def cb_rewards(cb: CallbackQuery, callback_data: RefCb):
     
     await cb.message.edit_text(
         "📜 <b>ПРАВИЛА ДОДЗЁ</b>\n\n"
-        "Приглашение закрепляется при регистрации. Самоприглашения и смена пригласившего запрещены.\n\n"
+        "Приглашение можно принять, если у тебя ещё нет пригласившего. Самоприглашения и смена пригласившего запрещены.\n\n"
         "С каждой оплаченной попытки улучшения катаны, включая неудачную: 10% / 1% / 0,1% трём пригласившим. "
         "Остаток и доли отсутствующих участников получает SenseiBank. Переводы и награды процентов не дают.\n\n"
         "Новым приглашённым: три разных дня активности, включая день платного апа. "

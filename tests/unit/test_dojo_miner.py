@@ -334,7 +334,7 @@ async def test_direct_referral_link_requires_explicit_configuration(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_signed_direct_referral_binds_only_new_player():
+async def test_signed_direct_referral_checks_new_and_existing_player():
     registration = AsyncMock(side_effect=[{'created': True}, {'created': False}])
     bind = AsyncMock(return_value=(True, 'ok'))
     state = AsyncMock(return_value={'phase': 'ready'})
@@ -349,10 +349,11 @@ async def test_signed_direct_referral_binds_only_new_player():
         auth = signed(now=int(time.time()), start_param='ref_42')
         for _ in range(2):
             assert (await client.post('/miniapp/dojo/api/state', json={'initData': auth})).status == 200
-        bind.assert_awaited_once_with(7, 'ref_42')
+        assert bind.await_count == 2
+        bind.assert_awaited_with(7, 'ref_42')
         forged = signed(now=int(time.time())) + '&start_param=ref_99'
         assert (await client.post('/miniapp/dojo/api/state', json={'initData': forged})).status == 401
-        bind.assert_awaited_once()
+        assert bind.await_count == 2
 
 
 @pytest.mark.asyncio
