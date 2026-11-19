@@ -15,7 +15,7 @@ const context = {$, document: {querySelectorAll: () => milestones}, Math, Number
   showToast() {}, api: () => new Promise((resolve, reject) => { resolveApi = {resolve, reject}; })};
 vm.createContext(context);
 vm.runInContext('let bank = null, bankBusy = false, bankRefreshQueued = false, bankLoadFailed = false;\n' + source.slice(start, end) + '\nthis.renderBank = renderBank; this.loadBank = loadBank; this.setBank = b => bank = b;', context);
-const data = {total_emitted: 971011837, emission_cap: 10000000000, emission_remaining: 9028988163,
+const data = {total_emitted: 971011837, lifetime_issued_estimate: 1000990403, emission_cap: 10000000000, emission_remaining: 8999009597,
   total_supply: 970615473, bank_balance: 968485634, circulation: 2129839, burned: 29978566,
   confiscated: 482064, holders: 272, snapshot_at: 1730000000};
 (async () => {
@@ -23,17 +23,18 @@ const data = {total_emitted: 971011837, emission_cap: 10000000000, emission_rema
   assert.equal($('bank-warning').hidden, false);
   assert.equal($('bank-warning-title').textContent, 'Обнаружено расхождение');
   assert.match($('bank-warning-delta').textContent, /396364/);
-  assert.equal($('bank-mined-label').textContent, '971011837 Coin');
-  assert.equal($('bank-progress').style.width, '9.71011837%');
+  assert.equal($('bank-mined-label').textContent, '1000990403 Coin');
+  assert.equal($('bank-current-emission').textContent, '971011837 Coin');
+  assert.equal($('bank-progress').style.width, '10.00990403%');
   assert.equal(milestones[0].classList['is-reached'], false);
-  context.setBank({...data, total_emitted: 2500000000, total_supply: 2500000000}); context.renderBank();
+  context.setBank({...data, lifetime_issued_estimate: 2500000000, total_emitted: 2500000000, total_supply: 2500000000}); context.renderBank();
   assert.equal($('bank-warning').hidden, true);
   assert.equal(milestones[0].classList['is-reached'], true);
-  context.setBank({...data, total_emitted: 2499999999, total_supply: 2499999999}); context.renderBank();
+  context.setBank({...data, lifetime_issued_estimate: 2499999999, total_emitted: 2499999999, total_supply: 2499999999}); context.renderBank();
   assert.equal(milestones[0].classList['is-reached'], false);
   context.setBank({...data, emission_cap: 100, total_emitted: 101, total_supply: 101}); context.renderBank();
   assert.equal($('bank-warning-title').textContent, 'Превышен лимит');
-  context.setBank({...data, total_emitted: null, emission_cap: null, total_supply: null,
+  context.setBank({...data, total_emitted: null, lifetime_issued_estimate: null, emission_cap: null, total_supply: null,
     emission_remaining: null, holders: null, burned: null}); context.renderBank();
   assert.equal($('bank-mined-label').textContent, '—');
   assert.equal($('bank-supply').textContent, '—');
@@ -56,7 +57,7 @@ const data = {total_emitted: 971011837, emission_cap: 10000000000, emission_rema
   oldApi.resolve(data); await old;
   assert.notEqual(resolveApi, oldApi, 'a forced refresh is retried after the in-flight snapshot');
   assert.equal($('bank-refresh').disabled, true);
-  resolveApi.resolve({...data, total_emitted: 42, total_supply: 42});
+  resolveApi.resolve({...data, total_emitted: 42, lifetime_issued_estimate: 42, total_supply: 42});
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal($('bank-mined-label').textContent, '42 Coin');
   assert.equal($('bank-refresh').disabled, false);

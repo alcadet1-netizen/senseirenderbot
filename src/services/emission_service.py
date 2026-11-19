@@ -1,4 +1,4 @@
-"""One hard, race-safe ceiling for every newly created SenseiCoin.
+"""Ceiling for reservations based on recorded current and burned counters.
 
 SenseiCoin has two kinds of money movements:
 
@@ -6,10 +6,10 @@ SenseiCoin has two kinds of money movements:
   never change the total supply;
 * new coins: the initial SenseiBank fill and registration starter kits.
 
-Only the second kind is emission.  The counter lives in the canonical bank
-document ``bank/_id=single`` (field ``total_emitted``).  Reserving coins is a
-single conditional ``$inc``: Mongo increments only while the stored counter is
-at or below ``cap - amount``, so concurrent workers cannot pass the ceiling.
+Only the second kind is emission.  The counters live in the canonical bank
+document ``bank/_id=single``: ``total_emitted`` is current issuance and
+``burned`` records burns. Reserving uses an atomic compare-and-swap of both
+counters against the cap. Their sum is an estimate, not verified history.
 Nothing in the bot should add coins to a user without either reserving them
 here (starter) or withdrawing the same amount from the bank (all payouts).
 """
@@ -23,6 +23,7 @@ from pymongo.errors import DuplicateKeyError
 
 from src.core.config import settings
 from src.core.constants import TOTAL_EMISSION_CAP
+from src.services.emission_watch import _amount
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,7 @@ class EmissionService:
                     {"$setOnInsert": {
                         "coins": allowed,
                         "total_emitted": observed + allowed,
+                        "burned": 0,
                         "emission_cap": self.cap,
                         "emission_reconciled_at": now,
                     }},
@@ -254,12 +256,16 @@ class EmissionService:
 
     async def bootstrap(self) -> dict:
         """Startup reconcile: never re-mint, never lower the cumulative total."""
-        doc = await self.ensure_state(force_reconcile=True)
+        # Preserve existing counters as the baseline. Reconstructing them from
+        # balances would silently change the basis of the lifetime estimate.
+        doc = await self.bank.find_one({"_id": BANK_ID})
+        if doc is None:
+            doc = await self.ensure_state()
         await self.fold_legacy_bank()
         doc = await self.bank.find_one({"_id": BANK_ID}) or doc
         snapshot = self.snapshot_from_doc(doc)
         logger.info(
-            "SenseiCoin emission: emitted=%.2f cap=%.2f remaining=%.2f",
+            "SenseiCoin emission: emitted=%s cap=%.2f remaining=%s",
             snapshot["total_emitted"], snapshot["emission_cap"],
             snapshot["emission_remaining"],
         )
@@ -275,32 +281,36 @@ class EmissionService:
         amount = _num(amount, 0.0)
         if amount <= 0:
             return True
-        doc = await self.ensure_state()
-        if doc.get("emission_frozen") or _num(doc.get("total_emitted")) > self.cap:
-            logger.error("Emission reserve denied (frozen/over cap): reason=%s amount=%.2f",
-                         reason, amount)
-            return False
-        limit = self.cap - amount
-        if limit < 0:
-            return False
-        try:
-            result = await self.bank.update_one(
-                {"_id": BANK_ID, "total_emitted": {"$lte": limit}},
-                {"$inc": {"total_emitted": amount},
-                 "$set": {"emission_cap": self.cap,
-                          "emission_updated_at": datetime.now(timezone.utc)}},
-            )
-        except Exception:
-            logger.exception("Emission reserve failed: reason=%s amount=%.2f", reason, amount)
-            return False
-        if not _matched(result):
-            logger.warning(
-                "Emission cap reached: reason=%s amount=%.2f cap=%.2f",
-                reason, amount, self.cap,
-            )
-            return False
-        logger.info("Emission reserved: reason=%s amount=%.2f", reason, amount)
-        return True
+        # Compare-and-swap both counters: a burn changes them together and
+        # never creates new lifetime headroom. Unknown history fails closed.
+        for _ in range(32):
+            doc = await self.bank.find_one({"_id": BANK_ID})
+            if doc is None:
+                doc = await self.ensure_state()
+            current, burned = _amount(doc.get("total_emitted")), _amount(doc.get("burned"))
+            cap, requested = _amount(self.cap), _amount(amount)
+            if current is None or burned is None or cap is None or requested is None:
+                logger.error("Emission reserve denied: missing or invalid counters")
+                return False
+            if doc.get("emission_frozen") or current + burned + requested > cap:
+                logger.warning("Emission reserve denied: lifetime baseline/cap reached")
+                return False
+            try:
+                result = await self.bank.update_one(
+                    {"_id": BANK_ID, "total_emitted": doc["total_emitted"],
+                     "burned": doc["burned"], "emission_frozen": {"$ne": True}},
+                    {"$inc": {"total_emitted": amount},
+                     "$set": {"emission_cap": self.cap,
+                              "emission_updated_at": datetime.now(timezone.utc)}},
+                )
+            except Exception:
+                logger.exception("Emission reserve failed: reason=%s amount=%.2f", reason, amount)
+                return False
+            if _matched(result):
+                logger.info("Emission reserved: reason=%s amount=%.2f", reason, amount)
+                return True
+        logger.warning("Emission reserve denied: concurrent updates")
+        return False
 
     async def release(self, amount: float, reason: str = "rollback") -> None:
         """Return a reservation whose credit failed.
@@ -324,7 +334,7 @@ class EmissionService:
     async def burn(self, amount: float, *, session=None) -> float:
         """Destroy already-emitted coins and return the amount actually burned.
 
-        Only the lifetime counter is reduced; SenseiBank is untouched because
+        Only the current counter is reduced; SenseiBank is untouched because
         these coins came from a player's balance, not from the bank pool.  A
         conditional update prevents the counter from going negative when two
         burns race.
@@ -335,8 +345,13 @@ class EmissionService:
         if session is not None:
             # The caller has already initialized the bank. The update and the
             # player debit must commit (or abort) in the same transaction.
+            doc = await self.bank.find_one({"_id": BANK_ID}, session=session)
+            if not doc or _amount(doc.get("burned")) is None:
+                logger.error("Emission burn denied: missing or invalid burned counter")
+                return 0.0
             result = await self.bank.update_one(
-                {"_id": BANK_ID, "total_emitted": {"$gte": amount}},
+                {"_id": BANK_ID, "total_emitted": {"$gte": amount},
+                 "burned": doc["burned"]},
                 {"$inc": {"total_emitted": -amount, "burned": amount},
                  "$set": {"emission_cap": self.cap,
                           "emission_updated_at": datetime.now(timezone.utc)}},
@@ -349,13 +364,17 @@ class EmissionService:
                 {"$set": {"emission_frozen": False}}, session=session)
             return amount
         doc = await self.ensure_state()
+        if _amount(doc.get("burned")) is None:
+            logger.error("Emission burn denied: missing or invalid burned counter")
+            return 0.0
         emitted = max(0.0, _num(doc.get("total_emitted"), 0.0))
         actual = min(amount, emitted)
         if actual <= 0:
             return 0.0
         try:
             result = await self.bank.update_one(
-                {"_id": BANK_ID, "total_emitted": {"$gte": actual}},
+                {"_id": BANK_ID, "total_emitted": {"$gte": actual},
+                 "burned": doc["burned"]},
                 {"$inc": {"total_emitted": -actual, "burned": actual},
                  "$set": {"emission_cap": self.cap,
                           "emission_frozen": emitted - actual > self.cap,
@@ -380,16 +399,19 @@ class EmissionService:
 
     def snapshot_from_doc(self, doc: dict | None) -> dict:
         bank_doc = doc or {}
-        emitted = max(0.0, _num(bank_doc.get("total_emitted"), 0.0))
         cap = max(0.0, _num(bank_doc.get("emission_cap"), self.cap))
-        remaining = max(0.0, cap - emitted)
-        percent = min(100.0, emitted / cap * 100.0) if cap else 100.0
+        current, burned = _amount(bank_doc.get("total_emitted")), _amount(bank_doc.get("burned"))
+        emitted = float(current) if current is not None else None
+        lifetime = float(current + burned) if current is not None and burned is not None else None
+        remaining = max(0.0, cap - lifetime) if lifetime is not None else None
+        percent = min(100.0, lifetime / cap * 100.0) if lifetime is not None and cap else None
         return {
-            "total_emitted": round(emitted, 2),
+            "total_emitted": round(emitted, 2) if emitted is not None else None,
             "emission_cap": round(cap, 2),
-            "emission_remaining": round(remaining, 2),
-            "emission_percent": round(percent, 2),
-            "emission_frozen": bool(bank_doc.get("emission_frozen")) or emitted >= cap,
+            "lifetime_issued_estimate": round(lifetime, 2) if lifetime is not None else None,
+            "emission_remaining": round(remaining, 2) if remaining is not None else None,
+            "emission_percent": round(percent, 2) if percent is not None else None,
+            "emission_frozen": bool(bank_doc.get("emission_frozen")) or lifetime is None or lifetime >= cap,
         }
 
     async def snapshot(self, *, create: bool = True) -> dict:

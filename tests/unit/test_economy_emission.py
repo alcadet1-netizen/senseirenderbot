@@ -121,7 +121,7 @@ async def test_game_win_moves_bank_coins_without_emission():
 @pytest.mark.parametrize('emitted,expected', [(0, 3000), (9_999_999_999, 0)])
 async def test_message_creation_exposes_actual_starter_only_once(emitted, expected):
     economy_service, db = economy([{
-        '_id': 'single', 'coins': 0, 'total_emitted': emitted,
+        '_id': 'single', 'coins': 0, 'total_emitted': emitted, 'burned': 0,
         'emission_cap': 10_000_000_000,
     }], user_coins=0)
     db.users.docs.clear()
@@ -167,3 +167,38 @@ async def test_simultaneous_game_payouts_do_not_overspend_bank():
     assert sum(result['success'] for result in results) == 1
     assert db.bank.docs['single']['coins'] == 20
     assert db.users.docs[7]['coins'] + db.users.docs[8]['coins'] == 1080
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('entrypoint', ['user', 'daily', 'message', 'game'])
+@pytest.mark.parametrize('duplicate', [False, True])
+async def test_starter_reservation_only_released_on_definite_duplicate(entrypoint, duplicate):
+    from unittest.mock import AsyncMock
+    from pymongo.errors import DuplicateKeyError
+    from src.services.user_service import UserService
+    from src.services.daily_service import DailyService
+
+    svc, db = economy([{'_id': 'single', 'coins': 0, 'total_emitted': 100, 'burned': 0}])
+    db.users.docs.clear()
+    db.daily_claims = UserCollection()
+    db.user_achievements = UserCollection()
+    db.users.insert_one = AsyncMock(side_effect=DuplicateKeyError('duplicate') if duplicate else TimeoutError('unknown outcome'))
+    mongo = NS(database=db)
+    if entrypoint == 'user':
+        svc = UserService(mongo)
+        run = lambda: svc.get_or_create(8)
+    elif entrypoint == 'daily':
+        svc = DailyService(mongo)
+        run = lambda: svc.claim_daily(8)
+    elif entrypoint == 'message':
+        run = lambda: svc.process_message_reward(8, apply_rewards=False)
+    else:
+        run = lambda: svc.process_game_win(8, coins=0, xp=0)
+    svc.emission.reserve_starter = AsyncMock(return_value=3000)
+    svc.emission.release = AsyncMock()
+    with pytest.raises(DuplicateKeyError if duplicate else TimeoutError):
+        await run()
+    if duplicate:
+        svc.emission.release.assert_awaited_once_with(3000, 'starter:8')
+    else:
+        svc.emission.release.assert_not_awaited()

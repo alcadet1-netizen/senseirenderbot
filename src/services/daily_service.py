@@ -2,6 +2,7 @@
 📅 Сервис ежедневных бонусов.
 """
 
+from pymongo.errors import DuplicateKeyError
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Tuple
 import asyncio
@@ -95,9 +96,15 @@ class DailyService:
                 }
                 try:
                     await self.users.insert_one(user_doc)
-                except Exception:
+                except DuplicateKeyError:
+                    # A duplicate-key rejection guarantees this insert was not applied.
                     if starter:
                         await self.emission.release(starter, f"starter:{user_id}")
+                    raise
+                except Exception:
+                    # A timeout can follow a successful insert. Keep the reservation
+                    # rather than reopening issuance that may already be credited.
+                    logger.warning("Starter reservation retained after uncertain insert: user=%s", user_id)
                     raise
                 user = user_doc
 

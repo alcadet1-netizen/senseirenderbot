@@ -332,14 +332,14 @@
           <h2 data-i18n="ЭМИССИЯ">ЭМИССИЯ</h2>
           <p
             class="view-copy"
-            data-i18n="Жёсткий лимит: 10 000 000 000 Coin. Награды списываются из SenseiBank, а не печатаются сверх лимита. Пустой банк останавливает начисления."
+            data-i18n="Предел выпуска: 10 000 000 000 Coin. Учёт опирается на доступные счётчики; история может быть неполной. Награды списываются из банка."
           >
-            Жёсткий лимит: 10 000 000 000 Coin. Награды списываются из
-            SenseiBank, а не печатаются сверх лимита. Пустой банк останавливает начисления.
+            Предел выпуска: 10 000 000 000 Coin. Учёт опирается на доступные счётчики;
+            история может быть неполной. Награды списываются из банка.
           </p>
           <div class="mining-progress">
             <div class="mining-progress-head">
-              <span data-i18n="ТЕКУЩАЯ ЭМИССИЯ">ТЕКУЩАЯ ЭМИССИЯ</span>
+              <span data-i18n="УЧТЕНО В ЛИМИТЕ">УЧТЕНО В ЛИМИТЕ</span>
               <b id="bank-mined-label">—</b>
             </div>
             <div class="emission-track" id="bank-progress-track" role="progressbar"
@@ -348,7 +348,7 @@
               <span id="bank-progress"></span><i class="emission-shine" aria-hidden="true"></i>
             </div>
             <div class="bank-progress-summary">
-              <span><b id="bank-progress-percent">—</b><small data-i18n="ЭМИССИИ ВЫПУЩЕНО">ЭМИССИИ ВЫПУЩЕНО</small></span>
+              <span><b id="bank-progress-percent">—</b><small data-i18n="ЛИМИТА УЧТЕНО">ЛИМИТА УЧТЕНО</small></span>
               <span><b id="bank-cap">—</b><small data-i18n="ЛИМИТ">ЛИМИТ</small></span>
               <span><b id="bank-remaining">—</b><small data-i18n="ОСТАЛОСЬ">ОСТАЛОСЬ</small></span>
             </div>
@@ -356,7 +356,7 @@
               <span data-milestone="25">25%</span><span data-milestone="50">50%</span>
               <span data-milestone="75">75%</span><span data-milestone="100">100%</span>
             </div>
-            <p class="bank-milestone-note" data-i18n="Текущий уровень может снижаться при сжигании.">Текущий уровень может снижаться при сжигании.</p>
+            <p class="bank-milestone-note" data-i18n="Расчёт по учтённым выпускам и сжиганиям; история может быть неполной.">Расчёт по учтённым выпускам и сжиганиям; история может быть неполной.</p>
           </div>
           <details id="bank-warning" class="bank-warning" hidden>
             <summary><strong id="bank-warning-title">Обнаружено расхождение</strong><span data-i18n="Подробнее">Подробнее</span></summary>
@@ -365,6 +365,7 @@
           </details>
           <h3 class="bank-section-title" data-i18n="Где находятся Coin">Где находятся Coin</h3>
           <div id="bank-stats" class="bank-grid">
+            <div class="bank-stat bank-stat-wide"><span data-i18n="Текущая эмиссия">Текущая эмиссия</span><b id="bank-current-emission">—</b></div>
             <div class="bank-stat bank-stat-wide"><span data-i18n="Всего в экономике">Всего в экономике</span><b id="bank-supply">—</b></div>
             <div class="bank-stat"><span data-i18n="Баланс банка">Баланс банка</span><b id="bank-balance">—</b></div>
             <div class="bank-stat"><span data-i18n="В обороте">В обороте</span><b id="bank-circulation">—</b></div>

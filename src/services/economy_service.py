@@ -5,6 +5,7 @@
 import asyncio
 import random
 import time
+from pymongo.errors import DuplicateKeyError
 from typing import Optional, List, Tuple
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from src.core.config import settings
@@ -183,9 +184,15 @@ class EconomyService:
                 }
                 try:
                     await self.users.insert_one(user)
-                except Exception:
+                except DuplicateKeyError:
+                    # A duplicate-key rejection guarantees this insert was not applied.
                     if starter:
                         await self.emission.release(starter, f"starter:{user_id}")
+                    raise
+                except Exception:
+                    # A timeout can follow a successful insert. Keep the reservation
+                    # rather than reopening issuance that may already be credited.
+                    logger.warning("Starter reservation retained after uncertain insert: user=%s", user_id)
                     raise
                 starter_amount = starter
                 # Refresh the user document
@@ -711,9 +718,15 @@ class EconomyService:
                 }
                 try:
                     await self.users.insert_one(user)
-                except Exception:
+                except DuplicateKeyError:
+                    # A duplicate-key rejection guarantees this insert was not applied.
                     if starter:
                         await self.emission.release(starter, f"starter:{user_id}")
+                    raise
+                except Exception:
+                    # A timeout can follow a successful insert. Keep the reservation
+                    # rather than reopening issuance that may already be credited.
+                    logger.warning("Starter reservation retained after uncertain insert: user=%s", user_id)
                     raise
                 # Refresh the user document
                 user = await self.users.find_one({"id": user_id})

@@ -49,7 +49,7 @@ class Collection:
 def setup(monkeypatch):
     db = NS(users=Collection([{'id': 7, 'coins': 5000}]), transactions=Collection(),
             bank=Collection([{'_id': 'single', 'coins': 1_000_000,
-                              'total_emitted': 10_000, 'emission_cap': 10_000_000_000}]))
+                              'total_emitted': 10_000, 'burned': 0, 'emission_cap': 10_000_000_000}]))
     lock = asyncio.Lock()
     async def transaction(mongo, callback):
         async with lock:
@@ -133,3 +133,15 @@ async def test_reused_id_with_different_amount_is_rejected(setup):
         await burner.burn(7, 2000, 'burn-request-0004')
     assert db.users.docs[7]['coins'] == 4000
     assert db.bank.docs['single']['total_emitted'] == 9000
+
+
+@pytest.mark.asyncio
+async def test_missing_burn_counter_does_not_invent_a_baseline(setup):
+    db, burner = setup
+    del db.bank.docs['single']['burned']
+    with pytest.raises(GameError):
+        await burner.burn(7, 1000, 'burn-request-unknown')
+    assert db.users.docs[7]['coins'] == 5000
+    assert db.bank.docs['single']['total_emitted'] == 10000
+    assert 'burned' not in db.bank.docs['single']
+    assert not db.transactions.docs

@@ -13,10 +13,10 @@ CAP = 10_000_000_000
 
 @pytest.mark.parametrize('doc,status', [
     ({'total_emitted': 900, 'burned': 100, 'emission_cap': CAP}, 'observing'),
-    ({'total_emitted': CAP - 100, 'burned': 100, 'emission_cap': CAP}, 'reuse_risk'),
+    ({'total_emitted': CAP - 100, 'burned': 100, 'emission_cap': CAP}, 'limit_reached'),
     ({'total_emitted': CAP - 50, 'burned': 100, 'emission_cap': CAP}, 'over_estimate'),
     ({'total_emitted': CAP + 1, 'burned': 0, 'emission_cap': CAP}, 'over_estimate'),
-    ({'total_emitted': CAP, 'burned': 0, 'emission_cap': CAP}, 'observing'),
+    ({'total_emitted': CAP, 'burned': 0, 'emission_cap': CAP}, 'limit_reached'),
     ({'total_emitted': 0, 'emission_cap': CAP}, 'unknown'),
     ({'total_emitted': None, 'burned': 0}, 'unknown'),
     ({'total_emitted': True, 'burned': 0}, 'unknown'),
@@ -36,7 +36,7 @@ def test_decimal_values_and_disclaimer():
     text = format_report(result)
     assert '901.75 Coin' in text
     assert 'оценка' in text and 'не блокирует' in text
-    assert 'правила допускают повторный выпуск' in text
+    assert 'сжигание не освобождает лимит' in text
 
 
 @pytest.mark.asyncio
@@ -54,7 +54,7 @@ async def test_alerts_rate_limited_per_admin_and_recovery():
     bank = NS(find_one=AsyncMock(return_value={'total_emitted': CAP - 100, 'burned': 100}))
     bot = NS(send_message=AsyncMock())
     watch = EmissionWatch(NS(bank=bank), bot, [1, 2, 2], cooldown=100, clock=lambda: time[0])
-    assert await watch.tick() == 'reuse_risk'
+    assert await watch.tick() == 'limit_reached'
     assert bot.send_message.await_count == 2
     await watch.tick()
     assert bot.send_message.await_count == 2

@@ -72,7 +72,7 @@ class BurnService:
             if not debited.matched_count:
                 raise GameError('Баланс изменился. Обнови экран и попробуй снова.')
             if await self.emission.burn(amount, session=session) != amount:
-                raise GameError('Эмиссия меньше суммы сжигания. Попробуй позже.')
+                raise GameError('Эмиссия меньше суммы сжигания или счётчик сжиганий недоступен. Попробуй позже.')
             receipt = {'_id': receipt_id, 'user_id': user_id, 'tx_type': 'burn',
                        'coins_change': -amount, 'description': 'Voluntary SenseiCoin burn',
                        'created_at': datetime.now(timezone.utc)}
@@ -84,7 +84,8 @@ class BurnService:
         try:
             # Initialization must happen before opening the transaction, never
             # after the player's balance is debited.
-            await self.emission.ensure_state()
+            if await self.db.bank.find_one({'_id': 'single'}) is None:
+                await self.emission.ensure_state()
             return await transaction(self.mongo_client, work)
         except DuplicateKeyError:
             # A concurrent request with the same id committed first.
