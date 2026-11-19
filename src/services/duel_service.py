@@ -22,6 +22,7 @@ from src.core.container import Container
 from src.core.visuals import Visuals
 from src.core.constants import LEVEL_XP_REQUIREMENTS
 from src.services.duel_escrow import DuelEscrow, DuelRequestAlreadyUsed
+from src.services.bank_ledger import _matched
 from src.services.duel_resources import (
     ARENAS, DODGE_GAGS_L, DODGE_GAGS_R, ATTACK_GAGS_L, ATTACK_GAGS_R,
     HIT_GAGS, MISS_GAGS, DUEL_COOLDOWN_SEC, DUEL_ACCEPT_TIMEOUT_SEC,
@@ -49,6 +50,10 @@ class Duel:
     escrow_id: Optional[str] = None
     settlement_started: bool = False
     settlement_winner: Optional[int] = None
+    settlement_reason: str = ""
+    winner_id: Optional[int] = None
+    payout_confirmed: bool = False
+    xp_confirmed: bool = False
 
     # State
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -158,9 +163,22 @@ class DuelService:
         while True:
             try:
                 await self.escrow.recover_decided()
+                await self._retry_live_settlements()
             except Exception:
                 logger.exception('Duel recovery scan failed; will retry')
             await asyncio.sleep(60)
+
+    async def _retry_live_settlements(self):
+        for duel in list(self.duels.values()):
+            if not duel.settlement_started or duel.finished:
+                continue
+            async with duel.lock:
+                if not duel.settlement_started or duel.finished:
+                    continue
+                try:
+                    await self._finish_duel(duel, duel.settlement_winner, duel.settlement_reason)
+                except Exception:
+                    logger.exception('Duel live settlement retry failed: duel=%s', duel.id)
 
     async def shutdown(self):
         """Refund live escrow under each duel lock before the database closes.
@@ -289,6 +307,7 @@ class DuelService:
 
         async with duel.lock:
             if duel.finished: return "❜ Дуэль завершена."
+            if duel.settlement_started: return "⏳ Результат дуэли подтверждается."
             if duel.accepted: return "✅ Уже идет."
 
             if decision == 'x':
@@ -329,6 +348,7 @@ class DuelService:
 
         async with duel.lock:
             if duel.finished: return "❜ Дуэль завершена."
+            if duel.settlement_started: return "⏳ Результат дуэли подтверждается."
             if user_id not in (duel.challenger_id, duel.opponent_id): return "❜ Не ваш бой."
 
             # Update action
@@ -353,6 +373,7 @@ class DuelService:
 
         async with duel.lock:
             if duel.finished: return "❜ Дуэль завершена."
+            if duel.settlement_started: return "⏳ Результат дуэли подтверждается."
             if user_id not in (duel.challenger_id, duel.opponent_id): return "❜ Не ваш бой."
 
             if action == 'open':
@@ -379,6 +400,7 @@ class DuelService:
 
         async with duel.lock:
             if duel.finished: return "❜ Уже всё."
+            if duel.settlement_started: return "⏳ Результат дуэли подтверждается."
             if user_id not in (duel.challenger_id, duel.opponent_id): return "❜ Не вы."
 
             winner_id = duel.opponent_id if user_id == duel.challenger_id else duel.challenger_id
@@ -388,7 +410,7 @@ class DuelService:
     # --- Internal Logic ---
 
     async def _start_round(self, duel: Duel):
-        if self._closing or duel.finished:
+        if self._closing or duel.finished or duel.settlement_started:
             return
         duel.round_num += 1
         duel.round_deadline_mono = time.monotonic() + DUEL_ROUND_TIMEOUT_SEC
@@ -397,7 +419,7 @@ class DuelService:
         duel.actions[duel.challenger_id] = {"dodge": None, "attack": None}
         duel.actions[duel.opponent_id] = {"dodge": None, "attack": None}
 
-        duel.log_lines.append(f"🔔 <b>Раунд {duel.round_num}</b>")
+        duel.log_lines.append(f"🔔 Раунд {duel.round_num}")
 
         await self._update_arena(duel)
         await self._update_control_dm(duel, duel.challenger_id)
@@ -415,7 +437,7 @@ class DuelService:
             if self.duels.get(duel_id) is None: return
             await asyncio.sleep(1)
             duel = self.duels.get(duel_id)
-            if not duel or duel.finished or duel.round_num != round_num: return
+            if not duel or duel.finished or duel.settlement_started or duel.round_num != round_num: return
 
             # Update timer in arena
             await self._update_arena(duel)
@@ -436,9 +458,11 @@ class DuelService:
                 await asyncio.sleep(remain)
 
         duel = self.duels.get(duel_id)
-        if not duel or duel.finished or duel.round_num != round_num: return
+        if not duel or duel.finished or duel.settlement_started or duel.round_num != round_num: return
 
         async with duel.lock:
+            if duel.finished or duel.settlement_started or duel.round_num != round_num:
+                return
             # Auto-fill missing
             for uid in (duel.challenger_id, duel.opponent_id):
                 acts = duel.actions[uid]
@@ -447,7 +471,10 @@ class DuelService:
 
             if timed_out:
                 duel.log_lines.append("⏰ Время вышло!")
-            await self._resolve_round(duel)
+            try:
+                await self._resolve_round(duel)
+            except Exception:
+                logger.exception('Duel round resolution failed: duel=%s', duel.id)
 
     def _all_ready(self, duel: Duel) -> bool:
         for uid in (duel.challenger_id, duel.opponent_id):
@@ -555,39 +582,29 @@ class DuelService:
         left = max(0, int(duel.round_deadline_mono - time.monotonic())) if duel.accepted else DUEL_ACCEPT_TIMEOUT_SEC
 
         if duel.finished:
-            # Determine winner and loser for short result
-            ch = duel.challenger_id
-            op = duel.opponent_id
-            ch_hits = duel.hits.get(ch, 0)
-            op_hits = duel.hits.get(op, 0)
-            if ch_hits > op_hits:
-                winner_id = ch
-                loser_id = op
-                winner_name = c_name
-                loser_name = o_name
-            elif op_hits > ch_hits:
-                winner_id = op
-                loser_id = ch
-                winner_name = o_name
-                loser_name = c_name
+            ch_hits = duel.hits.get(duel.challenger_id, 0)
+            op_hits = duel.hits.get(duel.opponent_id, 0)
+            result_lines = ["🏁 ДУЭЛЬ ЗАВЕРШЕНА"]
+            if duel.winner_id in (duel.challenger_id, duel.opponent_id):
+                winner_name = c_name if duel.winner_id == duel.challenger_id else o_name
+                result_lines.append(f"Победитель: @{winner_name}")
+                result_lines.append(f"Счёт: {ch_hits} : {op_hits}")
+                if duel.xp_confirmed:
+                    result_lines.append("Награда победителю: +50 XP")
+                else:
+                    result_lines.append("Начисление XP не подтверждено.")
+                if duel.bet > 0 and duel.payout_confirmed:
+                    result_lines.append(f"Возврат ставки и выигрыш: +{duel.bet * 2} монет")
+                elif duel.bet > 0:
+                    result_lines.append("Выплата ставки не подтверждена.")
             else:
-                winner_id = random.choice([ch, op])
-                loser_id = op if winner_id == ch else ch
-                winner_name = c_name if winner_id == ch else o_name
-                loser_name = o_name if winner_id == ch else c_name
-
-            coins_reward = float(duel.bet * 2) if duel.bet > 0 else 0.0
-            xp_reward = 50
-
-            result_lines = [
-                f"🏁 ДУЭЛЬ ЗАВЕРШЕНА",
-                f"Победитель: @{winner_name}",
-                f"Счёт: {ch_hits} : {op_hits}",
-                f"Награда победителю: +{xp_reward} XP"
-            ]
-            if coins_reward > 0:
-                result_lines.append(f", +{int(coins_reward)} монет")
+                result_lines.append("Победитель не определён.")
+                result_lines.append(f"Счёт: {ch_hits} : {op_hits}")
+                if duel.bet > 0 and duel.payout_confirmed:
+                    result_lines.append("Ставки возвращены игрокам.")
             log_view = "\n".join(result_lines)
+        elif duel.settlement_started:
+            log_view = "⏳ Результат дуэли подтверждается. Выплата пока не подтверждена."
         else:
             # Show full log always, as requested by user ("лог в чате полный всех трех раундов")
             # Telegram limit is 4096, 3 rounds should fit (~50 lines max).
@@ -619,6 +636,8 @@ class DuelService:
         # Status / Timer
         if duel.finished:
              lines.append(Visuals.frame_line_left("🏁 ДУЭЛЬ ЗАВЕРШЕНА", w))
+        elif duel.settlement_started:
+             lines.append(Visuals.frame_line_left("⏳ ПРОВЕРКА РЕЗУЛЬТАТА", w))
         elif not duel.accepted:
              lines.append(Visuals.frame_line_left(f"⏳ Ожидание: {left}с", w))
         else:
@@ -639,26 +658,22 @@ class DuelService:
         frame_text = "\n".join(lines)
 
         controls_msg = ""
-        if duel.accepted and not duel.finished:
+        if duel.accepted and not duel.finished and not duel.settlement_started:
             controls_msg = "\n📩 <b>Управление боем — в ЛС с ботом!</b>\n<i>(Нажмите «Управление» если потеряли чат)</i>"
 
         text = (
-            f"<pre>{frame_text}</pre>\n"
-            f"<i>{duel.arena_desc}</i>\n"
-            f"⚠️ {duel.arena_gag}\n"
+            f"<pre>{html.escape(frame_text)}</pre>\n"
+            f"<i>{html.escape(duel.arena_desc)}</i>\n"
+            f"⚠️ {html.escape(duel.arena_gag)}\n"
             f"{controls_msg}\n"
             f"📜 <b>Хроника:</b>\n"
-            f"<pre>{log_view}</pre>"
+            f"<pre>{html.escape(log_view)}</pre>"
         )
 
         # Buttons
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📩 Управление",
-                    callback_data=DuelUtilityCb(id=duel.id, u=0, a='open').pack()
-                )
-            ]
+        kb = None if duel.finished or duel.settlement_started else InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📩 Управление",
+                                  callback_data=DuelUtilityCb(id=duel.id, u=0, a='open').pack())]
         ])
 
         try:
@@ -706,7 +721,7 @@ class DuelService:
         left = max(0, int(duel.round_deadline_mono - time.monotonic()))
 
         text = (
-            f"<b>⚔️ Дуэль vs {other_name}</b>\n"
+            f"<b>⚔️ Дуэль vs {html.escape(other_name)}</b>\n"
             f"Раунд: {duel.round_num}, Время: {left}с\n"
             f"--------------------\n"
             f"<b>Ваш ход:</b>\n"
@@ -769,8 +784,10 @@ class DuelService:
         except TelegramForbiddenError:
             # User blocked bot, auto-surrender?
             logger.warning(f"User {user_id} blocked bot during duel {duel.id}")
-            # This will trigger surrender from the other side
-            await self.surrender(duel.id, user_id)
+            # This method can run while the duel lock is held by a move or
+            # utility callback. Re-entering surrender synchronously deadlocks.
+            # Let the callback release the lock before resolving the forfeit.
+            asyncio.create_task(self._forfeit_after_block(duel.id, user_id))
         except TelegramBadRequest as e:
             if "message is not modified" not in str(e):
                 logger.warning(f"Duel {duel.id}: Control update for {user_id} failed: {e}")
@@ -783,20 +800,36 @@ class DuelService:
         except Exception as e:
             logger.exception(f"Duel {duel.id}: Control update for {user_id} failed critically")
 
+    async def _forfeit_after_block(self, duel_id: int, user_id: int):
+        try:
+            await self.surrender(duel_id, user_id)
+        except Exception:
+            logger.exception('Duel forfeit after blocked DM failed: duel=%s user=%s', duel_id, user_id)
+
     async def _finish_duel(self, duel: Duel, winner_id: Optional[int], reason: str):
         if duel.finished: return
         settlement = None
         if duel.bet > 0:
             if duel.settlement_started and duel.settlement_winner != winner_id:
                 raise RuntimeError('Duel outcome already decided')
+            if not duel.settlement_started:
+                duel.settlement_reason = reason
             duel.settlement_started = True
             duel.settlement_winner = winner_id
             try:
                 settlement = await self.escrow.settle(duel.escrow_id, winner_id)
+                duel.payout_confirmed = True
+                duel.xp_confirmed = bool(winner_id is not None and settlement.get('award_version') == 1)
             except Exception:
                 logger.exception('Duel payout unconfirmed: duel=%s escrow=%s', duel.id, duel.escrow_id)
-                duel.log_lines.append('⚠️ Выплата ставки не подтверждена; требуется проверка.')
+                if duel.timeout_task and duel.timeout_task is not asyncio.current_task():
+                    duel.timeout_task.cancel()
+                try:
+                    await self._update_arena(duel)
+                except Exception:
+                    logger.exception('Failed to show pending duel result: duel=%s', duel.id)
                 raise
+        duel.winner_id = winner_id
         duel.finished = True
 
         if duel.timeout_task and duel.timeout_task is not asyncio.current_task():
@@ -806,7 +839,7 @@ class DuelService:
         if winner_id:
             loser_id = duel.opponent_id if winner_id == duel.challenger_id else duel.challenger_id
 
-        duel.log_lines.append(f"<b>{reason}</b>")
+        duel.log_lines.append(reason)
 
         # Staked duels now apply XP, stats and katana in escrow settlement.
         # Zero-stake duels retain the existing independent reward path.
@@ -814,10 +847,12 @@ class DuelService:
             details = settlement.get('result_details') or {}
             winner_name = details.get('winner_name', str(winner_id))
             loser_name = details.get('loser_name', str(loser_id))
-            if details.get('winner_has_katana'):
+            if duel.xp_confirmed and details.get('winner_has_katana'):
                 duel.log_lines.append(f"✨ {winner_name} получает +50 XP и +0.01 к катане.")
-            else:
+            elif duel.xp_confirmed:
                 duel.log_lines.append(f"✨ {winner_name} получает +50 XP.")
+            else:
+                duel.log_lines.append('⚠️ Начисление XP не подтверждено.')
             duel.log_lines.append(f"💰 Победитель получает {int(duel.bet * 2)} монет!")
             if details.get('loser_has_katana'):
                 duel.log_lines.append(f"💔 {loser_name} теряет -0.01 от катаны.")
@@ -834,10 +869,13 @@ class DuelService:
                     coins_reward = float(duel.bet * 2) if duel.bet > 0 else 0.0
 
                     # Update winner wins and xp using $inc (no document fetch needed for these)
-                    await self.users.update_one(
+                    xp_update = await self.users.update_one(
                         {"id": winner_id},
                         {"$inc": {"wins": 1, "xp": 50}}
                     )
+                    duel.xp_confirmed = _matched(xp_update)
+                    if not duel.xp_confirmed:
+                        raise RuntimeError('Duel winner XP update missed')
 
                     # Fetch winner document for katana-related updates and name
                     winner_doc = await self.users.find_one({"id": winner_id})
@@ -950,7 +988,7 @@ class DuelService:
                     await duel.bot.edit_message_text(
                         chat_id=uid,
                         message_id=mid,
-                        text=f"Дуэль #{duel.id} завершена.\n" + "\n".join(duel.log_lines[-5:]),
+                        text=f"Дуэль #{duel.id} завершена.\n" + html.escape("\n".join(duel.log_lines[-5:])),
                         reply_markup=None,
                         parse_mode="HTML"
                     )
