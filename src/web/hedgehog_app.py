@@ -1,6 +1,7 @@
 """Mini App static UI and authenticated same-origin game API."""
 import logging
 import hashlib
+from pathlib import Path
 from io import BytesIO
 
 from aiohttp import web
