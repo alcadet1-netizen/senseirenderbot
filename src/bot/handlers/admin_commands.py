@@ -91,6 +91,24 @@ async def cmd_emission_watch(message: Message, container: Container) -> None:
     await message.answer(format_report(report), parse_mode=None)
 
 
+@router.message(Command("duelwatch"))
+async def cmd_duel_watch(message: Message, container: Container) -> None:
+    """Private read-only diagnostic; never refunds or decides duels."""
+    if not message.from_user or message.from_user.id not in container.settings.admin_ids:
+        return
+    if message.chat.type != "private":
+        await message.answer("Открой /duelwatch в личном чате с ботом.", parse_mode=None)
+        return
+    from src.services.duel_watch import read_old_reservations, format_old_reservations
+    try:
+        docs, more = await asyncio.wait_for(read_old_reservations(container.mongo_client.database), timeout=5)
+    except Exception as exc:
+        logger.warning('Duel watch read failed error_type=%s', type(exc).__name__)
+        await message.answer('Не удалось прочитать резервы дуэлей. Их состояние неизвестно.', parse_mode=None)
+        return
+    await message.answer(format_old_reservations(docs, more), parse_mode=None)
+
+
 @router.message(Command("senseichats", "chats", "группы"))
 async def cmd_admin_chats(message: Message, container: Container):
     """Список групп, где есть бот (из активного мониторинга)."""

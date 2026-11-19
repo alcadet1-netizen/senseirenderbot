@@ -7,6 +7,7 @@ from types import SimpleNamespace as NS
 import pytest
 from motor.motor_asyncio import AsyncIOMotorClient
 from src.services.duel_escrow import DuelEscrow
+from src.infra.mongo.financial_collections import prepare_financial_collections
 
 
 @pytest.mark.asyncio
@@ -108,7 +109,9 @@ async def test_recovery_retries_decided_concurrently_without_touching_live_escro
 
 
 @pytest.mark.asyncio
-async def test_same_duel_command_reserves_once_across_processes_and_restart():
+@pytest.mark.parametrize('attempt', range(30))
+@pytest.mark.parametrize('precreated', [False, True])
+async def test_same_duel_command_reserves_once_across_processes_and_restart(attempt, precreated, caplog):
     from unittest.mock import AsyncMock
     from src.services.duel_service import DuelService, Duel
     uri = os.environ.get('CAMPAIGN_TEST_MONGO_URI')
@@ -119,13 +122,28 @@ async def test_same_duel_command_reserves_once_across_processes_and_restart():
     db = client[name]
     try:
         await db.users.insert_many([{'id': 7, 'coins': 1000}, {'id': 8, 'coins': 1000}])
+        if precreated:
+            assert await prepare_financial_collections(db) == []
         container = NS(mongo_client=NS(database=db), user_service=NS(), economy_service=NS())
         workers = [DuelService(container) for _ in range(8)]
         results = await asyncio.gather(*(w.create_duel(7, 8, 300, -100, AsyncMock(), request_id='-100:42')
                                          for w in workers))
         fights = [r for r in results if isinstance(r, Duel)]
         assert len(fights) == 1
-        assert all(isinstance(r, Duel) or 'уже обработан' in r for r in results), results
+        unexpected = [r for r in results if not isinstance(r, Duel) and 'уже обработан' not in r]
+        errors = [(type(r.exc_info[1]).__name__, getattr(r.exc_info[1], 'code', None),
+                   str(r.exc_info[1]).split('full error:')[0][:400])
+                  for r in caplog.records if r.levelname == 'ERROR' and r.exc_info]
+        if unexpected:
+            # On first use, MongoDB can report code 112 while different
+            # transactions race to create a collection at commit. The app
+            # must fail closed rather than retry an unknown commit outcome.
+            assert not precreated, (unexpected, errors)
+            assert all('Ставки не подтверждены' in reply for reply in unexpected), unexpected
+            assert len(errors) >= len(unexpected), errors
+            assert all(kind == 'OperationFailure' and code == 112
+                       and 'Collection namespace' in message and 'is already in use' in message
+                       for kind, code, message in errors), errors
         assert (await db.users.find_one({'id': 7}))['coins'] == 700
         assert (await db.users.find_one({'id': 8}))['coins'] == 700
         assert await db.duel_escrows.count_documents({}) == 1
@@ -137,6 +155,50 @@ async def test_same_duel_command_reserves_once_across_processes_and_restart():
         after_restart = await DuelService(container).create_duel(7, 8, 300, -100, AsyncMock(), request_id='-100:42')
         assert 'уже обработан' in after_restart
         assert await db.duel_escrows.count_documents({}) == 1
+    finally:
+        await client.drop_database(name)
+        client.close()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_after_stake_consumed_all_balance_reports_saved_receipt():
+    from unittest.mock import AsyncMock
+    from src.services.duel_service import DuelService, Duel
+    uri = os.environ.get('CAMPAIGN_TEST_MONGO_URI')
+    if not uri:
+        pytest.skip('MongoDB replica set required')
+    client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=5000)
+    name = 'sensei_duel_replay_' + uuid.uuid4().hex
+    db = client[name]
+    try:
+        await db.users.insert_many([{'id': 7, 'coins': 300}, {'id': 8, 'coins': 300}])
+        await db.create_collection('duel_escrows')
+        await db.create_collection('transactions')
+        container = NS(mongo_client=NS(database=db), user_service=NS(), economy_service=NS())
+        first, duplicate = DuelService(container), DuelService(container)
+        checked, release = asyncio.Event(), asyncio.Event()
+        check = duplicate._check_eligibility
+        async def wait_after_receipt_check(*args):
+            checked.set()
+            await release.wait()
+            return await check(*args)
+        duplicate._check_eligibility = wait_after_receipt_check
+        retry = asyncio.create_task(duplicate.create_duel(7, 8, 300, -100, AsyncMock(), request_id='-100:42'))
+        try:
+            await asyncio.wait_for(checked.wait(), 5)
+            duel = await first.create_duel(7, 8, 300, -100, AsyncMock(), request_id='-100:42')
+            assert isinstance(duel, Duel)
+        finally:
+            release.set()
+        response = await retry
+        assert 'уже обработан' in response
+        assert (await db.users.find_one({'id': 7}))['coins'] == 0
+        assert (await db.users.find_one({'id': 8}))['coins'] == 0
+        assert await db.duel_escrows.count_documents({}) == 1
+        assert await db.transactions.count_documents({'tx_type': 'duel_escrow'}) == 2
+        await first.shutdown()
+        assert (await db.users.find_one({'id': 7}))['coins'] == 300
+        assert (await db.users.find_one({'id': 8}))['coins'] == 300
     finally:
         await client.drop_database(name)
         client.close()

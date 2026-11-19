@@ -70,6 +70,16 @@ async def on_startup(bot: Bot, container: Container) -> None:
     await container.mongo_client.connect()
     logger.info("✅ MongoDB connected")
 
+    # Prepare empty namespaces before starting any financial work, without
+    # touching existing records. A failure is reported, not silently ignored.
+    from src.infra.mongo.financial_collections import prepare_financial_collections
+    failures = await prepare_financial_collections(container.mongo_client.database)
+    if failures:
+        logger.error('Financial collection preparation incomplete: %s; first-use transactions may fail',
+                     ', '.join(failures))
+    else:
+        logger.info('Financial collection namespaces ready')
+
     await container.hedgehog_service.ensure_indexes()
     await container.duel_service.start_recovery()
 
