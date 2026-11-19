@@ -1045,7 +1045,11 @@
     const max = energyMax();
     const rounded = Math.max(0, model?.circle_available ? Math.ceil(value) : Math.floor(value));
     $("energy").textContent = `${rounded} / ${max}`;
-    $("energy-bar").style.width = `${Math.min(100, (rounded / max) * 100)}%`;
+    // Keep the displayed number readable, but use the unrounded reservoir for
+    // a continuously draining bar. Task energy above the cap stays full until
+    // it falls below the cap; neither the number nor the server state is changed.
+    const fill = Math.max(0, Math.min(1, (Number(value) || 0) / max));
+    $("energy-bar").style.transform = `scaleX(${fill})`;
     $("energy-track").setAttribute("aria-valuemax", String(max));
     $("energy-track").setAttribute(
       "aria-valuenow",
