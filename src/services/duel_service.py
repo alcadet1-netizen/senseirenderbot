@@ -8,6 +8,7 @@ import random
 import time
 import logging
 import html
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional, Dict, List, Any, Union
@@ -19,6 +20,7 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, Teleg
 from src.core.container import Container
 from src.core.visuals import Visuals
 from src.core.constants import LEVEL_XP_REQUIREMENTS
+from src.services.duel_escrow import DuelEscrow
 from src.services.duel_resources import (
     ARENAS, DODGE_GAGS_L, DODGE_GAGS_R, ATTACK_GAGS_L, ATTACK_GAGS_R,
     HIT_GAGS, MISS_GAGS, DUEL_COOLDOWN_SEC, DUEL_ACCEPT_TIMEOUT_SEC,
@@ -42,6 +44,10 @@ class Duel:
 
     bot: Bot
     container: Container
+
+    escrow_id: Optional[str] = None
+    settlement_started: bool = False
+    settlement_winner: Optional[int] = None
 
     # State
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -127,6 +133,7 @@ class DuelService:
         self.duels: Dict[int, Duel] = {} # int ID
         self._closing = False
         self._lifecycle_lock = asyncio.Lock()
+        self._recovery_task: Optional[asyncio.Task] = None
 
         # Get references to services we'll need
         self.user_service = container.user_service
@@ -136,20 +143,40 @@ class DuelService:
         self.db = container.mongo_client.database
         self.users = self.db.users
         self.transactions = self.db.transactions
+        self.escrow = DuelEscrow(container.mongo_client)
 
     # --- Core Public Methods ---
+
+    async def start_recovery(self):
+        """Retry only already-decided settlements; leave active stakes alone."""
+        if self._recovery_task is not None or self._closing:
+            return
+        self._recovery_task = asyncio.create_task(self._recovery_loop(), name='duel-settlement-recovery')
+
+    async def _recovery_loop(self):
+        while True:
+            try:
+                await self.escrow.recover_decided()
+            except Exception:
+                logger.exception('Duel recovery scan failed; will retry')
+            await asyncio.sleep(60)
 
     async def shutdown(self):
         """Refund live escrow under each duel lock before the database closes.
 
-        Reuses cancellation settlement, without sending through a closing bot
-        session or scheduling new archive tasks. Existing refunds are best-effort,
-        not a crash-safe transaction across both player documents.
+        Reuses durable cancellation settlement, without sending through a closing bot
+        session or scheduling new archive tasks. Crash recovery is separate.
         """
         async with self._lifecycle_lock:
             self._closing = True
             pending = list(self.duels.values())
         timers, failures = [], []
+        if self._recovery_task is not None:
+            self._recovery_task.cancel()
+            timers.append(self._recovery_task)
+            self._recovery_task = None
+            await asyncio.gather(*timers, return_exceptions=True)
+            timers.clear()
         for duel in pending:
             async with duel.lock:
                 timer = duel.timeout_task
@@ -158,7 +185,11 @@ class DuelService:
                     timers.append(timer)
                 if not duel.finished:
                     try:
-                        await self._cancel_duel(duel, 'Бот перезапускается. Ставки возвращены.', notify=False)
+                        if duel.settlement_started:
+                            await self.escrow.settle(duel.escrow_id, duel.settlement_winner)
+                            duel.finished = True
+                        else:
+                            await self._cancel_duel(duel, 'Бот перезапускается. Ставки возвращены.', notify=False)
                     except Exception as exc:
                         logger.error('Duel shutdown refund failed: duel=%s type=%s', duel.id, type(exc).__name__)
                         failures.append(exc)
@@ -192,9 +223,19 @@ class DuelService:
         error = await self._check_eligibility(challenger_id, opponent_id, bet)
         if error: return error
 
+        # Generate the durable key before any money moves; it is independent
+        # of the short display ID, which can repeat after a restart.
+        did = _pick_duel_id(set(self.duels.keys()))
+        escrow_id = uuid.uuid4().hex if bet > 0 else None
+        aname, adesc, agag = pick_arena()
         # 2. Escrow
         if bet > 0:
-            if not await self._escrow_funds(challenger_id, opponent_id, bet):
+            try:
+                reserved = await self._escrow_funds(challenger_id, opponent_id, bet, escrow_id, did)
+            except Exception:
+                logger.exception('Duel stake outcome unconfirmed: escrow=%s', escrow_id)
+                return f'⚠️ Ставки не подтверждены. Не создавайте повторную дуэль до проверки. ID: {escrow_id}'
+            if not reserved:
                 logger.info(
                     "Create duel failed (insufficient funds): challenger=%s opponent=%s bet=%s",
                     challenger_id,
@@ -204,9 +245,6 @@ class DuelService:
                 return "❜ Недостаточно средств для ставки."
 
         # 3. Create
-        did = _pick_duel_id(set(self.duels.keys()))
-        aname, adesc, agag = pick_arena()
-
         duel = Duel(
             id=did,
             challenger_id=challenger_id,
@@ -215,6 +253,7 @@ class DuelService:
             chat_id=chat_id,
             bot=bot,
             container=self.container,
+            escrow_id=escrow_id,
             arena_name=aname,
             arena_desc=adesc,
             arena_gag=agag
@@ -729,9 +768,21 @@ class DuelService:
 
     async def _finish_duel(self, duel: Duel, winner_id: Optional[int], reason: str):
         if duel.finished: return
+        settlement = None
+        if duel.bet > 0:
+            if duel.settlement_started and duel.settlement_winner != winner_id:
+                raise RuntimeError('Duel outcome already decided')
+            duel.settlement_started = True
+            duel.settlement_winner = winner_id
+            try:
+                settlement = await self.escrow.settle(duel.escrow_id, winner_id)
+            except Exception:
+                logger.exception('Duel payout unconfirmed: duel=%s escrow=%s', duel.id, duel.escrow_id)
+                duel.log_lines.append('⚠️ Выплата ставки не подтверждена; требуется проверка.')
+                raise
         duel.finished = True
 
-        if duel.timeout_task:
+        if duel.timeout_task and duel.timeout_task is not asyncio.current_task():
             duel.timeout_task.cancel()
 
         loser_id = None
@@ -740,8 +791,24 @@ class DuelService:
 
         duel.log_lines.append(f"<b>{reason}</b>")
 
+        # Staked duels now apply XP, stats and katana in escrow settlement.
+        # Zero-stake duels retain the existing independent reward path.
+        if duel.bet > 0 and winner_id:
+            details = settlement.get('result_details') or {}
+            winner_name = details.get('winner_name', str(winner_id))
+            loser_name = details.get('loser_name', str(loser_id))
+            if details.get('winner_has_katana'):
+                duel.log_lines.append(f"✨ {winner_name} получает +50 XP и +0.01 к катане.")
+            else:
+                duel.log_lines.append(f"✨ {winner_name} получает +50 XP.")
+            duel.log_lines.append(f"💰 Победитель получает {int(duel.bet * 2)} монет!")
+            if details.get('loser_has_katana'):
+                duel.log_lines.append(f"💔 {loser_name} теряет -0.01 от катаны.")
+            else:
+                duel.log_lines.append(f"💔 {loser_name} не имеет катаны для потери.")
+
         try:
-            if winner_id and loser_id:
+            if not duel.bet and winner_id and loser_id:
                 # Get fresh user documents
                 winner_doc = await self.users.find_one({"id": winner_id})
                 loser_doc = await self.users.find_one({"id": loser_id})
@@ -848,51 +915,6 @@ class DuelService:
         except Exception as e:
             logger.exception(f"Duel {duel.id}: Error during _finish_duel processing: {e}")
 
-        # Handle escrow/refund of bets
-        try:
-            if duel.bet > 0:
-                if winner_id and loser_id:
-                    # Transfer bet*2 from escrow to winner
-                    await self.users.update_one(
-                        {"id": winner_id},
-                        {"$inc": {"coins": float(duel.bet * 2)}}
-                    )
-
-                    # Create transaction for the bet transfer
-                    tx_doc = {
-                        "user_id": winner_id,
-                        "tx_type": "duel_bet_payout",
-                        "coins_change": float(duel.bet * 2),
-                        "xp_change": 0,
-                        "description": f"Выигрыш ставки в дуэли #{duel.id}",
-                        "created_at": datetime.now(timezone.utc),
-                    }
-                    await self.transactions.insert_one(tx_doc)
-                else:
-                    # Refund both players if no winner (shouldn't happen in practice, but safe)
-                    await self.users.update_one(
-                        {"id": duel.challenger_id},
-                        {"$inc": {"coins": float(duel.bet)}}
-                    )
-                    await self.users.update_one(
-                        {"id": duel.opponent_id},
-                        {"$inc": {"coins": float(duel.bet)}}
-                    )
-
-                    # Create refund transactions
-                    for uid in (duel.challenger_id, duel.opponent_id):
-                        tx_doc = {
-                            "user_id": uid,
-                            "tx_type": "duel_bet_refund",
-                            "coins_change": float(duel.bet),
-                            "xp_change": 0,
-                            "description": f"Возврат ставки в дуэли #{duel.id}",
-                            "created_at": datetime.now(timezone.utc),
-                        }
-                        await self.transactions.insert_one(tx_doc)
-        except Exception as e:
-            logger.exception(f"Duel {duel.id}: Error during escrow handling: {e}")
-
         # Final update
         try:
             await self._update_arena(duel)
@@ -927,36 +949,11 @@ class DuelService:
 
     async def _cancel_duel(self, duel: Duel, reason: str, *, notify: bool = True):
         if duel.finished: return
-        duel.finished = True
-
-        if duel.timeout_task:
-            duel.timeout_task.cancel()
-
-        # Refund
         if duel.bet > 0:
-            # Refund both players
-            await self.users.update_one(
-                {"id": duel.challenger_id},
-                {"$inc": {"coins": float(duel.bet)}}
-            )
-            await self.users.update_one(
-                {"id": duel.opponent_id},
-                {"$inc": {"coins": float(duel.bet)}}
-            )
-
-            # Create refund transactions
-            for uid in (duel.challenger_id, duel.opponent_id):
-                tx_doc = {
-                    "user_id": uid,
-                    "tx_type": "duel_bet_refund",
-                    "coins_change": float(duel.bet),
-                    "xp_change": 0,
-                    "description": f"Возврат ставки дуэли #{duel.id}",
-                    "created_at": datetime.now(timezone.utc),
-                }
-                await self.transactions.insert_one(tx_doc)
-
-            logger.info("Duel canceled with refund: id=%s bet=%s reason=%s", duel.id, duel.bet, reason)
+            await self.escrow.settle(duel.escrow_id, None)
+        duel.finished = True
+        if duel.timeout_task and duel.timeout_task is not asyncio.current_task():
+            duel.timeout_task.cancel()
 
         if not notify:
             return
@@ -1020,64 +1017,5 @@ class DuelService:
 
         return None
 
-    async def _escrow_funds(self, cid: int, oid: int, bet: int) -> bool:
-        # Use a lock to prevent race conditions during escrow
-        lock_key = f"duel_escrow:{min(cid, oid)}:{max(cid, oid)}"
-        # We'll use a simple locking mechanism - in production we'd use something more robust
-        # For now, we'll do the check and update in a way that minimizes race conditions
-
-        challenger_doc = await self.users.find_one({"id": cid})
-        opponent_doc = await self.users.find_one({"id": oid})
-
-        if not challenger_doc or not opponent_doc:
-            logger.info("Escrow failed (user missing): c=%s o=%s", cid, oid)
-            return False
-
-        challenger_coins = challenger_doc.get("coins", 0.0)
-        opponent_coins = opponent_doc.get("coins", 0.0)
-
-        if challenger_coins < bet or opponent_coins < bet:
-            logger.info(
-                "Escrow failed (insufficient): c=%s c_coins=%s o=%s o_coins=%s bet=%s",
-                cid,
-                challenger_coins,
-                oid,
-                opponent_coins,
-                bet,
-            )
-            return False
-
-        # Deduct bets from both users. Conditional so a concurrent spend
-        # cannot make only one side of the escrow succeed; if the opponent's
-        # debit fails, the challenger's bet is returned immediately.
-        first = await self.users.update_one(
-            {"id": cid, "coins": {"$gte": float(bet)}},
-            {"$inc": {"coins": -float(bet)}},
-        )
-        if getattr(first, "matched_count", 1) != 1:
-            return False
-        second = await self.users.update_one(
-            {"id": oid, "coins": {"$gte": float(bet)}},
-            {"$inc": {"coins": -float(bet)}},
-        )
-        if getattr(second, "matched_count", 1) != 1:
-            await self.users.update_one(
-                {"id": cid},
-                {"$inc": {"coins": float(bet)}},
-            )
-            return False
-
-        # Create transaction records for the escrow
-        for uid in (cid, oid):
-            tx_doc = {
-                "user_id": uid,
-                "tx_type": "duel_escrow",
-                "coins_change": -float(bet),
-                "xp_change": 0,
-                "description": f"Ставка в дуэли",
-                "created_at": datetime.now(timezone.utc),
-            }
-            await self.transactions.insert_one(tx_doc)
-
-        logger.info("Escrow success: c=%s o=%s bet=%s", cid, oid, bet)
-        return True
+    async def _escrow_funds(self, cid: int, oid: int, bet: int, escrow_id: str, duel_id: int) -> bool:
+        return await self.escrow.reserve(escrow_id, cid, oid, bet, duel_id)

@@ -13,6 +13,7 @@ async def test_cmd_slots_bet_parsing():
     message.from_user = User(id=123, is_bot=False, first_name="TestUser", username="testuser")
     message.chat = Chat(id=1, type="private")
     message.bot = AsyncMock()
+    message.message_id = 1234
     
     # Mock message.answer to return a message with message_id
     sent_message_mock = MagicMock(spec=Message)
@@ -55,7 +56,7 @@ async def test_cmd_slots_bet_parsing():
         await cmd_slots(message, command, container)
         
         # Verify play_slots was called with correct bet
-        container.slots_service.play_slots.assert_called_with(123, expected_bet)
+        container.slots_service.play_slots.assert_called_with(123, expected_bet, request_id="1:1234")
 
 @pytest.mark.asyncio
 async def test_cmd_slots_invalid_bet():
@@ -71,3 +72,15 @@ async def test_cmd_slots_invalid_bet():
     await cmd_slots(message, command, container)
     message.answer.assert_called()
     assert "Неверная ставка" in message.answer.call_args[0][0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('value', ['inf', '-inf', 'nan', '1e999'])
+async def test_cmd_slots_non_finite_bet_is_rejected(value):
+    message = AsyncMock(spec=Message)
+    message.from_user = User(id=123, is_bot=False, first_name='Test')
+    message.answer = AsyncMock()
+    container = AsyncMock(spec=Container)
+    await cmd_slots(message, CommandObject(prefix='/', command='senseislots', args=value), container)
+    assert 'Неверная ставка' in message.answer.call_args.args[0]
+    container.slots_service.play_slots.assert_not_called()

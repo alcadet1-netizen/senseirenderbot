@@ -338,117 +338,21 @@ async def test_upgrade_katana_cooldown(economy_service, mock_mongo_client):
 
 
 @pytest.mark.asyncio
-async def test_process_message_reward_new_user(economy_service, mock_mongo_client):
-    """Тест обработки награды за сообщение для нового пользователя."""
-    # Setup mock data - user doesn't exist initially
-    initial_user = None  # User doesn't exist yet
-
-    # User data after creation
-    created_user = {
-        "id": 999,
-        "username": "new_user",
-        "first_name": "New",
-        "last_name": "User",
-        "is_bot": False,
-        "xp": 0,
-        "coins": 0.0,
-        "messages_count": 1,  # Will be incremented by 1 for the message
-        "wins": 0,
-        "losses": 0,
-        "daily_streak": 0,
-        "last_daily": None,
-        "is_banned": False,
-        "ban_reason": None,
-        "is_muted": False,
-        "mute_until": None,
-        "has_katana": False,
-        "katana_length": 0.0,
-        "last_katana_up": None,
-        "referrer_id": None,
-        "referral_count": 0,
-        "can_receive_broadcast": True,
-        "created_at": datetime.now(timezone.utc),
-    }
-
-    # Track state
-    user_created = False
-
-    # Setup mocks for users collection
-    async def mock_users_find_one(query):
-        if not user_created:
-            return None  # User doesn't exist yet
-        return created_user.copy()  # User exists after creation
-
-    async def mock_users_insert_one(document):
-        nonlocal user_created
-        user_created = True  # Mark that user has been created
-        # Return mock result
-        result = AsyncMock()
-        result.acknowledged = True
-        result.inserted_id = "mock_id"
-        return result
-
-    async def mock_users_update_one(query, update_dict, **kwargs):
-        # Return mock result
-        result = AsyncMock()
-        result.acknowledged = True
-        result.matched_count = 1
-        result.modified_count = 1 if ("$set" in update_dict or "$inc" in update_dict) else 0
-        result.upserted_id = None
-        return result
-
-    # Setup mocks for bank collection
-    async def mock_bank_find_one(query):
-        return {"balance": 10000.0}  # Sufficient bank balance
-
-    async def mock_bank_update_one(query, update_dict, **kwargs):
-        # Return mock result
-        result = AsyncMock()
-        result.acknowledged = True
-        result.matched_count = 1
-        result.modified_count = 1 if ("$set" in update_dict or "$inc" in update_dict) else 0
-        result.upserted_id = None
-        return result
-
-    # Setup mock for transactions
-    mock_mongo_client.database.transactions.insert_one = AsyncMock()
-
-    # Setup mock for aggregate operation
-    mock_cursor = MagicMock()
-    mock_cursor.to_list = AsyncMock(return_value=[{"total": 0.0}])
-
-    # Apply the mocks
-    mock_mongo_client.database.users.find_one.side_effect = mock_users_find_one
-    mock_mongo_client.database.users.insert_one.side_effect = mock_users_insert_one
-    mock_mongo_client.database.users.update_one.side_effect = mock_users_update_one
-    mock_mongo_client.database.bank.find_one.side_effect = mock_bank_find_one
-    mock_mongo_client.database.bank.update_one.side_effect = mock_bank_update_one
-    mock_mongo_client.database.users.aggregate = MagicMock(return_value=mock_cursor)
-
-    # Execute
-    result = await economy_service.process_message_reward(
-        user_id=999,
-        username="new_user",
-        first_name="New",
-        last_name="User",
-        apply_rewards=True
-    )
-
-    # Verify
-    assert result["success"] is True
-    assert "xp_earned" in result
-    assert "coins_earned" in result
-    assert result["new_xp"] >= 0
-    assert result["new_coins"] >= 0
-
-    # Verify user was created
-    mock_mongo_client.database.users.insert_one.assert_called()
-
-    # Verify updates were made (at least message count and rewards)
-    assert mock_mongo_client.database.users.update_one.call_count >= 2
-
-    # Verify transaction was recorded
-    mock_mongo_client.database.transactions.insert_one.assert_called()
+async def test_process_message_reward_new_user(monkeypatch):
+    from tests.unit.test_economy_emission import economy
+    async def tx(mongo, callback):
+        return await callback('test-session')
+    monkeypatch.setattr('src.services.economy_service.transaction', tx)
+    service, db = economy([{'_id': 'single', 'coins': 10000, 'total_emitted': 10000, 'burned': 0}])
+    db.users.docs.clear()
+    result = await service.process_message_reward(user_id=999, username='new_user',
+                                                   first_name='New', last_name='User', apply_rewards=True)
+    assert result['success'] is True
+    assert result['starter_coins'] > 0
+    assert result['coins_earned'] > 0 and result['xp_earned'] > 0
+    assert result['messages_count'] == 1
+    assert db.users.docs[999]['coins'] == result['new_coins']
+    assert list(db.transactions.docs.values())[-1]['tx_type'] == 'message_reward'
 
 
 @pytest.mark.asyncio

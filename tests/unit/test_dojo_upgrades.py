@@ -355,9 +355,9 @@ async def test_bank_summary_uses_the_cached_admin_snapshot():
     assert data['legacy_balance'] == 0
     assert data['circulation'] == 450
     assert data['total_supply'] == 1450
-    assert data['total_emitted'] == 1450
+    assert data['total_emitted'] is None
     assert data['emission_cap'] == 10_000_000_000.0
-    assert data['emission_remaining'] == 10_000_000_000.0 - 1450
+    assert data['emission_remaining'] is None
     assert data['initial_coins'] == 1_000_000_000.0
     assert data['users'] == 3
     assert data['holders'] == 2
@@ -421,3 +421,26 @@ async def test_previously_approved_refill_payment_survives_price_change():
     result = await service.receive(7, payment(payload, 'legacy-refill', 10))
     assert result['state'] == 'fulfilled'
     service.container.dojo_miner_service.apply_energy_refill.assert_awaited_once_with(7, 'legacy-refill')
+
+
+@pytest.mark.asyncio
+async def test_bank_stats_use_recorded_burn_for_lifetime_headroom():
+    class Cursor:
+        def __init__(self, rows): self.rows = rows
+        async def to_list(self, length=None): return self.rows
+
+    users = SimpleNamespace(aggregate=lambda *a, **kw: Cursor([{'coins': 25, 'count': 1, 'holders': 1}]))
+    bank = SimpleNamespace(find_one=AsyncMock(side_effect=[
+        {'_id': 'single', 'coins': 75, 'total_emitted': 100, 'burned': 20, 'emission_cap': 1000}, None]))
+    db = SimpleNamespace(users=users, bank=bank,
+        transactions=SimpleNamespace(aggregate=lambda *a, **kw: Cursor([])),
+        tickets=SimpleNamespace(count_documents=AsyncMock(return_value=0)))
+    svc = StatsService(SimpleNamespace(database=db))
+    stats = await svc._read_admin_stats(None)
+    assert stats['bank']['lifetime_issued_estimate'] == 120
+    assert stats['bank']['emission_remaining'] == 880
+    assert stats['bank']['burned'] == 20
+    svc.get_admin_stats = AsyncMock(return_value=stats)
+    summary = await svc.get_bank_summary()
+    assert summary['lifetime_issued_estimate'] == 120
+    assert summary['emission_remaining'] == 880

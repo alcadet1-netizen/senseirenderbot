@@ -722,7 +722,7 @@ class Visuals:
         total_supply = bank.get("total_supply", balance + circulation)
         emitted = bank.get("total_emitted", total_supply)
         cap = bank.get("emission_cap", TOTAL_EMISSION_CAP)
-        remaining = bank.get("emission_remaining", max(0, cap - emitted))
+        remaining = bank.get("emission_remaining")
         burned = bank.get("burned", 0)
         confiscated = bank.get("confiscated", 0)
         collected = bank.get("total_collected", 0)
@@ -739,9 +739,9 @@ class Visuals:
             cls.frame_line_left(f"💰 Баланс: {cls._fmt_coins(balance)}", w),
             cls.frame_line_left(f"🪙 В обороте: {cls._fmt_coins(circulation)}", w),
             cls.frame_line_left(f"📈 В системе: {cls._fmt_coins(total_supply)}", w),
-            cls.frame_line_left(f"🏭 Выпущено: {cls._fmt_coins(emitted)}", w),
+            cls.frame_line_left(f"🏭 Текущая эмиссия: {cls._fmt_coins(emitted)}", w),
             cls.frame_line_left(f"🎚 Лимит: {cls._fmt_coins(cap)}", w),
-            cls.frame_line_left(f"🟢 Осталось: {cls._fmt_coins(remaining)}", w),
+            cls.frame_line_left(f"🟢 Осталось по оценке: {cls._fmt_coins(remaining)}", w),
             cls.frame_line_left(f"🔥 Сожжено: {cls._fmt_coins(burned)}", w),
             cls.frame_line_left(f"↩️ Из автобана: {cls._fmt_coins(confiscated)}", w),
             cls.frame_separator_left(w),

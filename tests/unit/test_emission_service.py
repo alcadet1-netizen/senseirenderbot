@@ -122,7 +122,7 @@ async def test_initial_fill_is_limited_by_remaining_ceiling():
 async def test_concurrent_reservations_cannot_cross_the_cap():
     cap = 1_000
     emission, db = service(bank=[{
-        "_id": "single", "coins": 0, "total_emitted": 500,
+        "_id": "single", "coins": 0, "total_emitted": 500, "burned": 0,
         "emission_cap": cap,
     }])
     emission.cap = cap
@@ -158,7 +158,7 @@ async def test_existing_supply_above_cap_freezes_new_emission():
 @pytest.mark.asyncio
 async def test_release_only_returns_a_failed_reservation():
     emission, db = service(bank=[{
-        "_id": "single", "coins": 0, "total_emitted": 1_000,
+        "_id": "single", "coins": 0, "total_emitted": 1_000, "burned": 0,
     }])
     assert await emission.reserve(500) is True
     assert (await db.bank.find_one({"_id": "single"}))["total_emitted"] == 1_500
@@ -190,7 +190,7 @@ async def test_legacy_bank_is_folded_once_and_never_double_counted():
 @pytest.mark.asyncio
 async def test_burn_reduces_only_the_lifetime_counter_and_never_goes_negative():
     emission, db = service(bank=[{
-        "_id": "single", "coins": 50_000, "total_emitted": 5_000,
+        "_id": "single", "coins": 50_000, "total_emitted": 5_000, "burned": 0,
         "emission_cap": TOTAL_EMISSION_CAP,
     }])
     assert await emission.burn(1_000) == 1_000
@@ -203,3 +203,72 @@ async def test_burn_reduces_only_the_lifetime_counter_and_never_goes_negative():
     assert bank["total_emitted"] == 0
     assert bank["burned"] == 5_000
     assert await emission.burn(1) == 0
+
+
+@pytest.mark.asyncio
+async def test_burn_never_reopens_lifetime_reservation_capacity():
+    emission, db = service(bank=[{'_id': 'single', 'coins': 0, 'total_emitted': 900, 'burned': 100}])
+    emission.cap = 1000
+    assert await emission.reserve(1) is False
+    assert await emission.burn(300) == 300
+    assert await emission.reserve(1) is False
+    doc = await db.bank.find_one({'_id': 'single'})
+    assert doc['total_emitted'] == 600 and doc['burned'] == 400
+
+
+@pytest.mark.asyncio
+async def test_unknown_burn_counter_denies_reservation_without_writing():
+    emission, db = service(bank=[{'_id': 'single', 'coins': 50, 'total_emitted': 50}])
+    before = copy.deepcopy(db.bank.docs)
+    assert await emission.reserve(1) is False
+    assert db.bank.docs == before
+
+
+@pytest.mark.asyncio
+async def test_competing_reservations_use_remaining_lifetime_capacity():
+    emission, db = service(bank=[{'_id': 'single', 'coins': 0, 'total_emitted': 500, 'burned': 200}])
+    emission.cap = 1000
+    results = await asyncio.gather(*(emission.reserve(100) for _ in range(10)))
+    assert sum(results) == 3
+    doc = await db.bank.find_one({'_id': 'single'})
+    assert doc['total_emitted'] + doc['burned'] == 1000
+
+
+@pytest.mark.asyncio
+async def test_reservation_retries_after_burn_changes_counters(monkeypatch):
+    emission, db = service(bank=[{'_id': 'single', 'coins': 0, 'total_emitted': 700, 'burned': 100}])
+    emission.cap = 1000
+    original_update = db.bank.update_one
+    first = True
+
+    async def interleave(query, changes, upsert=False):
+        nonlocal first
+        if first and changes.get('$inc', {}).get('total_emitted', 0) > 0:
+            first = False
+            db.bank.docs['single']['total_emitted'] -= 100
+            db.bank.docs['single']['burned'] += 100
+        return await original_update(query, changes, upsert=upsert)
+
+    monkeypatch.setattr(db.bank, 'update_one', interleave)
+    assert await emission.reserve(200)
+    doc = await db.bank.find_one({'_id': 'single'})
+    assert doc['total_emitted'] == 800 and doc['burned'] == 200
+    assert await emission.reserve(1) is False
+
+
+@pytest.mark.asyncio
+async def test_existing_counter_is_not_reconciled_or_initialized_by_reserve():
+    emission, db = service(bank=[{'_id': 'single', 'coins': 10, 'burned': 1}])
+    before = copy.deepcopy(db.bank.docs)
+    assert not await emission.reserve(1)
+    assert db.bank.docs == before
+
+
+@pytest.mark.asyncio
+async def test_restart_preserves_existing_counter_baseline():
+    emission, db = service(bank=[{'_id': 'single', 'coins': 100, 'total_emitted': 50, 'burned': 5}],
+                           users=[{'_id': 7, 'coins': 100}])
+    snapshot = await emission.bootstrap()
+    assert snapshot['total_emitted'] == 50
+    assert snapshot['lifetime_issued_estimate'] == 55
+    assert db.bank.docs['single']['total_emitted'] == 50

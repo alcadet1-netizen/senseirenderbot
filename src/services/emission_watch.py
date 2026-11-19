@@ -39,12 +39,11 @@ def assess(doc):
         return result
     estimate = current + burned
     result['estimate'] = estimate
-    # Current reserve() only checks current issuance. These are warnings based
-    # on the available counters, not claims about missing historical records.
+    # A baseline from available counters is not proof of historical supply.
     if current > cap or estimate > cap:
         result['status'] = 'over_estimate'
-    elif estimate >= cap and current < cap:
-        result['status'] = 'reuse_risk'
+    elif estimate >= cap:
+        result['status'] = 'limit_reached'
     else:
         result['status'] = 'observing'
     return result
@@ -59,7 +58,7 @@ def format_report(result):
     status_text = {
         'unknown': 'Недостаточно данных или лимит в документе отличается от настройки.',
         'over_estimate': 'Учтённые показатели превышают предел. Требуется сверка.',
-        'reuse_risk': 'Текущие правила могут повторно использовать лимит после сжигания.',
+        'limit_reached': 'Расчётная сумма достигла предела; новый выпуск через резервирование недоступен.',
         'observing': 'По доступным счётчикам критический порог не достигнут.',
     }
     status = result['status']
@@ -70,11 +69,12 @@ def format_report(result):
         f"Учтено сжиганий: {fmt(result['burned'])} Coin",
         f"Расчётная сумма: {fmt(result['estimate'])} Coin",
         f"Предел: {fmt(result['cap'])} Coin",
+        f"Осталось по оценке: {fmt(max(Decimal(0), result['cap'] - result['estimate']) if result['estimate'] is not None else None)} Coin",
     ]
     if result['stored_cap'] is not None and result['stored_cap'] != result['cap']:
         lines.append(f"Лимит в документе банка: {fmt(result['stored_cap'])} Coin")
     lines.extend([
-        'Текущие правила допускают повторный выпуск после сжигания.',
+        'Резервирование нового выпуска учитывает обе суммы; сжигание не освобождает лимит.',
         'Сумма эмиссии и сжиганий — оценка по доступным счётчикам, не проверенная история.',
         'Страж не блокирует выпуск и не меняет балансы. История и другие источники начислений могут быть неполными.',
     ])

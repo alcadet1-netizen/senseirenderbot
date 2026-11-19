@@ -50,7 +50,7 @@ async def show_donate_menu(message, container, user):
         '1 ⭐ → 500 Coin\n5 ⭐ → 3 500 Coin\n10 ⭐ → 8 000 Coin\n50 ⭐ → 45 000 Coin\n\n'
         'Выбери пакет ниже — затем подтверди оплату в Telegram.\n'
         'Coin поступают из SenseiBank после подтверждения. XP не начисляется.\n\n'
-        '🦔 Повторная Ежа — отдельно в /senseidaily: полная награда, новая картинка и 15 секунд ласки.\n\n'
+        '🦔 Повторная Ежа — отдельно в /senseidaily: полная награда и новая картинка.\n\n'
         'xRocket — отдельное добровольное пожертвование без начисления монет.',
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode=None)
 

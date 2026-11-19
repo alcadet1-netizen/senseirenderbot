@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from src.core.config import settings
 from src.core.constants import TOTAL_EMISSION_CAP
 from src.services.emission_service import EmissionService
+from src.services.emission_watch import _amount
 from src.services.bank_ledger import BankLedger
 from src.services.referral_economy import transaction
 from src.infra.mongo.client import MongoClient
@@ -83,21 +84,23 @@ class StatsService:
         # Never hide historical inconsistencies by clipping real balances.
         bank_balance = raw_bank_balance
         total_supply = raw_total_supply
-        emitted_raw = max(0.0, _to_float(bank.get('total_emitted'), total_supply))
+        emitted_counter = _amount(bank.get('total_emitted'))
+        emitted_raw = float(emitted_counter) if emitted_counter is not None else None
         emitted = emitted_raw
-        remaining = max(0.0, cap - emitted)
-        percent = min(100.0, emitted / cap * 100.0) if cap else 100.0
+        current_counter, burn_counter = _amount(bank.get('total_emitted')), _amount(bank.get('burned'))
+        lifetime = float(current_counter + burn_counter) if current_counter is not None and burn_counter is not None else None
+        remaining = max(0.0, cap - lifetime) if lifetime is not None else None
+        percent = min(100.0, lifetime / cap * 100.0) if lifetime is not None and cap else None
         tickets = await self.tickets.count_documents({'burned': False}, session=session)
         rows = await self.transactions.aggregate([{'$group': {
             '_id': '$tx_type', 'count': {'$sum': 1},
             'total_amount': {'$sum': '$coins_change'}}}], session=session).to_list(length=None)
         by_type = {row['_id'] or 'unknown': {
             'count': row['count'], 'total_amount': row['total_amount']} for row in rows}
-        burned_tx = abs(min(0.0, _to_float(
-            by_type.get('burn', {}).get('total_amount'), 0.0)))
         confiscated = abs(min(0.0, _to_float(
             by_type.get('ban_confiscation', {}).get('total_amount'), 0.0)))
-        burned = max(0.0, _to_float(bank.get('burned'), burned_tx))
+        burned_value = _amount(bank.get('burned'))
+        burned = float(burned_value) if burned_value is not None else None
         stats = {
             'users': {'total': totals.get('count', 0), 'holders': totals.get('holders', 0)},
             'bank': {'balance': bank_balance,
@@ -109,7 +112,8 @@ class StatsService:
                      'total_emitted_raw': emitted_raw,
                      'emission_cap': cap,
                      'emission_remaining': remaining,
-                     'emission_percent': round(percent, 2),
+                     'emission_percent': round(percent, 2) if percent is not None else None,
+                     'lifetime_issued_estimate': lifetime,
                      'total_supply': total_supply,
                      'raw_total_supply': raw_total_supply,
                      'supply_over_cap': raw_total_supply > cap if cap else False,
@@ -136,8 +140,8 @@ class StatsService:
         cap = max(0.0, _to_float(bank.get('emission_cap'), TOTAL_EMISSION_CAP))
         total_supply = balance + circulation
         users = stats.get('users') or {}
-        emitted = max(0.0, _to_float(bank.get('total_emitted_raw',
-                                               bank.get('total_emitted')), total_supply))
+        current_counter = _amount(bank.get('total_emitted_raw', bank.get('total_emitted')))
+        emitted = float(current_counter) if current_counter is not None else None
         return {
             'snapshot_at': stats.get('snapshot_at'),
             'bank_balance': round(balance, 2),
@@ -145,13 +149,14 @@ class StatsService:
             'legacy_balance': round(max(0.0, _to_float(bank.get('legacy_balance'), 0.0)), 2),
             'circulation': round(circulation, 2),
             'total_supply': round(total_supply, 2),
-            'total_emitted': round(emitted, 2),
+            'total_emitted': round(emitted, 2) if emitted is not None else None,
             'emission_cap': round(cap, 2),
-            'emission_remaining': round(max(0.0, cap - emitted), 2),
-            'emission_percent': round(min(100.0, emitted / cap * 100.0) if cap else 100.0, 2),
+            'emission_remaining': bank.get('emission_remaining'),
+            'emission_percent': bank.get('emission_percent'),
+            'lifetime_issued_estimate': bank.get('lifetime_issued_estimate'),
             'supply_remaining': round(max(0.0, cap - total_supply), 2),
             'supply_percent': round(min(100.0, total_supply / cap * 100.0) if cap else 100.0, 2),
-            'burned': round(max(0.0, _to_float(bank.get('burned'), 0.0)), 2),
+            'burned': round(float(_amount(bank.get('burned'))), 2) if _amount(bank.get('burned')) is not None else None,
             'confiscated': round(max(0.0, _to_float(bank.get('confiscated'), 0.0)), 2),
             'supply_over_cap': bool(bank.get('supply_over_cap')) or bool(cap and total_supply > cap),
             'initial_coins': bank.get('initial_coins', getattr(settings, 'bank_initial_coins', 1000000.0)),

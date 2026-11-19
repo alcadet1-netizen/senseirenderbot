@@ -6,22 +6,23 @@ import pytest
 
 from src.services.economy_service import EconomyService
 from src.services.wave_activity import active_waves
+from tests.unit.test_economy_emission import economy as stateful_economy
 
 
 @pytest.fixture(autouse=True)
-def reset_waves():
+def reset_waves(monkeypatch):
+    async def tx(mongo, callback):
+        return await callback('test-session')
+    monkeypatch.setattr('src.services.economy_service.transaction', tx)
     active_waves.clear()
     yield
     active_waves.clear()
 
 
 def economy():
-    db = SimpleNamespace(users=AsyncMock(), transactions=AsyncMock(), bank=AsyncMock(), tickets=AsyncMock())
-    service = EconomyService(SimpleNamespace(database=db))
-    db.users.find_one.return_value = dict(id=7, xp=100, coins=100, messages_count=1, is_banned=False)
+    service, db = stateful_economy([{'_id': 'single', 'coins': 10000, 'total_emitted': 10000}], user_coins=100)
+    db.users.docs[7].update(xp=100, messages_count=1)
     service._get_total_coins_in_circulation = AsyncMock(return_value=0)
-    service._get_bank_balance = AsyncMock(return_value=10000)
-    service._withdraw_from_bank = AsyncMock(return_value=True)
     return service
 
 
@@ -38,8 +39,8 @@ async def test_wave_coins_are_local_and_stop_at_deadline_or_target(state, chat_i
     with patch('src.services.wave_activity.time.time', return_value=100):
         result = await service.process_message_reward(7, chat_id=chat_id)
     assert result['coins_earned'] == expected
-    service._withdraw_from_bank.assert_awaited_once_with(expected)
-    assert service.transactions.insert_one.call_args.args[0]['coins_change'] == expected
+    assert service.bank.docs['single']['coins'] == 10000 - expected
+    assert list(service.transactions.docs.values())[-1]['coins_change'] == expected
 
 
 @pytest.mark.asyncio
@@ -48,11 +49,11 @@ async def test_boost_does_not_bypass_reward_throttle_or_ban():
     service = economy()
     result = await service.process_message_reward(7, chat_id=-100, apply_rewards=False)
     assert result['coins_earned'] == 0
-    service._withdraw_from_bank.assert_not_awaited()
-    service.users.find_one.return_value['is_banned'] = True
+    assert service.bank.docs['single']['coins'] == 10000
+    service.users.docs[7]['is_banned'] = True
     result = await service.process_message_reward(7, chat_id=-100)
     assert not result['success']
-    service._withdraw_from_bank.assert_not_awaited()
+    assert service.bank.docs['single']['coins'] == 10000
 
 
 @pytest.mark.asyncio
@@ -80,7 +81,7 @@ async def test_activity_processor_passes_chat_context_to_real_economy():
         result = await processor._process_reward(user, True, -100)
     assert result.success
     assert reward.call_args.kwargs['chat_id'] == -100
-    service._withdraw_from_bank.assert_awaited_once_with(30)
+    assert service.bank.docs['single']['coins'] == 9970
 
 
 @pytest.mark.asyncio

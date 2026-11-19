@@ -86,11 +86,7 @@ class HedgehogWidgetMiddleware(BaseMiddleware):
             if len(parts) != 3:
                 raise GameError('Неверное действие.')
             if parts[0] == 'dp':
-                if (parts[1] not in {'v', 'p'} or not direct
-                        or query['chat'].get('type') != 'private' or query['chat'].get('id') != user_id):
-                    raise GameError('Поглаживания доступны только владельцу в личке с ботом.')
-                response = await self.container.daily_pet_service.widget_action(
-                    parts[2], user_id, parts[1], query['id'])
+                raise GameError('Поглаживания больше недоступны. Ежедневная награда выдаётся в чате.')
             else:
                 if parts[0] != 'hg' or not re.fullmatch(r'(?:s|f|t[0-9]{1,3})', parts[1]):
                     raise GameError('Неверное действие.')

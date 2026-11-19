@@ -52,9 +52,12 @@
     "Оплата Stars · улучшения не сгорают":
       "Stars payment · upgrades never expire",
     "Где находятся Coin": "Where the Coin is",
+    "УЧТЕНО В ЛИМИТЕ": "COUNTED AGAINST CAP",
+    "ЛИМИТА УЧТЕНО": "CAP USED",
+    "Текущая эмиссия": "Current emission",
     "Движение Coin": "Coin movement",
     "Вехи эмиссии": "Emission milestones",
-    "Текущий уровень может снижаться при сжигании.": "The current level can decrease when Coin is burned.",
+    "Расчёт по учтённым выпускам и сжиганиям; история может быть неполной.": "Estimated from recorded issuance and burns; history may be incomplete.",
     "Обнаружено расхождение": "Accounting discrepancy detected",
     "Превышен лимит": "Emission cap exceeded",
     "Подробнее": "Details",
@@ -365,7 +368,6 @@
     "Автобан возвращает Coin в SenseiBank. Сжигание уменьшает текущую эмиссию, но освобождённый лимит может использоваться снова.": "Autoban returns Coin to SenseiBank. Burning reduces current emission, but the freed capacity can be used again.",
     "Сожжённые Coin исчезают безвозвратно. Текущая эмиссия уменьшается, но освободившийся лимит может использоваться снова. Это добровольный вклад, а не инвестиция и не обещание цены или листинга.": "Burned Coin are gone permanently. Current emission decreases, but the freed capacity can be used again. This is a voluntary contribution, not an investment or a promise of price or listing.",
     НАМАЙНЕНО: "MINED",
-    "ЭМИССИИ ВЫПУЩЕНО": "OF EMISSION RELEASED",
     "ОСТАЛОСЬ ДО КОНЦА МАЙНИНГА": "LEFT UNTIL MINING ENDS",
     Намайнено: "Mined",
     "Осталось до конца майнинга": "Left until mining ends",
@@ -373,8 +375,8 @@
     "Вернулось из автобана": "Returned from autoban",
     "Coin забаненных и автобаненных игроков возвращаются в SenseiBank. Сжигание уменьшает эмиссию навсегда и не пополняет банк.":
       "Coins from banned and autobanned players return to SenseiBank. Burning permanently reduces emission and never refills the bank.",
-    "Жёсткий лимит: 10 000 000 000 Coin. Награды списываются из SenseiBank, а не печатаются сверх лимита. Пустой банк останавливает начисления.":
-      "Hard cap: 10,000,000,000 Coin. Rewards are debited from SenseiBank, never printed above the cap. An empty bank stops payouts.",
+    "Предел выпуска: 10 000 000 000 Coin. Учёт опирается на доступные счётчики; история может быть неполной. Награды списываются из банка.":
+      "Issuance limit: 10,000,000,000 Coin. The calculation uses available counters; history may be incomplete. Rewards are paid from the bank.",
     ВЫПУЩЕНО: "RELEASED",
     ЛИМИТ: "CAP",
     ОСТАЛОСТЬ: "LEFT",
@@ -2265,8 +2267,9 @@
     const emitted = bankNumber(bank.total_emitted);
     const supply = bankNumber(bank.total_supply);
     const cap = bankNumber(bank.emission_cap);
-    const percent = emitted !== null && cap !== null && cap > 0
-      ? Math.max(0, Math.min(100, emitted / cap * 100)) : null;
+    const lifetime = bankNumber(bank.lifetime_issued_estimate);
+    const percent = lifetime !== null && cap !== null && cap > 0
+      ? Math.max(0, Math.min(100, lifetime / cap * 100)) : null;
     $("bank-cap").textContent = bankCoin(bank.emission_cap);
     $("bank-remaining").textContent = bankCoin(bank.emission_remaining);
     $("bank-supply").textContent = bankCoin(bank.total_supply);
@@ -2279,11 +2282,12 @@
     const difference = emitted !== null && supply !== null ? emitted - supply : null;
     const warning = $("bank-warning");
     const hasDifference = difference !== null && Math.abs(difference) >= 0.009;
-    warning.hidden = !bank.supply_over_cap && !(cap !== null && emitted !== null && cap > 0 && emitted > cap) && !hasDifference;
+    warning.hidden = !bank.supply_over_cap && !(cap !== null && lifetime !== null && cap > 0 && lifetime > cap) && !hasDifference;
     $("bank-warning-title").textContent = t(hasDifference ? "Обнаружено расхождение" : "Превышен лимит");
     $("bank-warning-delta").textContent = difference === null ? "" :
       t("Эмиссия минус всего в экономике: {difference} Coin", { difference: coinExact(difference) });
-    $("bank-mined-label").textContent = bankCoin(bank.total_emitted);
+    $("bank-mined-label").textContent = bankCoin(bank.lifetime_issued_estimate);
+    $("bank-current-emission").textContent = bankCoin(bank.total_emitted);
     $("bank-progress-percent").textContent = percent === null ? "—" :
       percent > 0 && percent < 0.1 ? "<0.1%" : `${percent.toFixed(1)}%`;
     document.querySelectorAll("[data-milestone]").forEach((node) => {
@@ -2305,7 +2309,7 @@
       if (percent === null) track.removeAttribute("aria-valuenow");
       else track.setAttribute("aria-valuenow", percent.toFixed(1));
       track.setAttribute("aria-valuetext", percent === null ? t("Данные недоступны") :
-        t("{emitted} из {cap} Coin", { emitted: coinExact(emitted), cap: coinExact(cap) }));
+        t("{emitted} из {cap} Coin", { emitted: coinExact(lifetime), cap: coinExact(cap) }));
     }
   }
 

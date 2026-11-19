@@ -61,7 +61,7 @@ class Collection:
                 return False
         return True
 
-    async def find_one(self, query):
+    async def find_one(self, query, **kwargs):
         return next((copy.deepcopy(d) for d in self.docs.values() if self.matches(d, query)), None)
 
     async def find_one_and_update(self, query, changes, upsert=False, **kwargs):
@@ -85,6 +85,21 @@ class Collection:
         pass
 
 
+class FakeSession:
+    def __init__(self, db): self.db = db
+    async def __aenter__(self): return self
+    async def __aexit__(self, *args): pass
+    async def with_transaction(self, callback, **kwargs):
+        async with self.db.tx_lock:
+            collections = [c for c in vars(self.db).values() if isinstance(c, Collection)]
+            backups = [copy.deepcopy(c.docs) for c in collections]
+            try:
+                return await callback(self)
+            except BaseException:
+                for collection, backup in zip(collections, backups): collection.docs = backup
+                raise
+
+
 def services():
     db = SimpleNamespace(
         users=Collection([{'id': 7, 'is_banned': False, 'coins': 1000, 'xp': 500,
@@ -92,6 +107,9 @@ def services():
         bank=Collection([{'_id': 'main', 'balance': 100000}]),
         daily_claims=Collection(), transactions=Collection(), hedgehog_games=Collection(),
     )
+    db.tx_lock = asyncio.Lock()
+    async def start_session(): return FakeSession(db)
+    db.client = SimpleNamespace(start_session=start_session)
     mongo = SimpleNamespace(database=db)
     daily = DailyService(mongo)
     return db, daily, HedgehogService(mongo, daily, reward_mode="classic")

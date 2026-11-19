@@ -40,8 +40,8 @@ async def test_independent_workers_cas_and_query_replay_conserve_money():
     bank = db.bank.docs['main']['balance']
     read = db.users.find_one
 
-    async def interleaved(query):
-        result = await read(query)
+    async def interleaved(query, **kwargs):
+        result = await read(query, **kwargs)
         await asyncio.sleep(0)
         return result
 
@@ -65,42 +65,33 @@ async def test_shared_bank_race_must_not_mint_unfunded_bonus():
     other = DailyPetService(mongo, service.daily, service.hedgehog_gridfs)
     db.bank.docs['main']['balance'] = 5
     before = sum(db.users.docs[uid]['coins'] for uid in (7,8))
-    read = db.bank.find_one
-    arrived = 0
-    both = asyncio.Event()
-
-    async def concurrent_balance(query):
-        nonlocal arrived
-        snapshot = await read(query)
-        arrived += 1
-        if arrived == 2:
-            both.set()
-        await asyncio.wait_for(both.wait(), 2)
-        return snapshot
-
-    with patch.object(db.bank, 'find_one', side_effect=concurrent_balance), \
-         patch('src.services.daily_pet_service.time.time', return_value=105):
+    # The in-memory transaction fake serializes transactions; real Mongo
+    # concurrency and write-conflict retries are covered by integration tests.
+    with patch('src.services.daily_pet_service.time.time', return_value=105):
         await asyncio.gather(service.tap(token7,7,'bank-race:7'),
                              other.tap(session8['token'],8,'bank-race:8'))
     credited = sum(db.users.docs[uid]['coins'] for uid in (7,8))-before
     debited = 5-db.bank.docs['main']['balance']
-    assert credited == debited  # Currently 10 credited, only 5 debited.
+    assert credited == debited
 
 
 @pytest.mark.asyncio
-async def test_failed_bank_debit_is_visible_and_retry_cannot_duplicate_user_credit(caplog):
+async def test_failed_bank_debit_is_visible_and_retry_cannot_duplicate_user_credit():
+    from src.services.hedgehog_service import GameError
     db, service, _, _ = setup()
     _, token = await issue(service)
     before = db.users.docs[7]['coins']
-    with patch.object(db.bank, 'update_one', return_value=SimpleNamespace(matched_count=0)), \
-         patch('src.services.daily_pet_service.time.time', return_value=105):
-        await service.tap(token,7,'unmatched-bank')
-        await service.tap(token,7,'unmatched-bank')
-    # The bank debit is the admission ticket for a bonus: if it does not match,
-    # no coins are credited and a retry cannot duplicate anything.
-    assert db.users.docs[7]['coins']-before == 0
+    with patch('src.services.daily_pet_service.time.time', return_value=105):
+        with patch.object(db.bank, 'update_one', return_value=SimpleNamespace(matched_count=0)):
+            with pytest.raises(GameError, match='Банк изменился'):
+                await service.tap(token, 7, 'unmatched-bank')
+        assert db.users.docs[7]['coins'] == before
+        assert db.users.docs[7]['daily_pet']['taps'] == 0
+        result = await service.tap(token, 7, 'unmatched-bank')
+        again = await service.tap(token, 7, 'unmatched-bank')
+    assert result == again
     assert db.users.docs[7]['daily_pet']['taps'] == 1
-    assert 'Bank debit missed' in caplog.text
+    assert db.users.docs[7]['coins']-before == result['extra_coins']
 
 
 @pytest.mark.asyncio
@@ -111,21 +102,45 @@ async def test_shared_bank_race_must_not_mint_unfunded_base_daily():
     db.users.docs[8] = {**copy.deepcopy(db.users.docs[7]), 'id': 8}
     db.bank.docs['main']['balance'] = 55
     before = sum(db.users.docs[uid]['coins'] for uid in (7,8))
-    read = db.bank.find_one
-    both = asyncio.Event()
-    reads = 0
-
-    async def concurrent_balance(query):
-        nonlocal reads
-        snapshot = await read(query)
-        reads += 1
-        if reads == 2:
-            both.set()
-        await asyncio.wait_for(both.wait(), 2)
-        return snapshot
-
-    with patch.object(db.bank, 'find_one', side_effect=concurrent_balance):
-        await asyncio.gather(*(DailyService(mongo).settle_hedgehog(uid,True,utc_day(),ordinary=True) for uid in (7,8)))
+    # The rollback-capable fake serializes transactions. Real concurrent Mongo
+    # write conflicts and retries are covered by the replica-set integration test.
+    await asyncio.gather(*(DailyService(mongo).settle_hedgehog(uid, True, utc_day(), ordinary=True)
+                           for uid in (7, 8)))
     credited = sum(db.users.docs[uid]['coins'] for uid in (7,8))-before
     debited = 55-db.bank.docs['main']['balance']
-    assert credited == debited  # Currently 110 credited, only 55 debited.
+    assert credited == debited
+
+
+@pytest.mark.asyncio
+async def test_daily_journal_failure_rolls_back_bank_and_receipt():
+    from src.services.daily_service import DailyService
+    from src.services.hedgehog_service import utc_day
+    db, _, _, mongo = setup()
+    before = copy.deepcopy(db.users.docs[7])
+    bank_before = db.bank.docs['main']['balance']
+    async def fail(*args, **kwargs): raise RuntimeError('journal unavailable')
+    with patch.object(db.transactions, 'update_one', side_effect=fail):
+        with pytest.raises(RuntimeError, match='journal unavailable'):
+            await DailyService(mongo).settle_hedgehog(7, True, utc_day(), ordinary=True)
+    assert db.users.docs[7] == before
+    assert db.bank.docs['main']['balance'] == bank_before
+    assert not db.daily_claims.docs
+
+
+@pytest.mark.asyncio
+async def test_tap_journal_failure_rolls_back_bank_and_user_receipt():
+    db, service, _, _ = setup()
+    _, token = await issue(service)
+    before = copy.deepcopy(db.users.docs[7])
+    bank_before = db.bank.docs['main']['balance']
+    async def fail(*args, **kwargs): raise RuntimeError('journal unavailable')
+    with patch('src.services.daily_pet_service.time.time', return_value=105), \
+         patch.object(db.transactions, 'update_one', side_effect=fail):
+        with pytest.raises(RuntimeError, match='journal unavailable'):
+            await service.tap(token, 7, 'tap-journal')
+    assert db.users.docs[7] == before
+    assert db.bank.docs['main']['balance'] == bank_before
+    with patch('src.services.daily_pet_service.time.time', return_value=105):
+        result = await service.tap(token, 7, 'tap-journal')
+        assert (await service.tap(token, 7, 'tap-journal')) == result
+    assert result['taps'] == 1 and result['extra_coins'] == result['base_coins'] // 10

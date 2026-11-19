@@ -35,6 +35,7 @@ def setup_duels():
     container.mongo_client.database.users = AsyncMock()
     container.mongo_client.database.transactions = AsyncMock()
     service = DuelService(container)
+    service.escrow.settle = AsyncMock()
     for i in range(2):
         service.duels[i] = Duel(id=i, challenger_id=10+i*2, opponent_id=11+i*2,
                                bet=100, chat_id=-100, bot=AsyncMock(), container=container)
@@ -52,8 +53,7 @@ async def test_shutdown_refunds_once_cancels_timers_without_bot_or_archive_calls
         await asyncio.gather(service.shutdown(), service.shutdown())
         await service.shutdown()
         archive.assert_not_called()
-    assert service.users.update_one.await_count == 4
-    assert service.transactions.insert_one.await_count == 4
+    assert service.escrow.settle.await_count == 2
     assert all(t.cancelled() for t in timers)
     for duel in service.duels.values():
         assert duel.finished
@@ -84,7 +84,7 @@ async def test_shutdown_attempts_other_duels_and_propagates_failure():
         with pytest.raises(ExceptionGroup):
             await service.shutdown()
     assert service.duels[1].finished
-    assert service.users.update_one.await_count == 2
+    assert service.escrow.settle.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -117,7 +117,7 @@ async def test_shutdown_waits_for_inflight_creation_escrow_registration():
     duel = await creation
     await stopping
     assert duel.finished and duel.timeout_task.cancelled()
-    assert service.users.update_one.await_count == 2
+    assert service.escrow.settle.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -147,3 +147,23 @@ async def test_shutdown_without_container_closes_bot_session():
     bot=SimpleNamespace(session=SimpleNamespace(close=AsyncMock()))
     await on_shutdown(bot)
     bot.session.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_duel_recovery_background_stops_before_shutdown():
+    _, service = setup_duels()
+    service.duels.clear()
+    started = asyncio.Event()
+    async def scan():
+        started.set()
+        await asyncio.Event().wait()
+    service.escrow.recover_decided = AsyncMock(side_effect=scan)
+    await service.start_recovery()
+    task = service._recovery_task
+    await asyncio.wait_for(started.wait(), 1)
+    await service.start_recovery()
+    assert service._recovery_task is task
+    await service.shutdown()
+    assert task.cancelled()
+    await service.start_recovery()
+    assert service._recovery_task is None

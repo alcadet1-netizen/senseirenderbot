@@ -144,8 +144,8 @@ async def test_real_bridge_personal_only_no_group_inline_or_shared_taps():
         with patch('src.services.daily_pet_service.time.time', return_value=101):
             await middleware(AsyncMock(), event, {'bot': bot})
         payload = json.loads(bot.call_args.args[0].data)
-        assert ('error' in payload) is (i != 4)
-    assert db.users.docs[7]['daily_pet']['taps'] == 1
+        assert 'error' in payload
+    assert db.users.docs[7]['daily_pet']['taps'] == 0
 
 
 @pytest.mark.asyncio
@@ -164,11 +164,11 @@ async def test_group_command_photo_and_deeplink_not_native_group_send():
     assert 'XP' in call.kwargs['caption'] and 'Серия:' in call.kwargs['caption']
     assert 'Бонус серии' not in call.kwargs['caption']
     assert len(call.kwargs['caption']) < 180
-    link = call.kwargs['reply_markup'].inline_keyboard[0][0].url
-    assert link.startswith('https://t.me/Senseigame_bot?start=pet_')
+    assert call.kwargs['reply_markup'] is None
+    assert 'поглад' not in call.kwargs['caption'].lower()
     bot.assert_not_called()
     assert db.users.docs[7]['daily_pet']['delivered']
-    assert db.users.docs[7]['daily_pet']['deadline'] == 115
+    assert db.users.docs[7]['daily_pet']['deadline'] == 100
 
 
 @pytest.mark.asyncio
@@ -180,12 +180,9 @@ async def test_private_link_sends_native_widget_without_extending_or_paying():
     message = SimpleNamespace(chat=SimpleNamespace(id=7, type='private'), bot=bot, answer=AsyncMock())
     with patch('src.services.daily_pet_service.time.time', return_value=104):
         await open_pet(message, SimpleNamespace(id=7), container, token)
-    bot.assert_awaited_once()
-    widget = bot.call_args.args[0]
-    assert isinstance(widget, SendWidget)
-    assert widget.chat_id == 7 and 'TelegramWidget.request' in widget.html
-    assert 'https://t.me/airchatton' in widget.html
-    message.answer.assert_not_called()
+    bot.assert_not_awaited()
+    message.answer.assert_awaited_once()
+    assert 'больше недоступны' in message.answer.call_args.args[0]
     assert db.users.docs[7]['daily_pet']['deadline'] == 115
     assert db.users.docs[7]['daily_pet']['taps'] == 0
     assert db.users.docs[7]['coins'] == 1000 + result['total_coins']
@@ -254,9 +251,8 @@ async def test_expired_private_link_can_open_readonly_result_without_new_coins()
     message = SimpleNamespace(chat=SimpleNamespace(id=7, type='private'), bot=bot, answer=AsyncMock())
     with patch('src.services.daily_pet_service.time.time', return_value=115):
         await open_pet(message, SimpleNamespace(id=7), container, token)
-    bot.assert_awaited_once()
-    assert isinstance(bot.call_args.args[0], SendWidget)
-    assert '"state":"done"' in bot.call_args.args[0].html
+    bot.assert_not_awaited()
+    message.answer.assert_awaited_once()
     with patch('src.services.daily_pet_service.time.time', return_value=115):
         assert (await service.widget_action(token, 7, 'v', ''))['state'] == 'done'
     assert db.users.docs[7]['coins'] == 1000 + result['total_coins']
@@ -282,7 +278,7 @@ async def test_ambiguous_photo_delivery_does_not_retry_or_renew_window():
     with patch('src.services.daily_pet_service.time.time', return_value=115):
         await launch_hedgehog(message, user, container)
     assert db.users.docs[7]['coins'] == before
-    assert db.users.docs[7]['daily_pet']['deadline'] == 115
+    assert db.users.docs[7]['daily_pet']['deadline'] == 100
     message.answer_photo.assert_awaited_once()
     assert db.users.docs[7]['daily_pet']['notice_state'] == 'sending'
     assert not db.users.docs[7]['daily_pet']['delivered']

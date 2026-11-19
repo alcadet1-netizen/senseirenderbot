@@ -3,8 +3,10 @@
 """
 
 import asyncio
+import math
 import random
 import time
+from pymongo.errors import DuplicateKeyError
 from typing import Optional, List, Tuple
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from src.core.config import settings
@@ -34,6 +36,7 @@ from src.services.bank_ledger import BankLedger
 from src.services.referral_economy import transaction
 import logging
 from datetime import datetime, timezone, timedelta
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -183,9 +186,15 @@ class EconomyService:
                 }
                 try:
                     await self.users.insert_one(user)
-                except Exception:
+                except DuplicateKeyError:
+                    # A duplicate-key rejection guarantees this insert was not applied.
                     if starter:
                         await self.emission.release(starter, f"starter:{user_id}")
+                    raise
+                except Exception:
+                    # A timeout can follow a successful insert. Keep the reservation
+                    # rather than reopening issuance that may already be credited.
+                    logger.warning("Starter reservation retained after uncertain insert: user=%s", user_id)
                     raise
                 starter_amount = starter
                 # Refresh the user document
@@ -216,76 +225,71 @@ class EconomyService:
             old_xp = user.get("xp", 0)
 
             if apply_rewards:
-                logger.info(f"[ECONOMY] Applying rewards for user {user_id}")
-                # Increase message count
-                await self.users.update_one(
-                    {"id": user_id},
-                    {"$inc": {"messages_count": 1}}
-                )
-                user["messages_count"] = user.get("messages_count", 0) + 1
-
-                # Get total coins in circulation
+                # Rates remain unchanged and the expensive circulation snapshot keeps
+                # its existing cache. Bank debit, user credit, count and journal
+                # commit together, including the message milestone ticket.
                 total_circulation = await self._get_total_coins_in_circulation()
                 multiplier = self._calculate_halving_multiplier(total_circulation)
-                logger.info(f"[ECONOMY] User {user_id} total_circulation={total_circulation}, multiplier={multiplier}")
-
                 xp_reward = int(XP_PER_MESSAGE * multiplier)
-                # A local wave boost replaces, not supplements, normal coins.
-                # Resolve inside the user lock so expired/completed rounds cannot
-                # keep granting a boost to requests waiting on that lock.
                 from src.services.wave_activity import wave_message_reward
                 wave_coins = wave_message_reward(chat_id)
-                coins_reward = wave_coins if wave_coins is not None else COINS_PER_MESSAGE * multiplier
-                logger.info(f"[ECONOMY] User {user_id} xp_reward={xp_reward}, coins_reward={coins_reward}")
+                requested = wave_coins if wave_coins is not None else COINS_PER_MESSAGE * multiplier
 
-                # Never mint to cover a message reward: if the bank is low,
-                # pay only what the atomic debit actually covers.
-                bank_balance = await self._get_bank_balance()
-                logger.info(f"[ECONOMY] Bank balance={bank_balance}, coins_reward={coins_reward}")
-                if coins_reward > bank_balance:
-                    coins_reward = max(0.0, bank_balance)
-                if coins_reward > 0 and not await self._withdraw_from_bank(coins_reward):
-                    logger.warning("[ECONOMY] Bank debit raced for message reward user=%s", user_id)
-                    coins_reward = 0.0
-                logger.info(f"[ECONOMY] Withdrew {coins_reward} from bank")
+                async def settle(session):
+                    current = await self.users.find_one({'id': user_id}, session=session)
+                    if not current or current.get('is_banned'):
+                        return None
+                    accounts = []
+                    for bank_id, field in (('single', 'coins'), ('main', 'balance')):
+                        doc = await self.bank.find_one({'_id': bank_id}, session=session) or {}
+                        value = float(doc.get(field, 0) or 0)
+                        if not math.isfinite(value):
+                            raise ValueError('Invalid bank balance')
+                        accounts.append((bank_id, field, Decimal(str(max(0.0, value)))))
+                    available = sum((item[2] for item in accounts), Decimal(0))
+                    paid = min(Decimal(str(max(0.0, requested))), available)
+                    remaining = paid
+                    for bank_id, field, balance in accounts:
+                        take = min(remaining, balance)
+                        if take <= 0:
+                            continue
+                        debit = await self.bank.update_one(
+                            {'_id': bank_id, field: {'$gte': float(take)}},
+                            {'$inc': {field: -float(take)}}, session=session)
+                        if debit.matched_count != 1:
+                            raise RuntimeError('Bank changed during message reward')
+                        remaining -= take
+                    if remaining > 0:
+                        raise RuntimeError('Message reward was not fully funded')
+                    credited = await self.users.update_one(
+                        {'id': user_id, 'is_banned': {'$ne': True}},
+                        {'$inc': {'messages_count': 1, 'xp': xp_reward, 'coins': float(paid)}},
+                        session=session)
+                    if credited.matched_count != 1:
+                        raise RuntimeError('User unavailable during message reward')
+                    updated = await self.users.find_one({'id': user_id}, session=session)
+                    await self.transactions.insert_one({
+                        'user_id': user_id, 'tx_type': 'message_reward', 'xp_change': xp_reward,
+                        'coins_change': float(paid),
+                        'description': ('Wave message reward (30 SenseiCoin)' if wave_coins is not None
+                                        else f'Message reward (x{multiplier:.3f})'),
+                        'created_at': datetime.now(timezone.utc),
+                    }, session=session)
+                    ticket = None
+                    if updated.get('messages_count', 0) % MESSAGES_PER_TICKET == 0:
+                        result = await self.tickets.insert_one({
+                            'user_id': user_id, 'code': await self._generate_ticket_code(),
+                            'created_at': datetime.now(timezone.utc),
+                        }, session=session)
+                        ticket = str(result.inserted_id)
+                    return current, updated, float(paid), ticket
 
-                # Update user XP and coins
-                await self.users.update_one(
-                    {"id": user_id},
-                    {"$inc": {"xp": xp_reward, "coins": coins_reward}}
-                )
-                user["xp"] = user.get("xp", 0) + xp_reward
-                user["coins"] = user.get("coins", 0.0) + coins_reward
-                logger.info(f"[ECONOMY] Updated user {user_id}: xp={user['xp']}, coins={user['coins']}")
-
-                # Create transaction record
-                tx_doc = {
-                    "user_id": user_id,
-                    "tx_type": "message_reward",  # We'll use string for simplicity, or we can define constants
-                    "xp_change": xp_reward,
-                    "coins_change": coins_reward,
-                    "description": ("Wave message reward (30 SenseiCoin)" if wave_coins is not None
-                                    else f"Message reward (x{multiplier:.3f})"),
-                    "created_at": datetime.now(timezone.utc),
-                }
-                await self.transactions.insert_one(tx_doc)
-                logger.info(f"[ECONOMY] Inserted transaction for user {user_id}")
-
-                # Check for ticket award
-                if user["messages_count"] % MESSAGES_PER_TICKET == 0:
-                    ticket_doc = {
-                        "user_id": user_id,
-                        "code": await self._generate_ticket_code(),
-                        "created_at": datetime.now(timezone.utc),
-                    }
-                    result = await self.tickets.insert_one(ticket_doc)
-                    ticket_created = str(result.inserted_id)  # Or we can use the code
-                    logger.info(f"[ECONOMY] Ticket created for user {user_id}: {ticket_created}")
-
-                # Check level up
-                level_up = self.level_service.check_level_up(old_xp, user["xp"])
-                if level_up:
-                    logger.info(f"[ECONOMY] Level up for user {user_id}: {level_up}")
+                settled = await transaction(self.mongo_client, settle)
+                if settled is None:
+                    return {'success': False, 'reason': 'banned'}
+                before, user, coins_reward, ticket_created = settled
+                old_xp = before.get('xp', 0)
+                level_up = self.level_service.check_level_up(old_xp, user.get('xp', 0))
 
             # Return the result
             result = {
@@ -333,47 +337,64 @@ class EconomyService:
     # We'll stub out the rest of the methods for now, but we need to implement at least the ones that are called.
     # Since we don't know which ones are called, we'll try to implement the critical ones.
 
-    async def admin_add_coins(
-        self,
-        user_id: int,
-        amount: float,
-        admin_id: int
-    ) -> dict:
-        """Админ выдаёт монеты из банка."""
-        # Check bank balance
-        bank_balance = await self._get_bank_balance()
-        if bank_balance < amount:
-            return {
-                "success": False,
-                "error": f"Недостаточно в банке. Баланс: {bank_balance:,.2f}"
-            }
-        # Withdraw from bank
-        success = await self._withdraw_from_bank(amount)
-        if not success:
-            return {"success": False, "error": "Failed to withdraw from bank"}
-        # Add coins to user
-        await self.users.update_one(
-            {"id": user_id},
-            {"$inc": {"coins": amount}}
-        )
-        # Create transaction
-        tx_doc = {
-            "user_id": user_id,
-            "tx_type": "admin_grant",
-            "coins_change": amount,
-            "description": f"Admin grant by {admin_id}",
-            "created_at": datetime.now(timezone.utc),
-        }
-        await self.transactions.insert_one(tx_doc)
-        # Get new balance
-        user = await self.users.find_one({"id": user_id})
-        new_balance = user.get("coins", 0.0) if user else 0.0
-        return {
-            "success": True,
-            "user_id": user_id,
-            "amount": amount,
-            "new_balance": new_balance
-        }
+    async def _bank_user_transfer(self, user_id: int, amount: float, *, admin_id=None) -> dict:
+        """Move bank funds and optionally journal them in one Mongo transaction.
+
+        This is not an idempotency key for separate command retries. A failed or
+        ambiguous transaction must not be retried as a new command automatically.
+        """
+        try:
+            amount = float(amount)
+        except (TypeError, ValueError, OverflowError):
+            return {'success': False, 'error': 'Укажите корректную сумму.'}
+        if not math.isfinite(amount) or amount <= 0:
+            return {'success': False, 'error': 'Укажите корректную сумму.'}
+
+        requested = Decimal(str(amount))
+
+        async def transfer(session):
+            user = await self.users.find_one({'id': user_id}, session=session)
+            if not user:
+                return {'success': False, 'error': 'Пользователь не найден.'}
+            accounts = []
+            for bank_id, field in (('single', 'coins'), ('main', 'balance')):
+                doc = await self.bank.find_one({'_id': bank_id}, session=session) or {}
+                balance = float(doc.get(field, 0) or 0)
+                if not math.isfinite(balance):
+                    raise ValueError('Invalid bank balance')
+                accounts.append((bank_id, field, Decimal(str(max(0.0, balance)))))
+            balance = sum((account[2] for account in accounts), Decimal(0))
+            if balance < requested:
+                return {'success': False, 'error': f'Недостаточно в банке. Баланс: {balance:,.2f}'}
+            remaining = requested
+            for bank_id, field, available in accounts:
+                take = min(remaining, available)
+                if take <= 0:
+                    continue
+                debit = await self.bank.update_one({'_id': bank_id, field: {'$gte': float(take)}},
+                    {'$inc': {field: -float(take)}}, session=session)
+                if debit.matched_count != 1:
+                    raise RuntimeError('Bank balance changed during transfer')
+                remaining -= take
+            if remaining > 0:
+                raise RuntimeError('Bank transfer was not fully funded')
+            credited = await self.users.update_one({'id': user_id}, {'$inc': {'coins': amount}}, session=session)
+            if credited.matched_count != 1:
+                raise RuntimeError('User unavailable during bank transfer')
+            if admin_id is not None:
+                await self.transactions.insert_one({
+                    'user_id': user_id, 'tx_type': 'admin_grant', 'coins_change': amount,
+                    'description': f'Admin grant by {admin_id}', 'created_at': datetime.now(timezone.utc),
+                }, session=session)
+            updated = await self.users.find_one({'id': user_id}, session=session)
+            return {'success': True, 'user_id': user_id, 'amount': amount,
+                    'new_balance': updated.get('coins', 0.0)}
+
+        return await transaction(self.mongo_client, transfer)
+
+    async def admin_add_coins(self, user_id: int, amount: float, admin_id: int) -> dict:
+        """Issue an admin grant from the existing bank, not from emission."""
+        return await self._bank_user_transfer(user_id, amount, admin_id=admin_id)
 
     async def upgrade_katana(self, user_id: int) -> dict:
         """
@@ -568,18 +589,8 @@ class EconomyService:
         return await self._get_bank_balance()
 
     async def distribute_zov_reward(self, user_id: int, amount: float) -> bool:
-        """Выдать награду за созыв (без создания транзакции для скорости)."""
-        # Withdraw from bank
-        success = await self._withdraw_from_bank(amount)
-        if not success:
-            return False
-        # Add to user
-        await self.users.update_one(
-            {"id": user_id},
-            {"$inc": {"coins": amount}}
-        )
-        # We skip transaction creation for speed as per the original comment
-        return True
+        """Pay the existing zov reward atomically, without a transaction journal entry."""
+        return (await self._bank_user_transfer(user_id, amount))['success']
 
     async def distribute_boss_reward(
         self,
@@ -711,9 +722,15 @@ class EconomyService:
                 }
                 try:
                     await self.users.insert_one(user)
-                except Exception:
+                except DuplicateKeyError:
+                    # A duplicate-key rejection guarantees this insert was not applied.
                     if starter:
                         await self.emission.release(starter, f"starter:{user_id}")
+                    raise
+                except Exception:
+                    # A timeout can follow a successful insert. Keep the reservation
+                    # rather than reopening issuance that may already be credited.
+                    logger.warning("Starter reservation retained after uncertain insert: user=%s", user_id)
                     raise
                 # Refresh the user document
                 user = await self.users.find_one({"id": user_id})
