@@ -8,6 +8,7 @@ import pytest
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from src.services.exchange_service import ExchangeService
+from src.infra.mongo.financial_collections import prepare_financial_collections
 
 
 @pytest.mark.asyncio
@@ -25,8 +26,7 @@ async def test_exchange_replay_conservation_and_rollback(attempt, precreated, ca
         await db.bank.insert_many([{'_id': 'single', 'coins': 100, 'total_emitted': 10000, 'burned': 20},
                                    {'_id': 'main', 'balance': 500}])
         if precreated:
-            await db.create_collection('tickets')
-            await db.create_collection('transactions')
+            assert await prepare_financial_collections(db) == []
         services = [ExchangeService(NS(database=db)) for _ in range(8)]
         buys = await asyncio.gather(*(s.coins_to_ticket(7, request_id='buy-callback') for s in services))
         successes = [r for r in buys if r['success']]

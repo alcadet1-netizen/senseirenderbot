@@ -7,6 +7,7 @@ from types import SimpleNamespace as NS
 import pytest
 from motor.motor_asyncio import AsyncIOMotorClient
 from src.services.duel_escrow import DuelEscrow
+from src.infra.mongo.financial_collections import prepare_financial_collections
 
 
 @pytest.mark.asyncio
@@ -122,8 +123,7 @@ async def test_same_duel_command_reserves_once_across_processes_and_restart(atte
     try:
         await db.users.insert_many([{'id': 7, 'coins': 1000}, {'id': 8, 'coins': 1000}])
         if precreated:
-            await db.create_collection('duel_escrows')
-            await db.create_collection('transactions')
+            assert await prepare_financial_collections(db) == []
         container = NS(mongo_client=NS(database=db), user_service=NS(), economy_service=NS())
         workers = [DuelService(container) for _ in range(8)]
         results = await asyncio.gather(*(w.create_duel(7, 8, 300, -100, AsyncMock(), request_id='-100:42')
