@@ -119,6 +119,10 @@ async def test_duel_winner_gets_xp_and_katana_and_loser_loses_katana():
 
     # Create service
     service = DuelService(container)
+    async def settle_escrow(escrow_id, winner):
+        await db.users.update_one({'id': winner}, {'$inc': {'coins': 600.0}})
+        await db.transactions.insert_one({'user_id': winner, 'tx_type': 'duel_bet_payout', 'coins_change': 600.0})
+    service.escrow.settle = AsyncMock(side_effect=settle_escrow)
 
     # Create duel
     duel = Duel(
