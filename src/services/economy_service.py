@@ -225,76 +225,71 @@ class EconomyService:
             old_xp = user.get("xp", 0)
 
             if apply_rewards:
-                logger.info(f"[ECONOMY] Applying rewards for user {user_id}")
-                # Increase message count
-                await self.users.update_one(
-                    {"id": user_id},
-                    {"$inc": {"messages_count": 1}}
-                )
-                user["messages_count"] = user.get("messages_count", 0) + 1
-
-                # Get total coins in circulation
+                # Rates remain unchanged and the expensive circulation snapshot keeps
+                # its existing cache. Bank debit, user credit, count and journal
+                # commit together, including the message milestone ticket.
                 total_circulation = await self._get_total_coins_in_circulation()
                 multiplier = self._calculate_halving_multiplier(total_circulation)
-                logger.info(f"[ECONOMY] User {user_id} total_circulation={total_circulation}, multiplier={multiplier}")
-
                 xp_reward = int(XP_PER_MESSAGE * multiplier)
-                # A local wave boost replaces, not supplements, normal coins.
-                # Resolve inside the user lock so expired/completed rounds cannot
-                # keep granting a boost to requests waiting on that lock.
                 from src.services.wave_activity import wave_message_reward
                 wave_coins = wave_message_reward(chat_id)
-                coins_reward = wave_coins if wave_coins is not None else COINS_PER_MESSAGE * multiplier
-                logger.info(f"[ECONOMY] User {user_id} xp_reward={xp_reward}, coins_reward={coins_reward}")
+                requested = wave_coins if wave_coins is not None else COINS_PER_MESSAGE * multiplier
 
-                # Never mint to cover a message reward: if the bank is low,
-                # pay only what the atomic debit actually covers.
-                bank_balance = await self._get_bank_balance()
-                logger.info(f"[ECONOMY] Bank balance={bank_balance}, coins_reward={coins_reward}")
-                if coins_reward > bank_balance:
-                    coins_reward = max(0.0, bank_balance)
-                if coins_reward > 0 and not await self._withdraw_from_bank(coins_reward):
-                    logger.warning("[ECONOMY] Bank debit raced for message reward user=%s", user_id)
-                    coins_reward = 0.0
-                logger.info(f"[ECONOMY] Withdrew {coins_reward} from bank")
+                async def settle(session):
+                    current = await self.users.find_one({'id': user_id}, session=session)
+                    if not current or current.get('is_banned'):
+                        return None
+                    accounts = []
+                    for bank_id, field in (('single', 'coins'), ('main', 'balance')):
+                        doc = await self.bank.find_one({'_id': bank_id}, session=session) or {}
+                        value = float(doc.get(field, 0) or 0)
+                        if not math.isfinite(value):
+                            raise ValueError('Invalid bank balance')
+                        accounts.append((bank_id, field, Decimal(str(max(0.0, value)))))
+                    available = sum((item[2] for item in accounts), Decimal(0))
+                    paid = min(Decimal(str(max(0.0, requested))), available)
+                    remaining = paid
+                    for bank_id, field, balance in accounts:
+                        take = min(remaining, balance)
+                        if take <= 0:
+                            continue
+                        debit = await self.bank.update_one(
+                            {'_id': bank_id, field: {'$gte': float(take)}},
+                            {'$inc': {field: -float(take)}}, session=session)
+                        if debit.matched_count != 1:
+                            raise RuntimeError('Bank changed during message reward')
+                        remaining -= take
+                    if remaining > 0:
+                        raise RuntimeError('Message reward was not fully funded')
+                    credited = await self.users.update_one(
+                        {'id': user_id, 'is_banned': {'$ne': True}},
+                        {'$inc': {'messages_count': 1, 'xp': xp_reward, 'coins': float(paid)}},
+                        session=session)
+                    if credited.matched_count != 1:
+                        raise RuntimeError('User unavailable during message reward')
+                    updated = await self.users.find_one({'id': user_id}, session=session)
+                    await self.transactions.insert_one({
+                        'user_id': user_id, 'tx_type': 'message_reward', 'xp_change': xp_reward,
+                        'coins_change': float(paid),
+                        'description': ('Wave message reward (30 SenseiCoin)' if wave_coins is not None
+                                        else f'Message reward (x{multiplier:.3f})'),
+                        'created_at': datetime.now(timezone.utc),
+                    }, session=session)
+                    ticket = None
+                    if updated.get('messages_count', 0) % MESSAGES_PER_TICKET == 0:
+                        result = await self.tickets.insert_one({
+                            'user_id': user_id, 'code': await self._generate_ticket_code(),
+                            'created_at': datetime.now(timezone.utc),
+                        }, session=session)
+                        ticket = str(result.inserted_id)
+                    return current, updated, float(paid), ticket
 
-                # Update user XP and coins
-                await self.users.update_one(
-                    {"id": user_id},
-                    {"$inc": {"xp": xp_reward, "coins": coins_reward}}
-                )
-                user["xp"] = user.get("xp", 0) + xp_reward
-                user["coins"] = user.get("coins", 0.0) + coins_reward
-                logger.info(f"[ECONOMY] Updated user {user_id}: xp={user['xp']}, coins={user['coins']}")
-
-                # Create transaction record
-                tx_doc = {
-                    "user_id": user_id,
-                    "tx_type": "message_reward",  # We'll use string for simplicity, or we can define constants
-                    "xp_change": xp_reward,
-                    "coins_change": coins_reward,
-                    "description": ("Wave message reward (30 SenseiCoin)" if wave_coins is not None
-                                    else f"Message reward (x{multiplier:.3f})"),
-                    "created_at": datetime.now(timezone.utc),
-                }
-                await self.transactions.insert_one(tx_doc)
-                logger.info(f"[ECONOMY] Inserted transaction for user {user_id}")
-
-                # Check for ticket award
-                if user["messages_count"] % MESSAGES_PER_TICKET == 0:
-                    ticket_doc = {
-                        "user_id": user_id,
-                        "code": await self._generate_ticket_code(),
-                        "created_at": datetime.now(timezone.utc),
-                    }
-                    result = await self.tickets.insert_one(ticket_doc)
-                    ticket_created = str(result.inserted_id)  # Or we can use the code
-                    logger.info(f"[ECONOMY] Ticket created for user {user_id}: {ticket_created}")
-
-                # Check level up
-                level_up = self.level_service.check_level_up(old_xp, user["xp"])
-                if level_up:
-                    logger.info(f"[ECONOMY] Level up for user {user_id}: {level_up}")
+                settled = await transaction(self.mongo_client, settle)
+                if settled is None:
+                    return {'success': False, 'reason': 'banned'}
+                before, user, coins_reward, ticket_created = settled
+                old_xp = before.get('xp', 0)
+                level_up = self.level_service.check_level_up(old_xp, user.get('xp', 0))
 
             # Return the result
             result = {

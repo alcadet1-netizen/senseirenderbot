@@ -17,8 +17,11 @@ class UserCollection(Users):
         return await super().update_one(query, changes)
 
     async def insert_one(self, document, **kwargs):
-        self.docs[document.get('_id', document.get('id'))] = document
-        return NS(inserted_id=document.get('_id', document.get('id')))
+        from uuid import uuid4
+        document = copy.deepcopy(document)
+        key = document.get('_id', document.get('id', uuid4().hex))
+        self.docs[key] = document
+        return NS(inserted_id=key)
 
 
 class BankCollection(Collection):
@@ -33,7 +36,7 @@ def fake_transactions(monkeypatch):
     lock = asyncio.Lock()
     async def tx(mongo, callback):
         async with lock:
-            cols = (mongo.database.bank, mongo.database.users, mongo.database.transactions)
+            cols = (mongo.database.bank, mongo.database.users, mongo.database.transactions, mongo.database.tickets)
             snapshots = [copy.deepcopy(c.docs) for c in cols]
             try: return await callback("snapshot")
             except BaseException:
@@ -48,7 +51,7 @@ def economy(bank_docs, user_coins=1_000):
                            "is_banned": False, "messages_count": 0}]),
         bank=BankCollection(bank_docs),
         transactions=UserCollection(),
-        tickets=Collection(),
+        tickets=UserCollection(),
     )
     return EconomyService(NS(database=db)), db
 
@@ -276,3 +279,47 @@ async def test_fractional_transfer_across_accounts_does_not_reject_rounding():
     assert db.bank.docs['single']['coins'] == 0
     assert db.bank.docs['main']['balance'] == 0
     assert db.users.docs[7]['coins'] == 0.3
+
+
+@pytest.mark.asyncio
+async def test_message_reward_journal_failure_rolls_back_all_changes():
+    svc, db = economy([{'_id': 'single', 'coins': 4, 'total_emitted': 1000},
+                       {'_id': 'main', 'balance': 10}], user_coins=100)
+    before = copy.deepcopy(db.users.docs[7])
+    async def fail(*args, **kwargs):
+        raise RuntimeError('journal unavailable')
+    db.transactions.insert_one = fail
+    with pytest.raises(RuntimeError, match='journal unavailable'):
+        await svc.process_message_reward(7)
+    assert db.users.docs[7] == before
+    assert db.bank.docs['single']['coins'] == 4
+    assert db.bank.docs['main']['balance'] == 10
+    assert not db.transactions.docs and not db.tickets.docs
+
+
+@pytest.mark.asyncio
+async def test_message_ticket_failure_rolls_back_reward_and_count():
+    svc, db = economy([{'_id': 'single', 'coins': 100, 'total_emitted': 1000}], user_coins=100)
+    db.users.docs[7]['messages_count'] = 299
+    before = copy.deepcopy(db.users.docs[7])
+    async def fail(*args, **kwargs):
+        raise RuntimeError('tickets unavailable')
+    db.tickets.insert_one = fail
+    with pytest.raises(RuntimeError, match='tickets unavailable'):
+        await svc.process_message_reward(7)
+    assert db.users.docs[7] == before
+    assert db.bank.docs['single']['coins'] == 100
+    assert not db.transactions.docs and not db.tickets.docs
+
+
+@pytest.mark.asyncio
+async def test_message_reward_race_never_overdraws_bank_and_records_actual_payout():
+    svc, db = economy([{'_id': 'single', 'coins': 10, 'total_emitted': 1000}], user_coins=100)
+    db.users.docs[8] = {'_id': 8, 'id': 8, 'coins': 0, 'xp': 0, 'messages_count': 0, 'is_banned': False}
+    other = EconomyService(NS(database=db))
+    a, b = await asyncio.gather(svc.process_message_reward(7), other.process_message_reward(8))
+    assert a['success'] and b['success']
+    assert a['coins_earned'] + b['coins_earned'] == 10
+    assert db.bank.docs['single']['coins'] == 0
+    assert db.users.docs[7]['coins'] + db.users.docs[8]['coins'] == 110
+    assert sum(tx['coins_change'] for tx in db.transactions.docs.values()) == 10
