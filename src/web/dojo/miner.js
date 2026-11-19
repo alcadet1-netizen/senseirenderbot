@@ -1290,6 +1290,8 @@
 
     const balance = initData() ? coin(model?.balance) : "—";
     $("balance").textContent = balance;
+    $("balance").classList.toggle("balance-long", balance.length >= 10);
+    $("balance").classList.toggle("balance-extra-long", balance.length >= 15);
     $("profile-balance").textContent = initData() ? `${balance} Coin` : "—";
     $("profile-reward").textContent = `${coin(model?.reward)} Coin`;
     $("profile-rate").textContent =
