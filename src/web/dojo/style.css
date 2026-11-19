@@ -5336,3 +5336,35 @@ html.motion-reduced .chain-panel.is-live .chain-ecg path {
     font-size: 9px;
   }
 }
+
+/* Bank dashboard: clear hierarchy, legible accounting and honest milestones. */
+#view-bank .view-copy { font-size: 12px; line-height: 1.5; }
+#view-bank .mining-progress { padding: 15px; text-align: left; }
+#view-bank .mining-progress-head { display: grid; gap: 5px; }
+#view-bank .mining-progress-head span { font-size: 10px; letter-spacing: 1px; }
+#view-bank .mining-progress-head b { font-size: clamp(19px, 5vw, 25px); line-height: 1.2; overflow-wrap: anywhere; }
+#view-bank .emission-track { margin-top: 12px; }
+.bank-progress-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.bank-progress-summary > span { display: grid; gap: 3px; min-width: 0; }
+.bank-progress-summary > span:first-child { grid-column: 1 / -1; }
+.bank-progress-summary b { color: #d9ffea; font-size: 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.bank-progress-summary small { color: #9bb8a6; font-size: 9px; letter-spacing: .06em; }
+.bank-milestones { display: flex; justify-content: space-between; gap: 4px; margin-top: 14px; }
+.bank-milestones span { color: #9bb8a6; border: 1px solid rgba(112, 190, 143, .28); border-radius: 99px; padding: 4px 7px; font-size: 10px; }
+.bank-milestones .is-reached { color: #d5ffe5; border-color: #63db91; background: rgba(41, 137, 78, .25); }
+.bank-milestone-note { margin: 8px 0 0; color: #a3bcac; font-size: 10px; line-height: 1.4; }
+.bank-warning { margin-top: 14px; padding: 12px; border: 1px solid #dbad56; border-radius: 12px; background: #35280f; color: #fff0c9; text-align: left; }
+.bank-warning[hidden] { display: none; }
+.bank-warning summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; cursor: pointer; font-size: 12px; list-style: none; }
+.bank-warning summary::-webkit-details-marker { display: none; }
+.bank-warning summary span { color: #ffdf97; text-decoration: underline; font-size: 11px; flex-shrink: 0; }
+.bank-warning p { margin: 10px 0 0; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.bank-section-title { width: 100%; margin: 18px 0 8px; color: #c6e9d3; text-align: left; font-size: 12px; letter-spacing: .02em; }
+#view-bank .bank-stat { text-align: left; padding: 11px; gap: 6px; }
+#view-bank .bank-stat span { font-size: 10px; line-height: 1.35; letter-spacing: .03em; }
+#view-bank .bank-stat b { font-size: 12px; overflow-wrap: anywhere; }
+.bank-stat-wide { grid-column: 1 / -1; }
+#view-bank .bank-note, #view-bank .task-note { font-size: 11px; line-height: 1.5; color: #a3bcac; }
+#view-bank .bank-refresh { min-height: 44px; margin-top: 14px; font-size: 11px; }
+#view-bank .bank-refresh:disabled { opacity: .6; cursor: wait; }
+.bank-refresh-status { min-height: 1.4em; margin: 8px 0 0; color: #b1d4bd; font-size: 11px; line-height: 1.4; }

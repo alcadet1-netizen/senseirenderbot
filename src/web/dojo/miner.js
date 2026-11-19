@@ -51,6 +51,19 @@
     "ЗАГРУЖАЕМ УЛУЧШЕНИЯ…": "LOADING UPGRADES…",
     "Оплата Stars · улучшения не сгорают":
       "Stars payment · upgrades never expire",
+    "Где находятся Coin": "Where the Coin is",
+    "Движение Coin": "Coin movement",
+    "Вехи эмиссии": "Emission milestones",
+    "Текущий уровень может снижаться при сжигании.": "The current level can decrease when Coin is burned.",
+    "Обнаружено расхождение": "Accounting discrepancy detected",
+    "Превышен лимит": "Emission cap exceeded",
+    "Подробнее": "Details",
+    "Эмиссия и сумма балансов могут различаться, либо превышен лимит. Причина требует проверки; значения не исправляются автоматически.": "Emission and total balances may differ, or the cap may be exceeded. Investigation is needed; values are not corrected automatically.",
+    "Эмиссия минус всего в экономике: {difference} Coin": "Emission minus total in economy: {difference} Coin",
+    "Загружаем данные…": "Loading data…",
+    "Не удалось обновить данные. Попробуй ещё раз.": "Could not refresh data. Please try again.",
+    "Снимок данных: {time}": "Snapshot: {time}",
+    "Время снимка недоступно": "Snapshot time unavailable",
     ЭМИССИЯ: "EMISSION",
     "Всего в экономике может быть 10 000 000 000 Coin — жёсткий лимит. Новые Coin появляются только при стартовом заполнении SenseiBank и наборе новичка. Майнинг, задания и игры сначала списывают награду из SenseiBank; если банк пуст, начисления нет — лимит не растёт.":
       "The economy can hold at most 10,000,000,000 Coin. New coins appear only in the initial SenseiBank fill and the newcomer kit. Mining, tasks and games debit the reward from SenseiBank first; if the bank is empty, nothing is credited and the cap does not grow.",
@@ -886,6 +899,8 @@
   let burnBusy = false;
   let burnRequest = "";
   let bank = null;
+  let bankBusy = false;
+  let bankLoadFailed = false;
   let referrals = null;
   let referralsLoaded = false;
   let referralLevel = 1;
@@ -1569,6 +1584,7 @@
       renderReferrals(referralsLoaded ? undefined : t("ЗАГРУЖАЕМ УЧЕНИКОВ…"));
     }
     renderBank();
+    paintBankStatus();
     paintReferralLink();
   }
 
@@ -2235,37 +2251,35 @@
     const cap = Number(bank.emission_cap) || 0;
     const percent = Math.max(
       0,
-      Math.min(100, Number(bank.emission_percent) || 0),
+      Math.min(100, cap > 0 ? emitted / cap * 100 : 0),
     );
     const remaining = Number(bank.emission_remaining) || 0;
-    // The progress card's compact meta row omits the "Coin" suffix; the
-    // labels already say what these values are and this keeps a 10B cap on
-    // one line even on a 320px screen.
-    $("bank-emitted").textContent = `${coin(emitted)} Coin`;
-    $("bank-cap").textContent = `${coin(cap)} Coin`;
-    $("bank-remaining").textContent = `${coin(remaining)} Coin`;
-    $("bank-supply").textContent = `${coin(bank.total_supply)} Coin`;
-    $("bank-balance").textContent = `${coin(bank.bank_balance)} Coin`;
-    $("bank-circulation").textContent = `${coin(bank.circulation)} Coin`;
-    $("bank-burned").textContent = `${coin(bank.burned)} Coin`;
-    $("bank-confiscated").textContent = `${coin(bank.confiscated)} Coin`;
+    $("bank-cap").textContent = `${coinExact(cap)} Coin`;
+    $("bank-remaining").textContent = `${coinExact(remaining)} Coin`;
+    $("bank-supply").textContent = `${coinExact(bank.total_supply)} Coin`;
+    $("bank-balance").textContent = `${coinExact(bank.bank_balance)} Coin`;
+    $("bank-circulation").textContent = `${coinExact(bank.circulation)} Coin`;
+    $("bank-burned").textContent = `${coinExact(bank.burned)} Coin`;
+    $("bank-confiscated").textContent = `${coinExact(bank.confiscated)} Coin`;
     $("bank-holders").textContent = coin(bank.holders);
+    const difference = emitted - Number(bank.total_supply || 0);
     const warning = $("bank-warning");
-    if (warning) {
-      warning.hidden = !bank.supply_over_cap && !(cap && emitted > cap) && Math.abs(emitted - Number(bank.total_supply || 0)) < 1;
-      warning.textContent = t("Есть расхождение в учёте или превышение лимита. Требуется проверка данных.");
-    }
-    $("bank-mined-label").textContent = `${coin(emitted)} Coin`;
-    $("bank-remaining-label").textContent = `${coin(remaining)} Coin`;
+    const hasDifference = Math.abs(difference) >= 0.009;
+    warning.hidden = !bank.supply_over_cap && !(cap && emitted > cap) && !hasDifference;
+    $("bank-warning-title").textContent = t(hasDifference ? "Обнаружено расхождение" : "Превышен лимит");
+    $("bank-warning-delta").textContent = t("Эмиссия минус всего в экономике: {difference} Coin", { difference: coinExact(difference) });
+    $("bank-mined-label").textContent = `${coinExact(emitted)} Coin`;
     $("bank-progress-percent").textContent =
       percent > 0 && percent < 0.1 ? "<0.1%" : `${percent.toFixed(1)}%`;
+    document.querySelectorAll("[data-milestone]").forEach((node) => {
+      node.classList.toggle("is-reached", percent >= Number(node.dataset.milestone));
+    });
+    paintBankStatus();
     const burnTotal = $("burn-total");
     if (burnTotal) burnTotal.textContent = `${coin(bank.burned)} Coin`;
     const bar = $("bank-progress");
     if (bar) {
-      // A 0.01% emission is mathematically correct but looks like an empty,
-      // broken bank bar. Keep a small visible ember for any mined amount.
-      bar.style.width = percent > 0 ? `${Math.max(2, percent)}%` : "0%";
+      bar.style.width = `${percent}%`;
       bar.classList.toggle("is-filled", percent > 0);
     }
     const track = $("bank-progress-track");
@@ -2281,14 +2295,35 @@
     }
   }
 
+  function paintBankStatus() {
+    const status = $("bank-refresh-status");
+    const button = $("bank-refresh");
+    button.disabled = bankBusy;
+    button.setAttribute("aria-busy", String(bankBusy));
+    if (bankBusy) status.textContent = t("Загружаем данные…");
+    else if (bankLoadFailed) status.textContent = t("Не удалось обновить данные. Попробуй ещё раз.");
+    else if (bank) {
+      const stamp = Number(bank.snapshot_at);
+      status.textContent = stamp > 0
+        ? t("Снимок данных: {time}", { time: new Date(stamp * 1000).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" }) })
+        : t("Время снимка недоступно");
+    } else status.textContent = "";
+  }
+
   async function loadBank(force = false) {
-    if (!initData()) return;
-    if (bank && !force) return;
+    if (!initData() || bankBusy || (bank && !force)) return;
+    bankBusy = true;
+    bankLoadFailed = false;
+    paintBankStatus();
     try {
       bank = await api("bank");
       renderBank();
     } catch (error) {
+      bankLoadFailed = true;
       showToast(error.message, true);
+    } finally {
+      bankBusy = false;
+      paintBankStatus();
     }
   }
 
