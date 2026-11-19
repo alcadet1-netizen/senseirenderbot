@@ -126,3 +126,40 @@ async def test_recovery_only_completes_decided_and_skips_corrupt_records():
     assert db.duel_escrows.docs['corrupt']['state'] == 'decided'
     assert db.users.docs[7]['coins'] == 1000
     assert db.users.docs[8]['coins'] == 400
+
+
+@pytest.mark.asyncio
+async def test_awards_and_payout_atomic_and_recovery_applies_them_once():
+    db, escrow = setup()
+    db.users.docs[7].update({'xp': 100, 'wins': 3, 'has_katana': True, 'katana_length': 1.00})
+    db.users.docs[8].update({'losses': 2, 'has_katana': True, 'katana_length': .005})
+    await escrow.reserve('award', 7, 8, 300, 42)
+    insert = db.transactions.insert_one
+    async def fail_at_result_journal(doc, **kwargs):
+        if doc['tx_type'] == 'duel_win':
+            raise RuntimeError('result journal unavailable')
+        await insert(doc, **kwargs)
+    with patch.object(db.transactions, 'insert_one', side_effect=fail_at_result_journal):
+        with pytest.raises(RuntimeError, match='result journal unavailable'):
+            await escrow.settle('award', 7)
+    assert db.users.docs[7]['coins'] == 700 and db.users.docs[7]['xp'] == 100
+    assert db.users.docs[7]['wins'] == 3 and db.users.docs[7]['katana_length'] == 1
+    assert db.users.docs[8]['losses'] == 2 and db.users.docs[8]['katana_length'] == .005
+    assert [tx['tx_type'] for tx in db.transactions.docs.values()] == ['duel_escrow', 'duel_escrow']
+    await asyncio.gather(*(escrow.settle('award', 7) for _ in range(4)))
+    assert db.users.docs[7]['coins'] == 1300 and db.users.docs[7]['xp'] == 150
+    assert db.users.docs[7]['wins'] == 4 and db.users.docs[7]['katana_length'] == 1.01
+    assert db.users.docs[8]['losses'] == 3 and db.users.docs[8]['katana_length'] == 0
+    assert len([tx for tx in db.transactions.docs.values() if tx['tx_type'] == 'duel_win']) == 1
+
+
+@pytest.mark.asyncio
+async def test_existing_escrow_without_award_marker_does_not_add_new_awards():
+    db, escrow = setup()
+    await escrow.reserve('legacy', 7, 8, 300, 1)
+    db.duel_escrows.docs['legacy'].pop('award_version')
+    await escrow.settle('legacy', 7)
+    assert db.users.docs[7]['coins'] == 1300
+    assert db.users.docs[7]['xp'] == 500
+    assert db.users.docs[7].get('wins', 0) == 0
+    assert not any(tx['tx_type'] == 'duel_win' for tx in db.transactions.docs.values())

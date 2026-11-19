@@ -78,7 +78,7 @@ async def test_recovery_retries_decided_concurrently_without_touching_live_escro
     name = 'sensei_duel_recovery_' + uuid.uuid4().hex
     db = client[name]
     try:
-        await db.users.insert_many([{'id': uid, 'coins': 1000} for uid in (7, 8, 9, 10)])
+        await db.users.insert_many([{'id': uid, 'coins': 1000, 'xp': 10, 'has_katana': True, 'katana_length': 1.0} for uid in (7, 8, 9, 10)])
         workers = [DuelEscrow(NS(database=db)) for _ in range(6)]
         await workers[0].reserve('finished', 7, 8, 300, 1)
         await workers[0].reserve('active', 9, 10, 300, 2)
@@ -93,6 +93,11 @@ async def test_recovery_retries_decided_concurrently_without_touching_live_escro
         assert (await db.duel_escrows.find_one({'_id': 'finished'}))['state'] == 'settled'
         assert (await db.duel_escrows.find_one({'_id': 'active'}))['state'] == 'reserved'
         assert (await db.users.find_one({'id': 7}))['coins'] == 1300
+        winner = await db.users.find_one({'id': 7})
+        loser = await db.users.find_one({'id': 8})
+        assert winner['xp'] == 60 and winner['wins'] == 1 and winner['katana_length'] == 1.01
+        assert loser['losses'] == 1 and loser['katana_length'] == .99
+        assert await db.transactions.count_documents({'escrow_id': 'finished', 'tx_type': 'duel_win'}) == 1
         assert (await db.users.find_one({'id': 8}))['coins'] == 700
         assert (await db.users.find_one({'id': 9}))['coins'] == 700
         assert (await db.users.find_one({'id': 10}))['coins'] == 700

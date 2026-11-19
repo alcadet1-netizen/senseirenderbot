@@ -37,7 +37,7 @@ class DuelEscrow:
             now = datetime.now(timezone.utc)
             await self.escrows.insert_one({'_id': escrow_id, 'duel_id': duel_id,
                 'challenger_id': cid, 'opponent_id': oid, 'bet': bet,
-                'state': 'reserved', 'created_at': now}, session=tx)
+                'state': 'reserved', 'award_version': 1, 'created_at': now}, session=tx)
             for uid in (cid, oid):
                 await self.transactions.insert_one({'user_id': uid, 'tx_type': 'duel_escrow',
                     'coins_change': -float(bet), 'xp_change': 0, 'escrow_id': escrow_id,
@@ -93,11 +93,37 @@ class DuelEscrow:
                     'tx_type': 'duel_bet_payout' if winner_id is not None else 'duel_bet_refund',
                     'coins_change': float(amount), 'xp_change': 0, 'escrow_id': escrow_id,
                     'description': f'Ставка в дуэли #{entry["duel_id"]}', 'created_at': now}, session=tx)
+            details = None
+            if winner_id is not None and entry.get('award_version') == 1:
+                loser_id = ids[1] if winner_id == ids[0] else ids[0]
+                winner = await self.users.find_one({'id': winner_id}, session=tx)
+                loser = await self.users.find_one({'id': loser_id}, session=tx)
+                if not winner or not loser:
+                    raise RuntimeError('Duel result participant missing')
+                winner_update = {'$inc': {'wins': 1, 'xp': 50}}
+                loser_update = {'$inc': {'losses': 1}}
+                if winner.get('has_katana', False):
+                    winner_update['$set'] = {'katana_length': round((winner.get('katana_length', 0.0) or 0.0) + 0.01, 2)}
+                if loser.get('has_katana', False):
+                    loser_update['$set'] = {'katana_length': round(max(0.0, (loser.get('katana_length', 0.0) or 0.0) - 0.01), 2)}
+                if not _matched(await self.users.update_one({'id': winner_id}, winner_update, session=tx)):
+                    raise RuntimeError('Duel winner missing')
+                if not _matched(await self.users.update_one({'id': loser_id}, loser_update, session=tx)):
+                    raise RuntimeError('Duel loser missing')
+                for uid, tx_type, xp in ((winner_id, 'duel_win', 50), (loser_id, 'duel_loss', 0)):
+                    await self.transactions.insert_one({'user_id': uid, 'tx_type': tx_type,
+                        'xp_change': xp, 'coins_change': 0, 'escrow_id': escrow_id,
+                        'description': f'Результат дуэли #{entry["duel_id"]}', 'created_at': now}, session=tx)
+                details = {'winner_name': winner.get('username') or winner.get('first_name') or str(winner_id),
+                           'loser_name': loser.get('username') or loser.get('first_name') or str(loser_id),
+                           'winner_has_katana': bool(winner.get('has_katana', False)),
+                           'loser_has_katana': bool(loser.get('has_katana', False))}
             result = await self.escrows.update_one({'_id': escrow_id, 'state': 'decided'},
-                {'$set': {'state': 'settled', 'winner_id': winner_id, 'settled_at': now}}, session=tx)
+                {'$set': {'state': 'settled', 'winner_id': winner_id, 'settled_at': now,
+                          'result_details': details}}, session=tx)
             if not _matched(result):
                 raise RuntimeError('Duel escrow state changed')
-            return {**entry, 'state': 'settled', 'winner_id': winner_id, 'settled_at': now}
+            return {**entry, 'state': 'settled', 'winner_id': winner_id, 'settled_at': now, 'result_details': details}
         return await transaction(self.mongo, apply)
 
     async def recover_decided(self):

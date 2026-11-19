@@ -768,13 +768,14 @@ class DuelService:
 
     async def _finish_duel(self, duel: Duel, winner_id: Optional[int], reason: str):
         if duel.finished: return
+        settlement = None
         if duel.bet > 0:
             if duel.settlement_started and duel.settlement_winner != winner_id:
                 raise RuntimeError('Duel outcome already decided')
             duel.settlement_started = True
             duel.settlement_winner = winner_id
             try:
-                await self.escrow.settle(duel.escrow_id, winner_id)
+                settlement = await self.escrow.settle(duel.escrow_id, winner_id)
             except Exception:
                 logger.exception('Duel payout unconfirmed: duel=%s escrow=%s', duel.id, duel.escrow_id)
                 duel.log_lines.append('⚠️ Выплата ставки не подтверждена; требуется проверка.')
@@ -790,8 +791,24 @@ class DuelService:
 
         duel.log_lines.append(f"<b>{reason}</b>")
 
+        # Staked duels now apply XP, stats and katana in escrow settlement.
+        # Zero-stake duels retain the existing independent reward path.
+        if duel.bet > 0 and winner_id:
+            details = settlement.get('result_details') or {}
+            winner_name = details.get('winner_name', str(winner_id))
+            loser_name = details.get('loser_name', str(loser_id))
+            if details.get('winner_has_katana'):
+                duel.log_lines.append(f"✨ {winner_name} получает +50 XP и +0.01 к катане.")
+            else:
+                duel.log_lines.append(f"✨ {winner_name} получает +50 XP.")
+            duel.log_lines.append(f"💰 Победитель получает {int(duel.bet * 2)} монет!")
+            if details.get('loser_has_katana'):
+                duel.log_lines.append(f"💔 {loser_name} теряет -0.01 от катаны.")
+            else:
+                duel.log_lines.append(f"💔 {loser_name} не имеет катаны для потери.")
+
         try:
-            if winner_id and loser_id:
+            if not duel.bet and winner_id and loser_id:
                 # Get fresh user documents
                 winner_doc = await self.users.find_one({"id": winner_id})
                 loser_doc = await self.users.find_one({"id": loser_id})
