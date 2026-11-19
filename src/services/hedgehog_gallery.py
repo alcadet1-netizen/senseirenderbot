@@ -1,22 +1,24 @@
 """Persistent shuffle-bag selection for ordinary and paid hedgehog notices."""
 import hashlib
 import secrets
-from pathlib import Path
+from typing import List, Tuple
 
 from src.services.hedgehog_service import GameError
+from src.services.hedgehog_gridfs import HedgehogGridFS
 
-GALLERY = Path(__file__).resolve().parents[1] / 'infra/storage/ega'
 
-
-def gallery_files(directory=GALLERY):
-    files = sorted(p for p in directory.iterdir() if p.is_file() and p.suffix.lower() in {'.jpg', '.jpeg', '.png'}) if directory.is_dir() else []
-    if not files:
+async def gallery_files(gridfs: HedgehogGridFS) -> List[str]:
+    """Get list of image filenames from GridFS."""
+    files = await gridfs.list_images()
+    names = [f['filename'] for f in files]
+    if not names:
         raise GameError('Картинки ежа временно недоступны. Попробуйте позже.')
-    return files
+    return names
 
 
-def select_image(user, directory=GALLERY):
-    names = [p.name for p in gallery_files(directory)]
+async def select_image(user, gridfs: HedgehogGridFS) -> Tuple[str, List[str]]:
+    """Select a hedgehog image for the user from GridFS."""
+    names = await gallery_files(gridfs)
     previous = user.get('daily_pet') or {}
     last = previous.get('image_name')
     if last not in names:

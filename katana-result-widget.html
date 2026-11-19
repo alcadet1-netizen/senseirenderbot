@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>Katana Upgrade Result</title>
+<style>
+:root{
+  --bg:#0a0a12;
+  --bg-elev:#121222;
+  --text:#f0f0f5;
+  --muted:#8a8aa0;
+  --accent:#00d4aa;
+  --accent-dim:#00b894;
+  --gold:#ffd700;
+  --gold-dim:#e6c200;
+  --steel:#b8c5d6;
+  --steel-dim:#94a3b8;
+  --danger:#ff4757;
+  --danger-dim:#e84141;
+  --success:#2ed573;
+  --success-dim:#26c468;
+  --tier-vii:#64c8ff;
+  --tier-vii-bg:rgba(100,200,255,0.15);
+  --shadow:rgba(0,0,0,0.6);
+  --card-border:rgba(255,255,255,0.08);
+  --gradient-blade:linear-gradient(90deg,#1a1a2e 0%,#2a2a4a 30%,#3a3a6a 60%,#2a2a4a 100%);
+  --gradient-gold:linear-gradient(135deg,#ffd700 0%,#ffaa00 50%,#ffd700 100%);
+  --gradient-t7:linear-gradient(135deg,#64c8ff 0%,#00a8ff 50%,#64c8ff 100%);
+  --gradient-success:linear-gradient(135deg,#2ed573 0%,#7bed9f 100%);
+  --gradient-danger:linear-gradient(135deg,#ff4757 0%,#ff6b7a 100%);
+}
+*,*:before,*:after{box-sizing:border-box;margin:0;padding:0}
+@media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+html,body{height:100%}
+body{
+  font-family:'SF Pro Display','Segoe UI',system-ui,-apple-system,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  padding:env(safe-area-inset-top,16px) env(safe-area-inset-right,16px) env(safe-area-inset-bottom,16px) env(safe-area-inset-left,16px);
+  font-size:14px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.container{
+  max-width:400px;
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+.card{
+  background:linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02));
+  border:1px solid var(--card-border);
+  border-radius:20px;
+  padding:20px;
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  box-shadow:0 12px 40px var(--shadow),inset 0 1px 0 rgba(255,255,255,0.05);
+  position:relative;
+  overflow:hidden;
+}
+.card::before{
+  content:'';
+  position:absolute;
+  top:0;left:0;right:0;height:3px;
+  background:var(--gradient-t7);
+  opacity:0.8;
+}
+.katana-display{
+  text-align:center;
+  padding:16px 8px;
+  position:relative;
+}
+.katana-art{
+  font-family:'JetBrains Mono','Fira Code','Courier New',monospace;
+  font-size:18px;
+  line-height:1.15;
+  color:var(--steel);
+  white-space:pre;
+  overflow-x:auto;
+  filter:drop-shadow(0 0 12px rgba(100,200,255,0.4));
+  transition:all 0.6s cubic-bezier(0.34,1.56,0.64,1);
+  cursor:default;
+  user-select:none;
+  animation:blade-entrance 1s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes blade-entrance{
+  0%{transform:scaleX(0.3);opacity:0;filter:drop-shadow(0 0 4px rgba(100,200,255,0.2))}
+  40%{filter:drop-shadow(0 0 28px rgba(100,200,255,0.9))}
+  100%{transform:scaleX(1);opacity:1;filter:drop-shadow(0 0 12px rgba(100,200,255,0.4))}
+}
+.katana-art::selection{background:transparent}
+.katana-sheen{
+  position:absolute;
+  top:0;left:0;right:0;bottom:0;
+  background:linear-gradient(90deg,transparent 0%,rgba(100,200,255,0.12) 50%,transparent 100%);
+  transform:translateX(-100%);
+  animation:sheen 4s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes sheen{0%{transform:translateX(-100%)}50%,100%{transform:translateX(200%)}}
+.katana-name{
+  font-weight:700;
+  color:var(--gold);
+  margin:14px 0 6px;
+  font-size:18px;
+  letter-spacing:0.3px;
+  background:var(--gradient-gold);
+  -webkit-background-clip:text;
+  background-clip:text;
+  -webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 16px rgba(255,215,0,0.5));
+}
+.katana-rank{
+  color:var(--tier-vii);
+  opacity:0.95;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:2px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+.tier-badge{
+  display:inline-flex;
+  align-items:center;
+  padding:3px 12px;
+  border-radius:20px;
+  font-size:11px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:1.5px;
+  background:var(--tier-vii-bg);
+  color:var(--tier-vii);
+  border:1px solid rgba(100,200,255,0.3);
+  box-shadow:0 0 16px rgba(100,200,255,0.2),inset 0 1px 0 rgba(255,255,255,0.1);
+}
+.result-banner{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding:14px 18px;
+  margin:8px 0 4px;
+  border-radius:14px;
+  background:linear-gradient(135deg,rgba(46,213,115,0.15),rgba(46,213,115,0.05));
+  border:1px solid rgba(46,213,115,0.3);
+  animation:slideDown 0.5s cubic-bezier(0.34,1.56,0.64,1);
+}
+.result-banner.fail{
+  background:linear-gradient(135deg,rgba(255,71,87,0.15),rgba(255,71,87,0.05));
+  border:1px solid rgba(255,71,87,0.3);
+}
+@keyframes slideDown{
+  from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}
+}
+.result-icon{
+  font-size:22px;
+  animation:pop-in 0.5s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes pop-in{
+  0%{transform:scale(0);opacity:0}
+  50%{transform:scale(1.2)}
+  100%{transform:scale(1);opacity:1}
+}
+.result-text{
+  font-size:16px;
+  font-weight:700;
+  color:var(--success);
+  text-shadow:0 0 12px rgba(46,213,115,0.5);
+  letter-spacing:0.2px;
+}
+.result-banner.fail .result-text{
+  color:var(--danger);
+  text-shadow:0 0 12px rgba(255,71,87,0.5);
+}
+.result-banner.fail .result-icon{
+  animation:pop-in-fail 0.5s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes pop-in-fail{
+  0%{transform:scale(0);opacity:0}
+  50%{transform:scale(1.3) rotate(-10deg)}
+  100%{transform:scale(1) rotate(0);opacity:1}
+}
+.stats-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+  margin-top:10px;
+}
+.stat{
+  text-align:center;
+  padding:14px 10px;
+  background:rgba(0,0,0,0.35);
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.05);
+  transition:transform 0.2s ease,box-shadow 0.2s ease,border-color 0.2s ease;
+  animation:stat-reveal 0.5s cubic-bezier(0.34,1.56,0.64,1) backwards;
+}
+.stat:nth-child(1){animation-delay:0.1s}
+.stat:nth-child(2){animation-delay:0.15s}
+.stat:nth-child(3){animation-delay:0.2s}
+@keyframes stat-reveal{
+  from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}
+}
+.stat:hover{
+  transform:translateY(-2px);
+  box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  border-color:rgba(100,200,255,0.2);
+}
+.stat-value{
+  font-size:20px;
+  font-weight:800;
+  font-variant-numeric:tabular-nums;
+  line-height:1.2;
+}
+.stat-value.gold{
+  color:var(--gold);
+  background:var(--gradient-gold);
+  -webkit-background-clip:text;
+  background-clip:text;
+  -webkit-text-fill-color:transparent;
+}
+.stat-value.tier-vii{
+  color:var(--tier-vii);
+  background:var(--gradient-t7);
+  -webkit-background-clip:text;
+  background-clip:text;
+  -webkit-text-fill-color:transparent;
+}
+.stat-value.success{
+  color:var(--success);
+  background:var(--gradient-success);
+  -webkit-background-clip:text;
+  background-clip:text;
+  -webkit-text-fill-color:transparent;
+}
+.stat-value.danger{
+  color:var(--danger);
+  background:var(--gradient-danger);
+  -webkit-background-clip:text;
+  background-clip:text;
+  -webkit-text-fill-color:transparent;
+}
+.stat-label{
+  font-size:10px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:1px;
+  margin-top:4px;
+  font-weight:500;
+}
+.cost-row{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  margin-top:16px;
+  padding:14px 18px;
+  background:rgba(255,215,0,0.08);
+  border:1px solid rgba(255,215,0,0.2);
+  border-radius:14px;
+  animation:cost-reveal 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.25s backwards;
+}
+@keyframes cost-reveal{
+  from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}
+}
+.coin-icon{
+  font-size:24px;
+  animation:coin-spin 4s linear infinite;
+  display:inline-block;
+  filter:drop-shadow(0 0 8px rgba(255,215,0,0.4));
+}
+@keyframes coin-spin{
+  0%,50%,100%{transform:rotateY(0deg)}
+  25%{transform:rotateY(90deg)}
+  75%{transform:rotateY(270deg)}
+}
+.cost-label{
+  font-size:13px;
+  color:var(--muted);
+  font-weight:500;
+}
+.cost-value{
+  font-size:18px;
+  font-weight:800;
+  color:var(--gold);
+  font-variant-numeric:tabular-nums;
+  background:var(--gradient-gold);
+  -webkit-background-clip:text;
+  background-clip:text;
+  -webkit-text-fill-color:transparent;
+}
+.particles{
+  position:fixed;
+  top:0;left:0;right:0;bottom:0;
+  pointer-events:none;
+  overflow:hidden;
+  z-index:10;
+}
+.particle{
+  position:absolute;
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  pointer-events:none;
+  animation:particle-rise 1.5s ease-out forwards;
+}
+@keyframes particle-rise{
+  0%{transform:translate(var(--tx,0),var(--ty,0)) scale(1);opacity:1}
+  100%{transform:translate(var(--tx-end,0),var(--ty-end,-150px)) scale(0);opacity:0}
+}
+.cooldown-row{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  margin-top:12px;
+  padding:12px 16px;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.06);
+  border-radius:12px;
+  animation:cost-reveal 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.3s backwards;
+}
+.cooldown-icon{font-size:20px;animation:clock-tick 1s ease-in-out infinite}
+@keyframes clock-tick{0%,100%{transform:rotate(0deg)}50%{transform:rotate(20deg)}}
+.cooldown-text{font-size:13px;color:var(--muted);font-weight:500}
+.cooldown-value{font-size:13px;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<div class="particles" id="particles"></div>
+<div class="container">
+  <div class="card">
+    <div class="katana-display">
+      <div class="katana-sheen"></div>
+      <div class="katana-art" id="kArt">⟦☾☾⟧◈══════☾════════►</div>
+      <div class="katana-name" id="kName">Хеш-клинок Сатоши<span class="tier-badge">VII</span></div>
+      <div class="katana-rank" id="kRank">Ранг VII</div>
+
+      <div class="result-banner" id="resultBanner">
+        <span class="result-icon" id="rIcon">✅</span>
+        <span class="result-text" id="rText">+0.26 см</span>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat">
+          <div class="stat-value tier-vii" id="sLen">33.2</div>
+          <div class="stat-label">Длина (см)</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value gold" id="sCoins">1,240</div>
+          <div class="stat-label">Монеты</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value success" id="sGrowth">+0.26</div>
+          <div class="stat-label">Прирост</div>
+        </div>
+      </div>
+
+      <div class="cost-row">
+        <span class="coin-icon">💰</span>
+        <span class="cost-label">Следующее улучшение:</span>
+        <span class="cost-value" id="uCost">350</span>
+      </div>
+
+      <div class="cooldown-row" id="cdRow" style="display:none;">
+        <span class="cooldown-icon">⏳</span>
+        <span class="cooldown-text">Следующая попытка через:</span>
+        <span class="cooldown-value" id="cdVal">0м 0с</span>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+function spawnParticles(count, colors, centerY){
+  const container=document.getElementById("particles");
+  for(let i=0;i<count;i++){
+    const p=document.createElement("div");
+    p.className="particle";
+    const angle=(Math.random()-0.5)*0.6;
+    const dist=80+Math.random()*100;
+    const tx=(Math.random()-0.5)*60;
+    const txEnd=tx+Math.sin(angle)*dist;
+    const ty=centerY+Math.random()*40;
+    const tyEnd=-dist*Math.cos(angle);
+    p.style.setProperty("--tx",`${tx}px`);
+    p.style.setProperty("--ty",`${ty}px`);
+    p.style.setProperty("--tx-end",`${txEnd}px`);
+    p.style.setProperty("--ty-end",`${tyEnd}px`);
+    p.style.left=`${window.innerWidth/2+tx}px`;
+    p.style.top=`${ty}px`;
+    const color=colors[Math.floor(Math.random()*colors.length)];
+    p.style.background=color;
+    p.style.boxShadow=`0 0 12px ${color}`;
+    container.appendChild(p);
+    setTimeout(()=>p.remove(),1500);
+  }
+}
+function animateValue(el,start,end,duration,formatter){
+  const startTime=performance.now();
+  function tick(now){
+    const progress=Math.min((now-startTime)/duration,1);
+    const eased=1-Math.pow(1-progress,3);
+    const current=start+(end-start)*eased;
+    el.textContent=formatter(current);
+    if(progress<1)requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+function tm(s){
+  if(s<=0)return"0с";
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+  return h?`${h}ч ${m}м`:(m?`${m}м ${sec}с`:`${sec}с`);
+}
+function initFromUrl(){
+  const params=new URLSearchParams(window.location.search);
+  const isSuccess=params.get("success")==="true";
+  const growth=parseFloat(params.get("growth")||"0");
+  const newLength=parseFloat(params.get("newLength")||"0");
+  const coins=parseFloat(params.get("coins")||"0");
+  const nextCost=parseFloat(params.get("nextCost")||"0");
+  const cooldown=parseInt(params.get("cooldown")||"0",10);
+  const katanaName=decodeURIComponent(params.get("name")||"");
+  const katanaRank=decodeURIComponent(params.get("rank")||"I");
+  const tier=parseInt(params.get("tier")||"1",10);
+  const art=decodeURIComponent(params.get("art")||"");
+
+  // Update DOM
+  document.getElementById("kArt").textContent=art||"⟦■⟧╦════►";
+  document.getElementById("kName").innerHTML=katanaName+`<span class="tier-badge">${katanaRank}</span>`;
+  document.getElementById("kRank").textContent="Ранг "+katanaRank;
+
+  const banner=document.getElementById("resultBanner");
+  const icon=document.getElementById("rIcon");
+  const text=document.getElementById("rText");
+
+  if(isSuccess){
+    icon.textContent="✅";
+    text.textContent="+"+growth.toFixed(2)+" см";
+    text.style.color="var(--success)";
+    text.style.textShadow="0 0 12px rgba(46,213,115,0.5)";
+    banner.classList.remove("fail");
+    // Spawn success particles
+    setTimeout(()=>spawnParticles(24,["var(--gold)","var(--tier-vii)","var(--accent)"],window.innerHeight*0.55),100);
+    setTimeout(()=>spawnParticles(18,["var(--gold)","var(--tier-vii)","var(--accent)"],window.innerHeight*0.55),900);
+    setTimeout(()=>spawnParticles(12,["var(--gold)","var(--tier-vii)","var(--accent)"],window.innerHeight*0.55),1700);
+  }else{
+    banner.classList.add("fail");
+    icon.textContent="💔";
+    text.textContent=(growth>=0?"-":"")+Math.abs(growth).toFixed(2)+" см";
+    text.style.color="var(--danger)";
+    text.style.textShadow="0 0 12px rgba(255,71,87,0.5)";
+    // Spawn fail particles
+    setTimeout(()=>spawnParticles(16,["var(--danger)","var(--gold)"],window.innerHeight*0.55),200);
+  }
+
+  animateValue(document.getElementById("sLen"),0,newLength,800,(v)=>v.toFixed(1));
+  animateValue(document.getElementById("sCoins"),0,coins,1000,(v)=>v.toLocaleString("ru-RU"));
+  animateValue(document.getElementById("sGrowth"),0,growth,600,(v)=>(isSuccess?"+":"")+v.toFixed(2));
+  animateValue(document.getElementById("uCost"),0,nextCost,700,(v)=>v.toLocaleString("ru-RU"));
+
+  const sGrowth=document.getElementById("sGrowth");
+  if(isSuccess){
+    sGrowth.className="stat-value success";
+  }else{
+    sGrowth.className="stat-value danger";
+  }
+
+  // Show cooldown if present
+  if(cooldown>0){
+    document.getElementById("cdRow").style.display="flex";
+    document.getElementById("cdVal").textContent=tm(cooldown);
+  }
+
+  // Apply tier styles to katana art
+  const artEl=document.getElementById("kArt");
+  artEl.style.filter=`drop-shadow(0 0 12px rgba(100,200,255,0.4))`;
+  if(tier>=7){
+    artEl.style.filter=`drop-shadow(0 0 16px rgba(100,200,255,0.6))`;
+  }
+}
+document.addEventListener("DOMContentLoaded",initFromUrl);
+</script>
+</body>
+</html>

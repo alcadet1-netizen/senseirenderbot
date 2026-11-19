@@ -5,7 +5,7 @@ import re
 from src.widgets.hedgehog import TEMPLATE, to_hedgehog_html
 
 
-def to_daily_pet_html(token, images, snapshot, *, demo=False):
+async def to_daily_pet_html(token, hedgehog_gridfs, snapshot, *, demo=False):
     front = TEMPLATE.split('<script>', 1)[0]
     for old, new in (
         ('7 сек', '10 сек'), ('за 7 секунд', 'пока не истекли 10 секунд'),

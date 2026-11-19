@@ -1,6 +1,7 @@
 """Mini App static UI and authenticated same-origin game API."""
 import logging
-from pathlib import Path
+import hashlib
+from io import BytesIO
 
 from aiohttp import web
 
@@ -26,15 +27,25 @@ def setup_hedgehog(app, container):
         })
         return response
 
-    # Reuse the bot's existing hedgehog pictures, never accept a filesystem path.
-    images = sorted(p for p in (container.settings.BASE_DIR / 'src/infra/storage/ega').glob('*')
-                    if p.is_file() and p.suffix.lower() in {'.jpg', '.jpeg', '.png', '.gif'})
+    # GridFS service for hedgehog images
+    gridfs = container.hedgehog_gridfs
 
     async def picture(request):
+        """Serve hedgehog image by index from GridFS."""
         index = int(request.match_info['index'])
-        if index >= len(images):
+        # Get list of images from GridFS
+        files = await gridfs.list_images()
+        if index >= len(files):
             raise web.HTTPNotFound()
-        return web.FileResponse(images[index], headers={'X-Content-Type-Options': 'nosniff'})
+        # Get image content by ID
+        content = await gridfs.get_image_by_id(files[index]['id'])
+        if not content:
+            raise web.HTTPNotFound()
+        return web.Response(
+            body=content,
+            content_type='image/jpeg',
+            headers={'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'public, max-age=3600'}
+        )
 
     async def api(request):
         headers = {'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'}
@@ -51,10 +62,12 @@ def setup_hedgehog(app, container):
             token = payload.get('session')
             method = container.hedgehog_service.start if request.match_info['action'] == 'start' else container.hedgehog_service.finish
             result = await method(token, user['id'])
-            if result.get('state') == 'done' and result['result']['success'] and images:
-                import hashlib
-                index = int(hashlib.sha256(token.encode()).hexdigest()[:8], 16) % len(images)
-                result = {**result, 'image': f'/miniapp/hedgehog/picture/{index}'}
+            if result.get('state') == 'done' and result['result']['success']:
+                # Get images from GridFS to determine index
+                files = await gridfs.list_images()
+                if files:
+                    index = int(hashlib.sha256(token.encode()).hexdigest()[:8], 16) % len(files)
+                    result = {**result, 'image': f'/miniapp/hedgehog/picture/{index}'}
             return web.json_response(result, headers=headers)
         except (GameError, DailyAlreadyClaimedError) as exc:
             return web.json_response({'error': str(exc)}, status=409, headers=headers)

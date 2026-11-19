@@ -51,6 +51,7 @@ class Container:
     _banzai_service: Optional["BanzaiService"] = field(default=None, init=False, repr=False)
     _xrocket_service: Optional["XRocketService"] = field(default=None, init=False, repr=False)
     _chat_settings_service: Optional["ChatSettingsService"] = field(default=None, init=False, repr=False)
+    _hedgehog_gridfs: Optional["HedgehogGridFS"] = field(default=None, init=False, repr=False)
 
     @property
     def comment_campaign_service(self):
@@ -298,6 +299,13 @@ class Container:
             from src.services.popugai_service import PopugaiService
             self._popugai_service = PopugaiService(self.mongo_client)
         return self._popugai_service
+
+    @property
+    def hedgehog_gridfs(self):
+        if self._hedgehog_gridfs is None:
+            from src.services.hedgehog_gridfs import HedgehogGridFS
+            self._hedgehog_gridfs = HedgehogGridFS(self.mongo_client)
+        return self._hedgehog_gridfs
 
     @property
     def sensei_check_service(self):

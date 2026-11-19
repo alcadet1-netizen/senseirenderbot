@@ -1,0 +1,195 @@
+--- TRADING VISUALS ---
+Generated 8 frames.
+Frame 0:
+<pre><code>┏━━━━━━[WCS NEON TERM ⬡]━━━━━━━
+┃● LIVE  PING:018ms  SPR:06bp  
+┃BTCUSDT    PX:85 864     Δ:+0.
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ CHART ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁   
+┃ BOOK  B:▓▓▓▓░░░░░░ A:▓▓▓▓▓▓▓ 
+┃ ▌LOW  ·          +    *    x 
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃KEYS: /buy /sell /sl /tp /clos
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code></pre>
+@Tester
+--------------------
+Frame 1:
+<pre><code>┏━━━━━━[WCS NEON TERM ⬡]━━━━━━━
+┃● LIVE  PING:025ms  SPR:09bp  
+┃BTCUSDT    PX:85 919     Δ:+0.
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ CHART ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█   
+┃ BOOK  B:▓▓▓▓▓▓▓░░░ A:▓▓▓▓▓▓▓ 
+┃ F▌OW   •    :    ;    =    + 
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃KEYS: /buy /sell /sl /tp /clos
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code></pre>
+@Tester
+--------------------
+Frame 2:
+<pre><code>┏━━━━━━[WCS NEON TERM ⬡]━━━━━━━
+┃● LIVE  PING:032ms  SPR:12bp  
+┃BTCUSDT    PX:85 910     Δ:+0.
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ CHART ▁▁▁▁▁▁▁▁▁▁█████████▆   
+┃ BOOK  B:▓▓▓▓▓▓▓▓▓▓ A:▓▓▓▓▓▓▓ 
+┃ FL▌W    :    ;    =    +     
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃KEYS: /buy /sell /sl /tp /clos
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code></pre>
+@Tester
+--------------------
+Frame 3:
+<pre><code>┏━━━━━━[WCS NEON TERM ⬡]━━━━━━━
+┃● LIVE  PING:039ms  SPR:15bp  
+┃BTCUSDT    PX:85 828     Δ:-0.
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ CHART ▃▃▃▃▃▃▃██████▇▇▇▇▇▇▁   
+┃ BOOK  B:▓▓▓▓▓▓▓▓▓▓ A:▓▓▓▓▓▓░ 
+┃ FLO▌    ·    •    :          
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃KEYS: /buy /sell /sl /tp /clos
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code></pre>
+@Tester
+--------------------
+Frame 4:
+<pre><code>┏━━━━━━[WCS NEON TERM ⬡]━━━━━━━
+┃● LIVE  PING:046ms  SPR:18bp  
+┃BTCUSDT    PX:85 756     Δ:-0.
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ CHART ▅▅▅▅▅█████▇▇▇▇▇▄▄▄▄▁   
+┃ BOOK  B:▓▓▓▓▓▓░░░░ A:▓▓▓▓░░░ 
+┃ FLOW▌    •    :    ;    =    
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃KEYS: /buy /sell /sl /tp /clos
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code></pre>
+@Tester
+--------------------
+Frame 5:
+<pre><code>┏━━━━━━[WCS NEON TERM ⬡]━━━━━━━
+┃● LIVE  PING:053ms  SPR:21bp  
+┃BTCUSDT    PX:85 673     Δ:-0.
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ CHART ▆▆▆▆████▇▇▇▇▅▅▅▅▃▃▃▁   
+┃ BOOK  B:▓▓▓▓▓▓▓▓▓░ A:▓▓▓▓▓▓▓ 
+┃ FLOW ▌   x    ·          +   
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃KEYS: /buy /sell /sl /tp /clos
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code></pre>
+@Tester
+--------------------
+Frame 6:
+<pre><code>┏━━━━━━[WCS NEON TERM ⬡]━━━━━━━
+┃● LIVE  PING:060ms  SPR:24bp  
+┃BTCUSDT    PX:85 686     Δ:-0.
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ CHART ▆▆▆▆███▇▇▇▅▅▅▃▃▃▁▁▁▁   
+┃ BOOK  B:▓▓▓▓▓▓▓▓▓▓ A:▓▓▓▓▓▓▓ 
+┃ FLOW  ▌XECUTED @ MARKET      
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃KEYS: /buy /sell /sl /tp /clos
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code></pre>
+@Tester
+--------------------
+Frame 7:
+<pre><code>┏━━━━━━[WCS NEON TERM ⬡]━━━━━━━
+┃● LIVE  PING:067ms  SPR:08bp  
+┃BTCUSDT    PX:85 714     Δ:-0.
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ CHART ▆▆▆███▇▇▇▅▅▃▃▃▁▁▁▁▁▂   
+┃ BOOK  B:▓▓▓▓▓░░░░░ A:▓▓▓▓▓▓▓ 
+┃ FLOW  E▌ECUTED @ MARKET      
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃KEYS: /buy /sell /sl /tp /clos
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code></pre>
+@Tester
+--------------------
+Result WIN:
+<pre><code>┏━━━━━[WCS NEON RESULT ◈]━━━━━━
+┃● SETTLED   LONG ▲    WIN     
+┃P/L:+100       BAL:5 000      
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ CHART ▁▂▃▄▅▆▇███▇▆▅▄▃▂▲      
+┃ EDGE  ▓▓▓▓▓▓▓░░░  PWR:70%    
+┃ NOTE  SIGNAL TRUE            
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃NEXT: /again /share /stats    
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code></pre>
+@Tester
+💳 BAL <code>5 000</code>
+Result LOSS:
+<pre><code>┏━━━━━[WCS NEON RESULT ◈]━━━━━━
+┃● SETTLED   SHORT ▼   LOSS    
+┃P/L:-50        BAL:4 950      
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ CHART ▁▂▃▄▅▆▇███▇▆▅▄▃▂▲      
+┃ EDGE  ▓▓░░░░░░░░  PWR:20%    
+┃ NOTE  STOP HIT               
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃NEXT: /again /share /stats    
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code></pre>
+@Tester
+💳 BAL <code>4 950</code>
+
+--- SLOTS VISUALS ---
+Generated 3 frames.
+Frame 0:
+<pre><code>┏━━━━━━━[SENSEI SLOTS ◆]━━━━━━━
+┃● LIVE  BET:   100  FEE:    10
+┃BAL:5,000        POT:—        
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ ⟡ BOOT SEQUENCE  RUN:D194-CB 
+┃ ▶ 💎 │ 🍒 │ 7️⃣ ◀              
+┃ CORE  ▓▓░░░░░░░░  J:2        
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃STATE: BOOT                   
+┃SYNC:OK  RUN:D194-CB17        
+┃KEYS: /spin /bet /cashout     
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code></pre>
+👤 Tester
+--------------------
+Frame 1:
+<pre><code>┏━━━━━━━[SENSEI SLOTS ◆]━━━━━━━
+┃● LIVE  BET:   100  FEE:    10
+┃BAL:5,000        POT:—        
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ ✶ LOCK-IN  HOLD YOUR BREATH  
+┃ ▶⟦🍒⟧│ 💎 │ 7️⃣ ◀              
+┃ CORE  ▓▓▓░░░░░░░  J:9        
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃STATE: LOCKING                
+┃SYNC:OK  RUN:D194-CB17        
+┃KEYS: /spin /bet /cashout     
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code></pre>
+👤 Tester
+--------------------
+Frame 2:
+<pre><code>┏━━━━━━━[SENSEI SLOTS ◆]━━━━━━━
+┃● LIVE  BET:   100  FEE:    10
+┃BAL:5,000        POT:—        
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ ⌁ REVEAL  RPM:1071           
+┃ ▶⟦🍒⟧│⟦🍒⟧│ 🍒 ◀                
+┃ CORE  ▓▓▓▓░░░░░░  J:1        
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃STATE: REVEAL                 
+┃SYNC:OK  RUN:D194-CB17        
+┃KEYS: /spin /bet /cashout     
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code></pre>
+👤 Tester
+--------------------
+Result WIN:
+<pre><code>┏━━━━━━━[SENSEI SLOTS ✨]━━━━━━━
+┃● LIVE  BET:   100  FEE:    10
+┃BAL:5,500        POT:500      
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ RESULT: WINNER!              
+┃ ▶⟦🍒⟧│⟦🍒⟧│⟦🍒⟧◀                
+┃ PRIZE: 500                   
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃STATE: WINNER!                
+┃GAME OVER                     
+┃KEYS: /spin /bet /cashout     
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code></pre>
+👤 Tester
+💰 WIN <code>+500</code>

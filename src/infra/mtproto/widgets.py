@@ -260,10 +260,7 @@ class MtprotoWidgets:
                 # starts the clock, changes XP/coins or consumes the daily claim.
                 game = await self.container.hedgehog_service.issue(update.user_id)
                 async with RENDER_SLOTS:
-                    html = await asyncio.to_thread(
-                        to_hedgehog_html, game['token'],
-                        self.container.settings.BASE_DIR / 'src/infra/storage/ega',
-                    )
+                    html = await to_hedgehog_html(game['token'], self.container.hedgehog_gridfs)
                 results.append(self.types.InputBotInlineResult(
                     id='hedgehog_' + game['token'], type='article',
                     title='🦔 Погладь ежа · 7 секунд',

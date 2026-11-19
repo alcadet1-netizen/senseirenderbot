@@ -4,7 +4,7 @@ import asyncio
 import time
 
 
-from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, BufferedInputFile
 
 from src.bot.native_widgets import send_native_widget
 from src.widgets.daily_pet import to_daily_pet_html
@@ -14,17 +14,34 @@ from src.services.hedgehog_service import GameError
 from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure
 
 
-def picture(container, token, image_name=None):
-    files = sorted(p for p in (container.settings.BASE_DIR / 'src/infra/storage/ega').glob('*')
-                   if p.is_file() and p.suffix.lower() in {'.jpg', '.jpeg', '.png'})
-    if not files:
+async def _get_random_image_from_gridfs(container) -> bytes:
+    """Get a random hedgehog image from GridFS."""
+    gridfs = container.hedgehog_gridfs
+    file_info = await gridfs.get_random_image()
+    if not file_info:
         raise GameError('Картинки ежа временно недоступны. Попробуйте позже.')
+    content = await gridfs.get_image_by_id(file_info['id'])
+    if not content:
+        raise GameError('Картинки ежа временно недоступны. Попробуйте позже.')
+    return content
+
+
+async def _get_image_by_name_from_gridfs(container, image_name: str) -> bytes:
+    """Get a specific hedgehog image by name from GridFS."""
+    gridfs = container.hedgehog_gridfs
+    content = await gridfs.get_image(image_name)
+    if not content:
+        raise GameError('Сохранённая картинка ежа недоступна. Обратитесь в /paysupport; не платите повторно.')
+    return content
+
+
+async def picture(container, token, image_name=None):
+    """Return a BufferedInputFile with hedgehog image from GridFS."""
     if image_name is not None:
-        selected = next((p for p in files if p.name == image_name), None)
-        if selected is None:
-            raise GameError('Сохранённая картинка ежа недоступна. Обратитесь в /paysupport; не платите повторно.')
-        return FSInputFile(selected)
-    return FSInputFile(files[int(hashlib.sha256(token.encode()).hexdigest()[:8], 16) % len(files)])
+        content = await _get_image_by_name_from_gridfs(container, image_name)
+    else:
+        content = await _get_random_image_from_gridfs(container)
+    return BufferedInputFile(content, filename="hedgehog.jpg")
 
 
 async def send_daily_hedgehog(message, user, container):
@@ -64,8 +81,7 @@ async def open_pet(message, user, container, token):
             raise GameError('Сначала получите обычное уведомление ежа в чате.')
         snapshot = await container.daily_pet_service.widget_action(token, user.id, 'v', '')
         async with RENDER_SLOTS:
-            html = await asyncio.to_thread(to_daily_pet_html, token,
-                container.settings.BASE_DIR / 'src/infra/storage/ega', snapshot)
+            html = await to_daily_pet_html(token, container.hedgehog_gridfs, snapshot)
         await send_native_widget(message.bot, container, user.id, html)
     except GameError as exc:
         await message.answer(str(exc), parse_mode=None)

@@ -8,6 +8,7 @@ from aiogram.filters import Command
 from src.bot.native_widgets import send_native_widget
 from src.bot.widget_diagnostics import WIDGET_TRANSPORT_ERRORS, describe_failure, widget_chat_advice
 from src.widgets.hedgehog import to_hedgehog_html
+from src.widgets.daily_pet import to_daily_pet_html
 from src.widgets.limits import RENDER_SLOTS
 
 router = Router(name='widget_check')
@@ -47,10 +48,7 @@ async def cmd_widget_check(message, container):
                 html = MINIMAL_WIDGET
             else:
                 async with RENDER_SLOTS:
-                    html = await asyncio.to_thread(
-                        to_hedgehog_html, 'A' * 32,
-                        container.settings.BASE_DIR / 'src/infra/storage/ega',
-                    )
+                    html = await to_hedgehog_html('A' * 32, container.hedgehog_gridfs)
                 # Issued game tokens are always 32 characters; this sentinel
                 # cannot resolve to an issued daily session, even if tapped.
                 html = html.replace('"' + 'A' * 32 + '"', '"diagnostic_no_game"', 1)
@@ -102,9 +100,7 @@ async def cmd_ega(message, container):
                          'балансы, серия и ежедневная попытка не меняются.', parse_mode=None)
     try:
         async with RENDER_SLOTS:
-            html = await asyncio.to_thread(
-                to_daily_pet_html, 'A' * 32,
-                container.settings.BASE_DIR / 'src/infra/storage/ega',
+            html = await to_daily_pet_html('A' * 32, container.hedgehog_gridfs,
                 dict(state='playing', remaining_ms=15000, taps=0, extra_coins=0, base_coins=55),
                 demo=True,
             )

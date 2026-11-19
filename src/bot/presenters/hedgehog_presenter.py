@@ -24,10 +24,7 @@ async def launch_legacy_hedgehog(message, user, container, token=None):
         game = (await container.hedgehog_service.owned(token, user.id) if token else
                 await container.hedgehog_service.issue(user.id))
         async with RENDER_SLOTS:
-            html = await asyncio.to_thread(
-                to_hedgehog_html, game['token'],
-                container.settings.BASE_DIR / 'src/infra/storage/ega',
-            )
+            html = await to_hedgehog_html(game['token'], container.hedgehog_gridfs)
         # Direct media in THIS chat, including groups. No WebAppInfo, URL or
         # private-chat deep link. The roll does not start until a widget tap.
         await send_native_widget(message.bot, container, message.chat.id, html)
