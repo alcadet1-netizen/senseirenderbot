@@ -296,11 +296,18 @@ async def cmd_add_coin(message: Message, container: Container):
 
     target_user = message.reply_to_message.from_user
 
-    result = await container.economy_service.admin_add_coins(
-        user_id=target_user.id,
-        amount=amount,
-        admin_id=message.from_user.id
-    )
+    try:
+        result = await container.economy_service.admin_add_coins(
+            user_id=target_user.id,
+            amount=amount,
+            admin_id=message.from_user.id
+        )
+    except Exception:
+        logger.exception("Admin coin grant outcome could not be confirmed")
+        await message.answer(
+            f"{mention}\n\n⚠️ Не удалось подтвердить результат выдачи. "
+            "Проверьте баланс и журнал перед повтором команды.", parse_mode="HTML")
+        return
 
     if result["success"]:
         target_username = target_user.username

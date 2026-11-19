@@ -202,3 +202,77 @@ async def test_starter_reservation_only_released_on_definite_duplicate(entrypoin
         svc.emission.release.assert_awaited_once_with(3000, 'starter:8')
     else:
         svc.emission.release.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('source', ['admin', 'zov'])
+async def test_bank_transfer_uses_both_accounts_and_does_not_change_emission(source):
+    svc, db = economy([{'_id': 'single', 'coins': 3, 'total_emitted': 100, 'burned': 5},
+                       {'_id': 'main', 'balance': 7}])
+    if source == 'admin':
+        result = await svc.admin_add_coins(7, 8, 42)
+        assert result['success'] and result['new_balance'] == 1008
+        assert list(db.transactions.docs.values())[0]['tx_type'] == 'admin_grant'
+    else:
+        assert await svc.distribute_zov_reward(7, 8)
+        assert not db.transactions.docs
+    assert db.bank.docs['single']['coins'] == 0
+    assert db.bank.docs['main']['balance'] == 2
+    assert db.bank.docs['single']['total_emitted'] == 100
+    assert db.bank.docs['single']['burned'] == 5
+    assert db.users.docs[7]['coins'] == 1008
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('source', ['admin', 'zov'])
+async def test_bank_transfer_missing_user_and_insufficient_bank_do_not_debit(source):
+    svc, db = economy([{'_id': 'single', 'coins': 3, 'total_emitted': 100}])
+    call = (lambda uid, amount: svc.admin_add_coins(uid, amount, 42)) if source == 'admin' else svc.distribute_zov_reward
+    for uid, amount in ((999, 2), (7, 4)):
+        result = await call(uid, amount)
+        assert (result['success'] if source == 'admin' else result) is False
+    assert db.bank.docs['single']['coins'] == 3
+    assert db.users.docs[7]['coins'] == 1000
+    assert not db.transactions.docs
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('amount', [float('nan'), float('inf'), -1, 0])
+async def test_admin_rejects_nonfinite_or_nonpositive_amounts(amount):
+    svc, db = economy([{'_id': 'single', 'coins': 10, 'total_emitted': 100}])
+    assert not (await svc.admin_add_coins(7, amount, 42))['success']
+    assert db.bank.docs['single']['coins'] == 10 and db.users.docs[7]['coins'] == 1000
+
+
+@pytest.mark.asyncio
+async def test_admin_journal_failure_rolls_back_transfer():
+    svc, db = economy([{'_id': 'single', 'coins': 3, 'total_emitted': 100},
+                       {'_id': 'main', 'balance': 7}])
+    async def fail(*args, **kwargs):
+        raise RuntimeError('journal down')
+    db.transactions.insert_one = fail
+    with pytest.raises(RuntimeError, match='journal down'):
+        await svc.admin_add_coins(7, 8, 42)
+    assert db.bank.docs['single']['coins'] == 3
+    assert db.bank.docs['main']['balance'] == 7
+    assert db.users.docs[7]['coins'] == 1000
+
+
+@pytest.mark.asyncio
+async def test_concurrent_admin_and_zov_cannot_overspend_bank():
+    svc, db = economy([{'_id': 'single', 'coins': 10, 'total_emitted': 100}])
+    other = EconomyService(NS(database=db))
+    admin, zov = await asyncio.gather(svc.admin_add_coins(7, 8, 42), other.distribute_zov_reward(7, 8))
+    assert int(admin['success']) + int(zov) == 1
+    assert db.bank.docs['single']['coins'] == 2
+    assert db.users.docs[7]['coins'] == 1008
+
+
+@pytest.mark.asyncio
+async def test_fractional_transfer_across_accounts_does_not_reject_rounding():
+    svc, db = economy([{'_id': 'single', 'coins': 0.1, 'total_emitted': 100},
+                       {'_id': 'main', 'balance': 0.2}], user_coins=0)
+    assert (await svc.admin_add_coins(7, 0.3, 42))['success']
+    assert db.bank.docs['single']['coins'] == 0
+    assert db.bank.docs['main']['balance'] == 0
+    assert db.users.docs[7]['coins'] == 0.3
