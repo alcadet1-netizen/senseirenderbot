@@ -140,12 +140,24 @@ class DailyPetService:
     async def tap(self, token, user_id, query_id, *, received_at=None, rate_limit=True):
         if not isinstance(query_id, str) or not 1 <= len(query_id) <= 128:
             raise GameError('Неверное поглаживание.')
+        from decimal import Decimal
+        import math
+        from src.services.bank_ledger import _matched
+        from src.services.referral_economy import transaction
+
         async with self._locks[user_id]:
-            for _ in range(8):
-                session = await self.owned(token, user_id)
-                if session.get('paid_order'):
-                    from src.services.paid_hedgehog_service import PaidHedgehogService
-                    return await PaidHedgehogService(self.mongo, self.hedgehog_gridfs).tap(token, user_id, query_id, received_at=received_at, rate_limit=rate_limit)
+            initial = await self.owned(token, user_id)
+            if initial.get('paid_order'):
+                from src.services.paid_hedgehog_service import PaidHedgehogService
+                return await PaidHedgehogService(self.mongo, self.hedgehog_gridfs).tap(
+                    token, user_id, query_id, received_at=received_at, rate_limit=rate_limit)
+
+            async def settle(tx):
+                user = await self.users.find_one({'id': user_id}, session=tx)
+                session = (user or {}).get('daily_pet', {})
+                if (not user or user.get('is_banned') or session.get('token') != token
+                        or user.get('hedgehog_day') != session.get('day') or session.get('paid_order')):
+                    raise GameError('Это не ваш ёж или наступил новый день. Откройте /senseidaily.')
                 if session['state'] == 'pending':
                     raise GameError('Ёж ещё готовится. Нажмите ещё раз.')
                 if query_id in session['queries']:
@@ -156,38 +168,45 @@ class DailyPetService:
                 slot = int(accepted_at * 10) if received_at is not None and rate_limit else None
                 if slot is not None and slot in session.get('web_slots', []):
                     raise PetRateLimit('Тапы слишком частые: не более одного за 100 мс. Эффекты работают на каждом касании.')
-                bank_balance = max(0, int(await self.ledger.balance()))
+                accounts = []
+                for bank_id, field in (('single', 'coins'), ('main', 'balance')):
+                    doc = await self.bank.find_one({'_id': bank_id}, session=tx) or {}
+                    balance = float(doc.get(field, 0) or 0)
+                    if not math.isfinite(balance):
+                        raise ValueError('Invalid bank balance')
+                    accounts.append((bank_id, field, Decimal(str(max(0.0, balance)))))
+                available = int(sum((entry[2] for entry in accounts), Decimal(0)))
                 desired = session['base_coins'] * (session['taps'] + 1) // 10
-                # Each tap adds ten percent of the original coin award, not compound interest.
-                delta = min(max(0, desired - session['extra_coins']), bank_balance)
-                # Debit first: a concurrent tap may consume the last coins, in
-                # which case this tap gives no extra coins instead of minting.
-                if delta and not await self.ledger.try_withdraw(delta):
-                    delta = 0
+                delta = min(max(0, desired - session['extra_coins']), available)
+                remaining = Decimal(delta)
+                for bank_id, field, balance in accounts:
+                    take = min(remaining, balance)
+                    if take <= 0:
+                        continue
+                    debit = await self.bank.update_one({'_id': bank_id, field: {'$gte': float(take)}},
+                        {'$inc': {field: -float(take)}}, session=tx)
+                    if not _matched(debit):
+                        raise GameError('Банк изменился. Повторите запрос.')
+                    remaining -= take
+                if remaining > 0:
+                    raise GameError('Банк изменился. Повторите запрос.')
                 updated = copy.deepcopy(session)
                 updated['taps'] += 1
                 updated['extra_coins'] += delta
                 updated['queries'].append(query_id)
                 if slot is not None:
                     updated.setdefault('web_slots', []).append(slot)
-                # Count, dedup receipt and money are ONE atomic user-document change.
-                # Full snapshot CAS also protects simultaneous callbacks across processes.
                 committed = await self.users.find_one_and_update(
                     {'id': user_id, 'is_banned': {'$ne': True}, 'daily_pet': session},
                     {'$set': {'daily_pet': updated}, '$inc': {'coins': delta}},
-                    return_document=ReturnDocument.AFTER)
+                    return_document=ReturnDocument.AFTER, session=tx)
                 if not committed:
-                    if delta:
-                        await self.ledger.refund(delta, 'daily_pet_cas_race')
-                    continue
-                try:
-                    await self.transactions.update_one(
-                        {'_id': f"daily_pet:{user_id}:{session['day']}:{updated['taps']}"},
-                        {'$setOnInsert': {'user_id': user_id, 'tx_type': 'daily_pet_bonus',
-                         'coins_change': delta, 'xp_change': 0, 'created_at': datetime.now(timezone.utc)}},
-                        upsert=True)
-                except Exception:
-                    import logging
-                    logging.getLogger(__name__).exception('Daily pet credited; ledger needs reconciliation: user=%s', user_id)
+                    raise GameError('Поглаживания пришли одновременно. Нажмите ещё раз.')
+                await self.transactions.update_one(
+                    {'_id': f"daily_pet:{user_id}:{session['day']}:{updated['taps']}"},
+                    {'$setOnInsert': {'user_id': user_id, 'tx_type': 'daily_pet_bonus',
+                     'coins_change': delta, 'xp_change': 0, 'created_at': datetime.now(timezone.utc)}},
+                    upsert=True, session=tx)
                 return updated
-            raise GameError('Поглаживания пришли одновременно. Нажмите ещё раз.')
+
+            return await transaction(self.mongo, settle)
