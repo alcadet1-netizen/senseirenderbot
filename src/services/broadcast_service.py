@@ -64,7 +64,9 @@ class BroadcastService:
 
     async def get_count(self) -> int:
         """Получить количество пользователей для рассылки."""
-        return len(await self.get_users())
+        # Count on MongoDB rather than loading every full profile into memory.
+        # Keep exactly the same eligibility predicate as the broadcast itself.
+        return await self.users.count_documents({"is_banned": {"$ne": True}})
 
     def set_pending(self, msg: BroadcastMessage):
         self._pending = msg
