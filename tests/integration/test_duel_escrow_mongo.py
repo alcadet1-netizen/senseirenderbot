@@ -108,7 +108,8 @@ async def test_recovery_retries_decided_concurrently_without_touching_live_escro
 
 
 @pytest.mark.asyncio
-async def test_same_duel_command_reserves_once_across_processes_and_restart():
+@pytest.mark.parametrize('attempt', range(30))
+async def test_same_duel_command_reserves_once_across_processes_and_restart(attempt):
     from unittest.mock import AsyncMock
     from src.services.duel_service import DuelService, Duel
     uri = os.environ.get('CAMPAIGN_TEST_MONGO_URI')
