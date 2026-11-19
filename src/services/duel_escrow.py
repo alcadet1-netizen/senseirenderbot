@@ -6,7 +6,6 @@ from pymongo.errors import DuplicateKeyError
 
 from src.services.bank_ledger import _matched
 from src.services.referral_economy import transaction
-from src.services.transaction_retry import retry_initial_namespace
 
 
 logger = logging.getLogger(__name__)
@@ -51,7 +50,7 @@ class DuelEscrow:
                     'description': f'Ставка в дуэли #{duel_id}', 'created_at': now}, session=tx)
             return True
         try:
-            return await retry_initial_namespace(transaction, self.mongo, apply)
+            return await transaction(self.mongo, apply)
         except DuplicateKeyError:
             prior = await self.escrows.find_one({'_id': escrow_id})
             if prior and reject_existing:

@@ -108,8 +108,9 @@ async def test_recovery_retries_decided_concurrently_without_touching_live_escro
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('attempt', range(100))
-async def test_same_duel_command_reserves_once_across_processes_and_restart(attempt, caplog):
+@pytest.mark.parametrize('attempt', range(30))
+@pytest.mark.parametrize('precreated', [False, True])
+async def test_same_duel_command_reserves_once_across_processes_and_restart(attempt, precreated, caplog):
     from unittest.mock import AsyncMock
     from src.services.duel_service import DuelService, Duel
     uri = os.environ.get('CAMPAIGN_TEST_MONGO_URI')
@@ -120,6 +121,9 @@ async def test_same_duel_command_reserves_once_across_processes_and_restart(atte
     db = client[name]
     try:
         await db.users.insert_many([{'id': 7, 'coins': 1000}, {'id': 8, 'coins': 1000}])
+        if precreated:
+            await db.create_collection('duel_escrows')
+            await db.create_collection('transactions')
         container = NS(mongo_client=NS(database=db), user_service=NS(), economy_service=NS())
         workers = [DuelService(container) for _ in range(8)]
         results = await asyncio.gather(*(w.create_duel(7, 8, 300, -100, AsyncMock(), request_id='-100:42')
@@ -131,7 +135,15 @@ async def test_same_duel_command_reserves_once_across_processes_and_restart(atte
                    str(r.exc_info[1]).split('full error:')[0][:400])
                   for r in caplog.records if r.levelname == 'ERROR' and r.exc_info]
         if unexpected:
-            pytest.fail(f"Unexpected duel replies: {unexpected}; database errors: {errors}", pytrace=False)
+            # On first use, MongoDB can report code 112 while different
+            # transactions race to create a collection at commit. The app
+            # must fail closed rather than retry an unknown commit outcome.
+            assert not precreated, (unexpected, errors)
+            assert all('Ставки не подтверждены' in reply for reply in unexpected), unexpected
+            assert len(errors) >= len(unexpected), errors
+            assert all(kind == 'OperationFailure' and code == 112
+                       and 'Collection namespace' in message and 'is already in use' in message
+                       for kind, code, message in errors), errors
         assert (await db.users.find_one({'id': 7}))['coins'] == 700
         assert (await db.users.find_one({'id': 8}))['coins'] == 700
         assert await db.duel_escrows.count_documents({}) == 1
