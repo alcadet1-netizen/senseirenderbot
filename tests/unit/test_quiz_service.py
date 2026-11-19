@@ -26,6 +26,12 @@ def mock_mongo_client():
     db.bank = AsyncMock()
     db.tickets = AsyncMock()
 
+    class Session:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def with_transaction(self, callback, **kwargs): return await callback(self)
+    db.client.start_session = AsyncMock(return_value=Session())
+
     return client
 
 
@@ -147,7 +153,8 @@ async def test_check_answer_correct(quiz_service, mock_mongo_client):
     # 5. Quiz state update (mark as answered, update stats)
     assert mock_mongo_client.database.quiz_states.update_one.call_count == 1  # One for update
     quiz_state_update_args = mock_mongo_client.database.quiz_states.update_one.call_args_list[0]
-    assert quiz_state_update_args[0][0] == {"chat_id": chat_id}
+    assert quiz_state_update_args[0][0] == {"chat_id": chat_id, "status": "waiting_answer",
+                                             "current_question_id": 1, "round": 1}
     assert "$set" in quiz_state_update_args[0][1]
     update_data = quiz_state_update_args[0][1]["$set"]
     assert update_data["status"] == "answered"
@@ -221,7 +228,7 @@ async def test_check_answer_insufficient_funds(quiz_service, mock_mongo_client):
     # Verify
     assert result is not None
     assert result["user_id"] == user_id
-    assert result["reward"] == 100.0
+    assert result["reward"] == 0.0
     # Balance should remain 100 (no transfer due to insufficient funds in bank)
     assert result["balance"] == 100.0
 
@@ -240,7 +247,8 @@ async def test_check_answer_insufficient_funds(quiz_service, mock_mongo_client):
     # Verify quiz state was still updated (marked as answered, stats updated)
     assert mock_mongo_client.database.quiz_states.update_one.call_count == 1
     quiz_state_update_args = mock_mongo_client.database.quiz_states.update_one.call_args_list[0]
-    assert quiz_state_update_args[0][0] == {"chat_id": chat_id}
+    assert quiz_state_update_args[0][0] == {"chat_id": chat_id, "status": "waiting_answer",
+                                             "current_question_id": 1, "round": 1}
     assert "$set" in quiz_state_update_args[0][1]
     update_data = quiz_state_update_args[0][1]["$set"]
     assert update_data["status"] == "answered"

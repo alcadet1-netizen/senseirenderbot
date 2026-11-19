@@ -2,6 +2,7 @@
 import os
 import asyncio
 import html
+import logging
 from pathlib import Path
 from aiogram import Router, Bot, F
 from aiogram.types import Message
@@ -12,6 +13,7 @@ from src.bot.states.quiz_states import AddQuestionStates
 from src.core.container import Container
 from src.core.visuals import Visuals
 
+logger = logging.getLogger(__name__)
 router = Router()
 
 # Директория для хранения изображений
@@ -184,7 +186,12 @@ async def check_quiz_answer(
     service = get_quiz_service(container)
     
     user_name = html.escape(message.from_user.full_name)
-    result = await service.check_answer(chat_id, user_id, user_name, message.text)
+    try:
+        result = await service.check_answer(chat_id, user_id, user_name, message.text)
+    except Exception:
+        logger.exception('Quiz answer outcome could not be confirmed chat=%s user=%s', chat_id, user_id)
+        await message.reply('⚠️ Результат ответа не подтверждён. Не повторяйте ответ до проверки.', parse_mode=None)
+        return
     
     if result:
         w = Visuals.FRAME_W_MENU
@@ -194,7 +201,8 @@ async def check_quiz_answer(
             Visuals.frame_separator_left(w),
             Visuals.frame_line_left(f"👤 {user_name}", w, align="left"),
             Visuals.frame_line_left(f"💰 +{result['reward']:.0f} монет", w, align="left"),
-            Visuals.frame_line_left(f"🎟 +1 билет", w, align="left"),
+            *([Visuals.frame_line_left(f"🎟 +{result['tickets']} билет", w, align="left")]
+              if result.get('tickets', 0) else []),
             Visuals.frame_separator_left(w),
             Visuals.frame_line_left("🔜 След. вопрос...", w, align="left"),
             Visuals.frame_bottom_left(w)
