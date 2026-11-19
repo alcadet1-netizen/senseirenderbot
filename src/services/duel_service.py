@@ -8,6 +8,7 @@ import random
 import time
 import logging
 import html
+import hashlib
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -20,7 +21,7 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, Teleg
 from src.core.container import Container
 from src.core.visuals import Visuals
 from src.core.constants import LEVEL_XP_REQUIREMENTS
-from src.services.duel_escrow import DuelEscrow
+from src.services.duel_escrow import DuelEscrow, DuelRequestAlreadyUsed
 from src.services.duel_resources import (
     ARENAS, DODGE_GAGS_L, DODGE_GAGS_R, ATTACK_GAGS_L, ATTACK_GAGS_R,
     HIT_GAGS, MISS_GAGS, DUEL_COOLDOWN_SEC, DUEL_ACCEPT_TIMEOUT_SEC,
@@ -204,15 +205,29 @@ class DuelService:
                 return True
         return False
 
-    async def create_duel(self, challenger_id: int, opponent_id: int, bet: int, chat_id: int, bot: Bot) -> Union[Duel, str]:
+    async def create_duel(self, challenger_id: int, opponent_id: int, bet: int, chat_id: int, bot: Bot, *, request_id: Optional[str] = None) -> Union[Duel, str]:
         # Let an in-flight escrow finish registration before shutdown snapshots it.
         async with self._lifecycle_lock:
-            return await self._create_duel(challenger_id, opponent_id, bet, chat_id, bot)
+            return await self._create_duel(challenger_id, opponent_id, bet, chat_id, bot, request_id=request_id)
 
-    async def _create_duel(self, challenger_id: int, opponent_id: int, bet: int, chat_id: int, bot: Bot) -> Union[Duel, str]:
+    async def _create_duel(self, challenger_id: int, opponent_id: int, bet: int, chat_id: int, bot: Bot, *, request_id: Optional[str] = None) -> Union[Duel, str]:
         if self._closing:
             return "Бот перезапускается. Новые дуэли временно недоступны."
         logger.info("Create duel: challenger=%s opponent=%s bet=%s chat=%s", challenger_id, opponent_id, bet, chat_id)
+        if request_id is not None and (not isinstance(request_id, str) or not 1 <= len(request_id) <= 256):
+            return '❜ Некорректный идентификатор вызова.'
+        # The message key is stable across delivery retries and independent
+        # of the process-local short duel number.
+        escrow_id = ('duel:' + hashlib.sha256(request_id.encode()).hexdigest()
+                     if bet > 0 and request_id else uuid.uuid4().hex if bet > 0 else None)
+        if bet > 0 and request_id:
+            try:
+                previous = await self.escrow.escrows.find_one({'_id': escrow_id})
+            except Exception:
+                logger.exception('Could not check duel request: escrow=%s', escrow_id)
+                return f'⚠️ Не удалось проверить вызов. Не повторяйте до проверки. ID: {escrow_id}'
+            if previous:
+                return '❜ Этот вызов уже обработан. Повторного списания нет.'
         # 0. Check busy
         if self._is_in_active_duel(challenger_id):
             return "❜ Вы уже участвуете в активной дуэли (или отправили вызов)."
@@ -226,12 +241,14 @@ class DuelService:
         # Generate the durable key before any money moves; it is independent
         # of the short display ID, which can repeat after a restart.
         did = _pick_duel_id(set(self.duels.keys()))
-        escrow_id = uuid.uuid4().hex if bet > 0 else None
         aname, adesc, agag = pick_arena()
         # 2. Escrow
         if bet > 0:
             try:
-                reserved = await self._escrow_funds(challenger_id, opponent_id, bet, escrow_id, did)
+                reserved = await self._escrow_funds(challenger_id, opponent_id, bet, escrow_id, did,
+                                                    reject_existing=bool(request_id))
+            except DuelRequestAlreadyUsed:
+                return '❜ Этот вызов уже обработан. Повторного списания нет.'
             except Exception:
                 logger.exception('Duel stake outcome unconfirmed: escrow=%s', escrow_id)
                 return f'⚠️ Ставки не подтверждены. Не создавайте повторную дуэль до проверки. ID: {escrow_id}'
@@ -1017,5 +1034,5 @@ class DuelService:
 
         return None
 
-    async def _escrow_funds(self, cid: int, oid: int, bet: int, escrow_id: str, duel_id: int) -> bool:
-        return await self.escrow.reserve(escrow_id, cid, oid, bet, duel_id)
+    async def _escrow_funds(self, cid: int, oid: int, bet: int, escrow_id: str, duel_id: int, *, reject_existing=False) -> bool:
+        return await self.escrow.reserve(escrow_id, cid, oid, bet, duel_id, reject_existing=reject_existing)

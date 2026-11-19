@@ -96,7 +96,8 @@ async def cmd_duel(message: Message, container: Container, bot: Bot, bet: int = 
             opponent_id=opponent.id,
             bet=bet,
             chat_id=message.chat.id,
-            bot=bot
+            bot=bot,
+            request_id=f'{message.chat.id}:{message.message_id}'
         )
         
         if isinstance(result, str):

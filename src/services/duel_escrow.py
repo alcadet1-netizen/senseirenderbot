@@ -11,6 +11,10 @@ from src.services.referral_economy import transaction
 logger = logging.getLogger(__name__)
 
 
+class DuelRequestAlreadyUsed(Exception):
+    """A prior Telegram update already created this escrow."""
+
+
 class DuelEscrow:
     def __init__(self, mongo):
         self.mongo = mongo
@@ -18,10 +22,12 @@ class DuelEscrow:
         self.escrows = mongo.database.duel_escrows
         self.transactions = mongo.database.transactions
 
-    async def reserve(self, escrow_id, cid, oid, bet, duel_id):
+    async def reserve(self, escrow_id, cid, oid, bet, duel_id, *, reject_existing=False):
         async def apply(tx):
             previous = await self.escrows.find_one({'_id': escrow_id}, session=tx)
             if previous:
+                if reject_existing:
+                    raise DuelRequestAlreadyUsed()
                 if (previous['challenger_id'], previous['opponent_id'], previous['bet']) != (cid, oid, bet):
                     raise RuntimeError('Duel escrow identifier conflict')
                 return True
@@ -47,6 +53,8 @@ class DuelEscrow:
             return await transaction(self.mongo, apply)
         except DuplicateKeyError:
             prior = await self.escrows.find_one({'_id': escrow_id})
+            if prior and reject_existing:
+                raise DuelRequestAlreadyUsed()
             if prior and (prior['challenger_id'], prior['opponent_id'], prior['bet']) == (cid, oid, bet):
                 return True
             raise
