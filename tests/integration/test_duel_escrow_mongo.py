@@ -109,7 +109,7 @@ async def test_recovery_retries_decided_concurrently_without_touching_live_escro
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('attempt', range(30))
-async def test_same_duel_command_reserves_once_across_processes_and_restart(attempt):
+async def test_same_duel_command_reserves_once_across_processes_and_restart(attempt, caplog):
     from unittest.mock import AsyncMock
     from src.services.duel_service import DuelService, Duel
     uri = os.environ.get('CAMPAIGN_TEST_MONGO_URI')
@@ -126,7 +126,10 @@ async def test_same_duel_command_reserves_once_across_processes_and_restart(atte
                                          for w in workers))
         fights = [r for r in results if isinstance(r, Duel)]
         assert len(fights) == 1
-        assert all(isinstance(r, Duel) or 'уже обработан' in r for r in results), results
+        unexpected = [r for r in results if not isinstance(r, Duel) and 'уже обработан' not in r]
+        errors = [(r.getMessage(), repr(r.exc_info[1]) if r.exc_info else None)
+                  for r in caplog.records if r.levelname == 'ERROR']
+        assert not unexpected, (unexpected, errors)
         assert (await db.users.find_one({'id': 7}))['coins'] == 700
         assert (await db.users.find_one({'id': 8}))['coins'] == 700
         assert await db.duel_escrows.count_documents({}) == 1
