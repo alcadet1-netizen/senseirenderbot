@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from motor.motor_asyncio import AsyncIOMotorClient
+from src.infra.mongo.financial_collections import prepare_financial_collections
 from src.services.trade_service import TradeService
 
 
@@ -19,6 +20,7 @@ async def test_trade_replay_funding_and_journal_failure():
     name = 'sensei_trade_' + uuid.uuid4().hex
     db = client[name]
     try:
+        assert await prepare_financial_collections(db) == []
         await db.users.insert_one({'id': 7, 'coins': 1000})
         await db.bank.insert_many([{'_id': 'single', 'coins': 20, 'total_emitted': 10000},
                                    {'_id': 'main', 'balance': 100}])

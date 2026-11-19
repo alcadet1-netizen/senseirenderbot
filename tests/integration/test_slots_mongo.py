@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from motor.motor_asyncio import AsyncIOMotorClient
+from src.infra.mongo.financial_collections import prepare_financial_collections
 from src.services.slots_service import SlotsService
 
 
@@ -19,6 +20,7 @@ async def test_slots_concurrent_balance_funding_and_failed_journal():
     name = 'sensei_slots_test_' + uuid.uuid4().hex
     db = client[name]
     try:
+        assert await prepare_financial_collections(db) == []
         await db.bank.insert_many([{'_id': 'single', 'coins': 100, 'total_emitted': 10000, 'burned': 20},
                                    {'_id': 'main', 'balance': 500}])
         await db.users.insert_one({'id': 7, 'coins': 100})
@@ -67,6 +69,7 @@ async def test_redelivered_slot_command_credits_once_across_workers_and_restart(
     name = 'sensei_slots_replay_' + uuid.uuid4().hex
     db = client[name]
     try:
+        assert await prepare_financial_collections(db) == []
         await db.bank.insert_one({'_id': 'single', 'coins': 1000})
         await db.users.insert_one({'id': 7, 'coins': 1000})
         workers = [SlotsService(NS(database=db)) for _ in range(8)]
