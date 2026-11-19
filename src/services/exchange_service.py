@@ -13,6 +13,7 @@ from src.core.constants import EXCHANGE_COINS_TO_TICKET, EXCHANGE_TICKET_TO_COIN
 from src.core.exceptions import InsufficientFundsError, InsufficientTicketsError
 from src.infra.mongo.client import MongoClient
 from src.services.referral_economy import transaction
+from src.services.transaction_retry import retry_initial_namespace
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,7 @@ class ExchangeService:
             return result
 
         try:
-            return await transaction(self.mongo_client, settle)
+            return await retry_initial_namespace(transaction, self.mongo_client, settle)
         except _BankEmpty:
             return {'success': False, 'error': 'Банк временно пуст.'}
         except DuplicateKeyError:

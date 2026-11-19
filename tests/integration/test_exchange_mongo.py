@@ -11,7 +11,8 @@ from src.services.exchange_service import ExchangeService
 
 
 @pytest.mark.asyncio
-async def test_exchange_replay_conservation_and_rollback():
+@pytest.mark.parametrize('attempt', range(20))
+async def test_exchange_replay_conservation_and_rollback(attempt, caplog):
     uri = os.environ.get('CAMPAIGN_TEST_MONGO_URI')
     if not uri:
         pytest.skip('MongoDB replica set required')
@@ -24,7 +25,11 @@ async def test_exchange_replay_conservation_and_rollback():
                                    {'_id': 'main', 'balance': 500}])
         services = [ExchangeService(NS(database=db)) for _ in range(8)]
         buys = await asyncio.gather(*(s.coins_to_ticket(7, request_id='buy-callback') for s in services))
-        assert all(r == buys[0] and r['success'] for r in buys)
+        if not all(r == buys[0] and r['success'] for r in buys):
+            errors = [(type(r.exc_info[1]).__name__, getattr(r.exc_info[1], 'code', None),
+                       str(r.exc_info[1]).split('full error:')[0][:400])
+                      for r in caplog.records if r.levelname == 'ERROR' and r.exc_info]
+            pytest.fail(f'Exchange outcomes: {buys}; database errors: {errors}', pytrace=False)
         assert await db.tickets.count_documents({'user_id': 7, 'burned': False}) == 1
         assert await db.transactions.count_documents({'tx_type': 'exchange_in'}) == 1
         assert (await db.users.find_one({'id': 7}))['coins'] == 3000
