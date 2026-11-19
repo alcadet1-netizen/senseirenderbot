@@ -130,7 +130,8 @@ async def test_same_duel_command_reserves_once_across_processes_and_restart(atte
         errors = [(type(r.exc_info[1]).__name__, getattr(r.exc_info[1], 'code', None),
                    str(r.exc_info[1]).split('full error:')[0][:400])
                   for r in caplog.records if r.levelname == 'ERROR' and r.exc_info]
-        assert not unexpected, (unexpected, errors)
+        if unexpected:
+            pytest.fail(f"Unexpected duel replies: {unexpected}; database errors: {errors}", pytrace=False)
         assert (await db.users.find_one({'id': 7}))['coins'] == 700
         assert (await db.users.find_one({'id': 8}))['coins'] == 700
         assert await db.duel_escrows.count_documents({}) == 1
