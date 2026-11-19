@@ -71,7 +71,7 @@ class Container:
     def daily_pet_service(self):
         if getattr(self, '_daily_pet_service', None) is None:
             from src.services.daily_pet_service import DailyPetService
-            self._daily_pet_service = DailyPetService(self.mongo_client, self.daily_service)
+            self._daily_pet_service = DailyPetService(self.mongo_client, self.daily_service, self.hedgehog_gridfs)
         return self._daily_pet_service
 
     @property

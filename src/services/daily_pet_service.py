@@ -18,13 +18,14 @@ class PetRateLimit(GameError):
 
 
 class DailyPetService:
-    def __init__(self, mongo, daily):
+    def __init__(self, mongo, daily, hedgehog_gridfs):
         self.mongo = mongo
         self.users = mongo.database.users
         self.bank = mongo.database.bank
         self.transactions = mongo.database.transactions
         self.daily = daily
         self.ledger = BankLedger(mongo)
+        self.hedgehog_gridfs = hedgehog_gridfs
         self._locks = defaultdict(asyncio.Lock)
 
     async def claim(self, user_id):
@@ -51,7 +52,7 @@ class DailyPetService:
                     raise DailyAlreadyClaimedError('завтра после 00:00 UTC')
                 return result, previous
             from src.services.hedgehog_gallery import select_image
-            image_name, images_seen = select_image(user)
+            image_name, images_seen = await select_image(user, self.hedgehog_gridfs)
             session = dict(day=day, token=secrets.token_urlsafe(24), state='pending',
                            deadline=None, duration=15, delivered=False, taps=0, extra_coins=0, queries=[],
                            base_coins=result['total_coins'], image_name=image_name)
