@@ -39,7 +39,7 @@ async def to_daily_pet_html(token, hedgehog_gridfs, snapshot, *, demo=False):
         token = 'A' * 32
     template = front + script.replace('__SNAPSHOT__', json.dumps(snapshot, separators=(',', ':'))) + '</body></html>'
     # No gallery thumbnail: the ordinary full-size photo is already in the chat.
-    return to_hedgehog_html(token, images / '__no_thumbnail__', template=template)
+    return await to_hedgehog_html(token, hedgehog_gridfs, template=template)
 
 
 EXTRA_STYLE = '''

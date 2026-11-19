@@ -50,7 +50,7 @@ async def send_daily_hedgehog(message, user, container):
             user_id=user.id, username=user.username, first_name=user.first_name or '',
             last_name=user.last_name, is_bot=user.is_bot)
         # Resolve everything fallible we can before awarding the daily reward.
-        picture(container, str(user.id))
+        await picture(container, str(user.id))
         await message.bot.me()
         paid = getattr(container, 'paid_hedgehog_service', None)
         if paid is not None:
@@ -112,7 +112,7 @@ async def send_reward_notice(message, user, container, result, session, *, notic
     if time.time() >= active['deadline']:
         caption = reward_caption + '\n\nВремя ласки вышло. До завтра ♡'
         markup = None
-    photo = picture(container, str(user.id), session.get("image_name"))
+    photo = await picture(container, str(user.id), session.get("image_name"))
     # Both free and Stars delivery pass here. Claim in Mongo, not a process lock:
     # another update/process may already be sending this session's notice.
     if not await container.daily_pet_service.reserve_notice(session['token'], user.id):
