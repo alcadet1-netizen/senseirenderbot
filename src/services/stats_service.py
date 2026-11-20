@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from src.core.config import settings
 from src.core.constants import TOTAL_EMISSION_CAP
 from src.services.emission_service import EmissionService
-from src.services.emission_watch import _amount
+from src.services.emission_watch import _amount, correction_reserve
 from src.services.bank_ledger import BankLedger
 from src.services.referral_economy import transaction
 from src.infra.mongo.client import MongoClient
@@ -100,7 +100,8 @@ class StatsService:
         emitted_raw = float(emitted_counter) if emitted_counter is not None else None
         emitted = emitted_raw
         current_counter, burn_counter = _amount(bank.get('total_emitted')), _amount(bank.get('burned'))
-        lifetime = float(current_counter + burn_counter) if current_counter is not None and burn_counter is not None else None
+        reserve = correction_reserve(bank)
+        lifetime = float(current_counter + burn_counter + reserve) if current_counter is not None and burn_counter is not None and reserve is not None else None
         remaining = max(0.0, cap - lifetime) if lifetime is not None else None
         percent = min(100.0, lifetime / cap * 100.0) if lifetime is not None and cap else None
         tickets = await self.tickets.count_documents({'burned': False}, session=session)
