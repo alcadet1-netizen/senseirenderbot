@@ -109,6 +109,36 @@ async def cmd_duel_watch(message: Message, container: Container) -> None:
     await message.answer(format_old_reservations(docs, more), parse_mode=None)
 
 
+# Process-local guard limits expensive scans; it is not a distributed lock.
+_bank_diagnostic_lock = asyncio.Lock()
+_bank_diagnostic_last = float("-inf")
+
+
+@router.message(Command("bankdiagnose"))
+async def cmd_bank_diagnose(message: Message, container: Container) -> None:
+    """Private aggregate-only snapshot; no financial writes."""
+    global _bank_diagnostic_last
+    if not message.from_user or message.from_user.id not in container.settings.admin_ids:
+        return
+    if message.chat.type != "private":
+        await message.answer("Открой /bankdiagnose в личном чате с ботом.", parse_mode=None)
+        return
+    if _bank_diagnostic_lock.locked() or time.monotonic() - _bank_diagnostic_last < 60:
+        await message.answer("Сверка уже выполняется или недавно запускалась. Повтори через минуту.", parse_mode=None)
+        return
+    from src.services.bank_diagnostic import read_bank_diagnostic, format_bank_diagnostic
+    async with _bank_diagnostic_lock:
+        _bank_diagnostic_last = time.monotonic()
+        try:
+            report = await asyncio.wait_for(read_bank_diagnostic(container.mongo_client.database), timeout=15)
+            text = format_bank_diagnostic(report)
+        except Exception as exc:
+            logger.warning('Bank diagnostic failed error_type=%s', type(exc).__name__)
+            await message.answer('Не удалось получить согласованный снимок банка. Данные неизвестны; попробуй позже.', parse_mode=None)
+            return
+    await message.answer(text, parse_mode=None)
+
+
 @router.message(Command("senseichats", "chats", "группы"))
 async def cmd_admin_chats(message: Message, container: Container):
     """Список групп, где есть бот (из активного мониторинга)."""
