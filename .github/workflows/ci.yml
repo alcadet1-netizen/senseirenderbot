@@ -67,6 +67,10 @@ jobs:
         run: python -m scripts.check_widgets
       - name: Check Mini App JavaScript
         run: |
+          node --check src/web/dojo/miner.js
+          node --check src/web/dojo/motion.js
+          node tests/web/dojo_motion.cjs
+          node tests/web/dojo_collect_recovery.cjs
           node --check src/web/hedgehog/app.js
           node --check src/web/daily_pet/app.js
       - name: Check startup script

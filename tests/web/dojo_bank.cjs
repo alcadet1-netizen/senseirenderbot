@@ -24,9 +24,8 @@ const data = {total_emitted: 971011837, lifetime_issued_estimate: 1000990403, em
   assert.equal($('bank-warning-title').textContent, 'Обнаружено расхождение');
   assert.match($('bank-warning-delta').textContent, /396364/);
   assert.equal($('bank-mined-label').textContent, '1000990403 Coin');
-  assert.equal($('bank-escrow').textContent, '0 Coin');
+  assert.ok(!('bank-escrow' in nodes), 'duel stakes are not displayed');
   context.setBank({...data, duel_escrow: null, total_supply: null}); context.renderBank();
-  assert.equal($('bank-escrow').textContent, '—');
   assert.equal($('bank-supply').textContent, '—');
   context.setBank(data); context.renderBank();
   assert.equal($('bank-current-emission').textContent, '971011837 Coin');

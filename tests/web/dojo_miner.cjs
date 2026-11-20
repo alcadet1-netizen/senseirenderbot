@@ -34,6 +34,8 @@ const { chromium } = require("playwright-core");
   let cycleEnergyStart = 100;
   let burned = 0;
   let claimed = false;
+  const loseReceipt = process.env.DOJO_LOSE_RECEIPT === "1";
+  let failStateOnce = false;
   let burnRequestId = "";
   const calls = [];
   const boostUntil = Date.now() / 1000 + 3600;
@@ -50,6 +52,14 @@ const { chromium } = require("playwright-core");
     if (action === "collect") {
       phase = "ready";
       balance += 20;
+      if (loseReceipt) {
+        failStateOnce = true;
+        return route.abort("failed");
+      }
+    }
+    if (action === "state" && failStateOnce) {
+      failStateOnce = false;
+      return route.abort("failed");
     }
     if (action === "task") {
       balance += 10000;
@@ -294,10 +304,10 @@ const { chromium } = require("playwright-core");
     }
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  assert.equal(await page.locator("#motion-setting").textContent(), "EFFECT · ON");
+  assert.equal(await page.locator("#motion-setting").textContent(), "ЭФФ. ВКЛ");
   await page.click("#motion-setting");
   assert.equal(await page.locator("#motion-setting").getAttribute("aria-pressed"), "false");
-  assert.equal(await page.locator("#motion-setting").textContent(), "EFFECT · OFF");
+  assert.equal(await page.locator("#motion-setting").textContent(), "ЭФФ. ВЫКЛ");
   assert.equal(await page.locator("#magic-trail").isVisible(), true);
   await page.click("#motion-setting");
   assert.equal(await page.locator("#motion-setting").getAttribute("aria-pressed"), "true");
@@ -596,11 +606,16 @@ const { chromium } = require("playwright-core");
   assert.equal(await page.locator("#sheet").isVisible(), false);
 
   await page.click("#action");
+  if (loseReceipt) {
+    await page.waitForFunction(() => document.querySelector("#action-label").textContent === "ПРОВЕРИТЬ");
+    await page.click("#action");
+  }
   await page.waitForFunction(() =>
     /^22\s860$/.test(document.querySelector("#balance").textContent),
   );
   assert.equal(await page.locator("#energy").textContent(), "200 / 100");
-  assert.match(await page.locator("#toast").textContent(), /\+20 SenseiCoin/);
+  assert.equal(calls.filter(action => action === "collect").length, 1);
+  if (!loseReceipt) assert.match(await page.locator("#toast").textContent(), /\+20 SenseiCoin/);
   await page.waitForFunction(
     () =>
       document.querySelector("#action-label").textContent === "НАЧАТЬ МАЙНИНГ",

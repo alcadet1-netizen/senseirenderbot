@@ -42,14 +42,14 @@ for (const osReduced of [false, true]) {
   assert.ok(!h.classes.has('motion-reduced'), 'new installs animate from the loading screen');
   assert.equal(h.motion.motionReduced(), false);
   h.motion.paintMotionControl();
-  assert.equal(h.button.textContent, 'EFFECT · ON');
+  assert.equal(h.button.textContent, 'ЭФФ. ВКЛ');
   assert.equal(h.button['aria-label'], 'Эффекты: включены');
   assert.equal(h.button['aria-pressed'], 'true');
   h.motion.changeMotionPreference();
   assert.equal(h.stored, 'off');
   assert.equal(h.classes.has('motion-reduced'), true);
   assert.equal(h.motion.motionReduced(), true);
-  assert.equal(h.button.textContent, 'EFFECT · OFF');
+  assert.equal(h.button.textContent, 'ЭФФ. ВЫКЛ');
   assert.equal(h.button['aria-label'], 'Эффекты: выключены');
   assert.equal(h.button['aria-pressed'], 'false');
   h.motion.changeMotionPreference();

@@ -244,3 +244,42 @@ async def cmd_addchance(message: Message, container: Container) -> None:
     await message.answer(
         f'✅ Выдано {receipt["amount"]} сундуков игроку @{receipt["username"]}. '
         'Они появятся в разделе CHANCE.', parse_mode=None)
+
+
+@router.message(Command('senseichance'))
+async def chance_deliveries(message: Message, container: Container):
+    """Reserve a manual delivery before sending so two admins cannot fulfil it."""
+    if message.chat.type != 'private':
+        await message.answer('Очередь CHANCE доступна в личке бота.')
+        return
+    from datetime import datetime, timezone
+    receipts = container.mongo_client.database.dojo_chest_receipts
+    args = (message.text or '').split()[1:]
+    admin = message.from_user.id
+    if not args:
+        rows = await receipts.find({'delivery': {'$in': ['pending', 'assigned']}}).sort('created_at', 1).limit(12).to_list(length=12)
+        lines = ['CHANCE · первые 12 незавершённых передач']
+        for row in rows:
+            owner = f"у админа {row['assigned_to']}" if row['delivery'] == 'assigned' else 'ожидает'
+            name = f"@{row['username']} · " if row.get('username') else ''
+            lines.append(f"{name}ID {row['user_id']} · {owner}\n{row['_id']}")
+        if not rows:
+            lines.append('Очередь пуста.')
+        lines.append('Перед отправкой: /senseichance take ID_заявки\nПосле передачи: /senseichance done ID_заявки')
+        await message.answer('\n\n'.join(lines), parse_mode=None)
+        return
+    if len(args) != 2 or args[0] not in ('take', 'done'):
+        await message.answer('Используй /senseichance, чтобы открыть очередь.')
+        return
+    now = datetime.now(timezone.utc)
+    taking = args[0] == 'take'
+    query = {'_id': args[1], 'delivery': 'pending' if taking else 'assigned'}
+    if not taking:
+        query['assigned_to'] = admin
+    fields = ({'delivery': 'assigned', 'assigned_to': admin, 'assigned_at': now} if taking
+              else {'delivery': 'sent', 'sent_at': now})
+    change = await receipts.update_one(query, {'$set': fields})
+    if not change.modified_count:
+        await message.answer('Статус не изменён. Обнови очередь перед передачей.')
+    else:
+        await message.answer('Заявка закреплена за тобой. Передай подарок вручную.' if taking else 'Передача отмечена.')

@@ -68,6 +68,7 @@ The bot includes various commands for users and administrators. Key commands inc
 - /help - Show help
 - /profile - View your profile
 - /top - View leaderboard
+- /dojo — майнер SenseiCoin в личке бота. [Правила, запуск и проверка перед релизом](docs/DOJO_MINER.md).
 - /daily - Claim daily bonus
 - /trade - Trading interface
 - /duel - Challenge to duel

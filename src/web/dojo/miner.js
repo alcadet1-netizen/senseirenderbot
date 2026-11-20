@@ -11,6 +11,15 @@
   const LANG_KEY = "sensei_dojo_language";
   const SUPPORTED_LANGS = ["ru", "en"];
   const EN = {
+    "ЭФФ. ВКЛ": "FX ON", "ЭФФ. ВЫКЛ": "FX OFF",
+    "БОНУС": "BONUS", "Открыть бонусы": "Open bonuses",
+    "{full} ч на полной скорости": "{full} h at full speed",
+    " · {slow} ч на 10%": " · {slow} h at 10%",
+    "Энергия исчерпана · добыча идёт на 10% · {rate} Coin/ч": "Energy depleted · still mining at 10% · {rate} Coin/h",
+    "СБОР В {time}": "COLLECT AT {time}",
+    "ПРОВЕРИТЬ": "CHECK STATUS", "ПРОВЕРЯЕМ…": "CHECKING…",
+    "ПРОВЕРКА СБОРА": "COLLECTION STATUS",
+    "Проверим баланс и цикл без повторного сбора.": "Check your balance and cycle without collecting again.",
     "SenseiCoin · Майнер": "SenseiCoin · Miner",
     "Сенсей в тёмном кибер-додзё перед зелёным энсо":
       "Sensei in a dark cyber-dojo before a green enso",
@@ -58,7 +67,6 @@
     "Движение Coin": "Coin movement",
     "Вехи эмиссии": "Emission milestones",
     "Расчёт по учтённым выпускам, сжиганиям и резерву лимита; история может быть неполной.": "Estimated from recorded issuance, burns and the limit reserve; history may be incomplete.",
-    "В ставках дуэлей": "Held in duel stakes",
     "Обнаружено расхождение": "Accounting discrepancy detected",
     "Превышен лимит": "Emission cap exceeded",
     "Подробнее": "Details",
@@ -212,8 +220,8 @@
       "+{amount} SenseiCoin · +{energy} energy for one cycle",
     "УЛУЧШЕНИЯ НЕДОСТУПНЫ": "UPGRADES UNAVAILABLE",
     КИРКА: "PICKAXE",
-    "Каждый уровень: +10 SenseiCoin в час. Действует со следующего цикла.":
-      "Each level: +10 SenseiCoin per hour. Applies from the next cycle.",
+    "Навсегда +10 SenseiCoin в час за уровень. Действует со следующего цикла.":
+      "Permanently adds 10 SenseiCoin per hour per level. Applies from the next cycle.",
     "{rate} Coin/ч · следующий {next} Coin/ч":
       "{rate} Coin/h · next {next} Coin/h",
     "СЧЁТ…": "INVOICE…",
@@ -467,7 +475,7 @@
     const label = motionPreference === "auto" ? "Эффекты: как в системе" :
       motionPreference === "off" ? "Эффекты: выключены" : "Эффекты: включены";
     const reduced = motionReduced();
-    button.textContent = reduced ? "EFFECT · OFF" : "EFFECT · ON";
+    button.textContent = t(reduced ? "ЭФФ. ВЫКЛ" : "ЭФФ. ВКЛ");
     button.setAttribute("aria-label", t(label));
     button.setAttribute("title", t(label));
     button.setAttribute("aria-pressed", reduced ? "false" : "true");
@@ -891,6 +899,8 @@
   let model = null;
   let skew = 0;
   let pending = null;
+  let verifyCollection = false;
+  let stateRevision = 0;
   let toastTimer = 0;
   let endRetryAt = 0;
   let activeTab = "mining";
@@ -930,7 +940,9 @@
     let data = {};
     try {
       data = await response.json();
-    } catch {}
+    } catch {
+      throw Error(t("Майнер не ответил. Попробуй ещё раз."));
+    }
     if (!response.ok)
       throw Error(data.error || t("Майнер не ответил. Попробуй ещё раз."));
     return data;
@@ -1048,8 +1060,9 @@
       : 1;
     const rate = energy > 0 ? base * boost : base / 10;
     $("hint").textContent = t(
-      "Энергия {energy} / {max} · {rate} Coin/ч · после нуля 10%",
-      { energy: Math.floor(energy), max: energyMax(), rate: coin(rate) },
+      energy > 0 ? "Энергия {energy} / {max} · {rate} Coin/ч · после нуля 10%" :
+        "Энергия исчерпана · добыча идёт на 10% · {rate} Coin/ч",
+      { energy: Math.floor(energy), max: energyMax(), rate: coinExact(rate) },
     );
   }
 
@@ -1352,6 +1365,12 @@
       return;
     }
 
+    if (verifyCollection) {
+      paintAction("coin", t(pending ? "ПРОВЕРЯЕМ…" : "ПРОВЕРИТЬ"), "SENSEIBANK", false, Boolean(pending));
+      status.textContent = t("ПРОВЕРКА СБОРА");
+      hint.textContent = t("Проверим баланс и цикл без повторного сбора.");
+      return;
+    }
     if (pending === "collect") {
       paintAction("coin", t("ЗАБИРАЕМ…"), "SENSEIBANK", false, true);
       status.textContent = t("НАГРАДА В ПУТИ");
@@ -1370,7 +1389,7 @@
       paintAction(
         "pickaxe",
         clock(remaining()),
-        t("ДО КОНЦА ЦИКЛА"),
+        t("СБОР В {time}", {time: new Date(model.finish_at * 1000).toLocaleTimeString(locale(), {hour: "2-digit", minute: "2-digit", hour12: false})}),
         true,
         true,
       );
@@ -1404,14 +1423,10 @@
       false,
     );
     status.textContent = t("СЕНСЕЙ ГОТОВ");
-    hint.textContent = t(
-      "Кирка {rate} Coin/ч · энергия {energy} · {hours} ч полной мощности",
-      {
-        rate: coin(model.base_rate),
-        energy: energyMax(),
-        hours: energyMax() / 100,
-      },
-    );
+    const duration = (model.cycle_seconds || 10800) / 3600;
+    const full = Math.min(duration, energyValue() / (model.energy_per_hour || 100));
+    hint.textContent = t("{full} ч на полной скорости", { full: coinExact(full) }) +
+      (full < duration ? t(" · {slow} ч на 10%", { slow: coinExact(duration - full) }) : "");
   }
 
   function tick() {
@@ -1595,8 +1610,12 @@
 
   async function refresh(silent = false) {
     if (!initData() || pending) return;
+    const revision = ++stateRevision;
     try {
-      apply(await api("state"));
+      const state = await api("state");
+      if (revision !== stateRevision) return;
+      verifyCollection = false;
+      apply(state);
     } catch (error) {
       if (!silent) showToast(error.message, true);
     }
@@ -1604,6 +1623,7 @@
 
   async function start() {
     if (pending || !model || model.phase !== "ready" || !initData()) return;
+    ++stateRevision;
     pending = "start";
     render();
     let failed = false;
@@ -1623,6 +1643,7 @@
 
   async function collect() {
     if (pending || model?.phase !== "ready_to_collect" || !initData()) return;
+    ++stateRevision;
     pending = "collect";
     render();
     let failed = false;
@@ -1638,6 +1659,7 @@
         }),
       );
     } catch (error) {
+      verifyCollection = true;
       failed = true;
       showToast(error.message, true);
     } finally {
@@ -1989,7 +2011,7 @@
       "pickaxe",
       t("КИРКА"),
       `LVL ${upgrades.pickaxe_level} / ${upgrades.pickaxe_max}`,
-      t("Каждый уровень: +10 SenseiCoin в час. Действует со следующего цикла."),
+      t("Навсегда +10 SenseiCoin в час за уровень. Действует со следующего цикла."),
       t("{rate} Coin/ч · следующий {next} Coin/ч", {
         rate: coin(upgrades.pickaxe_rate),
         next: coin(upgrades.pickaxe_next_rate),
@@ -2276,7 +2298,6 @@
     $("bank-supply").textContent = bankCoin(bank.total_supply);
     $("bank-balance").textContent = bankCoin(bank.bank_balance);
     $("bank-circulation").textContent = bankCoin(bank.circulation);
-    $("bank-escrow").textContent = bankCoin(bank.duel_escrow);
     $("bank-burned").textContent = bankCoin(bank.burned);
     $("bank-confiscated").textContent = bankCoin(bank.confiscated);
     const holders = bankNumber(bank.holders);
@@ -2648,7 +2669,8 @@
   }
 
   $("action").addEventListener("click", () => {
-    if (model?.phase === "ready_to_collect") collect();
+    if (verifyCollection) refresh();
+    else if (model?.phase === "ready_to_collect") collect();
     else start();
   });
 
@@ -2771,7 +2793,7 @@
       ? `🎁 День ${nextChest} · ${nextChest / 7} сундук(а)`
       : "🏁 До конца серии остались последние дни";
     $("chest-info").textContent = `Бесплатный сегодня: ${data.free_chest ? "доступен" : "использован"} · бонусных: ${data.bonus_chests}`;
-    $("gram-info").textContent = `Виртуальный GRAM: ${(data.gram_hundredths / 100).toFixed(2)} · вывод пока недоступен.`;
+    $("gram-info").textContent = `Внутренний баланс GRAM: ${(data.gram_hundredths / 100).toFixed(2)}`;
     $("chest-spin").disabled = !data.free_chest && !data.bonus_chests && !sessionStorage.getItem("dojo_chest_request");
   }
   async function loadDaily() {
@@ -2817,7 +2839,7 @@
     const isGram = prize.kind === "gram";
     const isChest = prize.kind === "chest";
     const amount = isGram ? (prize.amount / 100).toFixed(2) : String(prize.amount);
-    const winner = isGram ? `${amount} виртуальных GRAM` : isChest ? `${amount} сундука` : `${amount} Coin`;
+    const winner = prize.kind === "gift" ? "коллекционный подарок Telegram · заявка сохранена, администратор передаст вручную" : isGram ? `${amount} виртуальных GRAM` : isChest ? `${amount} сундука` : `${amount} Coin`;
     result.textContent = "";
     scene.classList.remove("is-win");
     scene.classList.add("is-opening");
@@ -2829,24 +2851,24 @@
       {kind: "COIN", value: "300"}, {kind: "COIN", value: "400"},
       {kind: "COIN", value: "500"}, {kind: "GRAM", value: "0.01"},
       {kind: "GRAM", value: "0.02"}, {kind: "GRAM", value: "0.03"},
-      {kind: "PLACEHOLDER", value: "1 GRAM"},
-      {kind: "PLACEHOLDER", value: "3 GRAM"},
+      {kind: "GRAM", value: "1"}, {kind: "GRAM", value: "2"},
+      {kind: "GRAM", value: "3"},
       {kind: "CHEST", value: "2"},
-      {kind: "PLACEHOLDER", value: "NFT"},
+      {kind: "GIFT", value: "NFT"},
     ];
     // The centre cell always displays the server receipt; other cells are decorative.
     for (let i = 0; i < 25; i++) {
       const cell = document.createElement("div");
       const chosen = i === 22;
       const decoration = prizes[(i * 5 + 1) % prizes.length];
-      const kind = chosen ? (isGram ? "GRAM" : isChest ? "CHEST" : "COIN") : decoration.kind;
-      const value = chosen ? amount : decoration.value;
-      cell.className = `reel-prize${chosen ? " is-selected" : ""}${kind === "GRAM" ? " is-gram" : ""}${kind === "PLACEHOLDER" ? " is-placeholder" : ""}`;
+      const kind = chosen ? prize.kind.toUpperCase() : decoration.kind;
+      const value = chosen ? (kind === "GIFT" ? "NFT" : amount) : decoration.value;
+      cell.className = `reel-prize${chosen ? " is-selected" : ""}${kind === "GRAM" ? " is-gram" : ""}${kind === "GIFT" ? " is-gift" : ""}`;
       const icon = document.createElement("span"); icon.className = "reel-prize-icon";
-      icon.textContent = kind === "CHEST" ? "▣" : kind === "GRAM" || kind === "PLACEHOLDER" ? "✦" : "◈";
+      icon.textContent = kind === "CHEST" ? "▣" : kind === "GRAM" || kind === "GIFT" ? "✦" : "◈";
       const number = document.createElement("strong"); number.textContent = value;
       const label = document.createElement("small");
-      label.textContent = kind === "PLACEHOLDER" ? "ДЕКОР" : kind === "GRAM" ? "GRAM" : kind === "CHEST" ? "СУНДУКА" : "SENSEI COIN";
+      label.textContent = kind === "GIFT" ? "ПОДАРОК" : kind === "GRAM" ? "GRAM" : kind === "CHEST" ? "СУНДУКА" : "SENSEI COIN";
       cell.append(icon, number, label);
       track.appendChild(cell);
     }

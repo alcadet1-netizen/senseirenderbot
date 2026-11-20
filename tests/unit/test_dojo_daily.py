@@ -148,7 +148,7 @@ async def test_admin_grant_rejects_invalid_input(monkeypatch, username, amount):
 async def test_two_chests_are_credited_in_same_receipt(monkeypatch, free, starting, expected):
     today = datetime.now(timezone.utc).date().isoformat()
     svc, db = service(monkeypatch, {'free_day': None if free else today, 'chests': starting})
-    monkeypatch.setattr('src.services.dojo_daily_service.secrets.randbelow', lambda n: 10)
+    monkeypatch.setattr('src.services.dojo_daily_service.secrets.randbelow', lambda n: 10_000)
     assert await svc.open_chest(42, 'chest-win-id') == {'kind': 'chest', 'amount': 2}
     assert db.dojo_daily.update_one.call_args.args[1]['$inc']['chests'] == expected
     assert db.dojo_chest_receipts.insert_one.call_args.args[0]['result'] == {'kind': 'chest', 'amount': 2}
@@ -165,14 +165,16 @@ async def test_admin_grant_rejects_reused_key_with_different_payload(monkeypatch
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('roll,second,kind,amount', [
-    (0, 0, 'gram', 1), (9, 2, 'gram', 3),
-    (10, 0, 'chest', 2), (59, 0, 'chest', 2),
-    (60, 0, 'coin', 100), (999, 4, 'coin', 500),
+    (0, 0, 'gram', 1), (9999, 2, 'gram', 3),
+    (10_000, 0, 'chest', 2), (59_999, 0, 'chest', 2),
+    (60_000, 0, 'coin', 100), (999_998, 4, 'coin', 500),
+    (999_999, 0, 'gram', 100), (999_999, 1, 'gram', 200),
+    (999_999, 2, 'gram', 300), (999_999, 3, 'gift', 1),
 ])
 async def test_chest_roll_boundaries_and_receipts(monkeypatch, roll, second, kind, amount):
     svc, db = service(monkeypatch)
     monkeypatch.setattr('src.services.dojo_daily_service.secrets.randbelow',
-                        lambda n: roll if n == 1000 else second)
+                        lambda n: roll if n == 1_000_000 else second)
     result = await svc.open_chest(42, 'boundary-request')
     assert result == {'kind': kind, 'amount': amount}
     assert db.dojo_chest_receipts.insert_one.call_args.args[0]['result'] == result
@@ -181,3 +183,11 @@ async def test_chest_roll_boundaries_and_receipts(monkeypatch, roll, second, kin
         assert db.users.update_one.call_args.args[1] == {'$inc': {'coins': amount}}
     else:
         db.bank.update_one.assert_not_awaited()
+    if kind == 'gift':
+        receipt = db.dojo_chest_receipts.insert_one.call_args.args[0]
+        assert receipt['delivery'] == 'pending' and receipt['user_id'] == 42
+        db.dojo_chest_receipts.find_one.return_value = receipt
+        assert await svc.open_chest(42, 'boundary-request') == result
+        db.dojo_chest_receipts.insert_one.assert_awaited_once()
+    if kind == 'gram':
+        assert db.dojo_daily.update_one.call_args.args[1]['$inc']['gram_hundredths'] == amount
