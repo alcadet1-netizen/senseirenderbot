@@ -458,3 +458,15 @@ def test_render_scales_are_independent_and_thread_safe():
     assert all(image.size == (760, 290) for image in images)
     assert katana_handle(1, 1).size == (145, 95)
     assert katana_handle(1, 2).size == (290, 190)
+
+
+@pytest.mark.asyncio
+async def test_receipt_delivery_failure_offers_read_only_recovery():
+    msg = message()
+    economy = SimpleNamespace(upgrade_katana=AsyncMock(return_value=result()))
+    container = SimpleNamespace(economy_service=economy, settings=SimpleNamespace(widgets_enabled=True, widget_animations_enabled=True))
+    with patch('src.bot.handlers.user_commands.send_katana_upgrade', side_effect=RuntimeError('media unavailable')):
+        await cmd_upkatana(msg, container)
+    assert '/katanaresult' in msg.answer.await_args.args[0]
+    msg.delete.assert_not_awaited()
+    economy.upgrade_katana.assert_awaited_once()

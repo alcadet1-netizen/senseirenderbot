@@ -11,6 +11,10 @@
   const LANG_KEY = "sensei_dojo_language";
   const SUPPORTED_LANGS = ["ru", "en"];
   const EN = {
+    "Открой /dojo заново": "Reopen /dojo",
+    "Сессия Telegram завершена. Прогресс хранится на сервере.": "Your Telegram session ended. Progress is saved on the server.",
+    "Ожидает выплаты": "Awaiting payout",
+    "Последний автосбор": "Last auto-collect",
     "ЭФФ. ВКЛ": "FX ON", "ЭФФ. ВЫКЛ": "FX OFF",
     "БОНУС": "BONUS", "Открыть бонусы": "Open bonuses",
     "{full} ч на полной скорости": "{full} h at full speed",
@@ -158,8 +162,8 @@
       "<b>Collect the reward.</b> It comes from SenseiBank only after the cycle ends. The progress percentage is shown on screen.",
     "<b>Начни снова.</b> Следующий цикл открывается сразу после сбора.":
       "<b>Start again.</b> The next cycle opens right after collection.",
-    "<b>Улучшай кирку.</b> За Stars: +10 Coin/ч за уровень, +100 энергии или автосбор, который запускает циклы без тебя.":
-      "<b>Upgrade your pickaxe.</b> For Stars: +10 Coin/h per level, +100 energy, or auto-collect that starts cycles without you.",
+    "<b>Улучшай кирку.</b> За Stars: +50 Coin/ч за уровень, +100 энергии или автосбор, который запускает циклы без тебя.":
+      "<b>Upgrade your pickaxe.</b> For Stars: +50 Coin/h per level, +100 energy, or auto-collect that starts cycles without you.",
     ПОНЯТНО: "GOT IT",
     "Coin / ч": "Coin / h",
     "Coin/ч": "Coin/h",
@@ -220,8 +224,8 @@
       "+{amount} SenseiCoin · +{energy} energy for one cycle",
     "УЛУЧШЕНИЯ НЕДОСТУПНЫ": "UPGRADES UNAVAILABLE",
     КИРКА: "PICKAXE",
-    "Навсегда +10 SenseiCoin в час за уровень. Действует со следующего цикла.":
-      "Permanently adds 10 SenseiCoin per hour per level. Applies from the next cycle.",
+    "Навсегда +50 SenseiCoin в час за уровень. Действует со следующего цикла.":
+      "Permanently adds 50 SenseiCoin per hour per level. Applies from the next cycle.",
     "{rate} Coin/ч · следующий {next} Coin/ч":
       "{rate} Coin/h · next {next} Coin/h",
     "СЧЁТ…": "INVOICE…",
@@ -571,7 +575,7 @@
     }
     function recordOrbit(event) {
       if (!model || model.phase !== "mining" || !initData() ||
-          circleEnergyValue() >= energyMax() / 2) {
+          circleEnergyValue() >= (model.circle_energy_limit ?? 100)) {
         lastAngle = null; winding = 0; return;
       }
       const x = event.clientX - orbX;
@@ -930,13 +934,25 @@
     tg?.setBackgroundColor?.("#010503");
   } catch {}
 
+  let sessionEnded = false;
+  let needsEntry = true;
+  let entryRequest = null;
+  $("session-ended").addEventListener("cancel", event => event.preventDefault());
   async function api(action, extra = {}) {
+    if (sessionEnded) throw Error(t("Открой /dojo заново"));
     const response = await fetch(`/miniapp/dojo/api/${action}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
       body: JSON.stringify({ initData: initData(), ...extra }),
     });
+    if (response.status === 401) {
+      if (!sessionEnded) {
+        sessionEnded = true;
+        $("session-ended").showModal();
+      }
+      throw Error(t("Открой /dojo заново"));
+    }
     let data = {};
     try {
       data = await response.json();
@@ -1330,7 +1346,9 @@
     $("profile-rate").textContent =
       `${coin(model?.base_rate)} ${t("Coin / ч")}`;
     $("profile-energy").textContent = coin(model?.energy_max);
-    $("profile-auto").textContent = model?.auto_collect ? t("ВКЛ") : t("ВЫКЛ");
+    $("profile-auto").textContent = model?.auto_collect ? (model.auto_waiting ? t("Ожидает выплаты") : t("ВКЛ")) : t("ВЫКЛ");
+    $("auto-history").hidden = !model?.auto_collect;
+    $("auto-last").textContent = model?.last_auto_collect_at ? new Date(model.last_auto_collect_at * 1000).toLocaleString(locale()) : "—";
     paintEnergy(energyValue());
     paintBoost();
     paintBurn();
@@ -1430,7 +1448,7 @@
   }
 
   function tick() {
-    if (!model) return;
+    if (!model || sessionEnded) return;
     // The boost pill must keep counting down even while a cycle is ready.
     paintBoost();
     if (model.phase !== "mining" || pending) return;
@@ -1609,10 +1627,13 @@
   }
 
   async function refresh(silent = false) {
-    if (!initData() || pending) return;
+    if (!initData() || pending || sessionEnded) return;
     const revision = ++stateRevision;
     try {
-      const state = await api("state");
+      const state = await (needsEntry
+        ? (entryRequest ??= api("entry").finally(() => { entryRequest = null; }))
+        : api("state"));
+      needsEntry = false;
       if (revision !== stateRevision) return;
       verifyCollection = false;
       apply(state);
@@ -1696,6 +1717,7 @@
       return;
     }
     tasks.forEach((task) => {
+      const invite = task.kind === "invite_friends";
       const isLink = task.kind === "link";
       const isDailyProfile = task.kind === "daily_profile";
       const card = document.createElement("article");
@@ -1710,9 +1732,9 @@
       name.className = "task-name";
       const title = document.createElement("b");
       title.textContent =
-        t(task.title || (isLink ? task.host : `@${task.username}`));
+        invite ? (lang === "en" ? `Invite friends: ${task.goal}` : `Пригласи ${task.goal} ${task.goal === 1 ? "друга" : "друзей"}`) : t(task.title || (isLink ? task.host : `@${task.username}`));
       const handle = document.createElement("span");
-      handle.textContent = isDailyProfile ? t(task.description) : isLink
+      handle.textContent = invite ? `${lang === "en" ? "Direct invites" : "По твоей ссылке"}: ${task.progress} / ${task.goal}` : isDailyProfile ? t(task.description) : isLink
         ? t("Приложение · {host}", { host: task.host || task.username || "" })
         : t("@{username} · подписка на канал", { username: task.username });
       name.append(title, handle);
@@ -1785,7 +1807,13 @@
               : t("Проверить");
         claim.disabled = Boolean(taskBusy);
         claim.addEventListener("click", () => claimTask(task.slug));
-        if (!isDailyProfile) actions.appendChild(open);
+        if (invite) {
+          const share = document.createElement("button");
+          share.className = "task-link";
+          share.textContent = lang === "en" ? "Invite" : "Пригласить";
+          share.onclick = async () => { if (!referrals?.link) await loadReferrals(true); await shareReferralLink(); };
+          actions.appendChild(share);
+        } else if (!isDailyProfile) actions.appendChild(open);
         actions.appendChild(claim);
         card.appendChild(actions);
       }
@@ -1826,7 +1854,7 @@
       if (bank) loadBank(true);
       const updated = data.task || { ...task, claimed: true };
       tasks = tasks.map((item) =>
-        item.slug === slug ? { ...item, ...updated, claimed: true } : item,
+        item.slug === slug ? (task.kind === "invite_friends" ? updated : { ...item, ...updated, claimed: true }) : item,
       );
       const extras = [];
       if (data.reward_gram_hundredths) extras.push(`+${(data.reward_gram_hundredths / 100).toFixed(2)} виртуальных GRAM`);
@@ -2011,7 +2039,7 @@
       "pickaxe",
       t("КИРКА"),
       `LVL ${upgrades.pickaxe_level} / ${upgrades.pickaxe_max}`,
-      t("Навсегда +10 SenseiCoin в час за уровень. Действует со следующего цикла."),
+      t("Навсегда +50 SenseiCoin в час за уровень. Действует со следующего цикла."),
       t("{rate} Coin/ч · следующий {next} Coin/ч", {
         rate: coin(upgrades.pickaxe_rate),
         next: coin(upgrades.pickaxe_next_rate),
@@ -2927,6 +2955,7 @@
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
       refresh(true);
+      if (activeTab === "tasks" && !taskBusy) loadTasks(true);
       if (activeTab === "referrals") loadReferrals(true);
     }
   });
@@ -2959,12 +2988,8 @@
   render();
   if (initData()) {
     bootSetGoal(26, t("ЗАГРУЗКА…"));
-    Promise.allSettled([
-      refresh(),
-      loadTasks(),
-      loadUpgrades(),
-      loadBank(),
-    ]).then(() => completeBoot(t("ЗАГРУЗКА…")));
+    // Other tabs load independently on first open in setTab().
+    refresh().finally(() => completeBoot(t("ЗАГРУЗКА…")));
     // A stalled request must never trap the player on the splash screen.
     window.setTimeout(() => completeBoot(t("ЗАГРУЗКА…")), 9000);
   } else {

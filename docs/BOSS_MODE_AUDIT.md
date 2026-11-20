@@ -102,3 +102,5 @@ Targeted boss tests after this correction: 30 passed.
 Final full local run after the UI/runtime follow-up: **825 passed, 52 skipped,
 2 xfailed, 2 warnings**. Commands from other chats are not deleted or processed.
 No live Telegram/xRocket/production Mongo verification or deployment performed.
+
+Сверка конкретного удара: `/boss_payouts` в личке администратора показывает последние 10 незавершённых, отклонённых или не обеспеченных резервом заявок. `pool_exhausted` означает, что резерв для этого боя не был получен; внешнего вызова не было. `prepared`/`sending` могут означать ещё текущую обработку; `needs_review` не доказывает отказ. Сверять по ID квитанции (transferId), не повторять перевод вслепую. `/boss_xrocket_status` проверяет доступ к API, а не выплату игроку.

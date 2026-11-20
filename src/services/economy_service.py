@@ -413,12 +413,6 @@ class EconomyService:
             # Calculate dynamic cost based on katana length
             katana_length = user.get("katana_length", 0.0)
             cost = self._get_katana_upgrade_cost(katana_length)
-            # Get user
-            user = await self.users.find_one({"id": user_id})
-            if not user:
-                raise UserNotFoundError(user_id)
-            if not user.get("has_katana", False):
-                raise NoKatanaError()
             # Keep the actual starting length for the upgrade receipt, including
             # failures clamped to zero. Presentation must not re-read/retry it.
             old_length = user.get("katana_length", 0.0)
@@ -446,6 +440,8 @@ class EconomyService:
             growth = round(random.uniform(0.03, 0.60) if is_success else random.uniform(0.01, 0.20), 2)
             new_length = old_length + growth if is_success else max(0.0, old_length - growth)
 
+            receipt = dict(is_upgraded=is_success, old_length=old_length, growth=growth,
+                           new_length=new_length, cost=cost)
             async def purchase(tx):
                 current = await self.users.find_one({'id': user_id}, session=tx)
                 if not current or current.get('is_banned'):
@@ -454,7 +450,7 @@ class EconomyService:
                     raise NoKatanaError()
                 if current.get('last_katana_up') != snapshot_last_upgrade or current.get('katana_length', 0.0) != old_length:
                     raise CooldownError(KATANA_UPGRADE_COOLDOWN_HOURS * 3600)
-                changes = {'katana_length': new_length, 'last_katana_up': now}
+                changes = {'katana_length': new_length, 'last_katana_up': now, 'last_katana_receipt': receipt}
                 if current.get('referral_version') == 2:
                     # Upgrading is genuine gameplay too, including on otherwise silent days.
                     days = sorted(set(current.get('referral_activity_days') or []) | {now.date().isoformat()})[-3:]
@@ -468,7 +464,7 @@ class EconomyService:
                     coins_change=-cost, description='Katana upgrade attempt', created_at=now), session=tx)
                 await distribute(self.db, current, cost, event, tx)
                 await activate(self.db, current, event, tx)
-                return dict(is_upgraded=is_success, old_length=old_length, growth=growth, new_length=new_length, cost=cost)
+                return receipt
             return await transaction(self.mongo_client, purchase)
 
     # We'll stub out the other methods to avoid errors, but they should be implemented properly.

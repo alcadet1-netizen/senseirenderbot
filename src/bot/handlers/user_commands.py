@@ -272,14 +272,6 @@ async def cmd_upkatana(message: Message, container: Container):
         return
     logger.info(f"👉 [CMD] cmd_upkatana triggered by {message.from_user.id}")
 
-    # Delete trigger message
-    try:
-        await message.delete()
-    except TelegramBadRequest:
-        pass
-    except Exception as e:
-        logger.warning(f"⚠️ Failed to delete trigger message in cmd_upkatana: {e}")
-
     mention = get_mention(message.from_user)
 
     try:
@@ -325,7 +317,7 @@ async def cmd_upkatana(message: Message, container: Container):
         await message.answer(
             f"{mention}\n\n"
             f"⏳ <b>Мастер устал...</b>\n"
-            f"{e}",
+            f"{e}\nПоследний результат: /katanaresult",
             parse_mode="HTML"
         )
 
@@ -338,6 +330,23 @@ async def cmd_upkatana(message: Message, container: Container):
 
     except Exception as e:
         logger.error(f"❌ Error in cmd_upkatana: {e}", exc_info=True)
+        await message.answer("Не удалось показать итог. Проверь последнюю сохранённую попытку: /katanaresult. Повторять улучшение не нужно.", parse_mode=None)
+
+
+@router.message(Command("katanaresult"))
+async def cmd_katana_result(message: Message, container: Container):
+    if not message.from_user:
+        return
+    profile = await container.mongo_client.database.users.find_one(
+        {'id': message.from_user.id}, {'last_katana_receipt': 1, 'last_katana_up': 1}) or {}
+    receipt = profile.get('last_katana_receipt')
+    if not receipt:
+        await message.answer('Сохранённого результата пока нет. Текущая катана: /mykatana.', parse_mode=None)
+        return
+    outcome = 'Улучшение удалось' if receipt['is_upgraded'] else 'Попытка неудачна'
+    await message.answer(f"Последняя заточка · {profile['last_katana_up']:%d.%m.%Y %H:%M} UTC\n"
+                         f"{outcome}: {receipt['old_length']:.2f} → {receipt['new_length']:.2f} см\n"
+                         f"Стоимость попытки: {receipt['cost']:g} Coin", parse_mode=None)
 
 
 @router.message(Command("mykatana"))

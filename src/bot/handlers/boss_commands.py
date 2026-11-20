@@ -294,20 +294,9 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
         else:
             return # Silent if no boss
 
-    # Prepare message update data
-    chat_id = state.get("chat_id")
-    message_id = state.get("message_id")
-    has_photo = state.get("has_photo", False)
-
-    if not chat_id or not message_id:
-        # Fallback for old bosses without saved message info
-        if is_callback:
-            chat_id = event.message.chat.id
-            message_id = event.message.message_id
-            has_photo = bool(event.message.photo)
-        else:
-            # Cannot update message if we don't know where it is
-            return
+    # The origin chat was already validated against this battle. A missing
+    # card ID must not suppress rewards after the damage has been applied.
+    chat_id = origin.chat.id
 
     if result == "expired":
         from src.services.boss_runtime import refresh_boss
@@ -366,7 +355,11 @@ async def process_boss_attack(event: CallbackQuery | Message, container: Contain
                 if payout == 'confirmed':
                     alert_text += f"\n💎 <b>LUCKY HIT!</b> +{reward_amount} GRAM — xRocket подтвердил перевод."
                 elif payout in ('rejected', 'needs_review'):
+                    alert_text += ("\nGRAM: xRocket отклонил перевод." if payout == 'rejected' else
+                                   "\nGRAM: подтверждение не получено. Нужна сверка.")
                     logger.warning("Boss GRAM receipt requires reconciliation: user=%s status=%s", user_id, payout)
+                elif payout == 'pool_exhausted':
+                    alert_text += "\nGRAM: резерв боя не выделен. Перевод не отправлен."
         except Exception:
             # The hit was already applied. Never retry an ambiguous payout or
             # suppress its damage message because a reward lookup/transfer failed.

@@ -28,6 +28,7 @@ class ChatMessage:
 @dataclass
 class ChatData:
     messages: deque = field(default_factory=lambda: deque(maxlen=1000))
+    received: int = 0
     last_digest_count: int = 0
     last_digest_time: Optional[datetime] = None
 
@@ -311,6 +312,7 @@ class DigestService:
         )
         
         self.chats[chat_id].messages.append(msg)
+        self.chats[chat_id].received += 1
         return len(self.chats[chat_id].messages)
 
     def get_messages(self, chat_id: int, limit: int = 500) -> List[ChatMessage]:
@@ -321,13 +323,12 @@ class DigestService:
     def get_new_messages_count(self, chat_id: int) -> int:
         """Сколько сообщений с последней сводки"""
         chat = self.chats[chat_id]
-        total = len(chat.messages)
-        return total - chat.last_digest_count
+        return chat.received - chat.last_digest_count
 
-    def mark_digest_done(self, chat_id: int):
+    def mark_digest_done(self, chat_id: int, through: int | None = None):
         """Отмечаем что сводка сделана"""
         chat = self.chats[chat_id]
-        chat.last_digest_count = len(chat.messages)
+        chat.last_digest_count = chat.received if through is None else through
         chat.last_digest_time = datetime.now()
         self.cooldowns[chat_id] = datetime.now() + timedelta(seconds=self.settings.digest_cooldown)
         self.digest_number[chat_id] += 1
@@ -495,83 +496,50 @@ class DigestService:
         )
 
     async def trigger_digest(self, chat_id: int, bot: Bot, auto: bool = False):
-        """Основная функция генерации сводки"""
-        
+        await self._publish_issue(chat_id, bot, vestnik=False)
+
+    async def _publish_issue(self, chat_id, bot, *, vestnik):
         if chat_id in self.generating:
             return
-        
         self.generating.add(chat_id)
-        
+        status_msg = None
         try:
-            # Собираем данные
-            chat_log = self.format_for_llm(chat_id, 300) # Уменьшаем кол-во сообщений
-            stats = self.get_stats(chat_id)
-            topics = self.get_topics(chat_id)
-            msg_count = len(self.get_messages(chat_id))
-            
-            # Эпический анонс
-            if auto:
-                announcement = await self._generate_announcement(msg_count)
-            else:
-                announcement = self._get_random_announcement(msg_count)
-            
-            status_msg = await bot.send_message(chat_id, announcement)
-            
-            # Печатаем...
-            await bot.send_chat_action(chat_id, "typing")
-            
-            # Генерируем ЭПОС
-            digest = await self.generate_digest(chat_id, chat_log, stats, topics, msg_count)
-            
-            # Удаляем статус
+            through = self.chats[chat_id].received
+            messages = self.get_messages(chat_id, 800 if vestnik else 300)
+            chat_log = self.format_for_llm(chat_id, len(messages) or 1)
+            stats, topics = self.get_stats(chat_id), self.get_topics(chat_id)
+            title = '📰 Вестник чата' if vestnik else '🗞 Сводка чата'
+            status_msg = await bot.send_message(chat_id, title + '\nСенсей собирает главные темы.', parse_mode=None)
+            await bot.send_chat_action(chat_id, 'typing')
+            generate = self.generate_vestnik if vestnik else self.generate_digest
+            text = await generate(chat_id, chat_log, stats, topics, len(messages))
+            if not text or not text.strip():
+                raise ValueError('Empty digest')
+            await self._send_long_message(bot, chat_id, text)
+            self.mark_digest_done(chat_id, through)
+        except Exception as exc:
+            logger.warning('Digest publication failed: %s', type(exc).__name__)
             try:
-                await status_msg.delete()
-            except:
-                pass
-            
-            # Отправляем результат
-            await self._send_long_message(bot, chat_id, digest)
-            
-            # Отмечаем
-            self.mark_digest_done(chat_id)
-            
-        except Exception as e:
-            logger.error(f"Digest generation failed: {e}")
-            try:
-                await bot.send_message(
-                    chat_id,
-                    "⚠️ Сенсей подавился саке и не смог дочитать ваш срач.\n"
-                    f"Техническая хуйня: {str(e)[:100]}"
-                )
-            except:
-                pass
+                await bot.send_message(chat_id, 'Выпуск не завершён. Попробуйте позже через /senseivesti.', parse_mode=None)
+            except Exception as send_error:
+                logger.warning('Digest notice failed: %s', type(send_error).__name__)
         finally:
             self.generating.discard(chat_id)
+            if status_msg is not None:
+                try:
+                    await status_msg.delete()
+                except Exception as exc:
+                    logger.debug('Digest status cleanup failed: %s', type(exc).__name__)
 
     async def _send_long_message(self, bot: Bot, chat_id: int, text: str):
         """Отправка длинного сообщения частями"""
-        if len(text) <= 4000:
-            await bot.send_message(chat_id, text)
-            return
-        
-        # Разбиваем по разделителям или по 4000 символов
-        parts = []
-        current = ""
-        
-        for line in text.split('\n'):
-            if len(current) + len(line) + 1 > 3900:
-                parts.append(current)
-                current = line
-            else:
-                current += '\n' + line if current else line
-        
-        if current:
-            parts.append(current)
-        
-        for i, part in enumerate(parts):
-            if i > 0:
+        # Preserve paragraph breaks where possible; a single long line also fits.
+        while text:
+            end = len(text) if len(text) <= 4000 else text.rfind('\n', 1, 4000) + 1 or 4000
+            await bot.send_message(chat_id, text[:end], parse_mode=None)
+            text = text[end:]
+            if text:
                 await asyncio.sleep(0.5)
-            await bot.send_message(chat_id, part)
 
     async def chat_sage_reply(self, text: str) -> Optional[str]:
         """One sampled message only; never publish provider errors or raw output."""
@@ -873,28 +841,4 @@ LOG:
         )
 
     async def trigger_vestnik(self, chat_id: int, bot: Bot):
-        if chat_id in self.generating:
-            return
-        
-        self.generating.add(chat_id)
-        
-        try:
-            chat_log = self.format_for_llm(chat_id, 800) # More context for Vestnik
-            stats = self.get_stats(chat_id)
-            topics = self.get_topics(chat_id)
-            msg_count = len(self.get_messages(chat_id))
-            
-            # Announce
-            await bot.send_message(chat_id, "⚔️ ВЕРХОВНЫЙ СЕНСЕЙ ПРОБУДИЛСЯ...\nГотовьте жопы, сейчас будут НОВОСТИ.")
-            await bot.send_chat_action(chat_id, "typing")
-            
-            digest = await self.generate_vestnik(chat_id, chat_log, stats, topics, msg_count)
-            
-            await self._send_long_message(bot, chat_id, digest)
-            self.mark_digest_done(chat_id)
-            
-        except Exception as e:
-            logger.error(f"Vestnik generation failed: {e}")
-            await bot.send_message(chat_id, f"⚠️ Сенсей перебрал с саке. Сбой матрицы: {e}")
-        finally:
-            self.generating.discard(chat_id)
+        await self._publish_issue(chat_id, bot, vestnik=True)

@@ -23,3 +23,5 @@ Successful GIF generation logs `version=compact-v3`, seconds and byte size. A
 local sample of three uncached receipts took 0.47–0.54 seconds each (around
 350–371 KB); this is not a production latency guarantee. Live Telegram delivery
 and production load still need verification after deployment.
+
+Для новых попыток результат сохраняется в профиле в той же транзакции, что списание. `/katanaresult` показывает последнюю сохранённую попытку с временем UTC без повторного улучшения. Старые результаты не реконструируются. Для PNG введён отдельный тайм-аут 10 секунд перед текстовым резервом.

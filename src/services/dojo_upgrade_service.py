@@ -31,8 +31,8 @@ BOOST_STARS = SPEED_BOOST_STARS
 KINDS = {
     'pickaxe': {
         'stars': PICKAXE_STARS,
-        'title': 'Кирка +10 Coin/ч',
-        'description': 'Постоянный бонус +10 SenseiCoin в час. Действует со следующего цикла.',
+        'title': 'Кирка +50 Coin/ч',
+        'description': 'Постоянный бонус +50 SenseiCoin в час. Действует со следующего цикла.',
     },
     'energy': {
         'stars': ENERGY_STARS,

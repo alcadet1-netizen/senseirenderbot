@@ -252,7 +252,7 @@ class BossService:
                     "drop_chance": reward_settings.get("drop_chance", self.DEFAULT_DROP_CHANCE),
                     "reward_min": reward_settings.get("reward_min", self.DEFAULT_REWARD_MIN),
                     "reward_max": reward_settings.get("reward_max", self.DEFAULT_REWARD_MAX),
-                    "pool_limit": reward_settings.get("reward_pool", self.DEFAULT_POOL_LIMIT),
+                    "pool_limit": reward_settings.get("pool_limit", reward_settings.get("reward_pool", self.DEFAULT_POOL_LIMIT)),
                     "pool_used": 0.0,  # Reset pool on new boss
                 }}
             )

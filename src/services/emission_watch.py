@@ -76,8 +76,12 @@ def format_report(result):
     }
     status = result['status']
     lines = [
-        '🛡 Страж эмиссии · только наблюдение',
+        {'unknown': '⚪ Страж эмиссии · данные неполны',
+         'over_estimate': '🔴 Страж эмиссии · превышение по оценке',
+         'limit_reached': '🟠 Страж эмиссии · достигнут лимит',
+         'observing': '🟢 Страж эмиссии · ниже лимита'}[status],
         status_text[status],
+        '',
         f"Текущая эмиссия: {fmt(result['current'])} Coin",
         f"Учтено сжиганий: {fmt(result['burned'])} Coin",
         f"Резерв лимита после коррекции: {fmt(result['correction_reserve'])} Coin",
@@ -88,8 +92,8 @@ def format_report(result):
     if result['stored_cap'] is not None and result['stored_cap'] != result['cap']:
         lines.append(f"Лимит в документе банка: {fmt(result['stored_cap'])} Coin")
     lines.extend([
-        'Резервирование нового выпуска учитывает эмиссию, сжигания и резерв; сжигание не освобождает лимит.',
-        'Сумма счётчиков и резерва — оценка по доступным данным, не проверенная история.',
+        '',
+        'Как читать: это оценка; сжигание не освобождает лимит.',
         'Страж не блокирует выпуск и не меняет балансы. История и другие источники начислений могут быть неполными.',
     ])
     return '\n'.join(lines)

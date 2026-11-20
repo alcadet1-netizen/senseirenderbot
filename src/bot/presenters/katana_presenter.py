@@ -47,7 +47,7 @@ async def send_katana_upgrade(
         except (TelegramBadRequest, OSError, ValueError, TimeoutError):
             logger.warning("Katana animation unavailable; falling back to PNG", exc_info=True)
     try:
-        payload = await render_receipt(to_upgrade_png, receipt)
+        payload = await asyncio.wait_for(render_receipt(to_upgrade_png, receipt), timeout=10)
         await message.answer_photo(
             BufferedInputFile(payload, filename="sensei-katana-upgrade.png"),
             caption=caption,

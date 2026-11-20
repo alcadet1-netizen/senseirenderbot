@@ -148,13 +148,14 @@ async def test_signed_miniapp_existing_user_really_binds_once(graph):
     setup_dojo(app, container)
     async with TestClient(TestServer(app)) as client:
         auth = signed(now=int(time.time()), start_param='ref_42')
+        assert (await client.post('/miniapp/dojo/api/entry', json={'initData': auth})).status == 200
         for _ in range(2):
             response = await client.post('/miniapp/dojo/api/state', json={'initData': auth})
             assert response.status == 200
         forged = signed(now=int(time.time())) + '&start_param=ref_3'
         assert (await client.post('/miniapp/dojo/api/state', json={'initData': forged})).status == 401
         too_big = signed(now=int(time.time()), start_param='ref_9223372036854775808')
-        assert (await client.post('/miniapp/dojo/api/state', json={'initData': too_big})).status == 200
-    assert registration.await_count == 2
+        assert (await client.post('/miniapp/dojo/api/entry', json={'initData': too_big})).status == 200
+    assert registration.await_count == 1
     assert users.docs[7]['referrer_id'] == 42 and users.docs[7]['coins'] == 123
     assert users.docs[42]['referral_count'] == 1 and users.docs[42]['coins'] == 0

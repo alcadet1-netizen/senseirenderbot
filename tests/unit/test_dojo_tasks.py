@@ -230,8 +230,8 @@ async def test_task_energy_is_pending_above_the_base_cap_not_inside_it():
     assert state['energy'] == 200
     assert state['energy_start'] == 200
     assert state['task_energy_pending'] == 100
-    # Two full-power hours instead of one: 15 + 15 + 3 = 33.
-    assert state['reward'] == 32
+    # Two full-power hours instead of one: 75 + 75 + 7.5 rounds to 158.
+    assert state['reward'] == 158
 
 
 def test_link_urls_are_https_and_stable():
