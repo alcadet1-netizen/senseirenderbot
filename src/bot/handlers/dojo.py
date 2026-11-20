@@ -41,7 +41,7 @@ async def cmd_dojo(message, container):
         '⛏ Додзё: Майнер SenseiCoin\n\n'
         f'Запусти майнинг на {hours} {hour_word}: кирка добывает от {int(BASE_RATE)} Coin/ч. '
         '100 энергии — час полной мощности, потом 10% скорости.\n\n'
-        f'Пока цикл идёт, новый не запустить. Вернись через {hours} {hour_word}, забери награду '
+        f'Telegram можно закрыть — добыча продолжится. Вернись через {hours} {hour_word}, забери награду '
         'и запускай следующий. Монеты начисляются только внутри Telegram и только с сервера.\n\n'
         'Внутри — «Задания», «Улучшения» за Stars и общая эмиссия SenseiBank.',
         parse_mode=None, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[

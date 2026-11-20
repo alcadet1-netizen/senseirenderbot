@@ -90,11 +90,14 @@ class DojoDailyService:
         now = datetime.now(timezone.utc)
         today = now.date().isoformat()
         # Fixed, public probabilities, independent of balance and streak.
-        roll = secrets.randbelow(1000)
-        if roll < 10:
+        roll = secrets.randbelow(1_000_000)
+        if roll < 10_000:
             prize = ('gram', 1 + secrets.randbelow(3))
-        elif roll < 60:
+        elif roll < 60_000:
             prize = ('chest', 2)
+        elif roll == 999_999:
+            slot = secrets.randbelow(4)
+            prize = ('gift', 1) if slot == 3 else ('gram', (slot + 1) * 100)
         else:
             prize = ('coin', (100, 200, 300, 400, 500)[secrets.randbelow(5)])
         async def work(session):
@@ -125,6 +128,9 @@ class DojoDailyService:
                 updates['$set'] = {'free_day': today}
             await self.db.dojo_daily.update_one({'_id': uid}, updates, upsert=True, session=session)
             result = {'kind': kind, 'amount': amount}
-            await self.db.dojo_chest_receipts.insert_one({'_id': f'{uid}:{request_id}', 'result': result, 'created_at': now}, session=session)
+            receipt = {'_id': f'{uid}:{request_id}', 'result': result, 'created_at': now}
+            if kind == 'gift':
+                receipt.update(delivery='pending', user_id=uid, username=user.get('username'))
+            await self.db.dojo_chest_receipts.insert_one(receipt, session=session)
             return result
         return await transaction(self.mongo, work)

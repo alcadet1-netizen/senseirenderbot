@@ -4889,7 +4889,7 @@ button:focus-visible {
 .chest-prizes { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
 .chest-prizes span, .chest-prizes small { padding: 3px 5px; border-radius: 5px; background: #153b26; color: #c5ffda; font-size: clamp(8px, 1.4vh, 10px); }
 .chest-prizes small { background: transparent; color: #8fb49e; }
-#chest-sheet .chest-disclaimer, #chest-sheet #gram-info { font-size: clamp(9px, 1.5vh, 11px); line-height: 1.25; }
+#chest-sheet #gram-info { font-size: clamp(9px, 1.5vh, 11px); line-height: 1.25; }
 #chest-sheet .sheet-done { margin: 0; padding: clamp(8px, 1.6vh, 14px); letter-spacing: 1px; font-size: clamp(10px, 1.6vh, 12px); }
 @media (max-height: 520px) {
   #chest-sheet .chest-scene { display: none; }
@@ -5249,7 +5249,7 @@ html.motion-reduced .chain-panel.is-live .chain-ecg path {
 .energy-head, .mine-meter-head { min-width: 0; }
 .energy-title, .mine-meter-head > span { min-width: 0; }
 .energy-value, .mine-meter-head b { flex: 0 0 auto; white-space: nowrap; }
-.hint { width: 100%; max-width: var(--hud-max); }
+.hint { width: 100%; max-width: var(--hud-max); color: #dbffeb; text-shadow: 0 1px 3px #00170d; font-size: clamp(10px, 2.8vw, 13px); }
 .chain-panel {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(54px, 18vw, 86px);
@@ -5294,7 +5294,7 @@ html.motion-reduced .chain-panel.is-live .chain-ecg path {
   .timer-digits { font-size: clamp(12px, 4vw, 15px); line-height: 1.3; }
   .orb-button.is-timer .orb-sub { bottom: 8px; max-width: 90%; font-size: 6px; letter-spacing: .3px; }
   .status { margin-top: 2px; min-height: 10px; line-height: 1.2; }
-  .hint { margin-top: 1px; min-height: 0; font-size: 7px; line-height: 1.25; }
+  .hint { margin-top: 1px; min-height: 0; font-size: 10px; line-height: 1.25; }
 }
 
 /* A boost is part of the energy card, rather than a floating label over data. */
@@ -5436,3 +5436,5 @@ html.motion-reduced .chain-panel.is-live .chain-ecg path {
 @media (max-width: 420px) and (min-height: 641px) {
   .timer-digits { font-size: min(6.5vw, 26px); }
 }
+
+.reel-prize.is-gift { border-color: #e1bdff; background: linear-gradient(145deg, #5a367c, #24192e); color: #fff1ff; }

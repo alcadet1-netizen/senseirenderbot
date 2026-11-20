@@ -357,7 +357,7 @@ async def test_signed_direct_referral_checks_new_and_existing_player():
 
 
 @pytest.mark.asyncio
-async def test_daily_and_chest_interface_describes_prizes_without_percentages():
+async def test_daily_and_chest_interface_describes_live_prizes():
     app = web.Application()
     setup_dojo(app)
     async with TestClient(TestServer(app)) as client:
@@ -365,13 +365,13 @@ async def test_daily_and_chest_interface_describes_prizes_without_percentages():
         js = await (await client.get('/miniapp/dojo/miner.js')).text()
     daily = html.split('<div id="daily-sheet"', 1)[1].split('<div id="roadmap-sheet"', 1)[0]
     assert 'id="daily-calendar"' in daily and 'id="daily-milestone"' in daily
-    assert 'id="chest-result"' in daily and 'Виртуальный GRAM не является реальным активом' in daily
-    assert 'Вероятности наград различаются' in daily and '%' not in daily
-    assert 'id="chest-spin"' in daily and 'ВЫВОД ОТ 3 GRAM · НЕДОСТУПЕН' in daily
+    assert 'id="chest-result"' in daily and 'Внутренний баланс GRAM' in daily
+    assert 'chest-disclaimer' not in daily and '0,0001%' not in daily
+    assert 'id="chest-spin"' in daily and 'ВЫВОД ОТ 3 GRAM' not in daily
+    assert 'ДЕКОР' not in js and 'bank-escrow' not in html
     assert 'day <= Math.min(weekStart + 6, 90)' in js
     assert 'Твоя награда:' in js
     assert 'class="chest-pointer"' in daily and 'class="chest-art"' in daily
-    assert 'Лента — анимация, результат определяет сервер.' in daily
     assert 'track.children[22]' in js and 'target.offsetWidth / 2' in js
     assert 'prefers-reduced-motion: reduce' in js
     chest_handler = js.split('$("chest-spin").addEventListener', 1)[1]
@@ -429,7 +429,7 @@ async def test_magic_trail_supports_circle_energy_and_remains_visible():
 
 
 @pytest.mark.asyncio
-async def test_bonus_menu_and_placeholder_rewards():
+async def test_bonus_menu_and_rare_rewards():
     app = web.Application()
     setup_dojo(app)
     async with TestClient(TestServer(app)) as client:
@@ -440,12 +440,12 @@ async def test_bonus_menu_and_placeholder_rewards():
     assert 'id="bonus-open"' in main and 'id="burn"' in main
     for identifier in ('daily-open', 'chest-open', 'roadmap'):
         assert f'id="{identifier}"' in bonus and f'id="{identifier}"' not in main
-    for item in ('1', '3'):
-        assert f'{{kind: "PLACEHOLDER", value: "{item} GRAM"}}' in js
-    assert '{kind: "PLACEHOLDER", value: "NFT"}' in js
+    for item in ('1', '2', '3'):
+        assert f'{{kind: "GRAM", value: "{item}"}}' in js
+    assert '{kind: "GIFT", value: "NFT"}' in js
     assert 'НЕ ВЫПАДАЕТ' not in js and 'НЕ ВЫПАДАЕТ' not in html
     assert 'kind === "GRAM" ? " is-gram"' in js
     assert 'kind === "GRAM" ? "GRAM" : kind === "CHEST"' in js
     assert '<small>GRAM</small>' in html
-    assert 'const kind = chosen ? (isGram ? "GRAM" : isChest ? "CHEST" : "COIN")' in js
+    assert 'const kind = chosen ? prize.kind.toUpperCase()' in js
     assert 'closeBonus();' in js and 'aria-expanded' in js

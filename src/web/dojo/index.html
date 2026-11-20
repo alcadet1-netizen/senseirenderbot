@@ -122,7 +122,7 @@
             aria-pressed="true"
             aria-label="Эффекты: включены"
             title="Эффекты: включены"
-          >EFFECT · ON</button>
+          >ЭФФ. ВКЛ</button>
         </div>
         <div class="logo">
           <svg class="icon torii" viewBox="0 0 40 32" aria-hidden="true">
@@ -143,8 +143,8 @@
       </header>
 
       <div class="utility-rail main-utilities">
-        <button type="button" id="bonus-open" class="bonus-trigger" aria-label="Открыть бонусы" aria-expanded="false" aria-controls="bonus-sheet">
-          <span aria-hidden="true">✦</span><b>BONUS</b>
+        <button type="button" id="bonus-open" class="bonus-trigger" data-i18n-aria="Открыть бонусы" aria-label="Открыть бонусы" aria-expanded="false" aria-controls="bonus-sheet">
+          <span aria-hidden="true">✦</span><b data-i18n="БОНУС">БОНУС</b>
         </button>
         <button
           id="burn"
@@ -369,7 +369,6 @@
             <div class="bank-stat bank-stat-wide"><span data-i18n="Всего в экономике">Всего в экономике</span><b id="bank-supply">—</b></div>
             <div class="bank-stat"><span data-i18n="Баланс банка">Баланс банка</span><b id="bank-balance">—</b></div>
             <div class="bank-stat"><span data-i18n="В обороте">В обороте</span><b id="bank-circulation">—</b></div>
-            <div class="bank-stat bank-stat-wide"><span data-i18n="В ставках дуэлей">В ставках дуэлей</span><b id="bank-escrow">—</b></div>
           </div>
           <h3 class="bank-section-title" data-i18n="Движение Coin">Движение Coin</h3>
           <div class="bank-grid">
@@ -891,9 +890,7 @@
             <span>100</span><span>200</span><span>300</span><span>400</span><span>500</span><small>COIN</small>
             <span>0.01</span><span>0.02</span><span>0.03</span><small>GRAM</small><span>2</span><small>СУНДУКА</small>
           </div>
-          <p class="chest-disclaimer">1 и 3 GRAM и NFT в ленте пока недоступны; их механика в разработке. 1 бесплатный сундук в день UTC + бонусы серии. Вероятности наград различаются и не зависят от баланса. Лента — анимация, результат определяет сервер. Виртуальный GRAM не является реальным активом.</p>
-          <p id="gram-info">Виртуальный GRAM · вывод пока недоступен.</p>
-          <button class="sheet-done" disabled title="Вывод пока недоступен">ВЫВОД ОТ 3 GRAM · НЕДОСТУПЕН</button>
+          <p id="gram-info">Внутренний баланс GRAM: —</p>
 
           <button id="chest-spin" class="sheet-done" disabled>ОТКРЫТЬ СУНДУК</button>
         </section>
