@@ -79,7 +79,19 @@ class StatsService:
         single_balance = max(0.0, _to_float(bank.get('coins'), 0.0))
         legacy_balance = max(0.0, _to_float(legacy.get('balance'), 0.0))
         raw_bank_balance = single_balance + legacy_balance
-        raw_total_supply = raw_bank_balance + circulation
+        # Reserved/decided stakes are no longer in player balances, but still
+        # exist. Settled stakes were credited atomically and must not be counted.
+        valid_bet = {'$and': [{'$isNumber': '$bet'}, {'$gte': ['$bet', 0]}]}
+        escrow_rows = await self.db.duel_escrows.aggregate([
+            {'$match': {'state': {'$in': ['reserved', 'decided']}}},
+            {'$group': {'_id': None,
+                'bets': {'$sum': {'$cond': [valid_bet, '$bet', 0]}},
+                'invalid': {'$sum': {'$cond': [valid_bet, 0, 1]}}}},
+        ], session=session).to_list(length=1)
+        escrow_row = escrow_rows[0] if escrow_rows else {'bets': 0, 'invalid': 0}
+        bets = _amount(escrow_row.get('bets'))
+        escrow = float(bets * 2) if bets is not None and not escrow_row.get('invalid') else None
+        raw_total_supply = raw_bank_balance + circulation + escrow if escrow is not None else None
         cap = max(0.0, _to_float(bank.get('emission_cap'), TOTAL_EMISSION_CAP))
         # Never hide historical inconsistencies by clipping real balances.
         bank_balance = raw_bank_balance
@@ -114,9 +126,10 @@ class StatsService:
                      'emission_remaining': remaining,
                      'emission_percent': round(percent, 2) if percent is not None else None,
                      'lifetime_issued_estimate': lifetime,
+                     'duel_escrow': escrow,
                      'total_supply': total_supply,
                      'raw_total_supply': raw_total_supply,
-                     'supply_over_cap': raw_total_supply > cap if cap else False,
+                     'supply_over_cap': raw_total_supply > cap if cap and raw_total_supply is not None else False,
                      'burned': burned,
                      'confiscated': confiscated,
                      'total_withdrawn': 0},
@@ -138,7 +151,9 @@ class StatsService:
         circulation = max(0.0, _to_float(stats.get('circulation'), 0))
         balance = max(0.0, _to_float(bank.get('balance'), 0))
         cap = max(0.0, _to_float(bank.get('emission_cap'), TOTAL_EMISSION_CAP))
-        total_supply = balance + circulation
+        escrow_value = _amount(bank.get('duel_escrow', 0))
+        escrow = float(escrow_value) if escrow_value is not None else None
+        total_supply = balance + circulation + escrow if escrow is not None else None
         users = stats.get('users') or {}
         current_counter = _amount(bank.get('total_emitted_raw', bank.get('total_emitted')))
         emitted = float(current_counter) if current_counter is not None else None
@@ -148,17 +163,18 @@ class StatsService:
             'single_balance': round(max(0.0, _to_float(bank.get('single_balance'), balance)), 2),
             'legacy_balance': round(max(0.0, _to_float(bank.get('legacy_balance'), 0.0)), 2),
             'circulation': round(circulation, 2),
-            'total_supply': round(total_supply, 2),
+            'duel_escrow': round(escrow, 2) if escrow is not None else None,
+            'total_supply': round(total_supply, 2) if total_supply is not None else None,
             'total_emitted': round(emitted, 2) if emitted is not None else None,
             'emission_cap': round(cap, 2),
             'emission_remaining': bank.get('emission_remaining'),
             'emission_percent': bank.get('emission_percent'),
             'lifetime_issued_estimate': bank.get('lifetime_issued_estimate'),
-            'supply_remaining': round(max(0.0, cap - total_supply), 2),
-            'supply_percent': round(min(100.0, total_supply / cap * 100.0) if cap else 100.0, 2),
+            'supply_remaining': round(max(0.0, cap - total_supply), 2) if total_supply is not None else None,
+            'supply_percent': round(min(100.0, total_supply / cap * 100.0) if cap else 100.0, 2) if total_supply is not None else None,
             'burned': round(float(_amount(bank.get('burned'))), 2) if _amount(bank.get('burned')) is not None else None,
             'confiscated': round(max(0.0, _to_float(bank.get('confiscated'), 0.0)), 2),
-            'supply_over_cap': bool(bank.get('supply_over_cap')) or bool(cap and total_supply > cap),
+            'supply_over_cap': bool(bank.get('supply_over_cap')) or bool(cap and total_supply is not None and total_supply > cap),
             'initial_coins': bank.get('initial_coins', getattr(settings, 'bank_initial_coins', 1000000.0)),
             'users': int(_to_float(users.get('total'), 0)),
             'holders': int(_to_float(users.get('holders'), 0)),

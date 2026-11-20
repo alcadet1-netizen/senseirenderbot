@@ -5388,3 +5388,51 @@ html.motion-reduced .chain-panel.is-live .chain-ecg path {
 }
 #view-bank .bank-refresh { transition: border-color .2s ease, background .2s ease; }
 #view-bank .bank-refresh:not(:disabled):active { background: rgba(18, 73, 40, .9); }
+
+/* Keep the control circular even when its grid content needs more room. */
+.orb .orb-button {
+  box-sizing: border-box;
+  width: 92%;
+  height: 92%;
+  min-width: 0;
+  min-height: 0;
+  padding: 7%;
+  grid-template-rows: 26% 32% 10%;
+  gap: 3%;
+}
+.orb .orb-button:not(.is-timer) .orb-label {
+  min-height: 0;
+  max-width: 100%;
+  letter-spacing: 1px;
+}
+.orb .orb-button:not(.is-timer) .orb-icon {
+  height: 100%;
+}
+.orb .orb-button:not(.is-timer) .orb-icon .icon {
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+}
+.orb .orb-button.is-timer {
+  grid-template-rows: 1fr;
+  padding: 0;
+}
+/* More specific than .orb-button > *; otherwise the clock is a grid item. */
+.orb-button > .timer-face {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+}
+.orb-button > .timer-face[hidden] { display: none; }
+@media (max-height: 640px) {
+  #app:not(.tabs-open) .stage .orb,
+  #app:not(.tabs-open) .stage:has(.energy.is-empty) .orb,
+  #app:not(.tabs-open) .stage:has(.boost-pill:not([hidden])) .orb,
+  #app:not(.tabs-open) .stage:has(.energy.is-empty .boost-pill:not([hidden])) .orb {
+    width: min(42vw, 158px);
+    height: min(42vw, 158px);
+  }
+}
+@media (max-width: 420px) and (min-height: 641px) {
+  .timer-digits { font-size: min(6.5vw, 26px); }
+}

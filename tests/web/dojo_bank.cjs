@@ -16,7 +16,7 @@ const context = {$, document: {querySelectorAll: () => milestones}, Math, Number
 vm.createContext(context);
 vm.runInContext('let bank = null, bankBusy = false, bankRefreshQueued = false, bankLoadFailed = false;\n' + source.slice(start, end) + '\nthis.renderBank = renderBank; this.loadBank = loadBank; this.setBank = b => bank = b;', context);
 const data = {total_emitted: 971011837, lifetime_issued_estimate: 1000990403, emission_cap: 10000000000, emission_remaining: 8999009597,
-  total_supply: 970615473, bank_balance: 968485634, circulation: 2129839, burned: 29978566,
+  total_supply: 970615473, bank_balance: 968485634, circulation: 2129839, duel_escrow: 0, burned: 29978566,
   confiscated: 482064, holders: 272, snapshot_at: 1730000000};
 (async () => {
   context.setBank(data); context.renderBank();
@@ -24,6 +24,11 @@ const data = {total_emitted: 971011837, lifetime_issued_estimate: 1000990403, em
   assert.equal($('bank-warning-title').textContent, 'Обнаружено расхождение');
   assert.match($('bank-warning-delta').textContent, /396364/);
   assert.equal($('bank-mined-label').textContent, '1000990403 Coin');
+  assert.equal($('bank-escrow').textContent, '0 Coin');
+  context.setBank({...data, duel_escrow: null, total_supply: null}); context.renderBank();
+  assert.equal($('bank-escrow').textContent, '—');
+  assert.equal($('bank-supply').textContent, '—');
+  context.setBank(data); context.renderBank();
   assert.equal($('bank-current-emission').textContent, '971011837 Coin');
   assert.equal($('bank-progress').style.width, '10.00990403%');
   assert.equal(milestones[0].classList['is-reached'], false);

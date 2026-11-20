@@ -58,6 +58,7 @@
     "Движение Coin": "Coin movement",
     "Вехи эмиссии": "Emission milestones",
     "Расчёт по учтённым выпускам и сжиганиям; история может быть неполной.": "Estimated from recorded issuance and burns; history may be incomplete.",
+    "В ставках дуэлей": "Held in duel stakes",
     "Обнаружено расхождение": "Accounting discrepancy detected",
     "Превышен лимит": "Emission cap exceeded",
     "Подробнее": "Details",
@@ -2275,6 +2276,7 @@
     $("bank-supply").textContent = bankCoin(bank.total_supply);
     $("bank-balance").textContent = bankCoin(bank.bank_balance);
     $("bank-circulation").textContent = bankCoin(bank.circulation);
+    $("bank-escrow").textContent = bankCoin(bank.duel_escrow);
     $("bank-burned").textContent = bankCoin(bank.burned);
     $("bank-confiscated").textContent = bankCoin(bank.confiscated);
     const holders = bankNumber(bank.holders);
@@ -2827,8 +2829,8 @@
       {kind: "COIN", value: "300"}, {kind: "COIN", value: "400"},
       {kind: "COIN", value: "500"}, {kind: "GRAM", value: "0.01"},
       {kind: "GRAM", value: "0.02"}, {kind: "GRAM", value: "0.03"},
-      {kind: "GRAM", value: "1"},
-      {kind: "GRAM", value: "3"},
+      {kind: "PLACEHOLDER", value: "1 GRAM"},
+      {kind: "PLACEHOLDER", value: "3 GRAM"},
       {kind: "CHEST", value: "2"},
       {kind: "PLACEHOLDER", value: "NFT"},
     ];

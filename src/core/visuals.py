@@ -738,6 +738,7 @@ class Visuals:
             cls.frame_separator_left(w),
             cls.frame_line_left(f"💰 Баланс: {cls._fmt_coins(balance)}", w),
             cls.frame_line_left(f"🪙 В обороте: {cls._fmt_coins(circulation)}", w),
+            cls.frame_line_left(f"⚔️ В ставках дуэлей: {cls._fmt_coins(bank.get('duel_escrow'))}", w),
             cls.frame_line_left(f"📈 В системе: {cls._fmt_coins(total_supply)}", w),
             cls.frame_line_left(f"🏭 Текущая эмиссия: {cls._fmt_coins(emitted)}", w),
             cls.frame_line_left(f"🎚 Лимит: {cls._fmt_coins(cap)}", w),

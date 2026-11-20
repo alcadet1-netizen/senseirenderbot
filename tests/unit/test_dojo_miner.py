@@ -441,7 +441,7 @@ async def test_bonus_menu_and_placeholder_rewards():
     for identifier in ('daily-open', 'chest-open', 'roadmap'):
         assert f'id="{identifier}"' in bonus and f'id="{identifier}"' not in main
     for item in ('1', '3'):
-        assert f'{{kind: "GRAM", value: "{item}"}}' in js
+        assert f'{{kind: "PLACEHOLDER", value: "{item} GRAM"}}' in js
     assert '{kind: "PLACEHOLDER", value: "NFT"}' in js
     assert 'НЕ ВЫПАДАЕТ' not in js and 'НЕ ВЫПАДАЕТ' not in html
     assert 'kind === "GRAM" ? " is-gram"' in js

@@ -39,7 +39,8 @@ async def test_admin_32_concurrent_requests_one_refresh_four_database_operations
     bank=NS(find_one=AsyncMock(return_value={'coins':1000}))
     tickets=NS(count_documents=AsyncMock(return_value=4))
     transactions=NS(aggregate=Mock(return_value=NS(to_list=AsyncMock(return_value=[dict(_id='daily',count=2,total_amount=100)]))))
-    svc=StatsService(NS(database=NS(users=users,bank=bank,tickets=tickets,transactions=transactions)))
+    escrows=NS(aggregate=Mock(return_value=NS(to_list=AsyncMock(return_value=[]))))
+    svc=StatsService(NS(database=NS(users=users,bank=bank,tickets=tickets,transactions=transactions,duel_escrows=escrows)))
     results=await asyncio.gather(*(svc.get_admin_stats() for _ in range(32)))
     assert all(x==results[0] for x in results)
     assert results[0]['snapshot_at'] == svc._cache_timestamp
@@ -49,6 +50,7 @@ async def test_admin_32_concurrent_requests_one_refresh_four_database_operations
     assert users.aggregate.call_count==transactions.aggregate.call_count==1
     assert users.aggregate.call_args.kwargs['session'] == 'snapshot-session'
     assert transactions.aggregate.call_args.kwargs['session'] == 'snapshot-session'
+    assert escrows.aggregate.call_args.kwargs['session'] == 'snapshot-session'
     assert bank.find_one.await_args.kwargs['session'] == 'snapshot-session'
     assert tickets.count_documents.await_args.kwargs['session'] == 'snapshot-session'
     # Only numeric balances greater than zero count as holders; zero, missing,
@@ -71,7 +73,8 @@ async def test_empty_admin_stats_and_failed_refresh_retry(monkeypatch):
     monkeypatch.setattr("src.services.stats_service.transaction", tx)
     users=NS(aggregate=Mock(return_value=NS(to_list=AsyncMock(side_effect=[RuntimeError(),[]]))))
     db=NS(users=users,bank=NS(find_one=AsyncMock(return_value=None)),tickets=NS(count_documents=AsyncMock(return_value=0)),
-          transactions=NS(aggregate=Mock(return_value=NS(to_list=AsyncMock(return_value=[])))))
+          transactions=NS(aggregate=Mock(return_value=NS(to_list=AsyncMock(return_value=[])))),
+          duel_escrows=NS(aggregate=Mock(return_value=NS(to_list=AsyncMock(return_value=[])))))
     svc=StatsService(NS(database=db))
     with pytest.raises(RuntimeError): await svc.get_admin_stats()
     assert svc._cache_timestamp is None
