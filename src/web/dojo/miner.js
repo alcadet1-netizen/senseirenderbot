@@ -2827,8 +2827,8 @@
       {kind: "COIN", value: "300"}, {kind: "COIN", value: "400"},
       {kind: "COIN", value: "500"}, {kind: "GRAM", value: "0.01"},
       {kind: "GRAM", value: "0.02"}, {kind: "GRAM", value: "0.03"},
-      {kind: "GRAM", value: "1"},
-      {kind: "GRAM", value: "3"},
+      {kind: "PLACEHOLDER", value: "1 GRAM"},
+      {kind: "PLACEHOLDER", value: "3 GRAM"},
       {kind: "CHEST", value: "2"},
       {kind: "PLACEHOLDER", value: "NFT"},
     ];

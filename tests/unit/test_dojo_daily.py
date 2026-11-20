@@ -162,3 +162,22 @@ async def test_admin_grant_rejects_reused_key_with_different_payload(monkeypatch
     with pytest.raises(GameError, match='уже использован'):
         await svc.grant_admin_chests('SenseiUser', 11, 7, 'web:7:request-id')
     db.dojo_daily.update_one.assert_not_awaited()
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('roll,second,kind,amount', [
+    (0, 0, 'gram', 1), (9, 2, 'gram', 3),
+    (10, 0, 'chest', 2), (59, 0, 'chest', 2),
+    (60, 0, 'coin', 100), (999, 4, 'coin', 500),
+])
+async def test_chest_roll_boundaries_and_receipts(monkeypatch, roll, second, kind, amount):
+    svc, db = service(monkeypatch)
+    monkeypatch.setattr('src.services.dojo_daily_service.secrets.randbelow',
+                        lambda n: roll if n == 1000 else second)
+    result = await svc.open_chest(42, 'boundary-request')
+    assert result == {'kind': kind, 'amount': amount}
+    assert db.dojo_chest_receipts.insert_one.call_args.args[0]['result'] == result
+    if kind == 'coin':
+        assert db.bank.update_one.call_args.args[1] == {'$inc': {'coins': -amount}}
+        assert db.users.update_one.call_args.args[1] == {'$inc': {'coins': amount}}
+    else:
+        db.bank.update_one.assert_not_awaited()
