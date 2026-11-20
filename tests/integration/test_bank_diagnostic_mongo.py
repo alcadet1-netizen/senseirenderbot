@@ -35,3 +35,29 @@ async def test_private_diagnostic_reads_same_snapshot_without_writes():
     finally:
         await client.drop_database(name)
         client.close()
+
+
+@pytest.mark.asyncio
+async def test_preview_on_replica_set_is_read_only_and_rejects_changed_difference():
+    from src.services.emission_correction_plan import CorrectionPlanError
+    uri = os.environ.get('CAMPAIGN_TEST_MONGO_URI')
+    if not uri:
+        pytest.skip('MongoDB replica set required')
+    client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=5000)
+    name = 'sensei_preview_' + uuid.uuid4().hex
+    db = client[name]
+    try:
+        await db.bank.insert_many([{'_id': 'single', 'coins': 75, 'total_emitted': 120, 'burned': 5},
+                                   {'_id': 'main', 'balance': 0}])
+        await db.users.insert_one({'id': 1, 'coins': 25})
+        await db.duel_escrows.insert_one({'_id': 'settled', 'state': 'settled', 'bet': 5})
+        before = await db.bank.find_one({'_id': 'single'})
+        report = await read_bank_diagnostic(db, expected_difference='20')
+        assert report['correction_plan']['limit_reserve'] == '20.00'
+        with pytest.raises(CorrectionPlanError):
+            await read_bank_diagnostic(db, expected_difference='21')
+        assert await db.bank.find_one({'_id': 'single'}) == before
+        assert (await db.users.find_one({'id': 1}))['coins'] == 25
+    finally:
+        await client.drop_database(name)
+        client.close()
