@@ -19,9 +19,8 @@ from pymongo.write_concern import WriteConcern
 
 from scripts.diagnose_emission import build_report, read_snapshot
 from src.services.emission_correction_plan import CorrectionPlanError, make_correction_plan
-from src.services.emission_watch import _amount
+from src.services.emission_watch import _amount, CORRECTION_ID
 
-CORRECTION_ID = 'counter-baseline-v1'
 CONFIRM = 'ALL_FINANCIAL_WRITERS_STOPPED_AND_BACKUP_VERIFIED'
 
 

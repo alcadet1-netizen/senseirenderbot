@@ -44,7 +44,7 @@ async def test_correction_reserve_is_preserved_across_burn_and_competing_reserva
     try:
         await db.bank.insert_one({'_id': 'single', 'coins': 0, 'total_emitted': 500,
                                   'burned': 200, 'emission_cap': 1000,
-                                  'emission_correction_reserve': 200, 'emission_correction_applied': True})
+                                  'emission_correction_reserve': 200, 'emission_correction_applied': True, 'emission_correction_id': 'counter-baseline-v1'})
         services = [EmissionService(SimpleNamespace(database=db), cap=1000) for _ in range(8)]
         assert sum(await asyncio.gather(*(svc.reserve(100) for svc in services))) == 1
         assert await services[0].burn(100) == 100

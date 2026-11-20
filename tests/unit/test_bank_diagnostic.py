@@ -51,3 +51,24 @@ async def test_command_private_admin_only_and_safe_failure(monkeypatch):
     await admin_commands.cmd_bank_diagnose(message, container)
     assert 'через минуту' in message.answer.await_args.args[0]
     assert read.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_corrected_limit_reserve_is_visible_and_incomplete_is_unknown():
+    class Context:
+        async def __aenter__(self): return object()
+        async def __aexit__(self, *args): pass
+    client = NS(start_session=AsyncMock(return_value=Context()))
+    bank_doc = {'coins': 75, 'total_emitted': 100, 'burned': 5,
+                'emission_correction_reserve': 20, 'emission_correction_applied': True,
+                'emission_correction_id': 'counter-baseline-v1'}
+    bank = NS(find_one=AsyncMock(side_effect=[bank_doc, None]))
+    empty = NS(aggregate=Mock(return_value=NS(to_list=AsyncMock(return_value=[]))))
+    db = NS(client=client, bank=bank, users=empty, duel_escrows=empty)
+    report = await read_bank_diagnostic(db)
+    assert report['limit_reserve'] == '20'
+    assert 'Служебный резерв лимита (не Coin): 20' in format_bank_diagnostic(report)
+    del bank_doc['emission_correction_id']
+    bank.find_one.side_effect = [bank_doc, None]
+    report = await read_bank_diagnostic(db)
+    assert report['limit_reserve'] is None

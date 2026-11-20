@@ -302,6 +302,7 @@ class EmissionService:
                      "burned": doc["burned"],
                      "emission_correction_reserve": doc.get("emission_correction_reserve"),
                      "emission_correction_applied": doc.get("emission_correction_applied"),
+                     "emission_correction_id": doc.get("emission_correction_id"),
                      "emission_frozen": {"$ne": True}},
                     {"$inc": {"total_emitted": amount},
                      "$set": {"emission_cap": self.cap,

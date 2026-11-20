@@ -15,6 +15,7 @@ from bson.decimal128 import Decimal128
 from src.core.constants import TOTAL_EMISSION_CAP
 
 logger = logging.getLogger(__name__)
+CORRECTION_ID = 'counter-baseline-v1'
 
 
 def _amount(value):
@@ -29,9 +30,13 @@ def _amount(value):
 
 def correction_reserve(doc):
     """Old documents have no reserve; corrected documents must retain one."""
-    if 'emission_correction_reserve' not in doc:
-        return None if doc.get('emission_correction_applied') else Decimal(0)
-    return _amount(doc['emission_correction_reserve'])
+    keys = ('emission_correction_reserve', 'emission_correction_applied', 'emission_correction_id')
+    if not any(key in doc for key in keys):
+        return Decimal(0)  # Existing uncorrected documents.
+    if doc.get('emission_correction_applied') is not True or doc.get('emission_correction_id') != CORRECTION_ID:
+        return None
+    reserve = _amount(doc.get('emission_correction_reserve'))
+    return reserve if reserve is not None and reserve > 0 else None
 
 
 def assess(doc):
@@ -93,7 +98,7 @@ def format_report(result):
 async def read_report(db):
     """One projected read; no full collection scan, initialization or writes."""
     doc = await db.bank.find_one({'_id': 'single'},
-        {'total_emitted': 1, 'burned': 1, 'emission_cap': 1, 'emission_correction_reserve': 1, 'emission_correction_applied': 1})
+        {'total_emitted': 1, 'burned': 1, 'emission_cap': 1, 'emission_correction_reserve': 1, 'emission_correction_applied': 1, 'emission_correction_id': 1})
     return assess(doc)
 
 
