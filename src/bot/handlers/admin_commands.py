@@ -139,6 +139,40 @@ async def cmd_bank_diagnose(message: Message, container: Container) -> None:
     await message.answer(text, parse_mode=None)
 
 
+@router.message(Command("coinpreview"))
+async def cmd_coin_preview(message: Message, container: Container) -> None:
+    """Read-only plan from a snapshot; this is not an apply or stop command."""
+    global _bank_diagnostic_last
+    if not message.from_user or message.from_user.id not in container.settings.admin_ids:
+        return
+    if message.chat.type != "private":
+        await message.answer("Открой /coinpreview в личном чате с ботом.", parse_mode=None)
+        return
+    parts = (message.text or '').split()
+    if len(parts) != 2 or len(parts[1]) > 32:
+        await message.answer("Укажи ожидаемую разницу из свежей /bankdiagnose: /coinpreview 396363.83", parse_mode=None)
+        return
+    if _bank_diagnostic_lock.locked() or time.monotonic() - _bank_diagnostic_last < 60:
+        await message.answer("Сверка уже выполняется или недавно запускалась. Повтори через минуту.", parse_mode=None)
+        return
+    from src.services.bank_diagnostic import read_bank_diagnostic, format_correction_preview
+    from src.services.emission_correction_plan import CorrectionPlanError
+    async with _bank_diagnostic_lock:
+        _bank_diagnostic_last = time.monotonic()
+        try:
+            report = await asyncio.wait_for(read_bank_diagnostic(
+                container.mongo_client.database, expected_difference=parts[1]), timeout=15)
+            text = format_correction_preview(report)
+        except CorrectionPlanError:
+            await message.answer('План не построен: данные некорректны, расхождение изменилось или коррекция уже существует. Ничего не изменено; проверь /bankdiagnose и обратись к оператору.', parse_mode=None)
+            return
+        except Exception as exc:
+            logger.warning('Coin preview failed error_type=%s', type(exc).__name__)
+            await message.answer('Не удалось получить снимок. Данные неизвестны; ничего не изменено.', parse_mode=None)
+            return
+    await message.answer(text, parse_mode=None)
+
+
 @router.message(Command("bankhistory"))
 async def cmd_bank_history(message: Message, container: Container) -> None:
     """Read-only aggregate of selected journal types, never individual records."""

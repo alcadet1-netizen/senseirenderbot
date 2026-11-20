@@ -272,3 +272,22 @@ async def test_restart_preserves_existing_counter_baseline():
     assert snapshot['total_emitted'] == 50
     assert snapshot['lifetime_issued_estimate'] == 55
     assert db.bank.docs['single']['total_emitted'] == 50
+
+@pytest.mark.asyncio
+async def test_correction_reserve_keeps_lifetime_ceiling_closed():
+    emission, db = service(bank=[{'_id': 'single', 'coins': 0, 'total_emitted': 700,
+                                  'burned': 100, 'emission_correction_reserve': 200,
+                                  'emission_correction_applied': True, 'emission_correction_id': 'counter-baseline-v1'}])
+    emission.cap = 1000
+    assert (await emission.snapshot())['lifetime_issued_estimate'] == 1000
+    assert not await emission.reserve(1)
+    assert (await db.bank.find_one({'_id': 'single'}))['total_emitted'] == 700
+
+
+@pytest.mark.asyncio
+async def test_missing_correction_reserve_after_correction_fails_closed():
+    emission, db = service(bank=[{'_id': 'single', 'coins': 0, 'total_emitted': 700,
+                                  'burned': 100, 'emission_correction_applied': True, 'emission_correction_id': 'counter-baseline-v1'}])
+    emission.cap = 1000
+    assert (await emission.snapshot())['lifetime_issued_estimate'] is None
+    assert not await emission.reserve(1)

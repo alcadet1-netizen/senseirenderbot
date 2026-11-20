@@ -23,7 +23,7 @@ from pymongo.errors import DuplicateKeyError
 
 from src.core.config import settings
 from src.core.constants import TOTAL_EMISSION_CAP
-from src.services.emission_watch import _amount
+from src.services.emission_watch import _amount, correction_reserve
 
 logger = logging.getLogger(__name__)
 
@@ -288,17 +288,22 @@ class EmissionService:
             if doc is None:
                 doc = await self.ensure_state()
             current, burned = _amount(doc.get("total_emitted")), _amount(doc.get("burned"))
+            reserve = correction_reserve(doc)
             cap, requested = _amount(self.cap), _amount(amount)
-            if current is None or burned is None or cap is None or requested is None:
+            if current is None or burned is None or reserve is None or cap is None or requested is None:
                 logger.error("Emission reserve denied: missing or invalid counters")
                 return False
-            if doc.get("emission_frozen") or current + burned + requested > cap:
+            if doc.get("emission_frozen") or current + burned + reserve + requested > cap:
                 logger.warning("Emission reserve denied: lifetime baseline/cap reached")
                 return False
             try:
                 result = await self.bank.update_one(
                     {"_id": BANK_ID, "total_emitted": doc["total_emitted"],
-                     "burned": doc["burned"], "emission_frozen": {"$ne": True}},
+                     "burned": doc["burned"],
+                     "emission_correction_reserve": doc.get("emission_correction_reserve"),
+                     "emission_correction_applied": doc.get("emission_correction_applied"),
+                     "emission_correction_id": doc.get("emission_correction_id"),
+                     "emission_frozen": {"$ne": True}},
                     {"$inc": {"total_emitted": amount},
                      "$set": {"emission_cap": self.cap,
                               "emission_updated_at": datetime.now(timezone.utc)}},
@@ -402,7 +407,8 @@ class EmissionService:
         cap = max(0.0, _num(bank_doc.get("emission_cap"), self.cap))
         current, burned = _amount(bank_doc.get("total_emitted")), _amount(bank_doc.get("burned"))
         emitted = float(current) if current is not None else None
-        lifetime = float(current + burned) if current is not None and burned is not None else None
+        reserve = correction_reserve(bank_doc)
+        lifetime = float(current + burned + reserve) if current is not None and burned is not None and reserve is not None else None
         remaining = max(0.0, cap - lifetime) if lifetime is not None else None
         percent = min(100.0, lifetime / cap * 100.0) if lifetime is not None and cap else None
         return {

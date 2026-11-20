@@ -44,7 +44,7 @@ async def test_report_one_projected_read_never_writes():
     bank = NS(find_one=AsyncMock(return_value={'total_emitted': 900, 'burned': 100}))
     result = await read_report(NS(bank=bank))
     assert result['estimate'] == Decimal(1000)
-    bank.find_one.assert_awaited_once_with({'_id': 'single'}, {'total_emitted': 1, 'burned': 1, 'emission_cap': 1})
+    bank.find_one.assert_awaited_once_with({'_id': 'single'}, {'total_emitted': 1, 'burned': 1, 'emission_cap': 1, 'emission_correction_reserve': 1, 'emission_correction_applied': 1, 'emission_correction_id': 1})
     assert set(vars(bank)) == {'find_one'}
 
 
@@ -125,3 +125,23 @@ async def test_disabled_with_no_admins_does_not_read_database():
     watch = EmissionWatch(NS(bank=bank), NS(send_message=AsyncMock()), [])
     assert await watch.tick() == 'disabled'
     bank.find_one.assert_not_awaited()
+
+
+def test_correction_reserve_counts_toward_cap_and_missing_reserve_is_unknown():
+    doc = {'total_emitted': CAP - 200, 'burned': 100, 'emission_correction_reserve': 100,
+           'emission_correction_applied': True, 'emission_correction_id': 'counter-baseline-v1'}
+    assert assess(doc)['status'] == 'limit_reached'
+    del doc['emission_correction_reserve']
+    assert assess(doc)['status'] == 'unknown'
+
+
+@pytest.mark.parametrize('fields', [
+    {'emission_correction_reserve': 100},
+    {'emission_correction_applied': False, 'emission_correction_reserve': 100, 'emission_correction_id': 'counter-baseline-v1'},
+    {'emission_correction_applied': True, 'emission_correction_reserve': 100},
+    {'emission_correction_applied': True, 'emission_correction_reserve': 100, 'emission_correction_id': 'unknown'},
+    {'emission_correction_applied': True, 'emission_correction_reserve': 0, 'emission_correction_id': 'counter-baseline-v1'},
+    {'emission_correction_id': 'counter-baseline-v1'},
+])
+def test_partial_or_corrupt_correction_fails_closed(fields):
+    assert assess({'total_emitted': 100, 'burned': 0, **fields})['status'] == 'unknown'
