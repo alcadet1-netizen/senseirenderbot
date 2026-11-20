@@ -139,6 +139,31 @@ async def cmd_bank_diagnose(message: Message, container: Container) -> None:
     await message.answer(text, parse_mode=None)
 
 
+@router.message(Command("bankhistory"))
+async def cmd_bank_history(message: Message, container: Container) -> None:
+    """Read-only aggregate of selected journal types, never individual records."""
+    global _bank_diagnostic_last
+    if not message.from_user or message.from_user.id not in container.settings.admin_ids:
+        return
+    if message.chat.type != "private":
+        await message.answer("Открой /bankhistory в личном чате с ботом.", parse_mode=None)
+        return
+    if _bank_diagnostic_lock.locked() or time.monotonic() - _bank_diagnostic_last < 60:
+        await message.answer("Сверка уже выполняется или недавно запускалась. Повтори через минуту.", parse_mode=None)
+        return
+    from src.services.bank_history import read_bank_history, format_bank_history
+    async with _bank_diagnostic_lock:
+        _bank_diagnostic_last = time.monotonic()
+        try:
+            since, now, rows = await asyncio.wait_for(read_bank_history(container.mongo_client.database), timeout=15)
+            text = format_bank_history(since, now, rows)
+        except Exception as exc:
+            logger.warning('Bank history failed error_type=%s', type(exc).__name__)
+            await message.answer('Не удалось прочитать историю. Данные неизвестны; попробуй позже.', parse_mode=None)
+            return
+    await message.answer(text, parse_mode=None)
+
+
 @router.message(Command("senseichats", "chats", "группы"))
 async def cmd_admin_chats(message: Message, container: Container):
     """Список групп, где есть бот (из активного мониторинга)."""
