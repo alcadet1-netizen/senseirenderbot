@@ -24,8 +24,9 @@ def make_correction_plan(report, bank_doc, *, expected_delta):
     calculated = report.get('calculated') or {}
     if not single.get('present') or not legacy.get('present'):
         raise CorrectionPlanError('bank account missing')
-    if bank_doc.get('emission_correction_applied') or 'emission_correction_reserve' in bank_doc:
-        raise CorrectionPlanError('correction already applied or reserve exists')
+    if any(key in bank_doc for key in ('emission_correction_applied', 'emission_correction_reserve',
+                                        'emission_correction_id', 'emission_correction_at')):
+        raise CorrectionPlanError('correction already applied or incomplete correction fields exist')
     if users.get('negative_count') != 0 or users.get('missing_or_non_numeric_count') != 0:
         raise CorrectionPlanError('user balances require investigation')
     # The report serializes monetary values as strings; parse only known fields.

@@ -37,3 +37,16 @@ def test_preview_refuses_unsafe_snapshot(change):
     if change == 'changed': report['calculated']['emission_minus_ui_total_supply'] = '21'
     with pytest.raises(CorrectionPlanError):
         make_correction_plan(report, doc, expected_delta='20.00')
+
+
+@pytest.mark.parametrize('field,value', [
+    ('emission_correction_applied', False),
+    ('emission_correction_id', 'unknown'),
+    ('emission_correction_at', None),
+    ('emission_correction_reserve', 0),
+])
+def test_preview_refuses_any_partial_correction(field, value):
+    report, doc = sample()
+    doc[field] = value
+    with pytest.raises(CorrectionPlanError):
+        make_correction_plan(report, doc, expected_delta='20.00')
