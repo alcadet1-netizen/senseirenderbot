@@ -57,7 +57,7 @@ def bank_fields(doc, fields):
     return {"present": doc is not None, **result}
 
 
-def build_report(single, legacy, users, events, *, started_at, finished_at, history_days):
+def build_report(single, legacy, users, events, *, started_at, finished_at, history_days, escrow=None):
     single_info = bank_fields(single, ('coins', 'total_emitted', 'emission_cap', 'burned'))
     legacy_info = bank_fields(legacy, ('balance',))
     player_total = amount(users.get('numeric_sum', 0))
@@ -65,14 +65,18 @@ def build_report(single, legacy, users, events, *, started_at, finished_at, hist
     single_balance = stats_amount((single or {}).get('coins'))
     legacy_balance = stats_amount((legacy or {}).get('balance'))
     emitted = stats_amount((single or {}).get('total_emitted'))
+    # Unknown if the aggregate contains invalid stakes or a non-finite sum.
+    escrow = escrow if escrow is not None else {'bets': 0, 'invalid': 0}
+    bets = amount(escrow.get('bets'))
+    held = bets * 2 if bets is not None and bets >= 0 and not escrow.get('invalid') else None
     # Match StatsService's current displayed computation, including clamping.
     # A missing document is equivalent to zero; a malformed value is unknown.
     if single is None:
         single_balance = Decimal(0)
     if legacy is None:
         legacy_balance = Decimal(0)
-    if player_total_for_ui is not None and single_balance is not None and legacy_balance is not None:
-        calculated = max(Decimal(0), player_total_for_ui) + max(Decimal(0), single_balance) + max(Decimal(0), legacy_balance)
+    if player_total_for_ui is not None and single_balance is not None and legacy_balance is not None and held is not None:
+        calculated = max(Decimal(0), player_total_for_ui) + max(Decimal(0), single_balance) + max(Decimal(0), legacy_balance) + held
     else:
         calculated = None
     difference = emitted - calculated if emitted is not None and calculated is not None else None
@@ -92,6 +96,7 @@ def build_report(single, legacy, users, events, *, started_at, finished_at, hist
             'negative_count': users.get('negative_count', 0),
             'missing_or_non_numeric_count': users.get('non_numeric_count', 0),
         },
+        'duel_escrow': {'held_coins': as_text(held), 'invalid_stakes': escrow.get('invalid', 0)},
         'calculated': {
             'ui_total_supply': as_text(calculated),
             'emission_minus_ui_total_supply': as_text(difference),
@@ -102,7 +107,7 @@ def build_report(single, legacy, users, events, *, started_at, finished_at, hist
             'warning': 'Journal is incomplete; totals are not proof of active escrow or of the cause.',
         },
         'limitations': [
-            'Active duels are stored in the bot process, not a durable escrow ledger; their current total cannot be established from this snapshot.',
+            'Reserved and decided durable duel stakes are counted; old in-flight stakes without durable records cannot be reconstructed from this snapshot.',
             'Emission reservations/releases and some older operations do not have a complete reliable transaction journal.',
             'A read snapshot may capture multi-step non-transactional operations in progress; do not infer cause or correct balances from one report.',
             'Current UI calculations clamp negative component totals; inspect negative and non-numeric balances separately. Comparison is null when input types cannot be safely compared to UI coercion.',
@@ -126,6 +131,13 @@ def read_snapshot(db, session, history_days, now):
         'non_numeric_count': {'$sum': {'$cond': [is_num, 0, 1]}},
     }}]
     rows = list(db.users.aggregate(users_pipeline, session=session, maxTimeMS=120000))
+    valid_bet = {'$and': [{'$isNumber': '$bet'}, {'$gte': ['$bet', 0]}]}
+    escrow_rows = list(db.duel_escrows.aggregate([
+        {'$match': {'state': {'$in': ['reserved', 'decided']}}},
+        {'$group': {'_id': None,
+                    'bets': {'$sum': {'$cond': [valid_bet, '$bet', 0]}},
+                    'invalid': {'$sum': {'$cond': [valid_bet, 0, 1]}}}},
+    ], session=session, maxTimeMS=120000))
     events = []
     if history_days:
         pipeline = [
@@ -139,7 +151,7 @@ def read_snapshot(db, session, history_days, now):
             events.append({'day_utc': row['_id']['day'], 'type': row['_id']['type'],
                            'count': row['count'], 'signed_amount': as_text(amount(row['amount'])),
                            'non_numeric_amounts': row['non_numeric_amounts']})
-    return single, legacy, rows[0] if rows else {}, events
+    return single, legacy, rows[0] if rows else {}, events, escrow_rows[0] if escrow_rows else {'bets': 0, 'invalid': 0}
 
 
 def main(argv=None):
@@ -157,9 +169,9 @@ def main(argv=None):
                              appname='sensei-emission-readonly-diagnostic', read_preference=ReadPreference.PRIMARY)
         started = datetime.now(timezone.utc)
         with client.start_session(snapshot=True) as session:
-            single, legacy, users, events = read_snapshot(client[db_name], session, args.history_days, started)
+            single, legacy, users, events, escrow = read_snapshot(client[db_name], session, args.history_days, started)
         report = build_report(single, legacy, users, events, started_at=started,
-                              finished_at=datetime.now(timezone.utc), history_days=args.history_days)
+                              finished_at=datetime.now(timezone.utc), history_days=args.history_days, escrow=escrow)
         print(json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False))
         return 0
     except Exception as exc:

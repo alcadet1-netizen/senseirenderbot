@@ -1,7 +1,7 @@
 """Dojo upgrades: Stars receipts, permanent levels and automatic cycles."""
 import copy
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -434,6 +434,7 @@ async def test_bank_stats_use_recorded_burn_for_lifetime_headroom():
         {'_id': 'single', 'coins': 75, 'total_emitted': 100, 'burned': 20, 'emission_cap': 1000}, None]))
     db = SimpleNamespace(users=users, bank=bank,
         transactions=SimpleNamespace(aggregate=lambda *a, **kw: Cursor([])),
+        duel_escrows=SimpleNamespace(aggregate=lambda *a, **kw: Cursor([])),
         tickets=SimpleNamespace(count_documents=AsyncMock(return_value=0)))
     svc = StatsService(SimpleNamespace(database=db))
     stats = await svc._read_admin_stats(None)
@@ -444,3 +445,32 @@ async def test_bank_stats_use_recorded_burn_for_lifetime_headroom():
     summary = await svc.get_bank_summary()
     assert summary['lifetime_issued_estimate'] == 120
     assert summary['emission_remaining'] == 880
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('rows,expected_escrow,expected_total', [
+    ([], 0, 100),
+    ([{'bets': 10, 'invalid': 0}], 20, 120),
+    ([{'bets': 10, 'invalid': 1}], None, None),
+    ([{'bets': float('nan'), 'invalid': 0}], None, None),
+])
+async def test_bank_snapshot_includes_unsettled_duels_or_reports_unknown(rows, expected_escrow, expected_total):
+    class Cursor:
+        def __init__(self, values): self.values = values
+        async def to_list(self, length=None): return self.values
+    escrows = SimpleNamespace(aggregate=Mock(return_value=Cursor(rows)))
+    db = SimpleNamespace(
+        users=SimpleNamespace(aggregate=lambda *a, **kw: Cursor([{'coins': 25}])),
+        bank=SimpleNamespace(find_one=AsyncMock(side_effect=[{'coins': 75, 'total_emitted': 120, 'burned': 0}, None])),
+        transactions=SimpleNamespace(aggregate=lambda *a, **kw: Cursor([])),
+        tickets=SimpleNamespace(count_documents=AsyncMock(return_value=0)), duel_escrows=escrows)
+    svc = StatsService(SimpleNamespace(database=db))
+    snapshot = await svc._read_admin_stats('same-snapshot')
+    assert snapshot['bank']['duel_escrow'] == expected_escrow
+    assert snapshot['bank']['total_supply'] == expected_total
+    assert escrows.aggregate.call_args.kwargs['session'] == 'same-snapshot'
+    assert escrows.aggregate.call_args.args[0][0] == {'$match': {'state': {'$in': ['reserved', 'decided']}}}
+    svc.get_admin_stats = AsyncMock(return_value=snapshot)
+    summary = await svc.get_bank_summary()
+    assert summary['duel_escrow'] == expected_escrow
+    assert summary['total_supply'] == expected_total

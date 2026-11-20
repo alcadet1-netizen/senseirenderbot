@@ -44,12 +44,15 @@ def test_queries_are_read_only_use_same_session_and_no_history_by_default():
     users = MagicMock()
     users.aggregate.return_value = [{'numeric_sum': 4}]
     transactions = MagicMock()
-    db = SimpleNamespace(bank=bank, users=users, transactions=transactions)
+    escrows = MagicMock()
+    escrows.aggregate.return_value = []
+    db = SimpleNamespace(bank=bank, users=users, transactions=transactions, duel_escrows=escrows)
     diagnostic.read_snapshot(db, session, 0, NOW)
     assert bank.find_one.call_count == 2
     assert all(call.kwargs['session'] is session for call in bank.find_one.call_args_list)
     assert users.aggregate.call_args.kwargs['session'] is session
     transactions.aggregate.assert_not_called()
+    assert escrows.aggregate.call_args.kwargs['session'] is session
     assert set(bank.method_calls[i][0] for i in range(2)) == {'find_one'}
 
 
@@ -60,7 +63,9 @@ def test_history_uses_allowlisted_aggregate_only_and_same_snapshot():
     users.aggregate.return_value = []
     tx.aggregate.return_value = [{'_id': {'day': '2025-12-31', 'type': 'burn'},
                                   'amount': -10, 'count': 1, 'non_numeric_amounts': 0}]
-    _, _, _, result = diagnostic.read_snapshot(SimpleNamespace(bank=bank, users=users, transactions=tx), session, 30, NOW)
+    escrows = MagicMock()
+    escrows.aggregate.return_value = []
+    _, _, _, result, _ = diagnostic.read_snapshot(SimpleNamespace(bank=bank, users=users, transactions=tx, duel_escrows=escrows), session, 30, NOW)
     assert result == [{'day_utc': '2025-12-31', 'type': 'burn', 'count': 1, 'signed_amount': '-10', 'non_numeric_amounts': 0}]
     assert tx.aggregate.call_args.kwargs['session'] is session
     pipeline = tx.aggregate.call_args.args[0]
@@ -76,3 +81,17 @@ def test_failure_does_not_print_connection_secrets(monkeypatch, capsys):
     result = capsys.readouterr()
     assert result.out == ''
     assert 'private-secret' not in result.err and 'private-db' not in result.err
+
+
+def test_duel_escrow_contributes_and_invalid_stakes_make_total_unknown():
+    args = dict(started_at=NOW, finished_at=NOW, history_days=0)
+    data = diagnostic.build_report({'coins': 75, 'total_emitted': 120}, None,
+                                   {'numeric_sum': 25}, [], escrow={'bets': 10, 'invalid': 0}, **args)
+    assert data['duel_escrow']['held_coins'] == '20'
+    assert data['calculated']['ui_total_supply'] == '120'
+    assert data['calculated']['emission_minus_ui_total_supply'] == '0'
+    data = diagnostic.build_report({'coins': 75, 'total_emitted': 120}, None,
+                                   {'numeric_sum': 25}, [], escrow={'bets': 10, 'invalid': 1}, **args)
+    assert data['duel_escrow']['held_coins'] is None
+    assert data['calculated']['ui_total_supply'] is None
+    assert data['calculated']['emission_minus_ui_total_supply'] is None
