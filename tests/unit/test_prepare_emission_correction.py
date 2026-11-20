@@ -1,5 +1,6 @@
 from copy import deepcopy
 from decimal import Decimal
+from datetime import datetime, timezone
 from types import SimpleNamespace as NS
 from unittest.mock import Mock
 import pytest
@@ -37,7 +38,9 @@ def test_retry_and_race_fail_closed(monkeypatch):
     monkeypatch.setattr(tool, 'read_snapshot', lambda *args: (single, legacy, users, events, escrow))
     with pytest.raises(CorrectionPlanError):
         tool.run_snapshot(db, 'session', expected_delta='20', apply=True)
-    db.bank.find_one.return_value = {'emission_correction_applied': True, 'emission_correction_id': tool.CORRECTION_ID}
+    db.bank.find_one.return_value = {'emission_correction_applied': True, 'emission_correction_id': tool.CORRECTION_ID,
+                                     'emission_correction_reserve': 20, 'total_emitted': 100, 'burned': 5,
+                                     'emission_correction_at': datetime.now(timezone.utc)}
     assert tool.run_snapshot(db, 'session', expected_delta='20', apply=True)['status'] == 'already_applied'
     db.bank.update_one.assert_called_once()
 

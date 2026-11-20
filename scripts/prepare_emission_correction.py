@@ -19,6 +19,7 @@ from pymongo.write_concern import WriteConcern
 
 from scripts.diagnose_emission import build_report, read_snapshot
 from src.services.emission_correction_plan import CorrectionPlanError, make_correction_plan
+from src.services.emission_watch import _amount
 
 CORRECTION_ID = 'counter-baseline-v1'
 CONFIRM = 'ALL_FINANCIAL_WRITERS_STOPPED_AND_BACKUP_VERIFIED'
@@ -37,7 +38,11 @@ def run_snapshot(db, session, *, expected_delta, apply=False):
     now = datetime.now(timezone.utc)
     full_bank = db.bank.find_one({'_id': 'single'}, session=session)
     if full_bank and full_bank.get('emission_correction_id') == CORRECTION_ID:
-        if full_bank.get('emission_correction_applied') is True:
+        if (full_bank.get('emission_correction_applied') is True
+                and _amount(full_bank.get('emission_correction_reserve')) is not None
+                and _amount(full_bank.get('total_emitted')) is not None
+                and _amount(full_bank.get('burned')) is not None
+                and isinstance(full_bank.get('emission_correction_at'), datetime)):
             return {'status': 'already_applied', 'correction_id': CORRECTION_ID}
         raise CorrectionPlanError('correction receipt is incomplete')
     single, legacy, users, events, escrow = read_snapshot(db, session, 0, now)
