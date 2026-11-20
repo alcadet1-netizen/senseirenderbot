@@ -93,6 +93,11 @@ async def _handle_join(user, container: Container, event):
                 logging.exception("Unable to send auto-unban notice for user %s", user.id)
     except Exception:
         logging.exception("Unable to check auto-unban for user %s", user.id)
+    # A confirmed join is enough for a group mention; no private /start needed.
+    try:
+        await container.chat_activity_service.update_user_activity(event.chat.id, user.id)
+    except Exception:
+        logging.exception('Could not record joined member chat=%s', event.chat.id)
     await _send_welcome_message(user, container, event)
 
 

@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="/miniapp/dojo/style.css" />
   </head>
   <body>
+    <dialog id="session-ended" aria-labelledby="session-title"><h2 id="session-title" data-i18n="Открой /dojo заново">Открой /dojo заново</h2><p data-i18n="Сессия Telegram завершена. Прогресс хранится на сервере.">Сессия Telegram завершена. Прогресс хранится на сервере.</p></dialog>
     <main id="app" class="phase-ready">
       <div id="boot" class="boot">
         <img
@@ -278,7 +279,7 @@
             </button>
           </div>
           <p id="status" class="status">ПОДКЛЮЧЕНИЕ</p>
-          <p id="hint" class="hint">3 часа · 15 Coin/ч базово · энергия 100</p>
+          <p id="hint" class="hint">3 часа · 75 Coin/ч базово · энергия 100</p>
           <div id="coins" class="coins" aria-hidden="true"></div>
         </section>
 
@@ -506,7 +507,7 @@
             </div>
             <div class="stat-row">
               <span data-i18n="Добыча">Добыча</span
-              ><b id="profile-rate">15 Coin / ч</b>
+              ><b id="profile-rate">75 Coin / ч</b>
             </div>
             <div class="stat-row">
               <span data-i18n="Энергия">Энергия</span
@@ -517,12 +518,13 @@
             </div>
             <div class="stat-row">
               <span data-i18n="Награда">Награда</span
-              ><b id="profile-reward">26 Coin</b>
+              ><b id="profile-reward">—</b>
             </div>
             <div class="stat-row">
               <span data-i18n="Автосбор">Автосбор</span
               ><b id="profile-auto" data-i18n="ВЫКЛ">ВЫКЛ</b>
             </div>
+            <div class="stat-row" id="auto-history" hidden><span data-i18n="Последний автосбор">Последний автосбор</span><b id="auto-last">—</b></div>
             <div class="stat-row">
               <span data-i18n="Банк">Банк</span><b>SenseiBank</b>
             </div>
@@ -707,9 +709,9 @@
               <b>Начни снова.</b> Следующий цикл открывается сразу после сбора.
             </li>
             <li
-              data-i18n-html="<b>Улучшай кирку.</b> За Stars: +10 Coin/ч за уровень, +100 энергии или автосбор, который запускает циклы без тебя."
+              data-i18n-html="<b>Улучшай кирку.</b> За Stars: +50 Coin/ч за уровень, +100 энергии или автосбор, который запускает циклы без тебя."
             >
-              <b>Улучшай кирку.</b> За Stars: +10 Coin/ч за уровень, +100
+              <b>Улучшай кирку.</b> За Stars: +50 Coin/ч за уровень, +100
               энергии или автосбор, который запускает циклы без тебя.
             </li>
           </ol>

@@ -1,4 +1,3 @@
-import asyncio
 import html
 import re
 from datetime import datetime, timedelta
@@ -21,60 +20,7 @@ router = Router(name="digest")
 async def do_generate_digest(chat_id: int, bot: Bot, container: Container, auto: bool = False):
     """Основная функция генерации"""
 
-    # Check if already generating (simple lock in service or here?)
-    # Service has 'generating' set but it's per instance. Container is singleton so service is singleton.
-    if chat_id in container.digest_service.generating:
-        return
-
-    container.digest_service.generating.add(chat_id)
-
-    try:
-        # Собираем данные
-        chat_log = container.digest_service.format_for_llm(chat_id, 500)
-        stats = container.digest_service.get_stats(chat_id)
-        topics = container.digest_service.get_topics(chat_id)
-        msg_count = len(container.digest_service.get_messages(chat_id))
-
-        # Анонс
-        if auto:
-            announcement = await container.digest_service.generate_short_reaction(f"накопилось {msg_count} сообщений в чате")
-            status_msg = await bot.send_message(chat_id, announcement)
-        else:
-            status_msg = await bot.send_message(
-                chat_id,
-                f"🗞️ Сенсей читает {msg_count} сообщений...\n"
-                "Подождите, он пытается понять какого хуя тут происходит."
-            )
-
-        # Печатаем...
-        await bot.send_chat_action(chat_id, "typing")
-
-        # Генерируем
-        digest = await container.digest_service.generate_digest(chat_log, stats, topics, msg_count)
-
-        # Удаляем статус
-        try:
-            await status_msg.delete()
-        except:
-            pass
-
-        # Отправляем результат (разбиваем если длинный)
-        if len(digest) > 4000:
-            parts = [digest[i:i+4000] for i in range(0, len(digest), 4000)]
-            for i, part in enumerate(parts):
-                if i == 0:
-                    await bot.send_message(chat_id, part)
-                else:
-                    await asyncio.sleep(0.5)
-                    await bot.send_message(chat_id, part)
-        else:
-            await bot.send_message(chat_id, digest)
-
-        # Отмечаем что сделали
-        container.digest_service.mark_digest_done(chat_id)
-
-    finally:
-        container.digest_service.generating.discard(chat_id)
+    await container.digest_service.trigger_digest(chat_id, bot, auto=auto)
 
 
 @router.message(Command("senseivesti", "вестник", "digest"))
@@ -136,30 +82,19 @@ async def callback_digest_baldoi(callback: CallbackQuery, callback_data: DigestC
     if not can:
         mins = remaining // 60
         secs = remaining % 60
-        await callback.message.answer(
-            f"{mention}\n\n"
-            f"⏳ Сенсей отдыхает. Подожди ещё {mins}м {secs}с\n"
-            "Не еби мозги старику, он только что делал сводку."
-        )
-        await callback.answer()
+        await callback.answer(f"Следующая сводка через {mins} мин {secs} с.", show_alert=True)
         return
 
     # Проверка количества сообщений
     msg_count = len(container.digest_service.get_messages(chat_id))
 
     if msg_count < 10:
-        await callback.message.answer(
-            f"{mention}\n\n"
-            f"📭 Всего {msg_count} сообщений? Это даже не смешно.\n"
-            "Наберите хотя бы 10, тогда сенсею будет что анализировать.\n"
-            "А пока — идите общайтесь, дегенераты."
-        )
-        await callback.answer()
+        await callback.answer(f"Для сводки нужно 10 сообщений. Сейчас {msg_count} из 10.", show_alert=True)
         return
 
+    await callback.answer()
     await callback.message.delete()
     await container.digest_service.trigger_digest(chat_id, callback.message.bot, auto=False)
-    await callback.answer()
 
 
 @router.callback_query(DigestCb.filter(F.mode == "vestnik"))
@@ -179,16 +114,12 @@ async def callback_digest_vestnik(callback: CallbackQuery, callback_data: Digest
     msg_count = len(container.digest_service.get_messages(chat_id))
 
     if msg_count < 5:
-        await callback.message.answer(
-            f"{mention}\n\n"
-            f"📭 Всего {msg_count} сообщений? Маловато для эпоса.\n"
-        )
-        await callback.answer()
+        await callback.answer(f"Для вестника нужно 5 сообщений. Сейчас {msg_count} из 5.", show_alert=True)
         return
 
+    await callback.answer()
     await callback.message.delete()
     await container.digest_service.trigger_vestnik(chat_id, callback.message.bot)
-    await callback.answer()
 
 
 @router.message(Command("senseivestnik"))

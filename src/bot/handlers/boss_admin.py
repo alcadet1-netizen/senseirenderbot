@@ -115,3 +115,18 @@ async def cmd_boss_xrocket_status(message: Message, container: Container):
         "Это проверка /app/info без перевода денег. Успех не гарантирует право на переводы. "
         "При 401/403 проверьте актуальность API-ключа приложения, права переводов и ограничения доступа "
         "в настройках xRocket. Ключи в чат не отправляйте.", parse_mode=None)
+
+
+@router.message(Command('boss_payouts'), AdminFilter())
+async def cmd_boss_payouts(message: Message, container: Container):
+    """Read-only review list; the receipt ID is the xRocket transferId."""
+    if message.chat.type != 'private':
+        await message.answer('Сверка выплат доступна в личке: /boss_payouts.')
+        return
+    items = await container.mongo_client.database.boss_xrocket_rewards.find(
+        {'status': {'$in': ['prepared', 'sending', 'needs_review', 'rejected', 'pool_exhausted']}}
+    ).sort('created_at', -1).limit(10).to_list(length=10)
+    lines = ['Последние 10 неподтверждённых наград GRAM. Сверьте ID с xRocket перед любым решением.']
+    for row in items:
+        lines.append(f"{row['status']} · игрок {row['user_id']} · {row['amount']} GRAM\nID: {row['_id']}")
+    await message.answer('\n\n'.join(lines) if items else 'Нет неподтверждённых наград GRAM.', parse_mode=None)

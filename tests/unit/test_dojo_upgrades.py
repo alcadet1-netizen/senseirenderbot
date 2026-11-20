@@ -92,10 +92,10 @@ def upgrade_service(user=None):
 
 
 def test_energy_curve_matches_the_three_hour_cycle():
-    assert miner.estimate_amount(miner.BASE_RATE, 0) == 5
-    assert miner.estimate_amount(miner.BASE_RATE, 100) == 18
-    assert miner.estimate_amount(miner.BASE_RATE, 800) == 45
-    assert miner.estimate_amount(miner.BASE_RATE + 10, 100) == 30
+    assert miner.estimate_amount(miner.BASE_RATE, 0) == 23
+    assert miner.estimate_amount(miner.BASE_RATE, 100) == 90
+    assert miner.estimate_amount(miner.BASE_RATE, 800) == 225
+    assert miner.estimate_amount(miner.BASE_RATE + miner.PICKAXE_STEP, 100) == 150
 
 
 def payment(payload, charge, stars):
@@ -111,7 +111,7 @@ def payment(payload, charge, stars):
 async def test_snapshot_defaults_and_prices():
     _, service = upgrade_service()
     data = await service.snapshot(7)
-    assert data['pickaxe_level'] == 0 and data['pickaxe_rate'] == 15
+    assert data['pickaxe_level'] == 0 and data['pickaxe_rate'] == 75
     assert data['pickaxe_stars'] == PICKAXE_STARS == 10
     assert data['energy_bonus'] == 0 and data['energy_stars'] == ENERGY_STARS == 50
     assert data['energy_refill_stars'] == 5
@@ -130,7 +130,7 @@ async def test_pickaxe_receipt_applies_once_and_is_idempotent():
     assert first['state'] == second['state'] == 'fulfilled'
     assert users.docs[7]['dojo_pickaxe_level'] == 1
     assert users.docs[7]['dojo_applied_receipts'] == ['charge-1']
-    assert (await service.snapshot(7))['pickaxe_rate'] == 25
+    assert (await service.snapshot(7))['pickaxe_rate'] == 125
 
 
 @pytest.mark.asyncio
@@ -207,7 +207,7 @@ async def test_empty_energy_can_be_refilled_for_five_stars():
         assert state['energy'] == 100
         assert state['energy_refill_available'] is False
         # One full-power hour replaces an hour that would have run at 10%.
-        assert state['reward'] == 32
+        assert state['reward'] == 158
         assert (await service.receive(
             7, payment(order['payload'], 'charge-refill', 5)))['state'] == 'fulfilled'
         # A second paid refill cannot land while the bar is already positive.
@@ -251,12 +251,12 @@ async def test_pickaxe_and_energy_budget_drive_the_cycle():
     with patch.object(miner.time, 'time', return_value=1000):
         state = await dojo.state(7)
         started = await dojo.start(7)
-    assert state['base_rate'] == 45 and state['energy_max'] == 800
-    assert state["reward"] == 135 and state["next_reward"] == 135
-    assert started['energy_start'] == 800 and started["reward"] == 135
+    assert state['base_rate'] == 225 and state['energy_max'] == 800
+    assert state["reward"] == 675 and state["next_reward"] == 675
+    assert started['energy_start'] == 800 and started["reward"] == 675
     with patch.object(miner.time, 'time', return_value=1000 + 2 * 3600):
         mid = await dojo.state(7)
-    assert mid['energy'] == 600 and mid['current_rate'] == 45
+    assert mid['energy'] == 600 and mid['current_rate'] == 225
     with patch.object(miner.time, 'time', return_value=1000 + 3 * 3600):
         done = await dojo.state(7)
     assert done['phase'] == 'ready_to_collect'
@@ -281,10 +281,10 @@ async def test_task_energy_extends_one_budget_without_raising_the_cap():
         started = await dojo.start(7)
     assert state['energy_max'] == 100
     assert state['energy'] == 200
-    assert state['reward'] == 32
+    assert state['reward'] == 158
     assert started['energy_max'] == 100
     assert started['energy_start'] == 200
-    assert started['reward'] == 32
+    assert started['reward'] == 158
     # The one-time charge is spent by this cycle, not folded into the cap.
     consumed = await dojo.state(7)
     assert consumed['task_energy_pending'] == 0
@@ -327,12 +327,15 @@ async def test_auto_collect_starts_and_renews_cycles():
         assert await dojo.auto_tick() == 1
     first = dojo.miners.docs[7]
     assert first['started_at'] == 1000 and not first['collected']
-    async def collect(user_id):
+    with patch.object(miner.time, 'time', return_value=1001):
+        assert await dojo.auto_tick() == 0
+    async def collect(user_id, *, automatic):
+        assert automatic
         dojo.miners.docs[user_id]['collected'] = True
     with patch.object(dojo, 'collect', side_effect=collect) as claim, \
          patch.object(miner.time, 'time', return_value=1000 + 10800):
         assert await dojo.auto_tick() == 1
-    claim.assert_awaited_once_with(7)
+    claim.assert_awaited_once_with(7, automatic=True)
     second = dojo.miners.docs[7]
     assert second['started_at'] == 1000 + 10800
     assert second['finish_at'] == 1000 + 2 * 10800

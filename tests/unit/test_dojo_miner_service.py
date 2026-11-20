@@ -66,9 +66,9 @@ def test_container_has_lazy_miner_service_slot():
 
 def test_cycle_constants_are_three_hours_and_small():
     assert miner.CYCLE_SECONDS == 3 * 60 * 60
-    assert miner.BASE_RATE == 15
-    assert miner.PICKAXE_STEP == 10
-    assert miner.MINING_REWARD == 45
+    assert miner.BASE_RATE == 75
+    assert miner.PICKAXE_STEP == 50
+    assert miner.MINING_REWARD == 225
     assert miner.SPEED_BOOST_SECONDS == 60 * 60
 
 
@@ -78,11 +78,11 @@ async def test_ready_state_has_balance_and_reward():
     with patch.object(miner.time, 'time', return_value=1000):
         state = await dojo.state(7)
     assert state['phase'] == 'ready'
-    assert state['reward'] == 18
-    assert state['next_reward'] == 18
+    assert state['reward'] == 90
+    assert state['next_reward'] == 90
     assert state['balance'] == 500
     assert state['energy_max'] == 100
-    assert state['base_rate'] == 15
+    assert state['base_rate'] == 75
     assert state['progress_percent'] == 0
     assert state['cycle_seconds'] == 10800
 
@@ -123,10 +123,10 @@ async def test_collect_pays_once_from_bank_and_reopens_cycle():
         await dojo.start(7)
     with patch.object(miner.time, 'time', return_value=11800):
         result = await dojo.collect(7)
-    assert result['mined'] == 18
-    assert result['balance'] == 518
+    assert result['mined'] == 90
+    assert result['balance'] == 590
     assert result['phase'] == 'ready'
-    assert dojo.mongo.database.bank.docs['single']['coins'] == 982
+    assert dojo.mongo.database.bank.docs['single']['coins'] == 910
     assert len(dojo.mongo.database.transactions.docs) == 1
     economy.process_game_win.assert_not_awaited()
     with patch.object(miner.time, 'time', return_value=30000):
@@ -190,16 +190,16 @@ async def test_task_energy_is_spent_once_and_never_raises_the_cap():
     _, dojo, _ = service()
     with patch.object(miner.time, 'time', return_value=1000):
         started = await dojo.start(7)
-        assert started['reward'] == 18
+        assert started['reward'] == 90
         assert await dojo.apply_task_energy(7, 100, 'claim-1') is True
         state = await dojo.state(7)
     assert state['energy_max'] == 100
     assert state['energy'] == 200
-    assert state['reward'] == 32  # one extra full-power hour: 18 -> 32 (31.5 rounded)
+    assert state['reward'] == 158  # one extra full-power hour: 90 -> 158 (157.5 rounded)
     assert state['task_energy_pending'] == 0
     with patch.object(miner.time, 'time', return_value=1000):
         assert await dojo.apply_task_energy(7, 100, 'claim-1') is True
-        assert (await dojo.state(7))['reward'] == 32
+        assert (await dojo.state(7))['reward'] == 158
 
 
 @pytest.mark.asyncio
@@ -208,14 +208,14 @@ async def test_speed_boost_is_one_hour_and_once_per_cycle():
     dojo.users.docs[7]['coins'] = 500
     with patch.object(miner.time, 'time', return_value=1000):
         started = await dojo.start(7)
-        assert started['reward'] == 18
+        assert started['reward'] == 90
         assert await dojo.apply_speed_boost(7, 'charge-boost-1') is True
         boosted = await dojo.state(7)
-        assert boosted['reward'] == 26  # +7.5 for one boosted hour
+        assert boosted['reward'] == 128  # +37.5 for one boosted hour
         assert boosted['boost_percent'] == 50
         assert boosted['boost_seconds_left'] == 3600
         assert boosted['boost_purchased'] is True
-        assert boosted['current_rate'] == 22.5
+        assert boosted['current_rate'] == 112.5
         # A second purchase in the same cycle is rejected even after the
         # first hour ends; the percentage never stacks.
         assert await dojo.apply_speed_boost(7, 'charge-boost-2') is False
@@ -254,10 +254,10 @@ async def test_boost_bought_before_start_is_in_the_ready_reward():
         ready = await dojo.state(7)
         assert ready['phase'] == 'ready'
         assert ready['boost_active'] is True
-        assert ready['reward'] == 26
-        assert ready['next_reward'] == 26
+        assert ready['reward'] == 128
+        assert ready['next_reward'] == 128
         started = await dojo.start(7)
-    assert started['reward'] == 26
+    assert started['reward'] == 128
     assert started['boost_seconds_left'] == 3600
 
 
@@ -268,17 +268,17 @@ async def test_circle_energy_rapid_replay_cap_and_new_cycle():
         await dojo.start(7)
         assert (await dojo.add_circle_energy(7, 1000, 'circle-early'))['added'] == 0
     with patch.object(miner.time, 'time', return_value=4600):
-        for i in range(50):
+        for i in range(100):
             assert (await dojo.add_circle_energy(7, 1000, f'circle-{i:04}'))['added'] == 1
         assert (await dojo.add_circle_energy(7, 1000, 'circle-0000'))['replayed'] is True
-        assert (await dojo.add_circle_energy(7, 1000, 'circle-0050'))['added'] == 0
+        assert (await dojo.add_circle_energy(7, 1000, 'circle-0100'))['added'] == 0
         state = await dojo.state(7)
-        assert state['energy'] == pytest.approx(50)
-        assert state['circle_energy_limit'] == 50
-        assert state['reward'] == 25  # extra 50 energy gives 6.75 coins, rounded once
+        assert state['energy'] == pytest.approx(100)
+        assert state['circle_energy_limit'] == 100
+        assert state['reward'] == 158
     with patch.object(miner.time, 'time', return_value=4636):
-        assert (await dojo.state(7))['energy'] == pytest.approx(49)
-        assert (await dojo.add_circle_energy(7, 1000, 'circle-0051'))['added'] == 1
+        assert (await dojo.state(7))['energy'] == pytest.approx(99)
+        assert (await dojo.add_circle_energy(7, 1000, 'circle-0101'))['added'] == 1
     with patch.object(miner.time, 'time', return_value=11800):
         with pytest.raises(GameError, match='не запущен'):
             await dojo.add_circle_energy(7, 1000, 'circle-finish')
@@ -299,7 +299,7 @@ async def test_circle_energy_adds_reward_only_for_remaining_cycle_and_interacts_
             await dojo.add_circle_energy(7, 1000, f'late-{i:04}')
         state = await dojo.state(7)
         assert state['energy'] == pytest.approx(10)
-        assert state['reward'] == 18  # just 36 seconds remain
+        assert state['reward'] == 91  # just 36 seconds remain
         assert await dojo.apply_task_energy(7, 100, 'late-task')
         doc = dojo.miners.docs[7]
         assert doc['circle_reward'] == 0  # no double counting when the task fills the same time
@@ -317,28 +317,28 @@ async def test_circle_access_rejects_banned_player():
 
 
 @pytest.mark.asyncio
-async def test_circle_available_below_half_before_empty_and_partial_credit_replays():
+async def test_circle_available_below_cap_before_empty_and_partial_credit_replays():
     _, dojo, _ = service()
     with patch.object(miner.time, 'time', return_value=1000):
         await dojo.start(7)
-    for now in (2799, 2800):
+    for now in (1000,):
         with patch.object(miner.time, 'time', return_value=now):
             state = await dojo.state(7)
             assert state['circle_available'] is False
             assert (await dojo.add_circle_energy(7, 1000, f'above-{now}'))['added'] == 0
-    with patch.object(miner.time, 'time', return_value=2818):
+    with patch.object(miner.time, 'time', return_value=1018):
         state = await dojo.state(7)
-        assert state['circle_energy'] == pytest.approx(49.5)
+        assert state['circle_energy'] == pytest.approx(99.5)
         assert state['circle_available'] is True
         result = await dojo.add_circle_energy(7, 1000, 'partial-circle')
         assert result['added'] == pytest.approx(0.5)
         assert (await dojo.add_circle_energy(7, 1000, 'partial-circle')) == {
             'added': result['added'], 'replayed': True}
         state = await dojo.state(7)
-        assert state['energy'] == pytest.approx(50)
+        assert state['energy'] == pytest.approx(100)
         assert state['circle_available'] is False
         assert (await dojo.add_circle_energy(7, 1000, 'at-cap-again'))['added'] == 0
-    with patch.object(miner.time, 'time', return_value=2854):
+    with patch.object(miner.time, 'time', return_value=1054):
         assert (await dojo.state(7))['circle_available'] is True
         assert (await dojo.add_circle_energy(7, 1000, 'after-drain'))['added'] == 1
 
@@ -349,13 +349,13 @@ async def test_circle_limit_uses_permanent_energy_cap_not_task_energy():
     with patch.object(miner.time, 'time', return_value=1000):
         await dojo.apply_task_energy(7, 100, 'test-task-before-start')
         await dojo.start(7)
-    with patch.object(miner.time, 'time', return_value=6400):
+    with patch.object(miner.time, 'time', return_value=4600):
         state = await dojo.state(7)
-        assert state['circle_energy'] == pytest.approx(50)
+        assert state['circle_energy'] == pytest.approx(100)
         assert state['energy_max'] == 100
         assert state['circle_available'] is False
         assert (await dojo.add_circle_energy(7, 1000, 'with-task-cap'))['added'] == 0
-    with patch.object(miner.time, 'time', return_value=6418):
+    with patch.object(miner.time, 'time', return_value=4618):
         assert (await dojo.add_circle_energy(7, 1000, 'with-task-partial'))['added'] == pytest.approx(.5)
 
 
@@ -364,12 +364,12 @@ async def test_miner_transaction_split_bank_and_rollback():
     _, dojo, _ = service()
     bank = dojo.mongo.database.bank
     bank.docs['single']['coins'] = 10
-    bank.docs['main'] = {'_id': 'main', 'balance': 8}
+    bank.docs['main'] = {'_id': 'main', 'balance': 80}
     with patch.object(miner.time, 'time', return_value=1000):
         await dojo.start(7)
     with patch.object(miner.time, 'time', return_value=11800):
         result = await dojo.collect(7)
-    assert result['balance'] == 518
+    assert result['balance'] == 590
     assert bank.docs['single']['coins'] == 0 and bank.docs['main']['balance'] == 0
     assert len(dojo.mongo.database.transactions.docs) == 1
 
@@ -397,6 +397,26 @@ async def test_miner_two_workers_pay_cycle_only_once():
     with patch.object(miner.time, 'time', return_value=11800):
         results = await asyncio.gather(first.collect(7), second.collect(7), return_exceptions=True)
     assert sum(isinstance(r, dict) for r in results) == 1
-    assert mongo.database.users.docs[7]['coins'] == 518
-    assert mongo.database.bank.docs['single']['coins'] == 982
+    assert mongo.database.users.docs[7]['coins'] == 590
+    assert mongo.database.bank.docs['single']['coins'] == 910
     assert len(mongo.database.transactions.docs) == 1
+
+
+@pytest.mark.asyncio
+async def test_auto_collect_waits_for_funding_and_records_only_success():
+    mongo, dojo, _ = service()
+    with patch.object(miner.time, 'time', return_value=1000):
+        await dojo.start(7)
+    bank = mongo.database.bank.docs['single']
+    bank['coins'] = 0
+    with patch.object(miner.time, 'time', return_value=11800):
+        assert await dojo.auto_step(7) == 'waiting'
+        waiting = await dojo.state(7)
+        assert waiting['auto_waiting'] and not waiting['last_auto_collect_at']
+        mongo.database.bank.docs['single']['coins'] = 100
+        assert await dojo.auto_step(7) == 'renewed'
+        assert await dojo.auto_step(7) == 'mining'
+        renewed = await dojo.state(7)
+        assert not renewed['auto_waiting'] and renewed['last_auto_collect_at'] == 11800
+        assert renewed['phase'] == 'mining' and renewed['balance'] == 590
+        assert len(mongo.database.transactions.docs) == 1

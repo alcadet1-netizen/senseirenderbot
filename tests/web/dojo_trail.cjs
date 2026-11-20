@@ -112,7 +112,7 @@ assert.ok(disabled.strokes > 0, 'trail must remain visible when effects are off'
 assert.equal(disabled.ids, 1, 'circles still work with effects off');
 disabled.windowEvents.pointerup({pointerId: 41, clientX: 220, clientY: 150});
 
-for (const [energy, expected] of [[60, 0], [50, 0], [49.5, 1], [1, 1], [0, 1]]) {
+for (const [energy, expected] of [[120, 0], [100, 0], [99.5, 1], [1, 1], [0, 1]]) {
   const current = harness(); current.setEnergy(energy);
   current.stageEvents.pointerdown({pointerId: 1, pointerType: 'touch', target, clientX: 220, clientY: 150});
   current.windowEvents.pointermove({pointerId: 1, getCoalescedEvents: () => points(1)});

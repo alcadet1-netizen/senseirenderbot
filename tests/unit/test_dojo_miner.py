@@ -33,7 +33,7 @@ async def test_launcher():
     assert button.web_app.url.endswith('/miniapp/dojo')
     assert 'Начать майнинг' in button.text
     text = msg.answer.call_args.args[0]
-    assert '3 часа' in text and 'SenseiCoin' in text and '15 Coin/ч' in text
+    assert '3 часа' in text and 'SenseiCoin' in text and '75 Coin/ч' in text
     assert 'SenseiBank' in text and 'Задания' in text and 'Улучшения' in text
 
 
@@ -87,7 +87,7 @@ async def test_miner_has_boot_screen():
     assert 'prefers-reduced-motion' in css
     assert 'function seedBoot' in js
     assert 'function bootSetGoal' in js
-    assert 'allSettled' in js and '9000' in js
+    assert 'refresh().finally(() => completeBoot' in js and '9000' in js
     assert '"ЗАГРУЗКА…": "LOADING…"' in js
 
 
@@ -147,6 +147,7 @@ async def test_api_requires_signature_and_dispatches_actions():
         dojo_miner_service=SimpleNamespace(state=state, start=start, collect=collect, add_circle_energy=circle),
         dojo_task_service=SimpleNamespace(list_tasks=list_tasks, claim=claim),
         mongo_client=SimpleNamespace(database=SimpleNamespace(
+            users=SimpleNamespace(find_one=AsyncMock(return_value={"id": 7}), count_documents=AsyncMock(return_value=0)),
             dojo_task_claims=SimpleNamespace(find_one=AsyncMock(return_value=None)))),
         dojo_upgrade_service=SimpleNamespace(snapshot=upgrades, prepare=prepare),
         stats_service=SimpleNamespace(get_bank_summary=bank),
@@ -347,13 +348,14 @@ async def test_signed_direct_referral_checks_new_and_existing_player():
     setup_dojo(app, container)
     async with TestClient(TestServer(app)) as client:
         auth = signed(now=int(time.time()), start_param='ref_42')
+        assert (await client.post('/miniapp/dojo/api/entry', json={'initData': auth})).status == 200
         for _ in range(2):
             assert (await client.post('/miniapp/dojo/api/state', json={'initData': auth})).status == 200
-        assert bind.await_count == 2
+        assert bind.await_count == 1
         bind.assert_awaited_with(7, 'ref_42')
         forged = signed(now=int(time.time())) + '&start_param=ref_99'
-        assert (await client.post('/miniapp/dojo/api/state', json={'initData': forged})).status == 401
-        assert bind.await_count == 2
+        assert (await client.post('/miniapp/dojo/api/entry', json={'initData': forged})).status == 401
+        assert bind.await_count == 1
 
 
 @pytest.mark.asyncio

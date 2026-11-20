@@ -5438,3 +5438,7 @@ html.motion-reduced .chain-panel.is-live .chain-ecg path {
 }
 
 .reel-prize.is-gift { border-color: #e1bdff; background: linear-gradient(145deg, #5a367c, #24192e); color: #fff1ff; }
+
+#session-ended { max-width: min(85vw, 25rem); background: #092319; color: #ecfff4; border: 1px solid #69c995; border-radius: 14px; padding: 1.4rem; margin: auto; }
+#session-ended::backdrop { background: rgba(2, 10, 6, .86); }
+#auto-history[hidden] { display: none; }

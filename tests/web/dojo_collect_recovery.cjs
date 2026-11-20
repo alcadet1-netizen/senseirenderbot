@@ -15,6 +15,7 @@ const context = vm.createContext({
   },
 });
 vm.runInContext(`let pending = null, verifyCollection = false, stateRevision = 0;
+  let needsEntry = false, sessionEnded = false;
   let model = {phase:'ready_to_collect', balance:100};
   function apply(state) { model = state; }
   ${js.slice(js.indexOf('  async function refresh('), js.indexOf('  function celebrate('))}

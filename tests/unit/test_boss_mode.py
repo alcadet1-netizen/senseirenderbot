@@ -202,6 +202,8 @@ async def test_boss_attack_only_announces_confirmed_gram(callback, payout, caplo
     if payout == 'confirmed':
         assert text == ('⚔️ @Ronin · <b>−25 HP</b>\n'
                         '💎 <b>LUCKY HIT!</b> +0.0123 GRAM — xRocket подтвердил перевод.')
+    elif payout in ('pool_exhausted', 'rejected', 'needs_review'):
+        assert 'GRAM:' in text and 'подтвердил перевод' not in text
     else:
         assert text == '⚔️ @Ronin · <b>−25 HP</b>'
     assert 'Дырявый' not in text and 'провер' not in text

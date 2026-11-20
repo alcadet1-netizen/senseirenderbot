@@ -16,8 +16,8 @@ from src.services.referral_economy import transaction
 
 CYCLE_SECONDS = 3 * 60 * 60
 CYCLE_HOURS = CYCLE_SECONDS / 3600
-BASE_RATE = 15.0
-PICKAXE_STEP = 10.0
+BASE_RATE = 75.0
+PICKAXE_STEP = 50.0
 BASE_ENERGY = 100
 ENERGY_PER_HOUR = 100.0
 LOW_POWER = 0.1
@@ -155,7 +155,7 @@ class DojoMinerService:
                 if doc.get('collected') or now >= finish:
                     raise GameError('Майнинг не запущен.')
                 energy, _ = self._energy_timeline(doc, now)
-                cap = max(0, int(doc.get('energy_max', BASE_ENERGY))) / 2
+                cap = BASE_ENERGY
                 added = min(1.0, max(0.0, cap - energy))
                 if added <= 1e-9:
                     return {'added': 0, 'replayed': False}
@@ -277,13 +277,15 @@ class DojoMinerService:
             'energy_refill_amount': ENERGY_REFILL_AMOUNT,
             'energy_refill_available': phase == 'mining' and energy <= 0,
             'circle_energy': circle_energy,
-            'circle_available': phase == 'mining' and circle_energy < energy_cap / 2,
-            'circle_energy_limit': energy_cap // 2,
+            'circle_available': phase == 'mining' and circle_energy < BASE_ENERGY,
+            'circle_energy_limit': BASE_ENERGY,
             'base_rate': base_rate,
             'current_rate': current_rate,
             'pickaxe_level': profile['pickaxe_level'],
             'energy_purchases': profile['energy_purchases'],
             'auto_collect': profile['auto_collect'],
+            'last_auto_collect_at': doc.get('last_auto_collect_at'),
+            'auto_waiting': phase == 'ready_to_collect' and bool(doc.get('auto_waiting')),
             'boost_until': boost_until,
             'boost_active': boost_active,
             'boost_seconds_left': max(0, int(boost_until - now)),
@@ -323,6 +325,7 @@ class DojoMinerService:
             version = int((doc or {}).get('version', 0))
             session = {
                 'started_at': now,
+                'auto_waiting': False,
                 'finish_at': finish_at,
                 'collected': False,
                 'amount': estimate_amount(base_rate, energy_start) + boost_bonus,
@@ -357,7 +360,7 @@ class DojoMinerService:
             )
             return await self.state(user_id)
 
-    async def collect(self, user_id: int) -> dict:
+    async def collect(self, user_id: int, *, automatic=False) -> dict:
         """Commit the cycle, bank debit, player credit and receipt together."""
         async with self._locks[user_id]:
             now = time.time()
@@ -375,9 +378,12 @@ class DojoMinerService:
                     raise GameError('Награда недоступна для этого профиля.')
                 version = int(doc.get('version', 0))
                 amount = max(0, int(doc.get('amount', MINING_REWARD)))
+                settled = {'collected': True, 'collected_at': now}
+                if automatic:
+                    settled['last_auto_collect_at'] = now
                 claimed = await self.miners.find_one_and_update(
                     {'_id': user_id, 'version': version, 'collected': False},
-                    {'$set': {'collected': True, 'collected_at': now},
+                    {'$set': settled,
                      '$inc': {'version': 1}}, session=session)
                 if not claimed:
                     raise GameError('Награда уже получена. Обнови экран.')
@@ -612,23 +618,29 @@ class DojoMinerService:
                 return True
         return False
 
-    async def auto_step(self, user_id: int) -> None:
+    async def auto_step(self, user_id: int) -> str:
         """Collect a finished cycle and immediately start the next one."""
         if type(user_id) is not int or user_id <= 0:
-            return
+            return 'invalid'
         now = time.time()
         doc = await self.miners.find_one({'_id': user_id})
         if doc and not doc.get('collected') and now < doc.get('finish_at', 0):
-            return
-        if doc and not doc.get('collected'):
+            return 'mining'
+        collecting = bool(doc and not doc.get('collected'))
+        if collecting:
             try:
-                await self.collect(user_id)
+                await self.collect(user_id, automatic=True)
             except GameError:
-                return
+                if not doc.get('auto_waiting'):
+                    await self.miners.find_one_and_update(
+                        {'_id': user_id, 'version': doc.get('version', 0), 'collected': False},
+                        {'$set': {'auto_waiting': True}})
+                return 'waiting'
         try:
             await self.start(user_id)
         except GameError:
-            return
+            return 'not_started'
+        return 'renewed' if collecting else 'started'
 
     async def auto_tick(self) -> int:
         """Run one background pass over players with auto-collect enabled."""
@@ -638,8 +650,8 @@ class DojoMinerService:
             user_id = user.get('id')
             if type(user_id) is not int or user_id <= 0:
                 continue
-            await self.auto_step(user_id)
-            started += 1
+            if await self.auto_step(user_id) in ('started', 'renewed'):
+                started += 1
         return started
 
     async def auto_loop(self, interval: int = AUTOCOLLECT_INTERVAL) -> None:

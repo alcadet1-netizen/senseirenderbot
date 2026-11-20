@@ -17,6 +17,7 @@ from aiogram.types import (
 )
 from aiohttp import web
 
+from src.services.dojo_invite_tasks import InviteTasks, SLUGS as INVITE_SLUGS
 from src.services.dojo_miner_service import CYCLE_HOURS
 from src.services.hedgehog_service import GameError
 from src.services.maintenance_service import MaintenanceService
@@ -202,7 +203,7 @@ def setup_dojo(app, container=None):
             return web.json_response({'error': 'Доступ только для администраторов.'}, status=403, headers=headers)
         try:
             service = container.dojo_miner_service
-            if action == 'state':
+            if action == 'entry':
                 # Only use start_param from initData after signature verification.
                 # Existing users without a referrer may bind; already-linked
                 # users are never reassigned by the server-side transaction.
@@ -215,6 +216,8 @@ def setup_dojo(app, container=None):
                         first_name=user.get('first_name', ''), last_name=user.get('last_name'),
                         is_bot=user.get('is_bot', False))
                     await container.referral_service.process_referral(user['id'], referral)
+                result = await service.state(user['id'])
+            elif action == 'state':
                 result = await service.state(user['id'])
             elif action == 'start':
                 result = await service.start(user['id'])
@@ -260,12 +263,15 @@ def setup_dojo(app, container=None):
                 from src.services.dojo_profile_tasks import DojoProfileTasks
                 tasks = await container.dojo_task_service.list_tasks(user['id'])
                 tasks.extend(await DojoProfileTasks(container).list_tasks(user['id']))
+                tasks.append(await InviteTasks(container.mongo_client).current(user['id']))
                 result = {'tasks': tasks}
             elif action == 'task':
                 from src.services.dojo_profile_tasks import DojoProfileTasks, TASK_IDS
                 slug = payload.get('slug')
                 if isinstance(slug, str) and slug in TASK_IDS:
                     claim = await DojoProfileTasks(container).claim(user['id'], slug)
+                elif isinstance(slug, str) and slug in INVITE_SLUGS:
+                    claim = await InviteTasks(container.mongo_client).claim(user['id'], slug)
                 else:
                     claim = await container.dojo_task_service.claim(user['id'], slug)
                 result = await service.state(user['id'])
@@ -357,5 +363,5 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/assets/{asset:sensei\\.webp|loading-hero\\.webp|senseicoin-wordmark\\.svg|unbounded-variable\\.woff2|golos-text-variable\\.woff2|dseg7-classic-regular\\.woff2|sensei-style-(?:400|700)\\.woff2}', page)
     app.router.add_post(
-        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|share|daily|daily_claim|chest}',
+        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|share|daily|daily_claim|chest}',
         api)

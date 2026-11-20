@@ -304,11 +304,8 @@ async def cb_do_upgrade_katana(query: CallbackQuery, callback_data: MenuCb, cont
             pass
         await show_profile(query.message, container, query.from_user, is_edit=True)
         
-    except Exception as e:
-        try:
-            await query.answer(f"❌ Ошибка: {e}", show_alert=True)
-        except TelegramBadRequest:
-            pass
+    except Exception:
+        await query.message.answer('Не удалось показать итог. Проверь последнюю попытку: /katanaresult. Повторять улучшение не нужно.', parse_mode=None)
 
 
 @router.callback_query(MenuCb.filter(F.action == "cancel"))
