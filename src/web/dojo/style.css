@@ -5447,7 +5447,20 @@ html.motion-reduced .chain-panel.is-live .chain-ecg path {
 .ref-member-name small { font-size: 10px; white-space: normal; }
 
 /* Duel arena: the artwork is scenery; every label and control is live HTML. */
-#vs-open { position: fixed; left: max(12px, env(safe-area-inset-left)); bottom: calc(86px + env(safe-area-inset-bottom)); z-index: 7; width: 48px; height: 48px; border: 2px solid #a2ffcb; border-radius: 50%; background: #053020; color: #ffd476; font: italic 900 23px Georgia, serif; box-shadow: 0 0 12px #1bff92; transform: rotate(-8deg); }
+#vs-open {
+  position: relative; flex: none; margin-inline-end: auto;
+  width: clamp(46px, 12vw, 56px); aspect-ratio: 1; padding: 0;
+  display: grid; place-items: center; cursor: pointer; border-radius: 50%;
+  border: 2px solid #87ffb5; background: radial-gradient(circle at 35% 22%, #164c32, #04190f 65%);
+  box-shadow: inset 0 0 8px #63ffa84d, 0 0 9px #26ff8980;
+  color: #ff646b; font: italic 900 clamp(23px, 6vw, 28px)/1 system-ui, sans-serif;
+}
+#vs-open span { text-shadow: 0 2px 1px #270005; animation: vs-letter-pulse 2.4s ease-in-out infinite; }
+#vs-open::after { content: ''; position: absolute; inset: 3px; border: 1px solid #4beb9359; border-radius: inherit; pointer-events: none; }
+#vs-open:focus-visible { outline: 2px solid white; outline-offset: 2px; }
+@keyframes vs-letter-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.09); text-shadow: 0 0 5px #ff424baa; } }
+html.motion-reduced #vs-open span { animation: none; }
+@media (prefers-reduced-motion: reduce) { #vs-open span { animation: none; } }
 #vs-dialog { margin: auto; padding: 0; width: min(94vw, 440px); border: 1px solid #54da9a; border-radius: 22px; color: #f4fff7; background: #042318; overflow: auto; }
 #vs-dialog::backdrop { background: #00150feb; }
 .vs-stage { box-sizing: border-box; height: min(84dvh, 680px); min-height: 320px; display: flex; flex-direction: column; padding: 15px; gap: 12px; background: linear-gradient(#001e17c9, transparent 28%, transparent 69%, #001710), url('assets/duel-court.webp') center / cover; }
