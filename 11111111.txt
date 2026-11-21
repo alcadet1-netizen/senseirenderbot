@@ -1,5 +1,0 @@
-docker-compose down
-docker-compose up -d --build
-docker-compose logs -f app
-
-sk-elcmduyoy092 -1002098194464

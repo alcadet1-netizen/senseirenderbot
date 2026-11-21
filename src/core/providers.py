@@ -18,12 +18,6 @@ class AIProviderFactory:
                 api_key=settings.groq_api_key,
                 model="openai/gpt-oss-120b"
             ),
-            "openrouter": AIProvider(
-                name="OpenRouter",
-                url="https://openrouter.ai/api/v1/chat/completions",
-                api_key="sk-or-v1-...", 
-                model="meta-llama/llama-3.2-3b-instruct:free"
-            ),
             "sambanova": AIProvider(
                 name="SambaNova",
                 url="https://api.sambanova.ai/v1/chat/completions",

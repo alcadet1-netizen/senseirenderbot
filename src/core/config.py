@@ -2,17 +2,12 @@
 🔧 Конфигурация приложения через Pydantic Settings v2.
 """
 
-import logging
-import os
 from functools import lru_cache
 from typing import List, Literal
 from pathlib import Path
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-logger = logging.getLogger(__name__)
-
 
 class Settings(BaseSettings):
     """Главный класс настроек приложения."""
@@ -130,9 +125,7 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    settings = Settings()
-    logger.info(f"[SETTINGS] Loaded settings: admin_ids_str='{settings.admin_ids_str}', admin_ids={settings.admin_ids}")
-    return settings
+    return Settings()
 
 
 settings = get_settings()
