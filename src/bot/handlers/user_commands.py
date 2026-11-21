@@ -17,7 +17,8 @@ from src.bot.filters import AdminFilter, PrivateChatFilter
 from src.core.config import settings
 from src.core.container import Container
 from src.core.visuals import Visuals
-from src.bot.handlers.dojo import dojo_url
+from aiogram.utils.deep_linking import create_start_link
+from src.bot.handlers.dojo import cmd_dojo, dojo_url
 from src.bot.presenters.hedgehog_presenter import launch_hedgehog
 from src.bot.presenters.katana_presenter import send_katana_upgrade, send_current_katana
 from src.texts.donate_prompts import katana_insufficient_text
@@ -81,10 +82,10 @@ async def show_profile(
         # Пытаемся создать, если нет
         await container.user_service.get_or_create(
             user_id=user.id,
-            username=message.from_user.username,
-            first_name=message.from_user.first_name or "",
-            last_name=message.from_user.last_name,
-            is_bot=message.from_user.is_bot or False,
+            username=user.username,
+            first_name=user.first_name or "",
+            last_name=user.last_name,
+            is_bot=user.is_bot or False,
         )
         profile = await container.user_service.get_profile(user.id)
 
@@ -108,7 +109,7 @@ async def show_profile(
             container, user.id, katana_length)
 
     card = Visuals.profile_card(
-        username=profile["username"],
+        username=user.full_name,
         level=profile["level"],
         level_name=profile["level_name"],
         xp=profile["xp"],
@@ -125,12 +126,16 @@ async def show_profile(
         role=profile.get("role"),
     )
 
-    miner_url = dojo_url(container.settings) if message.chat.type == "private" else None
+    miner_url = dojo_url(container.settings)
+    private = message.chat.type == "private"
     markup = get_profile_keyboard(
-        user_id=user.id, has_katana=profile["has_katana"], dojo_url=miner_url,
+        user_id=user.id, has_katana=profile["has_katana"], dojo_url=miner_url if private else None,
+        miner_link=await create_start_link(message.bot, "dojo") if miner_url and not private else None,
     )
 
-    text = f"{mention}\n\n{card}"
+    text = card
+    if position:
+        text += f"\n🏆 /topkatana: №{position['rank']} из {position['total']}"
 
     try:
         if is_edit:
@@ -141,21 +146,6 @@ async def show_profile(
     except Exception as e:
         logger.error(f"❌ Failed to send profile card: {e}")
         return
-
-    # /mysensei must show the same current katana as /mykatana: live length,
-    # live rank and the GIF for the model level, not a stale preview.
-    if with_katana and profile.get("has_katana"):
-        try:
-            await send_current_katana(
-                message, katana_length, position=position,
-                owner_name=user.full_name,
-                animate=getattr(
-                    getattr(container, "settings", None),
-                    "widget_animations_enabled", True,
-                ),
-            )
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to send profile katana: {e}")
 
 
 @router.message(CommandStart())
@@ -181,6 +171,10 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
             )
         except Exception:
             logger.exception("Failed to send starter kit notice for user %s", message.from_user.id)
+
+    if command.args == 'dojo':
+        await cmd_dojo(message, container)
+        return
 
     if command.args == 'referrals_menu':
         from src.bot.handlers.referral import cmd_ref

@@ -6,6 +6,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters.callback_data import CallbackData
 import urllib.parse
+from src.core.constants import PLAYER_GUIDE_URL
 
 
 class MenuCb(CallbackData, prefix="menu"):
@@ -60,7 +61,7 @@ def get_katana_top_keyboard(user_id: int, page: int, total_pages: int) -> Inline
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def get_profile_keyboard(user_id: int, has_katana: bool = True, dojo_url: str | None = None) -> InlineKeyboardMarkup:
+def get_profile_keyboard(user_id: int, has_katana: bool = True, dojo_url: str | None = None, miner_link: str | None = None) -> InlineKeyboardMarkup:
     """Клавиатура профиля."""
     keyboard = [
         [
@@ -78,9 +79,12 @@ def get_profile_keyboard(user_id: int, has_katana: bool = True, dojo_url: str | 
     # Separate namespace: widgets never reuse financial/profile callbacks.
     keyboard.append([InlineKeyboardButton(text="🧩 Карточки", callback_data=f"sw:{user_id}:open")])
 
-    # The miner reads the same users.coins value as this card.
+    navigation = [InlineKeyboardButton(text="📖 Гайд", url=PLAYER_GUIDE_URL)]
     if dojo_url:
-        keyboard.append([InlineKeyboardButton(text="⛏ Майнинг", web_app=WebAppInfo(url=dojo_url))])
+        navigation.insert(0, InlineKeyboardButton(text="⛏ Майнинг", web_app=WebAppInfo(url=dojo_url)))
+    elif miner_link:
+        navigation.insert(0, InlineKeyboardButton(text="⛏ Майнинг", url=miner_link))
+    keyboard.insert(0, navigation)
 
     if not has_katana:
         keyboard.insert(0, [
