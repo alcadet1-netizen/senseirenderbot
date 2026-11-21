@@ -207,7 +207,6 @@ async def main() -> None:
     """Главная функция."""
     # Создаём бота и диспетчер
     bot = create_bot()
-    dp = create_dispatcher()
 
     # Создаём MongoDB клиент
     mongo_client = MongoClient()
@@ -225,6 +224,8 @@ async def main() -> None:
     # Attach container to bot for access in handlers
     bot.container = container
     container.bot = bot
+    # Workflow data reaches inline_query and chosen_inline_result as well as messages.
+    dp = create_dispatcher(container)
 
     # Start web server for health checks
     app = web.Application(client_max_size=16 * 1024)
