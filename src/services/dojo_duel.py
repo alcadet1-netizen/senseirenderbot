@@ -61,6 +61,46 @@ async def chat_choices(container, uid):
     return {'chats': choices}
 
 
+async def prepare_private_share(container, uid, name, bet):
+    """Make the link usable BEFORE the Telegram sheet opens (no inline feedback)."""
+    from aiogram.types import InlineQueryResultArticle, InputTextMessageContent, LinkPreviewOptions
+    if type(bet) is not int or not 300 <= bet <= 2**53-1:
+        raise GameError('Минимальная ставка — 300 Coin.')
+    db = container.mongo_client.database
+    if container.duel_service._is_in_active_duel(uid) or not await db.users.find_one(
+            {'id': uid, 'is_banned': {'$ne': True}, 'coins': {'$gte': bet}}):
+        raise GameError('Проверь баланс и заверши текущую дуэль.')
+    token = secrets.token_hex(12)
+    bot = container.bot
+    url = f'https://t.me/{(await bot.me()).username}?startapp=vs_{uid}_{token}'
+    card = InlineQueryResultArticle(id=f'dm_{token}', title='Вызов на дуэль',
+        input_message_content=InputTextMessageContent(parse_mode=None,
+            message_text=f'⚔️ {name} вызывает на дуэль! Ставка каждого: {bet} Coin.\n{url}',
+            link_preview_options=LinkPreviewOptions(is_disabled=True)))
+    prepared = await bot.save_prepared_inline_message(user_id=uid, result=card,
+        allow_user_chats=True, allow_group_chats=False, allow_channel_chats=False, allow_bot_chats=False)
+    now = time.time()
+    try:
+        await db.dojo_duel_offers.update_one({'_id': uid, '$or': [{'expires': {'$lte': now}},
+            {'status': {'$in': ['closed', 'draft']}}]}, {'$set': dict(token=token, chat=0,
+            title='Личная дуэль', expires=now+120, status='open', bet=bet, rival=None, rematch=None,
+            inline_private=True, inline_arena=None, message_id=None, share_pending=True)}, upsert=True)
+    except DuplicateKeyError:
+        raise GameError('Приглашение уже активно. Дождись соперника.')
+    return {'prepare_id': prepared.id, 'token': token}
+
+
+async def finish_private_share(container, uid, token, sent):
+    if not isinstance(token, str) or not re.fullmatch(r'[a-f0-9]{24}', token) or type(sent) is not bool:
+        raise GameError('Некорректный ответ отправки.')
+    now = time.time()
+    # A late/cancelled callback must never undo an accepted fight or a newer invitation.
+    await container.mongo_client.database.dojo_duel_offers.update_one(
+        {'_id': uid, 'token': token, 'status': 'open', 'share_pending': True},
+        {'$set': {'share_pending': False, **({'expires': now+120} if sent else {'status': 'closed'})}})
+    return await arena(container, uid)
+
+
 async def open_invitation(container, uid, owner, token, *, accept=False):
     db = container.mongo_client.database
     key = {'_id': owner, 'token': token, 'status': 'open', 'expires': {'$gt': time.time()}}
