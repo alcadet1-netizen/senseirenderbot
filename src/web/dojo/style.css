@@ -5625,7 +5625,7 @@ html.motion-reduced .vs-comic.is-striking { animation: none; }
 .vs-fighter.right { right: 1%; --lunge: -1; }
 .vs-ninja {
   position: relative; z-index: 1; display: block; width: 100%; height: auto;
-  mix-blend-mode: screen; user-select: none;
+  user-select: none;
   filter: drop-shadow(0 14px 16px rgba(0, 18, 8, .65)) drop-shadow(0 0 26px rgba(53, 255, 133, .34));
 }
 .vs-fighter.left .vs-ninja { /* sticker sprite already faces right — no mirror */ }
@@ -6361,3 +6361,232 @@ html.motion-reduced .vs-petals { display: none; }
 /* petals react to shockwave */
 .vs-stage.is-impact .vs-petals i { animation: vs-petal-impact 520ms ease-out both; }
 @keyframes vs-petal-impact { 0%{ transform: translate(0,0) rotate(0deg) scale(1) } 30%{ transform: translate(calc(var(--burst-x, 0) * 22px), calc(var(--burst-y, 0) * -18px)) rotate(180deg) scale(1.15) } 100%{ transform: translate(calc(var(--burst-x, 0) * 8px), 40px) rotate(360deg) scale(1) } }
+
+/* =========================================================================
+   STICKER-MAN FIRST-CLASS ANIMATION + ACTION BUTTONS
+   Chibi squash/stretch, jelly recoil, bouncy idle. Eyes are baked into
+   the sprite — the old .vs-eye overlay is hidden (it floated on forehead).
+   ========================================================================= */
+
+/* --- Sprite cleanup: no fake eye, no clipped border-radius -------------- */
+.vs-fighter .vs-eye { display: none !important; }
+.vs-ninja {
+  border-radius: 0 !important;
+  background: none !important;
+  transform-origin: 50% 100%;
+  will-change: transform, filter;
+}
+.vs-fighter { width: 46%; bottom: 36px; transform-origin: 50% 100%; }
+.vs-fighter.left { left: 2%; }
+.vs-fighter.right { right: 2%; }
+
+/* --- Idle: chibi bounce (squash/stretch + wobble, out of phase) --------- */
+.vs-fighter:not([data-pose]) .vs-ninja {
+  animation: vs-sticker-bounce 2.3s cubic-bezier(.45,.05,.55,.95) infinite;
+}
+.vs-fighter.right:not([data-pose]) .vs-ninja { animation-delay: -1.15s; }
+@keyframes vs-sticker-bounce {
+  0%, 100% { transform: translateY(0) scale(1, 1) rotate(0deg); }
+  18%      { transform: translateY(1px) scale(1.03, .96) rotate(-.5deg); }   /* squash */
+  38%      { transform: translateY(-7px) scale(.97, 1.04) rotate(.6deg); }   /* stretch hop */
+  55%      { transform: translateY(0) scale(1.02, .98) rotate(0deg); }
+  72%      { transform: translateY(-2px) scale(1, 1.01) rotate(-.3deg); }
+}
+/* Ground shadow breathes with the bounce */
+.vs-fighter:not([data-pose])::after { animation: vs-shadow-breathe 2.3s ease-in-out infinite; }
+.vs-fighter.right:not([data-pose])::after { animation-delay: -1.15s; }
+@keyframes vs-shadow-breathe {
+  0%, 100% { transform: scaleX(1); opacity: .85; }
+  38%      { transform: scaleX(.82); opacity: .55; }
+  55%      { transform: scaleX(1.04); opacity: .9; }
+}
+/* Aura pulses in sync */
+.vs-fighter:not([data-pose])::before { animation: vs-aura-breathe 2.3s ease-in-out infinite; }
+.vs-fighter.right:not([data-pose])::before { animation-delay: -1.15s; }
+
+/* --- Strike: sweep (ground slash) — crouch → stretch lunge → bounce ----- */
+.vs-fighter[data-pose=sweep] { animation: vs-sticker-sweep 820ms cubic-bezier(.34,.56,.36,1) both; }
+@keyframes vs-sticker-sweep {
+  0%   { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
+  10%  { transform: translate3d(calc(var(--lunge)*-8px), 3px,0) rotate(calc(var(--lunge)*2deg)) scale(.93,1.07); }  /* anticipation crouch */
+  20%  { transform: translate3d(calc(var(--lunge)*10px), -3px,0) rotate(calc(var(--lunge)*-2deg)) scale(1.05,.95); }
+  29%  { transform: translate3d(calc(var(--lunge)*46px), -8px,0) rotate(calc(var(--lunge)*-6deg)) scale(1.16,.85) skewX(calc(var(--lunge)*-3deg)); filter: brightness(1.2) blur(.4px); } /* contact: smear stretch */
+  38%  { transform: translate3d(calc(var(--lunge)*42px), -4px,0) rotate(calc(var(--lunge)*-4deg)) scale(1.09,.92); filter: brightness(1.22); } /* hold */
+  58%  { transform: translate3d(calc(var(--lunge)*16px), 1px,0) rotate(calc(var(--lunge)*-1deg)) scale(.98,1.02); }
+  76%  { transform: translate3d(calc(var(--lunge)*-3px), 0,0) rotate(calc(var(--lunge)*.5deg)) scale(1.02,.98); } /* overshoot bounce */
+  100% { transform: translate3d(0,0,0) rotate(0) scale(1,1); filter: brightness(1); }
+}
+
+/* --- Strike: kick (aerial hop) — crouch → hop stretch → landing squash -- */
+.vs-fighter[data-pose=kick] { animation: vs-sticker-kick 820ms cubic-bezier(.34,.56,.36,1) both; }
+@keyframes vs-sticker-kick {
+  0%   { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
+  10%  { transform: translate3d(calc(var(--lunge)*-7px), 4px,0) rotate(calc(var(--lunge)*3deg)) scale(.92,1.08); } /* crouch */
+  21%  { transform: translate3d(calc(var(--lunge)*20px), -22px,0) rotate(calc(var(--lunge)*-5deg)) scale(1.1,.9) skewX(calc(var(--lunge)*-2deg)); filter: blur(.5px); } /* airborne */
+  29%  { transform: translate3d(calc(var(--lunge)*45px), -64px,0) rotate(calc(var(--lunge)*-4deg)) scale(1.08,.93); filter: brightness(1.22) blur(.4px); } /* contact mid-air */
+  45%  { transform: translate3d(calc(var(--lunge)*30px), 2px,0) rotate(0) scale(.94,1.07); } /* landing squash */
+  62%  { transform: translate3d(calc(var(--lunge)*12px), -3px,0) rotate(calc(var(--lunge)*1deg)) scale(1.03,.97); } /* bounce */
+  80%  { transform: translate3d(calc(var(--lunge)*3px), 0,0) scale(.99,1.01); }
+  100% { transform: translate3d(0,0,0) rotate(0) scale(1,1); filter: brightness(1); }
+}
+
+/* --- Recoil: hit squash → jelly wobble → recover ------------------------ */
+.vs-fighter[data-pose=recoil] { animation: vs-sticker-recoil 780ms cubic-bezier(.3,.7,.4,1) both; }
+@keyframes vs-sticker-recoil {
+  0%, 18% { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
+  29%  { transform: translate3d(calc(var(--lunge)*-22px), 6px,0) rotate(calc(var(--lunge)*9deg)) scale(1.18,.76) skewX(calc(var(--lunge)*5deg)); filter: brightness(.78) saturate(.85) blur(.4px); } /* flat squash */
+  40%  { transform: translate3d(calc(var(--lunge)*-17px), 3px,0) rotate(calc(var(--lunge)*5deg)) scale(1.05,.93); filter: brightness(.9); }
+  54%  { transform: translate3d(calc(var(--lunge)*-11px), 1px,0) rotate(calc(var(--lunge)*-3deg)) scale(.96,1.05); } /* jelly wobble */
+  68%  { transform: translate3d(calc(var(--lunge)*-6px), 0,0) rotate(calc(var(--lunge)*1.5deg)) scale(1.03,.97); }
+  84%  { transform: translate3d(calc(var(--lunge)*-1px), 0,0) rotate(0) scale(1,1); }
+  100% { transform: translate3d(0,0,0) rotate(0) scale(1,1); filter: brightness(1); }
+}
+
+/* --- Slip: duck + slide back with motion blur, stretch recover ---------- */
+.vs-fighter[data-pose=slip] { animation: vs-sticker-slip 780ms cubic-bezier(.3,.7,.4,1) both; }
+@keyframes vs-sticker-slip {
+  0%   { transform: translate3d(0,0,0) scale(1,1) rotate(0); }
+  16%  { transform: translate3d(calc(var(--lunge)*-5px), -2px,0) scale(.98,1.03) rotate(calc(var(--lunge)*-2deg)); }
+  30%  { transform: translate3d(calc(var(--lunge)*-24px), 13px,0) scale(1.1,.7) rotate(calc(var(--lunge)*-11deg)); filter: blur(.7px); opacity:.94; } /* duck slide */
+  46%  { transform: translate3d(calc(var(--lunge)*-17px), 6px,0) scale(1.03,.88) rotate(calc(var(--lunge)*-5deg)); opacity:.98; }
+  64%  { transform: translate3d(calc(var(--lunge)*-6px), 0,0) scale(.98,1.04) rotate(calc(var(--lunge)*-1deg)); } /* stretch back up */
+  82%  { transform: translate3d(calc(var(--lunge)*-1px), 0,0) scale(1.01,.99); }
+  100% { transform: translate3d(0,0,0) scale(1,1) rotate(0); opacity:1; filter: blur(0); }
+}
+
+/* --- Enter: bounce in with landing squash (two bounces) ----------------- */
+#vs-dialog[data-sequence=intro] .vs-fighter.left  { animation: vs-sticker-enter-l 980ms cubic-bezier(.3,.9,.4,1.15) both; }
+#vs-dialog[data-sequence=intro] .vs-fighter.right { animation: vs-sticker-enter-r 980ms cubic-bezier(.3,.9,.4,1.15) both .12s; }
+@keyframes vs-sticker-enter-l {
+  0%   { transform: translate3d(-90px, -14px,0) scale(.9,.9); opacity: 0; filter: brightness(.7) blur(3px); }
+  45%  { transform: translate3d(4px, -6px,0) scale(1.04,.96); opacity: 1; filter: brightness(1.06) blur(0); }
+  62%  { transform: translate3d(0, 3px,0) scale(.95,1.06); }   /* landing squash */
+  78%  { transform: translate3d(0, -2px,0) scale(1.02,.98); }  /* bounce */
+  100% { transform: translate3d(0,0,0) scale(1,1); opacity: 1; }
+}
+@keyframes vs-sticker-enter-r {
+  0%   { transform: translate3d(90px, -14px,0) scale(.9,.9); opacity: 0; filter: brightness(.7) blur(3px); }
+  45%  { transform: translate3d(-4px, -6px,0) scale(1.04,.96); opacity: 1; filter: brightness(1.06) blur(0); }
+  62%  { transform: translate3d(0, 3px,0) scale(.95,1.06); }
+  78%  { transform: translate3d(0, -2px,0) scale(1.02,.98); }
+  100% { transform: translate3d(0,0,0) scale(1,1); opacity: 1; }
+}
+
+/* --- Dashing ghost trail (stronger for sticker smear) ------------------- */
+.vs-fighter.is-dashing .vs-trail { opacity: .7; animation: vs-trail-ghost 520ms ease-out both; }
+
+/* =========================================================================
+   ACTION BUTTONS — grouped, neon sticker style, progress commit
+   ========================================================================= */
+#vs-controls { display: grid; grid-template-columns: 1fr; gap: 10px; text-align: center; }
+.vs-move-group { display: grid; gap: 6px; }
+.vs-move-label {
+  font-size: 11px; font-weight: 900; letter-spacing: .18em; text-transform: uppercase;
+  color: #7affaa; text-shadow: 0 1px 3px #000, 0 0 12px rgba(53,255,133,.35);
+}
+.vs-move-dodge .vs-move-label { color: #8fd8ff; text-shadow: 0 1px 3px #000, 0 0 12px rgba(90,200,255,.35); }
+.vs-move-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#vs-controls .vs-move-row button {
+  position: relative; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 13px 10px; min-height: 52px;
+  border: 2px solid #2e6b45; border-radius: 16px;
+  background: linear-gradient(180deg, rgba(8,51,30,.92), rgba(4,28,15,.96));
+  color: #dfffeed2; font-weight: 800; font-size: 14px; letter-spacing: .02em;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 3px 0 #0a2e1a, inset 0 1px 0 rgba(255,255,255,.08), 0 0 0 rgba(53,255,133,0);
+  transition: transform .12s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease, color .18s ease;
+  overflow: hidden;
+}
+#vs-controls .vs-move-row button::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,.14) 50%, transparent 60%);
+  transform: translateX(-120%); transition: transform .5s ease, opacity .3s ease;
+}
+#vs-controls .vs-move-row button:hover { border-color: #6ff2a4; box-shadow: 0 3px 0 #0a2e1a, 0 0 16px rgba(53,255,133,.28), inset 0 1px 0 rgba(255,255,255,.1); }
+#vs-controls .vs-move-row button:hover::after { opacity: 1; transform: translateX(120%); }
+#vs-controls .vs-move-row button:active { transform: translateY(2px) scale(.97); box-shadow: 0 1px 0 #0a2e1a; }
+.vs-btn-arrow { font-size: 19px; font-weight: 900; line-height: 1; color: #7affaa; text-shadow: 0 0 10px rgba(53,255,133,.6); transition: transform .15s ease, color .15s ease; }
+.vs-move-dodge .vs-btn-arrow { color: #8fd8ff; text-shadow: 0 0 10px rgba(90,200,255,.6); }
+#vs-controls .vs-move-row button:hover .vs-btn-arrow { transform: translateX(2px); }
+.vs-btn-check {
+  position: absolute; top: 5px; right: 7px; width: 18px; height: 18px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 11px; font-weight: 900; line-height: 1;
+  background: #021a0d; color: #ffd65c; border: 1.5px solid #ffd65c;
+  opacity: 0; transform: scale(.4) rotate(-30deg); transition: opacity .15s ease, transform .22s cubic-bezier(.34,1.56,.64,1);
+}
+#vs-controls .vs-move-row button.is-selected,
+#vs-controls .vs-move-row button[aria-pressed="true"] {
+  background: linear-gradient(180deg, #ffd65c, #ff9d2e);
+  border-color: #ffe9a0; color: #2a1500;
+  box-shadow: 0 3px 0 #7a3b07, 0 0 22px rgba(255,180,60,.5), inset 0 1px 0 rgba(255,255,255,.5);
+  animation: vs-btn-pop .28s cubic-bezier(.34,1.56,.64,1);
+}
+#vs-controls .vs-move-row button.is-selected .vs-btn-arrow,
+#vs-controls .vs-move-row button[aria-pressed="true"] .vs-btn-arrow { color: #2a1500; text-shadow: none; }
+#vs-controls .vs-move-row button.is-selected .vs-btn-check,
+#vs-controls .vs-move-row button[aria-pressed="true"] .vs-btn-check { opacity: 1; transform: scale(1) rotate(0deg); }
+@keyframes vs-btn-pop { 0% { transform: scale(.94); } 60% { transform: scale(1.04); } 100% { transform: scale(1); } }
+
+/* Commit: progress dots + ready pulse */
+#vs-commit {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  grid-column: 1 / -1; padding: 14px; border-radius: 16px;
+  font-weight: 900; letter-spacing: .07em; text-transform: uppercase; font-size: 14.5px;
+  border: 2px solid #1c4a33; background: linear-gradient(180deg, #0a2e1a, #062015);
+  color: #7fa88c; cursor: not-allowed;
+  box-shadow: 0 3px 0 #04140b; transition: all .2s ease;
+}
+.vs-commit-dots { display: inline-flex; gap: 6px; }
+.vs-commit-dots i {
+  width: 9px; height: 9px; border-radius: 50%; background: #1c3829;
+  border: 1.5px solid #2e6b45; transition: all .25s cubic-bezier(.34,1.56,.64,1);
+}
+.vs-commit-dots i.is-on { background: #ffd65c; border-color: #ffd65c; box-shadow: 0 0 10px rgba(255,180,60,.7); transform: scale(1.25); }
+#vs-controls #vs-commit:disabled {
+  filter: none; opacity: 1; cursor: not-allowed;
+  border-color: #1c4a33; background: linear-gradient(180deg, #0a2e1a, #062015);
+  color: #7fa88c; box-shadow: 0 3px 0 #04140b;
+}
+#vs-commit.is-ready {
+  border-color: #54ffb0; background: linear-gradient(180deg, #2fdc7a, #1ec661); color: #021a0d;
+  cursor: pointer; box-shadow: 0 4px 0 #0c5c28, 0 0 28px rgba(53,245,133,.5);
+  animation: vs-commit-pulse 1.6s ease-in-out infinite;
+}
+#vs-commit.is-ready:hover { filter: brightness(1.08); }
+#vs-commit.is-ready:active { transform: translateY(2px); box-shadow: 0 2px 0 #0c5c28; }
+#vs-commit.is-ready .vs-commit-dots i { background: #021a0d; border-color: #021a0d; }
+#vs-commit.is-ready .vs-commit-dots i.is-on { background: #021a0d; box-shadow: none; }
+@keyframes vs-commit-pulse { 0%, 100% { box-shadow: 0 4px 0 #0c5c28, 0 0 20px rgba(53,245,133,.4); } 50% { box-shadow: 0 4px 0 #0c5c28, 0 0 36px rgba(53,245,133,.65); } }
+.vs-controls-hint { display: block; font-size: 11px; color: #7fa88c; letter-spacing: .04em; }
+
+/* Reduced motion: still frame, buttons keep states without animation */
+html.motion-reduced .vs-fighter:not([data-pose]) .vs-ninja,
+html.motion-reduced .vs-fighter[data-pose],
+html.motion-reduced #vs-commit.is-ready,
+html.motion-reduced #vs-controls .vs-move-row button.is-selected { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .vs-fighter:not([data-pose]) .vs-ninja,
+  .vs-fighter[data-pose],
+  #vs-commit.is-ready,
+  #vs-controls .vs-move-row button.is-selected { animation: none !important; }
+}
+
+/* --- Final sprite framing: real alpha PNGs, feet on the arena floor ------- */
+/* The sprites are trimmed to their bounding box, so the old border-radius
+   mask, background glow and screen blend would either clip the katana arc or
+   punch holes through the black body. Alpha handles it now. */
+.vs-fighter { width: min(44%, 210px); bottom: 30px; }
+.vs-fighter.left { left: 1%; }
+.vs-fighter.right { right: 1%; }
+.vs-ninja {
+  width: 100%; height: auto; display: block;
+  border-radius: 0; background: none;
+  filter: drop-shadow(0 10px 14px rgba(0, 14, 7, .7)) drop-shadow(0 0 18px rgba(53, 255, 133, .38));
+  image-rendering: auto;
+}
+.vs-fighter.right .vs-ninja {
+  filter: drop-shadow(0 10px 14px rgba(0, 14, 7, .7)) drop-shadow(0 0 18px rgba(70, 255, 150, .36));
+}
+.vs-fighter[data-pose=sweep] .vs-ninja { filter: drop-shadow(0 10px 14px rgba(0,14,7,.7)) drop-shadow(0 0 34px rgba(122,255,170,.85)) brightness(1.12); }
+.vs-fighter[data-pose=kick] .vs-ninja { filter: drop-shadow(0 10px 14px rgba(0,14,7,.7)) drop-shadow(0 0 30px rgba(158,255,189,.8)) brightness(1.1); }
+.vs-fighter::after { left: 16%; right: 16%; bottom: -2%; height: 9%; }

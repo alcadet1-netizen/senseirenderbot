@@ -1031,7 +1031,24 @@
           <details id="vs-recap" hidden><summary>Разбор обмена</summary><ol></ol></details>
           <div id="vs-lobby" hidden><div class="vs-bet-row"><label>Ставка каждого <input id="vs-bet" type="number" min="300" step="100" inputmode="numeric" value="500"> Coin</label><div class="vs-bet-presets" role="group" aria-label="Быстрые ставки"><button type="button" data-bet="300">300</button><button type="button" data-bet="500">500</button><button type="button" data-bet="1000">1000</button><button type="button" data-bet="5000">5000</button></div></div>
           <button id="vs-send">Отправить дуэль ⚔️</button><div id="vs-destinations" hidden><button id="vs-dm">В личку 💌</button><button id="vs-group">В группу 👥</button><div id="vs-by-name" hidden><input id="vs-handle" placeholder="@username" aria-label="Имя соперника"><button id="vs-address">Отправить ссылку</button></div></div><small>Вызов на 2 минуты. Ставки резервируются при принятии. Подсказка: <code>/duel @user 500</code> в чате — мгновенно.</small></div>
-          <button id="vs-accept" hidden>Принять вызов</button><button id="vs-rematch" hidden>Реванш · та же ставка</button><small id="vs-ready" hidden></small><div id="vs-controls" hidden><button data-vs="dodge_l">← Уворот</button><button data-vs="dodge_r">Уворот →</button><button data-vs="hit_l">← Удар</button><button data-vs="hit_r">Удар →</button><button id="vs-commit" disabled>Подтвердить ход</button></div>
+          <button id="vs-accept" hidden>Принять вызов</button><button id="vs-rematch" hidden>Реванш · та же ставка</button><small id="vs-ready" hidden></small><div id="vs-controls" hidden>
+            <div class="vs-move-group vs-move-attack">
+              <span class="vs-move-label">⚔️ Удар</span>
+              <div class="vs-move-row">
+                <button type="button" data-vs="hit_l" aria-pressed="false"><span class="vs-btn-arrow" aria-hidden="true">←</span><span class="vs-btn-text">Влево</span><span class="vs-btn-check" aria-hidden="true">✓</span></button>
+                <button type="button" data-vs="hit_r" aria-pressed="false"><span class="vs-btn-arrow" aria-hidden="true">→</span><span class="vs-btn-text">Вправо</span><span class="vs-btn-check" aria-hidden="true">✓</span></button>
+              </div>
+            </div>
+            <div class="vs-move-group vs-move-dodge">
+              <span class="vs-move-label">💨 Уворот</span>
+              <div class="vs-move-row">
+                <button type="button" data-vs="dodge_l" aria-pressed="false"><span class="vs-btn-arrow" aria-hidden="true">←</span><span class="vs-btn-text">Влево</span><span class="vs-btn-check" aria-hidden="true">✓</span></button>
+                <button type="button" data-vs="dodge_r" aria-pressed="false"><span class="vs-btn-arrow" aria-hidden="true">→</span><span class="vs-btn-text">Вправо</span><span class="vs-btn-check" aria-hidden="true">✓</span></button>
+              </div>
+            </div>
+            <button type="button" id="vs-commit" disabled><span class="vs-commit-label">Выбери удар и уворот</span><span class="vs-commit-dots" aria-hidden="true"><i></i><i></i></span></button>
+            <small class="vs-controls-hint">Удар и уворот — в любом порядке</small>
+          </div>
         </div>
       </dialog>
     </main>

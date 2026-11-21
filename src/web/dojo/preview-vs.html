@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>VS · превью анимации и кнопок</title>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      /* Dev-only chrome: never shipped to the mini app (served by dojo_app route whitelist). */
+      html, body { height: auto; overflow: auto; }
+      body { display: block; padding: 18px 14px 60px; }
+      .pv-wrap { max-width: 520px; margin: 0 auto; display: grid; gap: 18px; }
+      .pv-head h1 { margin: 0 0 4px; font-size: 19px; letter-spacing: .02em; }
+      .pv-head p { margin: 0; font-size: 12.5px; color: #8ca699; line-height: 1.5; }
+      .pv-panel {
+        display: grid; gap: 9px; padding: 13px; border: 1px solid rgba(92,255,166,.18);
+        border-radius: 16px; background: rgba(3,16,9,.82);
+      }
+      .pv-panel h2 { margin: 0; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: #7affaa; }
+      .pv-row { display: flex; flex-wrap: wrap; gap: 7px; }
+      .pv-row button {
+        padding: 9px 13px; border-radius: 11px; border: 1px solid #3e8f5e; cursor: pointer;
+        background: linear-gradient(180deg, #08331e, #041c0f); color: #dfffeed2;
+        font: inherit; font-size: 12.5px; font-weight: 700;
+        transition: border-color .15s ease, box-shadow .15s ease, transform .12s ease;
+      }
+      .pv-row button:hover { border-color: #6ff2a4; box-shadow: 0 0 12px #35ff8538; }
+      .pv-row button:active { transform: translateY(1px) scale(.98); }
+      .pv-row button[aria-pressed="true"] { background: linear-gradient(180deg, #ffd65c, #ff9d2e); border-color: #ffd65c; color: #2a1500; }
+      #pv-dialog-host { display: grid; place-items: start center; }
+      .pv-slow .vs-fighter[data-pose],
+      .pv-slow .vs-fighter:not([data-pose]) .vs-ninja { animation-duration: 2.34s !important; }
+      #pv-dialog-host dialog { position: static; margin: 0; max-height: none; }
+      .pv-note { font-size: 11.5px; color: #7fa88c; line-height: 1.5; margin: 0; }
+    </style>
+  </head>
+  <body>
+    <div class="pv-wrap">
+      <div class="pv-head">
+        <h1>Дуэль · превью</h1>
+        <p>Страница подключает настоящий <code>style.css</code> и берёт разметку диалога прямо из <code>index.html</code> — правишь игру, превью подтягивает изменения само.</p>
+      </div>
+
+      <div class="pv-panel">
+        <h2>Анимация</h2>
+        <div class="pv-row" id="pv-poses">
+          <button data-pose="">Покой (idle)</button>
+          <button data-pose="sweep" data-side="0">Удар слева</button>
+          <button data-pose="kick" data-side="1">Удар справа</button>
+          <button data-pose="recoil" data-side="1">Отброс</button>
+          <button data-pose="slip" data-side="0">Уворот</button>
+        </div>
+        <div class="pv-row">
+          <button id="pv-round">▶ Прогнать раунд</button>
+          <button id="pv-slow" aria-pressed="false">Замедленно ×0.35</button>
+        </div>
+        <p class="pv-note">Раунд повторяет тайминги боя: контакт через 240 мс, hit-stop, разбор обмена.</p>
+      </div>
+
+      <div class="pv-panel">
+        <h2>Кнопки хода</h2>
+        <div class="pv-row">
+          <button id="pv-reset">Сбросить выбор</button>
+          <button id="pv-locked">Соперник уже ходил</button>
+        </div>
+        <p class="pv-note">Кнопки ниже — реальные из <code>index.html</code>: кликай и смотри состояния «выбрано» и прогресс подтверждения.</p>
+      </div>
+
+      <div id="pv-dialog-host"></div>
+    </div>
+
+    <script>
+    (async () => {
+      const host = document.getElementById("pv-dialog-host");
+      const html = await (await fetch("index.html")).text();
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      host.append(document.importNode(doc.getElementById("vs-dialog"), true));
+      // Same puppet mounting as miner.js: templates live outside the dialog.
+      for (const fighter of host.querySelectorAll(".vs-fighter")) {
+        const tpl = fighter.classList.contains("left") ? "vs-puppet" : "vs-puppet-2";
+        fighter.append(document.importNode(doc.getElementById(tpl).content, true));
+        fighter.dataset.base = fighter.classList.contains("left") ? "sensei1" : "sensei2";
+      }
+      // Assets live next to this page here; the app serves them under /miniapp/dojo/assets.
+      for (const img of host.querySelectorAll("img[src^='/miniapp/dojo/assets/']"))
+        img.src = img.getAttribute("src").replace("/miniapp/dojo/assets/", "assets/");
+
+      const dialog = host.querySelector("#vs-dialog");
+      dialog.showModal();
+      dialog.querySelector("#vs-lobby").hidden = true;
+      dialog.querySelector("#vs-send").hidden = true;
+      dialog.querySelector("#vs-destinations").hidden = true;
+      dialog.querySelector("#vs-recap").hidden = true;
+      dialog.querySelector("#vs-controls").hidden = false;
+      dialog.querySelector("#vs-status").textContent = "Превью · раунд 1";
+      dialog.querySelector("#vs-ready").hidden = false;
+      dialog.querySelector("#vs-ready").textContent = "● Соперник готов";
+      dialog.querySelector("#vs-left").classList.add("is-me");
+
+      const stage = dialog.querySelector(".vs-stage");
+      const comic = dialog.querySelector(".vs-comic");
+      const fighters = [...dialog.querySelectorAll(".vs-fighter")];
+      const impact = dialog.querySelector(".vs-impact");
+      const card = dialog.querySelector(".vs-cut-card");
+      const label = dialog.querySelector(".vs-cut-label");
+      const title = dialog.querySelector(".vs-cut-title");
+      const sub = dialog.querySelector(".vs-cut-sub");
+      const read = dialog.querySelector("#vs-read");
+      const leftCard = dialog.querySelector("#vs-left");
+      const rightCard = dialog.querySelector("#vs-right");
+      const status = dialog.querySelector("#vs-status");
+      let hits = [0, 0];
+
+      const score = () => {
+        leftCard.textContent = `Ты · SENSEI · ${hits[0]}`;
+        rightCard.textContent = `${hits[1]} · NINJA`;
+        leftCard.dataset.health = String(Math.max(0, 2 - hits[1]));
+        rightCard.dataset.health = String(Math.max(0, 2 - hits[0]));
+      };
+      const say = (text) => { impact.textContent = text; impact.style.display = text ? "" : "none"; };
+      const cut = (on, heading, kicker) => {
+        card.style.display = on ? "" : "none";
+        if (!on) return;
+        label.textContent = "ДОДЗЁ  /  ПОЕДИНОК";
+        title.textContent = heading;
+        sub.textContent = kicker || "";
+      };
+
+      function resetPoses() {
+        stage.classList.remove("is-impact", "is-shake", "is-zoom", "is-slash", "is-storm", "is-flash", "is-hitstop");
+        comic.classList.remove("is-striking");
+        for (const key of ["striker", "outcome", "direction", "sequence"]) delete dialog.dataset[key];
+        for (const f of fighters) { delete f.dataset.pose; f.classList.remove("is-dashing"); }
+        read.hidden = true;
+        say("");
+        cut(false);
+      }
+
+      let slow = false;
+      const wait = ms => new Promise(r => setTimeout(r, slow ? ms * 2.85 : ms));
+
+      async function round() {
+        resetPoses();
+        hits = [0, 0];
+        score();
+        dialog.dataset.sequence = "intro";
+        stage.classList.add("is-storm");
+        cut(true, "Раунд 1", "");
+        await wait(680);
+        for (const side of [0, 1]) {
+          const hit = side === 0;                       // SENSEI lands, NINJA misses
+          const attackerPose = side === 0 ? "sweep" : "kick";
+          dialog.dataset.sequence = "strike";
+          for (const f of fighters) { delete f.dataset.pose; f.classList.remove("is-dashing"); }
+          void fighters[0].offsetWidth;                  // restart the animation
+          fighters[side].dataset.pose = attackerPose;
+          fighters[1 - side].dataset.pose = hit ? "recoil" : "slip";
+          fighters[side].classList.add("is-dashing");
+          dialog.dataset.striker = side ? "right" : "left";
+          dialog.dataset.outcome = hit ? "hit" : "miss";
+          dialog.dataset.direction = "right";
+          stage.style.setProperty("--slash-dir", side ? "-1" : "1");
+          stage.classList.add("is-storm", "is-slash");
+          comic.classList.add("is-striking");
+          status.textContent = `Раунд 1 · атакует ${side ? "NINJA" : "SENSEI"}`;
+          await wait(240);
+          if (hit) {
+            stage.classList.add("is-hitstop", "is-flash", "is-shake");
+            rightCard.classList.add("is-hit");
+            say("ДЗАН!");
+            setTimeout(() => rightCard.classList.remove("is-hit"), 440);
+            await wait(90);
+            stage.classList.remove("is-hitstop", "is-flash", "is-shake");
+            stage.classList.add("is-zoom");
+          } else {
+            say("МИМО!");
+          }
+          hits[side] += Number(hit);
+          score();
+          read.hidden = false;
+          dialog.querySelector("#vs-read-hit").textContent = "→";
+          dialog.querySelector("#vs-read-dodge").textContent = side ? "←" : "→";
+          dialog.querySelector("#vs-read-result").textContent = hit ? "Попадание" : "Уклонился!";
+          status.textContent = `SENSEI: удар → · NINJA: уворот → · ${hit ? "Попадание" : "Уклонился!"}`;
+          await wait(680);
+          read.hidden = true;
+          stage.classList.remove("is-zoom", "is-shake", "is-slash");
+          comic.classList.remove("is-striking");
+          delete dialog.dataset.striker;
+          for (const f of fighters) { delete f.dataset.pose; f.classList.remove("is-dashing"); }
+        }
+        dialog.dataset.sequence = "outro";
+        cut(true, `${hits[0]} : ${hits[1]}`, "ПРЕИМУЩЕСТВО");
+        stage.classList.add("is-zoom");
+        await wait(860);
+        stage.classList.remove("is-storm", "is-zoom");
+        cut(false);
+        delete dialog.dataset.sequence;
+        status.textContent = "Раунд 1 · обмен завершён";
+      }
+
+      /* Pose buttons: fire one exchange half at a time */
+      document.getElementById("pv-poses").addEventListener("click", event => {
+        const btn = event.target.closest("button[data-pose]");
+        if (!btn) return;
+        for (const b of document.querySelectorAll("#pv-poses button")) b.setAttribute("aria-pressed", String(b === btn));
+        resetPoses();
+        const pose = btn.dataset.pose;
+        if (!pose) return;
+        const side = Number(btn.dataset.side || 0);
+        const striking = pose === "sweep" || pose === "kick";
+        dialog.dataset.sequence = "strike";
+        fighters[side].dataset.pose = pose;
+        if (pose === "slip" || pose === "recoil") return;
+        fighters[side].classList.add("is-dashing");
+        fighters[1 - side].dataset.pose = pose === "sweep" ? "recoil" : "slip";
+        dialog.dataset.striker = side ? "right" : "left";
+        dialog.dataset.outcome = pose === "sweep" ? "hit" : "miss";
+        stage.style.setProperty("--slash-dir", side ? "-1" : "1");
+        stage.classList.add("is-storm", "is-slash");
+        comic.classList.add("is-striking");
+        status.textContent = `Превью · ${pose === "sweep" ? "горизонтальный удар" : "удар в прыжке"}`;
+        setTimeout(() => {
+          if (pose === "sweep") { stage.classList.add("is-shake"); say("ДЗАН!"); }
+          else { say("МИМО!"); }
+        }, 240);
+      });
+
+      /* Draft painting: mirrors paintDraft() in miner.js */
+      let draft = {};
+      const commit = dialog.querySelector("#vs-commit");
+      function paintDraft() {
+        const picked = Object.values(draft);
+        for (const btn of dialog.querySelectorAll("[data-vs]")) {
+          const on = picked.includes(btn.dataset.vs);
+          btn.setAttribute("aria-pressed", String(on));
+          btn.classList.toggle("is-selected", on);
+        }
+        const done = Number(Boolean(draft.attack)) + Number(Boolean(draft.dodge));
+        commit.disabled = done < 2;
+        commit.classList.toggle("is-ready", done === 2);
+        const commitLabel = commit.querySelector(".vs-commit-label");
+        if (commitLabel) commitLabel.textContent = done === 2 ? "В бой! ⚔️" : done === 1 ? "Остался один ход" : "Выбери удар и уворот";
+        commit.querySelectorAll(".vs-commit-dots i").forEach((dot, i) => dot.classList.toggle("is-on", i < done));
+      }
+      dialog.addEventListener("click", event => {
+        const btn = event.target.closest("[data-vs]");
+        if (!btn) return;
+        draft[btn.dataset.vs.startsWith("hit_") ? "attack" : "dodge"] = btn.dataset.vs;
+        paintDraft();
+        if (navigator.vibrate) try { navigator.vibrate(12); } catch {}
+      });
+      document.getElementById("pv-reset").addEventListener("click", () => { draft = {}; paintDraft(); });
+      document.getElementById("pv-locked").addEventListener("click", () => {
+        const controls = dialog.querySelector("#vs-controls");
+        controls.hidden = true;
+        status.textContent = "Ход зафиксирован · ждём соперника";
+        setTimeout(() => { controls.hidden = false; status.textContent = "Превью · раунд 1"; }, 1700);
+      });
+      document.getElementById("pv-slow").addEventListener("click", event => {
+        slow = !slow;
+        event.currentTarget.setAttribute("aria-pressed", String(slow));
+        stage.classList.toggle("pv-slow", slow);
+      });
+      document.getElementById("pv-round").addEventListener("click", round);
+
+      score();
+      paintDraft();
+    })();
+    </script>
+  </body>
+</html>

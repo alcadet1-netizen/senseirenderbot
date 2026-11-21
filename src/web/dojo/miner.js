@@ -1013,6 +1013,7 @@
     delete vsDialog.dataset.outcome;
     delete vsDialog.dataset.direction;
     for (const actor of vsDialog.querySelectorAll(".vs-fighter")) { delete actor.dataset.pose; actor.classList.remove("is-dashing"); }
+    clearTrail();
     const stage = vsDialog.querySelector(".vs-stage");
     stage?.classList.remove("is-storm","is-impact","is-flash","is-shake","is-zoom","is-slash","is-hitstop");
     vsDialog.querySelector(".vs-comic")?.classList.remove("is-striking");
@@ -1068,9 +1069,9 @@
       actors[side].dataset.pose = attackerPose;
       actors[1-side].dataset.pose = defenderPose;
       actors[side].classList.add("is-dashing");
-      // Dynamic eye flare + trail swap: attacker gets bright flare, defender glints on dodge
+      // Attacker aura flare (eyes are baked into the sticker sprite)
       try {
-        actors[side].querySelector(".vs-eye")?.animate([{opacity:.9, filter:"brightness(1.2) blur(0px)"},{opacity:1, filter:"brightness(2.2) blur(.2px)"},{opacity:1, filter:"brightness(1.6)"}], {duration: 420, easing: "ease-out"});
+        actors[side].animate([{filter:"brightness(1)"},{filter:"brightness(1.35) saturate(1.2)"},{filter:"brightness(1)"}], {duration: 460, easing: "ease-out"});
       } catch {}
       vsDialog.dataset.striker = side ? "right" : "left";
       vsDialog.dataset.evade = strike.dodge === "dodge_l" ? "left" : "right";
@@ -1160,9 +1161,19 @@
   }
   let draftKey = "", draft = {};
   function paintDraft() {
-    for (const btn of vsDialog.querySelectorAll("[data-vs]"))
-      btn.setAttribute("aria-pressed", Object.values(draft).includes(btn.dataset.vs));
-    $("vs-commit").disabled = !(draft.attack && draft.dodge);
+    const picked = Object.values(draft);
+    for (const btn of vsDialog.querySelectorAll("[data-vs]")) {
+      const on = picked.includes(btn.dataset.vs);
+      btn.setAttribute("aria-pressed", String(on));
+      btn.classList.toggle("is-selected", on);
+    }
+    const done = Number(Boolean(draft.attack)) + Number(Boolean(draft.dodge));
+    const commit = $("vs-commit");
+    commit.disabled = done < 2;
+    commit.classList.toggle("is-ready", done === 2);
+    const label = commit.querySelector(".vs-commit-label");
+    if (label) label.textContent = done === 2 ? "В бой! ⚔️" : done === 1 ? "Остался один ход" : "Выбери удар и уворот";
+    commit.querySelectorAll(".vs-commit-dots i").forEach((dot, i) => dot.classList.toggle("is-on", i < done));
   }
   function drawVs(s) {
     vsBattle = s;
@@ -1298,6 +1309,7 @@
     if (move && vsBattle?.phase === "fight" && !vsPlaying) {
       draft[move.startsWith("hit_") ? "attack" : "dodge"] = move;
       paintDraft();
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch {}
     }
     if (event.target.closest("#vs-commit") && !vsPlaying) {
       if (vsBusy) return showToast("Обновление арены · нажми ещё раз");
