@@ -248,7 +248,7 @@
         commit.disabled = done < 2;
         commit.classList.toggle("is-ready", done === 2);
         const commitLabel = commit.querySelector(".vs-commit-label");
-        if (commitLabel) commitLabel.textContent = done === 2 ? "В бой! ⚔️" : done === 1 ? "Остался один ход" : "Выбери удар и уворот";
+        if (commitLabel) commitLabel.textContent = done === 2 ? "В бой!" : done === 1 ? "Остался один ход" : "Выбери удар и уворот";
         commit.querySelectorAll(".vs-commit-dots i").forEach((dot, i) => dot.classList.toggle("is-on", i < done));
       }
       dialog.addEventListener("click", event => {

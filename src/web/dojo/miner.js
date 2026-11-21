@@ -1206,7 +1206,7 @@
     commit.disabled = done < 2;
     commit.classList.toggle("is-ready", done === 2);
     const label = commit.querySelector(".vs-commit-label");
-    if (label) label.textContent = done === 2 ? "В бой! ⚔️" : done === 1 ? "Остался один ход" : "Выбери удар и уворот";
+    if (label) label.textContent = done === 2 ? "В бой!" : done === 1 ? "Остался один ход" : "Выбери удар и уворот";
     commit.querySelectorAll(".vs-commit-dots i").forEach((dot, i) => dot.classList.toggle("is-on", i < done));
   }
   // Write helpers: a no-op write still costs a style pass in a WebView, and

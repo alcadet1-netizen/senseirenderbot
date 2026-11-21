@@ -998,7 +998,7 @@
             <i style="left:94%;--w:9px;--d:14.5s;--dl:-3.1s;--o:.7"></i>
           </div>
           <header class="vs-top">
-            <div class="vs-title-block"><small>ДОДЗЁ / АРЕНА</small><h2 id="vs-title"><span class="vs-title-sensei">SENSEI</span> <span class="vs-title-kanji">対</span> <span class="vs-title-ninja">NINJA</span></h2></div>
+            <div class="vs-title-block"><small>ДОДЗЁ / АРЕНА</small><h2 id="vs-title"><span class="vs-title-sensei">SENSEI</span> <span class="vs-title-kanji" aria-hidden="true">VS</span> <span class="vs-title-ninja">NINJA</span></h2></div>
             <button id="vs-close" aria-label="Закрыть">×</button>
           </header>
           <div id="vs-score">
@@ -1017,9 +1017,9 @@
             <svg class="vs-blade-art" viewBox="0 0 320 140" aria-hidden="true" focusable="false">
               <defs>
                 <linearGradient id="vs-blade-grad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#7affaa" stop-opacity="0"/><stop offset="18%" stop-color="#eafff3" stop-opacity="1"/><stop offset="55%" stop-color="#7affaa"/><stop offset="100%" stop-color="#00ff88" stop-opacity="0"/></linearGradient>
-                <filter id="vs-blade-glow"><feGaussianBlur stdDeviation="3.2"/><feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 13 -5"/></filter>
+                
               </defs>
-              <g class="vs-sweep"><path class="vs-blade-wake" d="M 10 118 Q 105 24 298 8 Q 128 48 10 118 Z" filter="url(#vs-blade-glow)"/><path class="vs-blade-core" pathLength="1" d="M12 106 Q118 26 288 14" stroke="url(#vs-blade-grad)" stroke-width="7" fill="none" stroke-linecap="round"/><path class="vs-blade-edge" pathLength="1" d="M12 106 Q118 26 288 14"/><path class="vs-blade-thread" pathLength="1" d="M44 100 Q138 39 240 29"/></g>
+              <g class="vs-sweep"><path class="vs-blade-wake" d="M 10 118 Q 105 24 298 8 Q 128 48 10 118 Z"/><path class="vs-blade-core" pathLength="1" d="M12 106 Q118 26 288 14" stroke="url(#vs-blade-grad)" stroke-width="7" fill="none" stroke-linecap="round"/><path class="vs-blade-edge" pathLength="1" d="M12 106 Q118 26 288 14"/><path class="vs-blade-thread" pathLength="1" d="M44 100 Q138 39 240 29"/></g>
             </svg><i class="vs-contact-ring"></i><div class="vs-sparks"><span class="vs-spark-core"></span><span class="vs-spark-ring"></span></div><b class="vs-impact"></b><div class="vs-cut-card"><small class="vs-cut-label"></small><strong class="vs-cut-title"></strong><span class="vs-cut-sub"></span></div>
             <div class="vs-afterimage" aria-hidden="true"></div>
           </div>
@@ -1030,17 +1030,17 @@
           <div id="vs-read" hidden aria-hidden="true"><span>Удар <b id="vs-read-hit"></b></span><span>Уворот <b id="vs-read-dodge"></b></span><strong id="vs-read-result"></strong></div>
           <details id="vs-recap" hidden><summary>Разбор обмена</summary><ol></ol></details>
           <div id="vs-lobby" hidden><div class="vs-bet-row"><label>Ставка каждого <input id="vs-bet" type="number" min="300" step="100" inputmode="numeric" value="500"> Coin</label><div class="vs-bet-presets" role="group" aria-label="Быстрые ставки"><button type="button" data-bet="300">300</button><button type="button" data-bet="500">500</button><button type="button" data-bet="1000">1000</button><button type="button" data-bet="5000">5000</button></div></div>
-          <button id="vs-send">Отправить дуэль ⚔️</button><div id="vs-destinations" hidden><button id="vs-dm">В личку 💌</button><button id="vs-group">В группу 👥</button><div id="vs-by-name" hidden><input id="vs-handle" placeholder="@username" aria-label="Имя соперника"><button id="vs-address">Отправить ссылку</button></div></div><small>Вызов на 2 минуты. Ставки резервируются при принятии. Подсказка: <code>/duel @user 500</code> в чате — мгновенно.</small></div>
+          <button id="vs-send">Отправить дуэль</button><div id="vs-destinations" hidden><button id="vs-dm">В личку</button><button id="vs-group">В группу</button><div id="vs-by-name" hidden><input id="vs-handle" placeholder="@username" aria-label="Имя соперника"><button id="vs-address">Отправить ссылку</button></div></div><small>Вызов на 2 минуты. Ставки резервируются при принятии. Подсказка: <code>/duel @user 500</code> в чате — мгновенно.</small></div>
           <button id="vs-accept" hidden>Принять вызов</button><button id="vs-rematch" hidden>Реванш · та же ставка</button><small id="vs-ready" hidden></small><div id="vs-controls" hidden>
             <div class="vs-move-group vs-move-attack">
-              <span class="vs-move-label">⚔️ Удар</span>
+              <span class="vs-move-label"><svg class="vs-move-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 14l8.5-8.5M11 2l3 3M9.5 3.5l3 3M2 14l1.5-1.5" /></svg>Удар</span>
               <div class="vs-move-row">
                 <button type="button" data-vs="hit_l" aria-pressed="false"><span class="vs-btn-arrow" aria-hidden="true">←</span><span class="vs-btn-text">Влево</span><span class="vs-btn-check" aria-hidden="true">✓</span></button>
                 <button type="button" data-vs="hit_r" aria-pressed="false"><span class="vs-btn-arrow" aria-hidden="true">→</span><span class="vs-btn-text">Вправо</span><span class="vs-btn-check" aria-hidden="true">✓</span></button>
               </div>
             </div>
             <div class="vs-move-group vs-move-dodge">
-              <span class="vs-move-label">💨 Уворот</span>
+              <span class="vs-move-label"><svg class="vs-move-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1 6h9M2 9h7M1 12h5" /></svg>Уворот</span>
               <div class="vs-move-row">
                 <button type="button" data-vs="dodge_l" aria-pressed="false"><span class="vs-btn-arrow" aria-hidden="true">←</span><span class="vs-btn-text">Влево</span><span class="vs-btn-check" aria-hidden="true">✓</span></button>
                 <button type="button" data-vs="dodge_r" aria-pressed="false"><span class="vs-btn-arrow" aria-hidden="true">→</span><span class="vs-btn-text">Вправо</span><span class="vs-btn-check" aria-hidden="true">✓</span></button>
