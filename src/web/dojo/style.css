@@ -5446,7 +5446,9 @@ html.motion-reduced .chain-panel.is-live .chain-ecg path {
 .ref-member .ref-claim { margin-inline-start: auto; flex: none; }
 .ref-member-name small { font-size: 10px; white-space: normal; }
 
-/* Duel arena: the artwork is scenery; every label and control is live HTML. */
+
+/* Duel arena: layered scenery, AI ninja silhouettes and a cinematic combat plane. */
+
 #vs-open {
   position: relative; flex: none; margin-inline-end: auto;
   width: clamp(46px, 12vw, 56px); aspect-ratio: 1; padding: 0;
@@ -5461,118 +5463,408 @@ html.motion-reduced .chain-panel.is-live .chain-ecg path {
 @keyframes vs-letter-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.09); text-shadow: 0 0 5px #ff424baa; } }
 html.motion-reduced #vs-open span { animation: none; }
 @media (prefers-reduced-motion: reduce) { #vs-open span { animation: none; } }
-#vs-dialog { margin: auto; padding: 0; width: min(94vw, 440px); border: 1px solid #54da9a; border-radius: 22px; color: #f4fff7; background: #042318; overflow: auto; }
-#vs-dialog::backdrop { background: #00150feb; }
-.vs-stage { box-sizing: border-box; height: min(84dvh, 680px); min-height: 320px; display: flex; flex-direction: column; padding: 15px; gap: 12px; background: linear-gradient(#001e17c9, transparent 28%, transparent 69%, #001710), url('assets/duel-court.webp') center / cover; }
-.vs-stage header, #vs-score { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.vs-stage h2 { margin: 2px 0; font-size: 24px; }
-.vs-stage small { display: block; font-size: 11px; letter-spacing: .04em; }
-.vs-stage button, .vs-stage select { border: 1px solid #5bce91; border-radius: 12px; padding: 10px; background: #073321; color: #edfff4; font-weight: 700; }
-#vs-close { font-size: 20px; line-height: 1; }
-#vs-score b { min-width: 0; flex: 1; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; border-bottom: 3px solid #51ff93; background: #022c20eb; border-radius: 8px; padding: 6px; }
-#vs-score i { color: #ffcf65; font: italic bold 24px Georgia; }
-.vs-console { margin-top: auto; padding: 12px; border-radius: 16px; background: #001d15ed; text-align: center; }
-#vs-status { display: block; } #vs-lobby, #vs-controls { display: grid; gap: 7px; margin-top: 8px; } #vs-controls { grid-template-columns: 1fr 1fr; } #vs-controls[hidden], #vs-lobby[hidden] { display: none; }
-#vs-controls [aria-pressed=true], #vs-send { color: #002313; background: #81ffa7; }
-/* The court stays fixed; the combat plane owns actors and contact art. */
-.vs-stage { position: relative; isolation: isolate; overflow: hidden; }
-.vs-stage header, #vs-score, .vs-console { position: relative; z-index: 2; }
-.vs-comic { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-.vs-impact { display:none; position:absolute; }
-#vs-dialog[data-striker] .vs-impact { display:block; top:47%; left:12%; padding:.55em .65em; font:italic 1000 clamp(24px,9vw,48px)/1 system-ui; color:#12081a; background:#ffe343; clip-path:polygon(0 23%,20% 25%,17% 0,39% 14%,53% 0,60% 18%,90% 2%,84% 24%,100% 28%,91% 48%,100% 70%,82% 72%,80% 100%,58% 84%,34% 100%,32% 80%,0 91%,9% 60%); transform:rotate(-9deg); }
-#vs-dialog[data-striker=left] .vs-impact { left:auto;right:10%; transform:rotate(8deg); }
-#vs-dialog[data-outcome=miss] .vs-impact { background:#8afffc; }
-#vs-score b { border-bottom:0; background:linear-gradient(90deg,#51ff93 var(--life,100%),#264139 0) bottom / 100% 5px no-repeat,#022c20eb; padding-bottom:9px; }
-#vs-score [data-health='1'] { --life:50%; } #vs-score [data-health='0'] { --life:0%; }
-.vs-console { border:2px solid #0b100d; box-shadow:3px 3px 0 #53f59a; }
-/* Anticipation, contact, follow-through: hits throw gold sparks, a dodge leaves cyan ink. */
-#vs-dialog { --sidestep: 6%; } #vs-dialog[data-evade=left] { --sidestep: -6%; }
-#vs-dialog[data-striker][data-outcome=hit] .is-striking .vs-sparks { position:absolute; left:58%;top:56%; width:26%;aspect-ratio:1; background:repeating-conic-gradient(from 8deg,transparent 0 27deg,#ffda72 28deg 31deg,transparent 32deg 44deg); mask-image:radial-gradient(circle,transparent 20%,black 43%,transparent 70%); animation:vs-contact 1.18s both; }
-#vs-dialog[data-striker=right] .is-striking .vs-sparks { left:18%; }
-@keyframes vs-contact { 0%,30% {opacity:0;scale:.2} 48% {opacity:1;scale:.9} 100% {opacity:0;scale:1.6} }
-#vs-dialog[data-striker] .is-striking .vs-impact { animation:vs-caption 1.18s both; }
-@keyframes vs-caption { 0%,24% {opacity:0;scale:.75} 46% {opacity:1;scale:1.08} 70%,100% {opacity:1;scale:1} }
-#vs-destination select { max-width:100%; } #vs-rematch { margin-top:8px; }
-html.motion-reduced #vs-dialog .vs-comic * { animation:none!important; }
-@media(prefers-reduced-motion:reduce){ #vs-dialog .vs-comic * { animation:none!important; } }
-/* Arcade round slate and ink borders. The HUD stays still during camera motion. */
-.vs-cut-card { display:none; }
-#vs-dialog:is([data-sequence=intro],[data-sequence=outro]) .vs-cut-card {
-  position:absolute; display:grid; gap:.15em; align-content:center; inset:35% -3% auto;
-  padding:.7em 8%; text-align:center; transform:skewY(-5deg); color:#fff4d1;
-  background:linear-gradient(110deg,transparent,#04130ff5 17%,#163e2efa 72%,transparent);
-  border-block:2px solid #b9ff7e; box-shadow:0 4px 0 #02170d; animation:vs-slate .24s ease-out both;
+
+#vs-dialog {
+  margin: auto; padding: 0; width: min(94vw, 470px); border: 1px solid #2f6b4c; border-radius: 26px;
+  color: #eafff3; background: #02110a; overflow: auto;
+  box-shadow: 0 30px 90px #00000099, 0 0 0 1px #0d3324, 0 0 60px #0c402433;
 }
-.vs-cut-title { font:italic 1000 clamp(34px,10vw,60px)/1.05 system-ui; text-transform:uppercase; text-shadow:3px 3px #ad394b; }
-.vs-cut-label { color:#a5ffc8; font-weight:800; letter-spacing:.16em; }
-@keyframes vs-slate { from {opacity:0;translate:-8% 0} to {opacity:1;translate:0} }
-#vs-dialog[data-sequence=strike] .vs-comic::before { content:''; position:absolute; inset:7% -5%; background:repeating-conic-gradient(from 8deg at 50% 58%,transparent 0deg 7deg,#afffcb80 7.15deg 7.45deg,transparent 7.65deg 13deg); mask-image:radial-gradient(ellipse,transparent 32%,black 85%); }
-html.motion-reduced #vs-dialog .vs-comic { animation:none!important; }
-@media(prefers-reduced-motion:reduce){ #vs-dialog .vs-comic { animation:none!important; } }
-#vs-commit { grid-column:1/-1; background:#86ffaf; color:#071f15; }
-#vs-commit:disabled { background:#163327; color:#c0d5c8; }
-#vs-ready:not([hidden]) { display:block; margin:6px 0; color:#aeedcb; }
-#vs-controls button[data-vs^="hit_"][aria-pressed=true] { background:#ffd275; color:#211507; }
-/* Contact typography and hand-drawn blade trajectory share the same impact beat. */
-.vs-blade-art,.vs-contact-ring { display:none; pointer-events:none; }
-#vs-dialog[data-striker] .vs-blade-art { position:absolute; display:block; left:7%; width:86%; top:45%; overflow:visible; color:#ffcb63; }
-#vs-dialog[data-striker=right] .vs-blade-art { transform:scaleX(-1); }
-#vs-dialog[data-direction=left] .vs-sweep { transform:scaleY(-1); transform-origin:center; }
-#vs-dialog[data-outcome=miss] .vs-blade-art { color:#68f4ed; }
-.vs-blade-wake { fill:currentColor; opacity:.65; }
-.vs-blade-edge,.vs-blade-thread { fill:none; stroke:#fff7d1; stroke-width:3; stroke-linecap:round; stroke-dasharray:1; }
-.vs-blade-thread { stroke:currentColor; stroke-width:1.2; }
-.is-striking .vs-blade-art { animation:vs-stroke-window 1.32s both; }
-.is-striking .vs-blade-edge,.is-striking .vs-blade-thread { animation:vs-draw-edge 1.32s both; }
-@keyframes vs-stroke-window { 0%,19%,80%,100% {opacity:0} 32%,45% {opacity:1} }
-@keyframes vs-draw-edge { 0%,18% {stroke-dashoffset:1} 33%,48% {stroke-dashoffset:0} 76%,100% {stroke-dashoffset:-1} }
-#vs-dialog[data-striker][data-outcome=hit] .is-striking .vs-contact-ring { display:block; position:absolute; top:55%; left:60%; width:16%; aspect-ratio:1; border-radius:50%; border:3px solid #fff6b0; box-shadow:0 0 0 2px #ed9c35; animation:vs-pressure 1.32s both; }
-#vs-dialog[data-striker=right][data-outcome=hit] .is-striking .vs-contact-ring { left:23%; }
-@keyframes vs-pressure { 0%,30% {opacity:0;scale:.15} 34% {opacity:1;scale:.45} 52% {opacity:.75;scale:1.2} 70%,100% {opacity:0;scale:1.55} }
-#vs-read:not([hidden]) { display:flex; justify-content:center; align-items:center; gap:6px; flex-wrap:wrap; margin:6px 0 0; font-size:12px; }
-#vs-read span { border:1px solid #697b72; border-radius:6px; padding:3px 7px; color:#fff; background:#071d18; }
-#vs-read b { font-size:16px; color:#ffd47e; } #vs-read span+span b { color:#99f6ec; }
-#vs-read-result { color:#ffdc84; } #vs-dialog[data-outcome=miss] #vs-read-result { color:#9ef9ef; }
-#vs-status { overflow-wrap:anywhere; }
-#vs-recap { margin-top:5px; font-size:12px; text-align:left; }
-#vs-recap summary { cursor:pointer; color:#b3ebca; padding:5px; }
-#vs-recap ol { padding-left:20px; margin:5px 0; overflow-wrap:anywhere; }
-html.motion-reduced #vs-dialog .vs-contact-ring,html.motion-reduced #vs-dialog .vs-blade-art { display:none; }
-@media(prefers-reduced-motion:reduce){#vs-dialog .vs-contact-ring,#vs-dialog .vs-blade-art { display:none!important; }}
-/* Independent vector actors. Pivots use each joint's local SVG origin. */
-.vs-fighter { position:absolute; width:47%; top:60%; translate:0 -70%; --rim:#99ffaf; --silk:#227b52; filter:drop-shadow(0 0 3px #56ff8d80); }
-.vs-fighter.left { left:1%; } .vs-fighter.right { right:1%; transform:scaleX(-1); --rim:#8afce4; --silk:#247374; }
-.vs-fighter::before { content:''; position:absolute; left:15%; bottom:7%; width:54%; height:7%; border-radius:50%; background:radial-gradient(ellipse,#001210dc,transparent 72%); }
-.vs-puppet { position:relative; display:block; width:100%; overflow:visible; }
-.vs-body { transform-origin:76px 164px; }
-.vs-spine,.vs-shoulder,.vs-elbow,.vs-lead-leg,.vs-rear-leg,.vs-shin { transform-origin:0 0; }
-.vs-sash { transform-origin:-13px -4px; }
-.vs-fighter:not([data-pose]) .vs-spine { animation:vs-guard 2.6s ease-in-out infinite alternate; }
-.vs-fighter.right:not([data-pose]) .vs-spine { animation-delay:-1.3s; }
-@keyframes vs-guard { to { transform:translateY(2px) rotate(-3deg); } }
-.vs-fighter[data-pose=sweep] .vs-body { animation:vs-step 1.32s both; }
-.vs-fighter[data-pose=sweep] .vs-spine { animation:vs-windup 1.32s both; }
-.vs-fighter[data-pose=sweep] .vs-shoulder { animation:vs-cut-arm 1.32s both; }
-.vs-fighter[data-pose=sweep] .vs-elbow { animation:vs-release 1.32s both; }
-.vs-fighter[data-pose=sweep] .vs-rear-leg { animation:vs-drive 1.32s both; }
-.vs-fighter:is([data-pose=kick],[data-pose=sweep]) .vs-sash { animation:vs-cloth 1.32s both; }
-@keyframes vs-step { 17% {transform:translate(-5px,3px)} 34%,43% {transform:translate(39px,-2px)} 69% {transform:translate(18px,2px)} }
-@keyframes vs-windup { 20% {transform:rotate(-18deg)} 34%,43% {transform:rotate(18deg)} }
-@keyframes vs-cut-arm { 21% {transform:rotate(-100deg)} 35%,45% {transform:rotate(-30deg)} 65% {transform:rotate(9deg)} }
-@keyframes vs-release { 21% {transform:rotate(-55deg)} 35%,44% {transform:rotate(18deg)} }
-@keyframes vs-drive { 18% {transform:rotate(-8deg)} 40% {transform:rotate(22deg)} }
-@keyframes vs-cloth { 27% {transform:rotate(26deg)} 46% {transform:rotate(42deg)} 76% {transform:rotate(-12deg)} }
-.vs-fighter[data-pose=kick] .vs-body { animation:vs-kick-step 1.32s both; }
-.vs-fighter[data-pose=kick] .vs-spine { animation:vs-counterbalance 1.32s both; }
-.vs-fighter[data-pose=kick] .vs-lead-leg { animation:vs-chamber 1.32s both; }
-.vs-fighter[data-pose=kick] .vs-shin { animation:vs-extend 1.32s both; }
-@keyframes vs-kick-step { 18% {transform:translate(-3px,3px)} 34%,42% {transform:translate(34px,-6px)} }
-@keyframes vs-counterbalance { 21% {transform:rotate(-9deg)} 34%,46% {transform:rotate(-21deg)} }
-@keyframes vs-chamber { 22% {transform:rotate(-52deg)} 34%,42% {transform:rotate(-57deg)} 57% {transform:rotate(-45deg)} }
-@keyframes vs-extend { 20% {transform:rotate(65deg)} 34%,42% {transform:rotate(-48deg)} 57% {transform:rotate(54deg)} }
-.vs-fighter[data-pose=recoil] .vs-body { animation:vs-stagger 1.32s both; }
-.vs-fighter[data-pose=slip] .vs-body { animation:vs-low-slip 1.32s both; }
-@keyframes vs-stagger { 0%,32% {transform:none} 38%,45% {transform:translate(-10px,2px) rotate(-9deg)} 65% {transform:translate(-5px,3px) rotate(-4deg)} }
-@keyframes vs-low-slip { 18% {transform:translate(-2px,2px)} 35%,49% {transform:translate(-18px,8px) scaleY(.84) rotate(-6deg)} }
-/* Keep the courtyard, UI and ground plane locked while the actors move. */
-#vs-dialog:has(.vs-fighter[data-pose=kick]) .vs-blade-art { visibility:hidden; }
+#vs-dialog::backdrop {
+  background: radial-gradient(circle at 50% 32%, #01281c80, #00150ff2);
+  backdrop-filter: blur(3px) saturate(210%);
+}
+#vs-dialog[open] { animation: vs-dialog-in .42s cubic-bezier(.2, 1.3, .35, 1) both; }
+@keyframes vs-dialog-in { from { transform: translateY(26px) scale(.92); opacity: 0; } to { transform: none; opacity: 1; } }
+html.motion-reduced #vs-dialog[open] { animation: none; }
+@media (prefers-reduced-motion: reduce) { #vs-dialog[open] { animation: none; } }
+
+/* -- Stage: a short cinematic arena framed above the controls ------------- */
+
+.vs-stage {
+  position: relative; isolation: isolate; overflow: hidden;
+  display: flex; flex-direction: column;
+  height: min(46dvh, 400px); min-height: 262px;
+  background: url('assets/duel-court.webp') center / cover; /* fallback when the arena renders slowly */
+  box-shadow: inset 0 0 70px rgba(0, 0, 0, .55), inset 0 -30px 50px rgba(0, 0, 0, .4);
+  border-bottom: 1px solid #1c4a33;
+}
+
+.vs-scene { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.vs-bg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+  animation: vs-drift 24s ease-in-out infinite alternate;
+}
+@keyframes vs-drift { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.075) translate(-0.7%, 1%); } }
+html.motion-reduced .vs-bg { animation: none; }
+@media (prefers-reduced-motion: reduce) { .vs-bg { animation: none; } }
+.vs-glow {
+  position: absolute; left: 50%; top: -14%; width: 78%; aspect-ratio: 1; translate: -50% 0;
+  background: radial-gradient(circle, #c9ff7a90, #45f88f33 40%, transparent 68%);
+  filter: blur(14px); animation: vs-glow 6s ease-in-out infinite;
+}
+@keyframes vs-glow { 0%, 100% { opacity: .35; } 50% { opacity: .85; } }
+html.motion-reduced .vs-glow { animation: none; }
+@media (prefers-reduced-motion: reduce) { .vs-glow { animation: none; } }
+.vs-mist {
+  position: absolute; left: -28%; right: -28%; bottom: -8%; height: 40%;
+  background: linear-gradient(180deg, transparent, rgba(130, 255, 196, .09) 60%, rgba(5, 28, 19, .9));
+  filter: blur(10px); animation: vs-mist 12s ease-in-out infinite alternate;
+}
+@keyframes vs-mist { from { transform: translateX(-7%); } to { transform: translateX(7%); } }
+html.motion-reduced .vs-mist { animation: none; }
+@media (prefers-reduced-motion: reduce) { .vs-mist { animation: none; } }
+.vs-fog {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 34%;
+  background:
+    radial-gradient(ellipse 85% 95% at 50% 125%, rgba(53, 245, 133, .25), transparent 58%),
+    linear-gradient(0deg, rgba(2, 20, 13, .62), transparent 55%);
+}
+
+/* Sakura petals drifting over the combat plane */
+.vs-petals { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.vs-petals i {
+  position: absolute; top: -8%; left: var(--x, 50%); width: var(--w); height: calc(var(--w) * .78);
+  opacity: var(--o);
+  background: linear-gradient(150deg, #ffe3f0, #ff8fc0 70%);
+  border-radius: 62% 38% 58% 42%;
+  filter: blur(.5px);
+  animation: vs-petal-fall var(--d) linear infinite;
+  animation-delay: var(--dl);
+}
+@keyframes vs-petal-fall {
+  0%   { transform: translate(0, -8px) rotate(0deg); }
+  22%  { transform: translate(36px, 130px) rotate(170deg); }
+  50%  { transform: translate(-24px, 290px) rotate(310deg); }
+  76%  { transform: translate(28px, 420px) rotate(430deg); }
+  100% { transform: translate(-8px, 540px) rotate(530deg); }
+}
+html.motion-reduced .vs-petals i { animation: none; }
+@media (prefers-reduced-motion: reduce) { .vs-petals i { animation: none; opacity: 0; } }
+
+/* -- Header + score cards -------------------------------------------------- */
+
+.vs-top {
+  position: relative; z-index: 4; display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 8px; padding: 10px 14px 0; pointer-events: none;
+}
+.vs-top > * { pointer-events: auto; }
+.vs-title-block small {
+  display: block; font-size: 10px; font-weight: 900; letter-spacing: .22em; color: #8fefae;
+  text-shadow: 0 1px 2px #000; opacity: .85;
+}
+.vs-title-block h2 {
+  margin: 1px 0 0; font-size: 23px; line-height: 1.1; letter-spacing: .01em; color: #f4fff7;
+  text-shadow: 0 2px 10px #000, 0 0 22px rgba(53, 245, 133, .25);
+}
+#vs-close {
+  flex: none; width: 34px; height: 34px; border-radius: 50%; padding: 0; line-height: 1;
+  border: 1px solid #64c78c; background: rgba(3, 26, 17, .72); color: #b8ffcf; font-size: 19px; font-weight: 700;
+  cursor: pointer; backdrop-filter: blur(4px); text-shadow: 0 1px 2px #000;
+  transition: transform .15s ease, color .15s ease, box-shadow .15s ease;
+}
+#vs-close:hover { transform: rotate(90deg) scale(1.06); color: #fff; box-shadow: 0 0 16px #35f58566; }
+
+#vs-score {
+  position: relative; z-index: 4; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  gap: 8px; padding: 4px 14px 2px;
+}
+#vs-score b {
+  position: relative; min-width: 0; border: 1px solid #59d86f55; border-radius: 12px;
+  background: linear-gradient(180deg, #04271bd1, #03190f2a);
+  backdrop-filter: blur(6px);
+  text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;
+  font-size: 14px; font-weight: 800; color: #eafff3; padding: 8px 10px 13px;
+  text-shadow: 0 1px 2px #000;
+}
+#vs-score b::after {
+  content: ''; position: absolute; left: 8px; right: 8px; bottom: 7px; height: 4px; border-radius: 99px;
+  background: #1c3829; overflow: hidden; box-shadow: inset 0 1px 2px #000a;
+}
+#vs-score b::before {
+  content: ''; position: absolute; left: 9px; bottom: 8px; height: 2.5px; width: var(--life, 100%); border-radius: 99px;
+  background: linear-gradient(90deg, #35ff85, #b9ff4f); box-shadow: 0 0 8px #35ff85;
+  transition: width .55s cubic-bezier(.3, .9, .3, 1);
+}
+#vs-score [data-health='1'] { --life: 50%; }
+#vs-score [data-health='0'] { --life: 3%; }
+#vs-score [data-health='2'] { --life: 100%; }
+#vs-score b.is-me { border-color: #ffd65c88; box-shadow: 0 0 18px #ffd65c2b; }
+#vs-score i.vs-emblem {
+  font: italic 900 clamp(22px, 6vw, 30px)/1 "Unbounded", system-ui, sans-serif; color: #ffd65c;
+  -webkit-text-stroke: 1px #241300; letter-spacing: .02em;
+  text-shadow: 0 2px 0 #3a1300, 0 0 18px #ff9d2e66, 0 0 34px #ffd65c33;
+  filter: drop-shadow(0 3px 6px #000);
+  animation: vs-emblem-pulse 2.2s ease-in-out infinite;
+}
+@keyframes vs-emblem-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+html.motion-reduced #vs-score i.vs-emblem { animation: none; }
+@media (prefers-reduced-motion: reduce) { #vs-score i.vs-emblem { animation: none; } }
+#vs-dialog[data-sequence=intro] .vs-emblem { animation: vs-emblem-slam .9s cubic-bezier(.2, 1.4, .4, 1) both; }
+@keyframes vs-emblem-slam { 0% { transform: scale(2.4) rotate(-14deg); opacity: 0; } 62% { transform: scale(.94) rotate(2deg); opacity: 1; } 100% { transform: scale(1); } }
+
+/* -- Combat plane: fighters + blade + impact + cut card -------------------- */
+
+.vs-comic { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+.vs-comic.is-striking { animation: vs-combat-shake 1.32s both; }
+@keyframes vs-combat-shake {
+  0%, 16%, 100% { transform: translate(0, 0); }
+  34% { transform: translate(-2px, 1px); }
+  44% { transform: translate(2.5px, -1.5px); }
+  54% { transform: translate(-1.4px, .6px); }
+  64% { transform: translate(1px, .8px); }
+}
+html.motion-reduced .vs-comic.is-striking { animation: none; }
+@media (prefers-reduced-motion: reduce) { .vs-comic.is-striking { animation: none; } }
+
+.vs-fighter {
+  position: absolute; bottom: 50px; width: 50%; z-index: 1; pointer-events: none;
+  transform-origin: 50% 100%; will-change: transform, opacity;
+}
+.vs-fighter.left { left: 1%; --lunge: 1; }
+.vs-fighter.right { right: 1%; --lunge: -1; }
+.vs-ninja {
+  position: relative; z-index: 1; display: block; width: 100%; height: auto;
+  mix-blend-mode: screen; user-select: none;
+  filter: drop-shadow(0 14px 16px rgba(0, 18, 8, .65)) drop-shadow(0 0 26px rgba(53, 255, 133, .34));
+}
+.vs-fighter.left .vs-ninja { transform: scaleX(-1); }
+.vs-fighter::before { /* energy aura */
+  content: ''; position: absolute; inset: -18% -10% 0; z-index: 0;
+  background: radial-gradient(ellipse at 50% 72%, #35ff8530, transparent 62%);
+  filter: blur(6px); animation: vs-aura 2.7s ease-in-out infinite alternate;
+}
+.vs-fighter.right::before { animation-delay: -1.35s; }
+@keyframes vs-aura { from { opacity: .55; } to { opacity: 1; } }
+.vs-fighter::after { /* ground shadow */
+  content: ''; position: absolute; left: 12%; right: 12%; bottom: -4%; height: 11%; z-index: 0;
+  background: radial-gradient(ellipse, rgba(0, 16, 8, .7), transparent 70%);
+  filter: blur(2px);
+}
+.vs-fighter:not([data-pose]) .vs-ninja { animation: vs-breath 3.1s ease-in-out infinite alternate; }
+.vs-fighter.right:not([data-pose]) .vs-ninja { animation-delay: -1.55s; }
+@keyframes vs-breath { from { translate: 0 0; } to { translate: 0 -4px; } }
+html.motion-reduced .vs-fighter .vs-ninja { animation: none; }
+@media (prefers-reduced-motion: reduce) { .vs-fighter .vs-ninja { animation: none; } }
+
+/* Pose choreography. Strike peak ~46%. */
+.vs-fighter[data-pose=sweep] { animation: vs-lunge-sweep 1.32s cubic-bezier(.6, .02, .2, .98) both; }
+.vs-fighter[data-pose=kick] { animation: vs-lunge-kick 1.32s cubic-bezier(.6, .02, .2, .98) both; }
+@keyframes vs-lunge-sweep {
+  0%, 16% { transform: translate(0, 0) rotate(0); }
+  36%, 44% { transform: translate(calc(var(--lunge) * 40px), -4px) rotate(calc(var(--lunge) * -5deg)); }
+  72% { transform: translate(calc(var(--lunge) * 15px), 2px) rotate(calc(var(--lunge) * -1deg)); }
+  100% { transform: translate(0, 0) rotate(0); }
+}
+@keyframes vs-lunge-kick {
+  0%, 16% { transform: translate(0, 0) scale(1); }
+  36%, 44% { transform: translate(calc(var(--lunge) * 54px), -7px) rotate(calc(var(--lunge) * -3deg)) scale(1.07); }
+  74% { transform: translate(calc(var(--lunge) * 22px), 2px) scale(1); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+.vs-fighter[data-pose=sweep] .vs-ninja,
+.vs-fighter[data-pose=kick] .vs-ninja { animation: vs-sword-flash 1.32s both; }
+@keyframes vs-sword-flash {
+  0%, 18% { filter: drop-shadow(0 14px 16px rgba(0, 18, 8, .65)) drop-shadow(0 0 26px rgba(53, 255, 133, .34)); }
+  40% { filter: drop-shadow(0 14px 16px rgba(0, 18, 8, .55)) drop-shadow(0 0 52px rgba(110, 255, 170, .85)); }
+  74% { filter: drop-shadow(0 14px 16px rgba(0, 18, 8, .65)) drop-shadow(0 0 26px rgba(53, 255, 133, .34)); }
+}
+.vs-fighter[data-pose=recoil] { animation: vs-recoil 1.32s cubic-bezier(.4, .02, .2, .98) both; }
+@keyframes vs-recoil {
+  0%, 32% { transform: translate(0, 0) rotate(0); opacity: 1; }
+  45%, 52% { transform: translate(calc(var(--lunge) * -24px), 5px) rotate(calc(var(--lunge) * 7deg)); opacity: .78; }
+  100% { transform: translate(0, 0) rotate(0); opacity: 1; }
+}
+.vs-fighter[data-pose=slip] { animation: vs-slip 1.32s cubic-bezier(.4, .02, .2, .98) both; }
+@keyframes vs-slip {
+  0%, 26% { transform: translate(0, 0) scaleY(1); }
+  42%, 54% { transform: translate(calc(var(--lunge) * -14px), 12px) scaleY(.8) rotate(calc(var(--lunge) * -4deg)); }
+  100% { transform: translate(0, 0) scaleY(1); }
+}
+
+/* Intro: fighters swing in from the sides */
+#vs-dialog[data-sequence=intro] .vs-fighter.left { animation: vs-enter-l 1s cubic-bezier(.2, .8, .3, 1.1) both; }
+#vs-dialog[data-sequence=intro] .vs-fighter.right { animation: vs-enter-r 1s cubic-bezier(.2, .8, .3, 1.1) both; }
+@keyframes vs-enter-l { from { transform: translateX(-52px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes vs-enter-r { from { transform: translateX(52px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+html.motion-reduced #vs-dialog[data-sequence=intro] .vs-fighter { animation: none; }
+@media (prefers-reduced-motion: reduce) { #vs-dialog[data-sequence=intro] .vs-fighter { animation: none; } }
+
+/* Blade sweep, contact ring and sparks */
+.vs-blade-art, .vs-contact-ring { display: none; pointer-events: none; }
+#vs-dialog[data-striker] .vs-blade-art {
+  position: absolute; display: block; left: 5%; width: 88%; top: 33%; overflow: visible;
+  color: #68ffdc; filter: drop-shadow(0 0 10px #35ff85cc);
+}
+#vs-dialog[data-striker=right] .vs-blade-art { transform: scaleX(-1); }
+#vs-dialog[data-direction=left] .vs-sweep { transform: scaleY(-1); transform-origin: center; }
+#vs-dialog[data-outcome=miss] .vs-blade-art { color: #68f4ed; filter: drop-shadow(0 0 10px #3ed6c8cc); }
+.vs-blade-wake { fill: currentColor; opacity: .55; }
+.vs-blade-edge, .vs-blade-thread { fill: none; stroke: #eafff0; stroke-width: 3.2; stroke-linecap: round; stroke-dasharray: 1; filter: drop-shadow(0 0 6px currentColor); }
+.vs-blade-thread { stroke: currentColor; stroke-width: 1.4; }
+.is-striking .vs-blade-art { animation: vs-stroke-window 1.32s both; }
+.is-striking .vs-blade-edge, .is-striking .vs-blade-thread { animation: vs-draw-edge 1.32s both; }
+@keyframes vs-stroke-window { 0%, 16%, 82%, 100% { opacity: 0; } 32%, 48% { opacity: 1; } }
+@keyframes vs-draw-edge { 0%, 16% { stroke-dashoffset: 1; } 34%, 52% { stroke-dashoffset: 0; } 80%, 100% { stroke-dashoffset: -1; } }
+
+.vs-sparks { position: absolute; pointer-events: none; display: none; }
+#vs-dialog[data-striker][data-outcome=hit] .is-striking .vs-sparks {
+  display: block; left: 58%; top: 42%; width: 26%; aspect-ratio: 1;
+  background: repeating-conic-gradient(from 8deg, transparent 0 27deg, #ffe27a 28deg 31deg, transparent 32deg 44deg);
+  mask-image: radial-gradient(circle, transparent 20%, black 43%, transparent 70%);
+  animation: vs-contact 1.18s both;
+}
+#vs-dialog[data-striker=right] .is-striking .vs-sparks { left: 16%; }
+@keyframes vs-contact { 0%, 30% { opacity: 0; scale: .2; } 48% { opacity: 1; scale: .95; } 100% { opacity: 0; scale: 1.6; } }
+
+.vs-contact-ring {
+  position: absolute; top: 54%; left: 60%; width: 16%; aspect-ratio: 1; border-radius: 50%;
+  border: 3px solid #ffffb0; box-shadow: 0 0 0 2px #ed9c35, 0 0 26px #ffe27a99;
+}
+#vs-dialog[data-striker][data-outcome=hit] .is-striking .vs-contact-ring { display: block; animation: vs-pressure 1.32s both; }
+#vs-dialog[data-striker=right][data-outcome=hit] .is-striking .vs-contact-ring { left: 23%; }
+@keyframes vs-pressure { 0%, 30% { opacity: 0; scale: .15; } 34% { opacity: 1; scale: .45; } 52% { opacity: .75; scale: 1.2; } 70%, 100% { opacity: 0; scale: 1.55; } }
+
+html.motion-reduced #vs-dialog .vs-contact-ring, html.motion-reduced #vs-dialog .vs-blade-art, html.motion-reduced #vs-dialog .vs-sparks { display: none; }
+@media(prefers-reduced-motion: reduce){#vs-dialog .vs-contact-ring,#vs-dialog .vs-blade-art,#vs-dialog .vs-sparks { display: none!important; }}
+
+/* Impact caption */
+.vs-impact { display: none; position: absolute; top: 40%; left: 14%; }
+#vs-dialog[data-striker] .vs-impact {
+  display: block; padding: .55em .7em; font: italic 1000 clamp(26px, 10vw, 50px)/1 system-ui;
+  color: #190c00; text-shadow: 0 1px 0 #fff7e0aa; letter-spacing: -.02em;
+  background: linear-gradient(165deg, #ffe963, #ff8d2c);
+  clip-path: polygon(0 23%, 20% 25%, 17% 0, 39% 14%, 53% 0, 60% 18%, 90% 2%, 84% 24%, 100% 28%, 91% 48%, 100% 70%, 82% 72%, 80% 100%, 58% 84%, 34% 100%, 32% 80%, 0 91%, 9% 60%);
+  filter: drop-shadow(0 5px 0 #2d0d0055) drop-shadow(0 0 22px #ffb34066);
+  transform: rotate(-8deg);
+}
+#vs-dialog[data-striker=left] .vs-impact { left: auto; right: 9%; transform: rotate(8deg); }
+#vs-dialog[data-outcome=miss] .vs-impact { color: #062c2a; background: linear-gradient(165deg, #c9fff4, #4ef0dd); filter: drop-shadow(0 5px 0 #04201c55) drop-shadow(0 0 22px #3ed6c866); }
+#vs-dialog[data-striker] .is-striking .vs-impact { animation: vs-caption 1.18s both; }
+@keyframes vs-caption { 0%, 24% { opacity: 0; scale: .75; } 46% { opacity: 1; scale: 1.1; } 70%, 100% { opacity: 1; scale: 1; } }
+
+/* Strike burst backdrop */
+#vs-dialog[data-sequence=strike] .vs-comic::before {
+  content: ''; position: absolute; inset: 12% -5%; z-index: 0;
+  background: repeating-conic-gradient(from 8deg at 50% 58%, transparent 0deg 7deg, #8fffc24d 7.15deg 7.45deg, transparent 7.65deg 13deg);
+  mask-image: radial-gradient(ellipse, transparent 30%, black 85%);
+}
+
+/* Cut card: intro / outro cinematic banner */
+.vs-cut-card { display: none; position: absolute; left: 50%; top: 41%; translate: -50% -50%; z-index: 3; width: 86%;
+  text-align: center; padding: 14px 18px 15px; border-radius: 16px;
+  background: linear-gradient(180deg, rgba(2, 24, 15, .94), rgba(2, 20, 13, .72));
+  border: 1px solid #3fe78a55; box-shadow: 0 0 60px #35ff8526, inset 0 0 30px #35ff8518;
+}
+#vs-dialog:is([data-sequence=intro], [data-sequence=outro]) .vs-cut-card { display: block; animation: vs-cut-in .85s cubic-bezier(.2, .9, .3, 1.15) both; }
+.vs-cut-card .vs-cut-label {
+  display: block; color: #a5ffc8; font-size: 11px; font-weight: 900; letter-spacing: .3em; text-shadow: 0 1px 2px #000;
+}
+.vs-cut-card .vs-cut-title {
+  display: block; margin-top: 4px; font: italic 1000 clamp(34px, 11vw, 54px)/1.02 "Unbounded", system-ui, sans-serif;
+  color: #f2ffe9; letter-spacing: -.01em;
+  text-shadow: 3px 3px 0 #0c3d2a, 0 0 34px #35ff8577;
+}
+@keyframes vs-cut-in { from { transform: translateY(18px) scale(.88); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+html.motion-reduced #vs-dialog .vs-cut-card { animation: none; }
+@media (prefers-reduced-motion: reduce) { #vs-dialog .vs-cut-card { animation: none; } }
+
+/* Status pill */
+#vs-status {
+  position: absolute; left: 50%; bottom: 12px; translate: -50% 0; z-index: 5;
+  display: flex; align-items: center; justify-content: center; gap: 9px; max-width: 93%;
+  padding: 10px 18px; border-radius: 999px; line-height: 1.35;
+  background: rgba(2, 26, 17, .84); border: 1px solid #3f8f63;
+  box-shadow: 0 8px 26px #000a, inset 0 1px 0 #ffffff14;
+  color: #a5ffcb; font-size: clamp(11px, 3.2vw, 13.5px); font-weight: 800; letter-spacing: .03em; text-align: center;
+  backdrop-filter: blur(8px);
+}
+#vs-status::before {
+  content: ''; flex: none; width: 8px; height: 8px; border-radius: 50%;
+  background: #54ffb0; box-shadow: 0 0 8px #54ffb0;
+  animation: vs-dot 1.7s ease-out infinite;
+}
+@keyframes vs-dot { 0% { box-shadow: 0 0 0 0 #54ffb078; } 70% { box-shadow: 0 0 0 9px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+html.motion-reduced #vs-status::before { animation: none; box-shadow: 0 0 6px #54ffb0; }
+@media (prefers-reduced-motion: reduce) { #vs-status::before { animation: none; box-shadow: 0 0 6px #54ffb0; } }
+
+/* -- Console: controls under the stage ----------------------------------- */
+
+.vs-console {
+  position: relative; z-index: 4; padding: 11px 15px 15px;
+  background: linear-gradient(180deg, #04180fd6, #021208f4);
+  text-align: center;
+}
+.vs-console button, .vs-console select, .vs-console input {
+  font: inherit; border-radius: 13px;
+}
+#vs-read:not([hidden]) {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px;
+  font-size: 13px; color: #b9e6cc; margin-bottom: 6px;
+}
+#vs-read span { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 9px; border: 1px solid #2e6b45; background: #041c0f; }
+#vs-read span b, #vs-read strong { color: #ffd65c; font-weight: 900; }
+#vs-read strong { color: #a5ffcb; letter-spacing: .04em; text-shadow: 0 1px 2px #000; }
+#vs-recap { margin-bottom: 8px; text-align: left; font-size: 12.5px; color: #a9d4b9; }
+#vs-recap summary { cursor: pointer; font-weight: 700; letter-spacing: .05em; color: #8fefae; list-style: none; text-align: center; }
+#vs-recap summary::-webkit-details-marker { display: none; }
+#vs-recap summary::before { content: '▸ '; }
+#vs-recap[open] summary::before { content: '▾ '; }
+#vs-recap ol { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 4px; }
+#vs-recap li { line-height: 1.45; }
+#vs-lobby { display: grid; gap: 9px; text-align: center; }
+#vs-lobby label { display: block; font-size: 12.5px; font-weight: 700; letter-spacing: .03em; color: #b9e6cc; }
+#vs-lobby input[type=number] {
+  width: 96px; padding: 8px 10px; margin-left: 6px; color: #eafff3; font-weight: 900; font-size: 15px;
+  background: #041c0f; border: 1px solid #2e6b45; text-align: center; outline: none;
+}
+#vs-lobby input[type=number]:focus { border-color: #54ffb0; box-shadow: 0 0 0 2px #54ffb033; }
+#vs-lobby small { display: block; color: #7fa88c; font-size: 11px; }
+#vs-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; text-align: center; }
+#vs-controls[hidden], #vs-lobby[hidden] { display: none; }
+#vs-controls button {
+  padding: 11px 6px; border: 1px solid #3e8f5e; background: linear-gradient(180deg, #08331e, #041c0f);
+  color: #dfffeed2; font-weight: 800; letter-spacing: .02em; font-size: 13px; cursor: pointer;
+  transition: transform .12s ease, box-shadow .15s ease, border-color .15s ease;
+}
+#vs-controls button:hover { border-color: #6ff2a4; box-shadow: 0 0 12px #35ff8538; }
+#vs-controls button:active { transform: translateY(1px) scale(.97); }
+#vs-controls button[aria-pressed=true] { background: linear-gradient(180deg, #ffd65c, #ff9d2e); border-color: #ffd65c; color: #2a1500; box-shadow: 0 0 14px #ffd65c55; text-shadow: none; }
+#vs-commit { grid-column: 1 / -1; padding: 13px; border-radius: 13px; font-weight: 900; letter-spacing: .08em;
+  border: 1px solid #54ffb0; background: linear-gradient(180deg, #2fdc7a, #1ec661); color: #021a0d;
+  text-transform: uppercase; font-size: 14.5px; cursor: pointer; transition: transform .12s ease, box-shadow .2s ease, filter .2s ease;
+  box-shadow: 0 4px 0 #0c5c28, 0 0 22px #35f58544;
+}
+#vs-commit:not(:disabled):hover { filter: brightness(1.08); box-shadow: 0 4px 0 #0c5c28, 0 0 30px #35f58566; }
+#vs-commit:not(:disabled):active { transform: translateY(2px); box-shadow: 0 2px 0 #0c5c28; }
+#vs-commit:disabled { filter: grayscale(.6) brightness(.65); box-shadow: none; cursor: not-allowed; }
+#vs-send {
+  width: 100%; padding: 13px; border-radius: 13px; font-weight: 900; letter-spacing: .06em; font-size: 14.5px;
+  border: 1px solid #54ffb0; background: linear-gradient(180deg, #2fdc7a, #1ec661); color: #021a0d; cursor: pointer;
+  box-shadow: 0 4px 0 #0c5c28, 0 0 22px #35f58544; transition: transform .12s ease, box-shadow .2s ease;
+}
+#vs-send:hover { filter: brightness(1.07); box-shadow: 0 4px 0 #0c5c28, 0 0 30px #35f58566; }
+#vs-send:active { transform: translateY(2px); box-shadow: 0 2px 0 #0c5c28; }
+#vs-destinations { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 2px; }
+#vs-destinations[hidden] { display: none; }
+#vs-destinations button, #vs-by-name button { padding: 10px; border: 1px solid #3e8f5e; border-radius: 12px; background: #062a19; color: #dfffeed2; font-weight: 700; cursor: pointer; transition: border-color .12s ease, box-shadow .12s ease; }
+#vs-destinations button:hover, #vs-by-name button:hover { border-color: #6ff2a4; box-shadow: 0 0 10px #35ff8530; }
+#vs-by-name { grid-column: 1 / -1; display: flex; gap: 6px; margin-top: 2px; }
+#vs-by-name[hidden] { display: none; }
+#vs-by-name input { flex: 1; min-width: 0; padding: 10px 12px; background: #041c0f; border: 1px solid #2e6b45; border-radius: 12px; color: #eafff3; font-weight: 700; outline: none; }
+#vs-by-name input:focus { border-color: #54ffb0; box-shadow: 0 0 0 2px #54ffb033; }
+#vs-accept, #vs-rematch { width: 100%; padding: 14px; border-radius: 13px; font-weight: 900; letter-spacing: .07em; font-size: 15px; cursor: pointer; color: #021a0d;
+  border: 1px solid #54ffb0; background: linear-gradient(180deg, #2fdc7a, #1ec661); box-shadow: 0 4px 0 #0c5c28, 0 0 24px #35f58544; transition: transform .12s ease, box-shadow .2s ease; }
+#vs-rematch { border-color: #ffd65c; background: linear-gradient(180deg, #ffd65c, #ff9d2e); box-shadow: 0 4px 0 #7a3b07, 0 0 24px #ffd65c44; color: #2a1500; }
+#vs-accept:hover, #vs-rematch:hover { filter: brightness(1.06); }
+#vs-accept:active, #vs-rematch:active { transform: translateY(2px); }
+#vs-ready:not([hidden]) { display: block; margin-top: 6px; font-size: 12px; color: #8fefae; letter-spacing: .04em; }
+#vs-accept[hidden], #vs-rematch[hidden], #vs-ready[hidden] { display: none; }
+
+/* Reduced-motion: the whole arena settles to a still frame */
+html.motion-reduced .vs-stage * { animation: none !important; transition-duration: .01ms !important; }
+html.motion-reduced .vs-petals { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .vs-stage * { animation: none !important; transition-duration: .01ms !important; }
+  .vs-petals { display: none; }
+}
