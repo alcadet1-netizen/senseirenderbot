@@ -6329,3 +6329,56 @@ html.motion-reduced .vs-petals { display: none; }
 #vs-commit, #vs-send { letter-spacing:.06em; font-weight:900; border-width:1.5px; }
 #vs-score i.vs-emblem { filter: drop-shadow(0 3px 6px #000) drop-shadow(0 0 12px #ffd65c55); }
 
+
+/* === PROFESSIONAL STUDIO TIER 3: cinematic 3D + volumetric + sprite morph === */
+.vs-trail-canvas {
+  position: absolute; inset: 0; z-index: 5; pointer-events: none; width: 100%; height: 100%;
+  mix-blend-mode: screen; opacity: .95;
+}
+.vs-depth-fog { position:absolute; inset:0; z-index:2; pointer-events:none; overflow:hidden; }
+.vs-depth-fog i {
+  position:absolute; left: -10%; right:-10%; height: 22%; bottom: 8%;
+  background: radial-gradient(ellipse at 50% 100%, rgba(80,255,160,.18), transparent 70%);
+  filter: blur(14px); animation: vs-fog-drift 14s ease-in-out infinite alternate;
+}
+.vs-depth-fog i:nth-child(2){ bottom: 12%; height:18%; opacity:.7; animation-delay:-5s; animation-duration:18s; }
+.vs-depth-fog i:nth-child(3){ bottom: 0%; height:26%; opacity:.5; animation-delay:-9s; }
+@keyframes vs-fog-drift { 0%{ transform: translateX(-4%) scaleX(1)} 100%{ transform: translateX(4%) scaleX(1.06)} }
+
+/* fighter sprite cross-fade morph */
+.vs-fighter .vs-ninja { will-change: transform, filter, opacity; transition: filter .18s ease, opacity .14s ease; backface-visibility: hidden; transform-style: preserve-3d; }
+.vs-fighter[data-pose="dash"] .vs-ninja { filter: brightness(1.18) contrast(1.12) drop-shadow(0 0 18px rgba(120,255,180,.5)) blur(0px); }
+.vs-fighter[data-pose="recoil"] .vs-ninja { filter: brightness(.98) contrast(1.08) hue-rotate(-2deg) drop-shadow(0 0 20px rgba(255,80,60,.22)); }
+.vs-fighter.is-morphing .vs-ninja { animation: vs-morph-flash 160ms ease-out; }
+@keyframes vs-morph-flash { 0%{ filter: brightness(1.35) blur(1px) } 100%{ filter: brightness(1) blur(0) } }
+
+/* depth: pagoda layers parallax on camera move */
+.vs-stage.is-shake .vs-bg { animation: none !important; }
+.vs-stage.is-shake .vs-parallax-clouds { transform: translateX(var(--shake-x,0)); }
+.vs-stage.is-zoom { transform: scale(1.04); transform-origin: 50% 44%; transition: transform .28s cubic-bezier(.16,.84,.28,1); }
+
+/* impact chromatic shockwave */
+.vs-shockwave {
+  position:absolute; left:50%; top:52%; width: 12%; aspect-ratio:1; border-radius:50%; pointer-events:none; z-index:6;
+  border: 2px solid rgba(122,255,170,.95); box-shadow: 0 0 16px #7affaa, inset 0 0 12px #7affaa55;
+  opacity:0; transform: translate(-50%,-50%) scale(.15);
+}
+.vs-stage.is-impact .vs-shockwave { animation: vs-shock 520ms cubic-bezier(.16,1,.28,1) both .08s; }
+@keyframes vs-shock { 0%{ opacity:0; transform: translate(-50%,-50%) scale(.15); border-width:4px } 18%{ opacity:1; transform: translate(-50%,-50%) scale(.62); border-width:3px } 100%{ opacity:0; transform: translate(-50%,-50%) scale(1.55); border-width:1px } }
+
+/* lens dirt + anamorphic streak on slash */
+.vs-stage.is-slash::after {
+  content:''; position:absolute; inset:0; z-index:7; pointer-events:none; opacity:0;
+  background: linear-gradient(90deg, transparent 46%, rgba(122,255,170,.18) 49%, rgba(255,255,255,.28) 50%, rgba(122,255,170,.18) 51%, transparent 54%);
+  filter: blur(.6px); mix-blend-mode: screen;
+}
+.vs-stage.is-slash::after { animation: vs-anamorphic 380ms ease-out both; }
+@keyframes vs-anamorphic { 0%{ opacity:0; transform: scaleX(.3) } 22%{ opacity:.85 } 100%{ opacity:0; transform: scaleX(1) } }
+
+/* score health glitch on hit */
+#vs-score b.is-hit { animation: vs-health-hit 420ms ease-out; }
+@keyframes vs-health-hit { 0%{ transform: translateX(0) } 12%{ transform: translateX(-1px) } 24%{ transform: translateX(1.5px) } 36%{ transform: translateX(-1px) } 100%{ transform: translateX(0) } }
+
+/* petals react to shockwave */
+.vs-stage.is-impact .vs-petals i { animation: vs-petal-impact 520ms ease-out both; }
+@keyframes vs-petal-impact { 0%{ transform: translate(0,0) rotate(0deg) scale(1) } 30%{ transform: translate(calc(var(--burst-x, 0) * 22px), calc(var(--burst-y, 0) * -18px)) rotate(180deg) scale(1.15) } 100%{ transform: translate(calc(var(--burst-x, 0) * 8px), 40px) rotate(360deg) scale(1) } }

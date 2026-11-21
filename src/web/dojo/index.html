@@ -967,10 +967,16 @@
       </div>
       <!-- Studio puppets: two distinct sculpts, cloth & blade glow baked, motion adds the life -->
       <template id="vs-puppet">
-        <img class="vs-ninja" src="/miniapp/dojo/assets/ninja-sensei-1.png" alt="" aria-hidden="true" draggable="false" onerror="this.src='/miniapp/dojo/assets/ninja-fighter.jpg'" />
+        <img class="vs-ninja" src="/miniapp/dojo/assets/ninja-sensei-1.png" data-base="sensei1" alt="" aria-hidden="true" draggable="false" onerror="this.src='/miniapp/dojo/assets/ninja-fighter.jpg'" />
       </template>
       <template id="vs-puppet-2">
-        <img class="vs-ninja" src="/miniapp/dojo/assets/ninja-sensei-2.png" alt="" aria-hidden="true" draggable="false" onerror="this.src='/miniapp/dojo/assets/ninja-sensei-1.png'" />
+        <img class="vs-ninja" src="/miniapp/dojo/assets/ninja-sensei-2.png" data-base="sensei2" alt="" aria-hidden="true" draggable="false" onerror="this.src='/miniapp/dojo/assets/ninja-sensei-1.png'" />
+      </template>
+      <template id="vs-puppet-dash">
+        <img class="vs-ninja" src="/miniapp/dojo/assets/ninja-dash.png" alt="" aria-hidden="true" draggable="false" />
+      </template>
+      <template id="vs-puppet-recoil">
+        <img class="vs-ninja" src="/miniapp/dojo/assets/ninja-recoil.png" alt="" aria-hidden="true" draggable="false" />
       </template>
       <dialog id="vs-dialog" aria-labelledby="vs-title">
         <div class="vs-stage">
@@ -1009,6 +1015,8 @@
           <div class="vs-vignette" aria-hidden="true"></div>
           <div class="vs-speedlines" aria-hidden="true"></div>
           <div class="vs-hitflash" aria-hidden="true"></div>
+          <canvas class="vs-trail-canvas" width="640" height="360" aria-hidden="true"></canvas>
+          <div class="vs-depth-fog" aria-hidden="true"><i></i><i></i><i></i></div>
           <div class="vs-comic" aria-hidden="true">
             <div class="vs-fighter left" data-stance="guard"><span class="vs-trail" aria-hidden="true"></span><span class="vs-eye"></span></div>
             <div class="vs-fighter right" data-stance="guard"><span class="vs-trail" aria-hidden="true"></span><span class="vs-eye"></span></div>

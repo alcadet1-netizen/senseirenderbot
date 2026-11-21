@@ -943,12 +943,77 @@
   $("session-ended").addEventListener("cancel", event => event.preventDefault());
   // The server owns stake, participants, score and both round actions.
   const vsDialog = $("vs-dialog");
-  // Studio: left = sensei-1 (leaping slash), right = sensei-2 (frontal guard) — same soul, two keyframes
+  // Studio sprites: 4 key sculpt variations, blended via src swap + cross-fade
+  const SPRITES = {
+    sensei1: "/miniapp/dojo/assets/ninja-sensei-1.png",
+    sensei2: "/miniapp/dojo/assets/ninja-sensei-2.png",
+    dash: "/miniapp/dojo/assets/ninja-dash.png",
+    recoil: "/miniapp/dojo/assets/ninja-recoil.png",
+  };
+  // preload
+  Object.values(SPRITES).forEach(u=>{ const im=new Image(); im.src=u; });
   for (const fighter of vsDialog.querySelectorAll(".vs-fighter")) {
     const tpl = fighter.classList.contains("left") ? "vs-puppet" : "vs-puppet-2";
     const src = document.getElementById(tpl);
     fighter.append((src || $("vs-puppet")).content.cloneNode(true));
+    fighter.dataset.base = fighter.classList.contains("left") ? "sensei1" : "sensei2";
   }
+  function setFighterSprite(fighter, key) {
+    const img = fighter.querySelector(".vs-ninja");
+    if (!img) return;
+    const url = SPRITES[key] || SPRITES[fighter.dataset.base];
+    if (img.src.includes(url)) return;
+    fighter.classList.add("is-morphing");
+    img.style.opacity = "0";
+    setTimeout(()=>{ img.src = url; img.style.opacity="1"; }, 60);
+    setTimeout(()=> fighter.classList.remove("is-morphing"), 220);
+  }
+  // trail canvas (volumetric neon streak)
+  const vsTrailCanvas = vsDialog.querySelector(".vs-trail-canvas");
+  const vsTrailCtx = vsTrailCanvas ? vsTrailCanvas.getContext("2d", {alpha:true}) : null;
+  let trailRaf = 0;
+  let shockEl = null;
+  function ensureShock(){
+    if (shockEl) return shockEl;
+    shockEl = document.createElement("i");
+    shockEl.className = "vs-shockwave";
+    shockEl.setAttribute("aria-hidden","true");
+    vsDialog.querySelector(".vs-comic")?.appendChild(shockEl);
+    return shockEl;
+  }
+  function paintBladeTrail(t, side, hit) {
+    if (!vsTrailCtx || !vsTrailCanvas) return;
+    const w = vsTrailCanvas.width, h = vsTrailCanvas.height;
+    vsTrailCtx.clearRect(0,0,w,h);
+    if (t <= 0 || t >= 1) return;
+    // bezier from attacker to center
+    const fromX = side===0 ? w*0.26 : w*0.74;
+    const toX = w*0.5;
+    const fromY = h*0.48, toY = h*0.52;
+    // ease: fast out then slow
+    const e = 1 - Math.pow(1 - t, 3);
+    const x = fromX + (toX - fromX) * e + Math.sin(e*Math.PI)* 10 * (side? -1:1);
+    const y = fromY + (toY - fromY) * e + Math.sin(e*Math.PI*2)* -6;
+    const len = 120 * (1 - Math.abs(e-.5)*1.2);
+    const ang = (side===0 ? -12 : 12) * Math.PI/180 + Math.sin(e*Math.PI)* .45;
+    vsTrailCtx.save();
+    vsTrailCtx.lineCap = "round"; vsTrailCtx.lineJoin="round";
+    // outer glow
+    vsTrailCtx.strokeStyle = `rgba(122,255,170,${0.22 * (1-e)})`;
+    vsTrailCtx.lineWidth = 18;
+    vsTrailCtx.beginPath(); vsTrailCtx.moveTo(x - Math.cos(ang)*len*.5, y - Math.sin(ang)*len*.5); vsTrailCtx.lineTo(x + Math.cos(ang)*len*.5, y + Math.sin(ang)*len*.5); vsTrailCtx.stroke();
+    // core
+    vsTrailCtx.strokeStyle = `rgba(234,255,243,${0.95 * (1-e*0.6)})`;
+    vsTrailCtx.lineWidth = 4.2;
+    vsTrailCtx.beginPath(); vsTrailCtx.moveTo(x - Math.cos(ang)*len*.5, y - Math.sin(ang)*len*.5); vsTrailCtx.lineTo(x + Math.cos(ang)*len*.5, y + Math.sin(ang)*len*.5); vsTrailCtx.stroke();
+    // particles sparkle along trail
+    if (hit && t > .35 && t < .62) {
+      vsTrailCtx.fillStyle = `rgba(255,235,120,${0.9})`;
+      for(let i=0;i<3;i++){ const px = x + (Math.random()-.5)*16; const py = y + (Math.random()-.5)*10; vsTrailCtx.beginPath(); vsTrailCtx.arc(px,py, 1.6,0,Math.PI*2); vsTrailCtx.fill(); }
+    }
+    vsTrailCtx.restore();
+  }
+  function clearTrail(){ if(vsTrailCtx) vsTrailCtx.clearRect(0,0,vsTrailCanvas.width,vsTrailCanvas.height); cancelAnimationFrame(trailRaf); }
   let vsBattle, vsTimer, vsBusy = false;
   let seenExchange = "", vsPlaying = false, frameTimer;
   function stopVsComic() {
@@ -1012,6 +1077,10 @@
       // Alternate choreography, keep manga posing: sweep = grounded horizontal slash, kick = aerial leap
       const attackerPose = (exchange.round + side) % 2 ? "sweep" : "kick";
       const defenderPose = strike.hit ? "recoil" : "slip";
+      // pro sprite morph - dash flash then strike, recoil on hit
+      setFighterSprite(actors[side], "dash");
+      setTimeout(()=> setFighterSprite(actors[side], actors[side].dataset.base), 220);
+      if (strike.hit) { setFighterSprite(actors[1-side], "recoil"); setTimeout(()=> setFighterSprite(actors[1-side], actors[1-side].dataset.base), 520); }
       actors[side].dataset.pose = attackerPose;
       actors[1-side].dataset.pose = defenderPose;
       actors[side].classList.add("is-dashing");
@@ -1026,12 +1095,26 @@
       // Choose impact typography like shonen
       const impact = vsDialog.querySelector(".vs-impact");
       if (impact) impact.textContent = strike.hit ? (side===0 ? "ДЗАН!" : "БАМ!") : (defenderPose==="slip" ? "УКЛОН!" : "МИМО!");
-      // Storm = petals swirl, slash = afterimage
+      // Storm = petals swirl, slash = afterimage + shockwave + volumetric trail
       if (stage) {
         stage.style.setProperty("--slash-dir", side ? "-1" : "1");
         stage.classList.add("is-storm","is-slash");
         stage.classList.remove("is-impact","is-flash","is-shake");
         if (strike.hit) stage.classList.add("is-impact");
+        // shockwave center
+        ensureShock(); shockEl.style.left = "50%"; shockEl.style.top = "52%";
+      }
+      // volumetric neon trail animates over 380ms via rAF
+      if (!reduced) {
+        let start=null;
+        const dur = 380;
+        const onTrail = (now)=> {
+          if(!start) start=now;
+          const t = Math.min(1, (now-start)/dur);
+          paintBladeTrail(t, side, strike.hit);
+          if (t < 1) trailRaf = requestAnimationFrame(onTrail); else { setTimeout(clearTrail, 80); }
+        };
+        cancelAnimationFrame(trailRaf); trailRaf = requestAnimationFrame(onTrail);
       }
       const comic = vsDialog.querySelector(".vs-comic");
       comic.classList.remove("is-striking");
@@ -1045,9 +1128,17 @@
       frameTimer = setTimeout(() => {
         if (hitStop) {
           stage?.classList.add("is-hitstop");
+          // burst petals outward from impact point
+          vsDialog.querySelectorAll(".vs-petals i").forEach(p=>{
+            p.style.setProperty("--burst-x", ((Math.random()-.5)*2).toFixed(2));
+            p.style.setProperty("--burst-y", ((Math.random()-.5)*2).toFixed(2));
+          });
+          // health bar punch
+          const defenderCard = side ? $("vs-left") : $("vs-right");
+          defenderCard?.classList.add("is-hit"); setTimeout(()=> defenderCard?.classList.remove("is-hit"), 440);
           // flash + shake peak exactly at contact
           stage?.classList.add("is-flash","is-shake");
-          if (navigator.vibrate) try { navigator.vibrate(28); } catch {}
+          if (navigator.vibrate) try { navigator.vibrate([22,18,28]); } catch {}
           frameTimer = setTimeout(() => {
             stage?.classList.remove("is-hitstop","is-flash","is-shake");
             if (!reduced && strike.hit) stage?.classList.add("is-zoom");

@@ -34,6 +34,8 @@ ASSETS = {
     'assets/dojo-temple-bg.jpg',
     'assets/ninja-sensei-1.png',
     'assets/ninja-sensei-2.png',
+    'assets/ninja-recoil.png',
+    'assets/ninja-dash.png',
     'assets/duel-court.webp',
     'assets/sensei.webp',
     'assets/loading-hero.webp',
