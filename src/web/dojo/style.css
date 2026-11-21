@@ -5445,3 +5445,40 @@ html.motion-reduced .chain-panel.is-live .chain-ecg path {
 
 .ref-member .ref-claim { margin-inline-start: auto; flex: none; }
 .ref-member-name small { font-size: 10px; white-space: normal; }
+
+/* Duel arena: the artwork is scenery; every label and control is live HTML. */
+#vs-open { position: fixed; left: max(12px, env(safe-area-inset-left)); bottom: calc(86px + env(safe-area-inset-bottom)); z-index: 7; width: 48px; height: 48px; border: 2px solid #a2ffcb; border-radius: 50%; background: #053020; color: #ffd476; font: italic 900 23px Georgia, serif; box-shadow: 0 0 12px #1bff92; transform: rotate(-8deg); }
+#vs-dialog { margin: auto; padding: 0; width: min(94vw, 440px); border: 1px solid #54da9a; border-radius: 22px; color: #f4fff7; background: #042318; overflow: auto; }
+#vs-dialog::backdrop { background: #00150feb; }
+.vs-stage { box-sizing: border-box; height: min(84dvh, 680px); min-height: 320px; display: flex; flex-direction: column; padding: 15px; gap: 12px; background: linear-gradient(#001e17c9, transparent 28%, transparent 69%, #001710), url('assets/duel-court.webp') center / cover; }
+.vs-stage header, #vs-score { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.vs-stage h2 { margin: 2px 0; font-size: 24px; }
+.vs-stage small { display: block; font-size: 11px; letter-spacing: .04em; }
+.vs-stage button, .vs-stage select { border: 1px solid #5bce91; border-radius: 12px; padding: 10px; background: #073321; color: #edfff4; font-weight: 700; }
+#vs-close { font-size: 20px; line-height: 1; }
+#vs-score b { min-width: 0; flex: 1; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; border-bottom: 3px solid #51ff93; background: #022c20eb; border-radius: 8px; padding: 6px; }
+#vs-score i { color: #ffcf65; font: italic bold 24px Georgia; }
+.vs-console { margin-top: auto; padding: 12px; border-radius: 16px; background: #001d15ed; text-align: center; }
+#vs-status { display: block; } #vs-lobby, #vs-controls { display: grid; gap: 7px; margin-top: 8px; } #vs-controls { grid-template-columns: 1fr 1fr; } #vs-controls[hidden], #vs-lobby[hidden] { display: none; }
+#vs-controls [aria-pressed=true], #vs-send { color: #002313; background: #81ffa7; }
+/* A pair of moving ink panels reuses the actual illustrated fighters. */
+.vs-stage { position: relative; isolation: isolate; overflow: hidden; }
+.vs-stage header, #vs-score, .vs-console { position: relative; z-index: 2; }
+.vs-comic { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.vs-panel { position: absolute; inset: 0; background: url('assets/duel-court.webp') center / cover; opacity: 0; }
+.vs-panel.left { clip-path: polygon(0 28%, 52% 39%, 41% 85%, 0 80%); }
+.vs-panel.right { clip-path: polygon(50% 38%, 100% 26%, 100% 82%, 58% 84%); }
+#vs-dialog[data-striker=left] .vs-panel.left { animation: vs-lunge-left .56s both; }
+#vs-dialog[data-striker=right] .vs-panel.right { animation: vs-lunge-right .56s both; }
+@keyframes vs-lunge-left { 0%,100% {opacity:0} 18% {opacity:1; transform:translateX(-2%)} 49%,68% {opacity:1;transform:translate(12%,-2%) scale(1.07); filter:contrast(1.3)} }
+@keyframes vs-lunge-right { 0%,100% {opacity:0} 18% {opacity:1; transform:translateX(2%)} 49%,68% {opacity:1;transform:translate(-12%,-2%) scale(1.07);filter:contrast(1.3)} }
+.vs-impact, .vs-slash { display:none; position:absolute; }
+#vs-dialog[data-striker] .vs-impact { display:block; top:47%; left:12%; padding:.55em .65em; font:italic 1000 clamp(24px,9vw,48px)/1 system-ui; color:#12081a; background:#ffe343; clip-path:polygon(0 23%,20% 25%,17% 0,39% 14%,53% 0,60% 18%,90% 2%,84% 24%,100% 28%,91% 48%,100% 70%,82% 72%,80% 100%,58% 84%,34% 100%,32% 80%,0 91%,9% 60%); transform:rotate(-9deg); }
+#vs-dialog[data-striker=left] .vs-impact { left:auto;right:10%; transform:rotate(8deg); }
+#vs-dialog[data-outcome=miss] .vs-impact { background:#8afffc; }
+#vs-dialog[data-striker] .vs-slash { display:block; width:62%; height:2%; top:58%; left:19%; background:white; border-radius:100%; box-shadow:0 0 9px 4px #8aff99; transform:rotate(-29deg); }
+#vs-dialog[data-direction=left] .vs-slash { transform:rotate(29deg); }
+#vs-score b { border-bottom:0; background:linear-gradient(90deg,#51ff93 var(--life,100%),#264139 0) bottom / 100% 5px no-repeat,#022c20eb; padding-bottom:9px; }
+#vs-score [data-health='1'] { --life:50%; } #vs-score [data-health='0'] { --life:0%; }
+.vs-console { border:2px solid #0b100d; box-shadow:3px 3px 0 #53f59a; }
+@media (prefers-reduced-motion:reduce) { #vs-dialog[data-striker] .vs-panel { animation:none; } #vs-dialog[data-striker] .vs-slash { display:none; } }

@@ -233,3 +233,40 @@ async def on_duel_utility(query: CallbackQuery, callback_data: DuelUtilityCb, co
     except Exception as e:
         logger.error(f"Utility error: {e}")
         await query.answer("❌ Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith('vs:'))
+async def accept_dojo_challenge(query: CallbackQuery, container: Container, bot: Bot):
+    import time
+    match = re.fullmatch(r'vs:(\d{1,19}):([a-f0-9]{24})', query.data or '')
+    if not match or not query.message or query.from_user.is_bot:
+        return await query.answer('Недоступный вызов.')
+    uid, token = int(match[1]), match[2]
+    opponent = query.from_user.id
+    if uid == opponent:
+        return await query.answer('Ожидаем другого игрока.')
+    db = container.mongo_client.database
+    offers = db.dojo_duel_offers
+    key = {'_id': uid, 'token': token, 'chat': query.message.chat.id,
+           'status': 'open', 'expires': {'$gt': time.time()}}
+    offer = await offers.find_one(key)
+    if not offer:
+        return await query.answer('Вызов занят или истёк.')
+    player = await db.users.find_one({'id': opponent, 'is_banned': {'$ne': True}})
+    if not player or player.get('coins', 0) < offer['bet']:
+        return await query.answer('Открой /start и проверь баланс для ставки.', show_alert=True)
+    if container.duel_service._is_in_active_duel(opponent):
+        return await query.answer('Сначала заверши свою дуэль.')
+    key['expires'] = {'$gt': time.time()}
+    locked = await offers.update_one(key, {'$set': {'status': 'joining'}})
+    if not locked.matched_count:
+        return await query.answer('Вызов занят или истёк.')
+    await query.answer('Открываем арену…')
+    result = await container.duel_service.create_duel(uid, opponent, offer['bet'], offer['chat'], bot,
+                                                       request_id=f'dojo:{token}')
+    if isinstance(result, str):
+        await offers.update_one({'_id': uid, 'token': token}, {'$set': {'status': 'closed'}})
+        return await query.message.edit_text(result, parse_mode=None)
+    result.challenge_message_id = query.message.message_id
+    await container.duel_service.process_decision(result.id, opponent, 'a')
+    await offers.update_one({'_id': uid, 'token': token}, {'$set': {'status': 'closed'}})

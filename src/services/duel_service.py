@@ -66,6 +66,8 @@ class Duel:
     actions: Dict[int, Dict[str, Optional[str]]] = field(default_factory=dict)
     # Structure: {uid: {"dodge": "dodge_l"|None, "attack": "hit_r"|None}}
 
+    last_exchange: Optional[dict] = None
+
     # Concurrency
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     timeout_task: Optional[asyncio.Task] = None
@@ -357,7 +359,7 @@ class DuelService:
 
         return "⚠️ Ошибка."
 
-    async def process_move(self, duel_id: int, user_id: int, move: str) -> str:
+    async def process_move(self, duel_id: int, user_id: int, move: str, *, expected_round=None) -> str:
         # move is 'hit_l', 'hit_r', 'dodge_l', 'dodge_r'
         duel = self.duels.get(duel_id)
         if not duel: return "❜ Дуэль не найдена."
@@ -366,6 +368,9 @@ class DuelService:
             if duel.finished: return "❜ Дуэль завершена."
             if duel.settlement_started: return "⏳ Результат дуэли подтверждается."
             if user_id not in (duel.challenger_id, duel.opponent_id): return "❜ Не ваш бой."
+
+            if expected_round is not None and (not duel.accepted or duel.round_num != expected_round or time.monotonic() >= duel.round_deadline_mono):
+                return "Раунд уже сменился."
 
             # Update action
             actions = duel.actions.setdefault(user_id, {"dodge": None, "attack": None})
@@ -521,6 +526,13 @@ class DuelService:
 
         if ch_hit_success: duel.hits[ch] += 1
         if op_hit_success: duel.hits[op] += 1
+
+        # Only resolved moves are public. Keep a snapshot across the next
+        # round reset so Mini App polling cannot lose the final exchange.
+        duel.last_exchange = {'round': duel.round_num, 'strikes': [
+            {'attack': acts['attack'], 'dodge': target['dodge'], 'hit': success}
+            for acts, target, success in ((ch_acts, op_acts, ch_hit_success),
+                                           (op_acts, ch_acts, op_hit_success))]}
 
         # Names
         u_ch_doc = await self.users.find_one({"id": ch})

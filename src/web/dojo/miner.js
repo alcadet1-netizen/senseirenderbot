@@ -941,6 +941,83 @@
   let needsEntry = true;
   let entryRequest = null;
   $("session-ended").addEventListener("cancel", event => event.preventDefault());
+  // The server owns stake, participants, score and both round actions.
+  const vsDialog = $("vs-dialog");
+  let vsBattle, vsTimer, vsBusy = false;
+  let seenExchange = "", vsPlaying = false, frameTimer;
+  function stopVsComic() {
+    clearTimeout(frameTimer);
+    vsPlaying = false;
+    delete vsDialog.dataset.striker;
+  }
+  function playVsComic(s) {
+    const exchange = s.exchange;
+    seenExchange = `${s.id}:${exchange.round}`;
+    vsPlaying = true;
+    $("vs-controls").hidden = true;
+    const frame = side => {
+      const strike = exchange.strikes[side];
+      vsDialog.dataset.striker = side ? "right" : "left";
+      vsDialog.dataset.outcome = strike.hit ? "hit" : "miss";
+      vsDialog.dataset.direction = strike.attack === "hit_l" ? "left" : "right";
+      vsDialog.querySelector(".vs-impact").textContent = strike.hit ? "БАМ!" : "МИМО!";
+      const arrow = strike.attack === "hit_l" ? "←" : "→";
+      $("vs-status").textContent = `Раунд ${exchange.round} · ${s.names[side]} ${arrow} · ${strike.hit ? "попадание" : "уворот"}`;
+      frameTimer = setTimeout(() => {
+        if (!side) frame(1);
+        else { stopVsComic(); drawVs(vsBattle); }
+      }, 580);
+    };
+    frame(0);
+  }
+  function drawVs(s) {
+    vsBattle = s;
+    const fighting = s.phase === "fight", ended = s.phase === "finished";
+    $("vs-lobby").hidden = s.phase !== "lobby";
+    $("vs-controls").hidden = !fighting;
+    $("vs-left").textContent = s.names ? `${s.side === 0 ? "Ты · " : ""}${s.names[0]} · ${s.hits[0]}` : "Сэнсэй";
+    $("vs-right").textContent = s.names ? `${s.hits[1]} · ${s.names[1]}${s.side === 1 ? " · Ты" : ""}` : "Ниндзя";
+    if (s.hits) {
+      for (const [i, id] of ["vs-left", "vs-right"].entries()) {
+        const fighter = $(id);
+        fighter.dataset.health = String(Math.max(0, 2 - s.hits[1-i]));
+        fighter.classList.toggle("is-me", i === s.side);
+      }
+    } else for (const id of ["vs-left", "vs-right"]) {
+      delete $(id).dataset.health;
+      $(id).classList.remove("is-me");
+    }
+    if (vsPlaying) { $("vs-controls").hidden = true; return; }
+    if (s.exchange && `${s.id}:${s.exchange.round}` !== seenExchange && vsDialog.open) {
+      playVsComic(s); return;
+    }
+    const resolved = fighting && s.exchange?.round === s.round;
+    $("vs-controls").hidden = !fighting || resolved || !s.round;
+    $("vs-status").textContent = resolved ? "Судья подводит итог…" : fighting ? `Раунд ${s.round} · ${s.seconds} с · ${s.bet} Coin` :
+      ended ? (s.draw ? "Бой завершён без победителя" : s.winner ? "Победа!" : "Поражение") :
+      s.phase === "waiting" ? `Ждём соперника · ${s.chat} · ${s.seconds} с` : "Открытый вызов";
+    for (const btn of vsDialog.querySelectorAll("[data-vs]"))
+      btn.setAttribute("aria-pressed", Object.values(s.moves || {}).includes(btn.dataset.vs));
+  }
+  async function vsRequest(action, args = {}) {
+    if (vsBusy || !vsDialog.open) return;
+    vsBusy = true;
+    clearTimeout(vsTimer);
+    try { drawVs(await api(action, args)); }
+    catch (err) { $("vs-status").textContent = err.message; }
+    finally {
+      vsBusy = false;
+      if (vsDialog.open && !sessionEnded) vsTimer = setTimeout(() => vsRequest("vs_state"), 2200);
+    }
+  }
+  $("vs-open")?.addEventListener("click", () => { vsDialog.showModal(); vsRequest("vs_state"); });
+  $("vs-close")?.addEventListener("click", () => vsDialog.close());
+  vsDialog?.addEventListener("close", () => { clearTimeout(vsTimer); stopVsComic(); });
+  $("vs-send")?.addEventListener("click", () => vsRequest("vs_publish", {bet: Number($("vs-bet").value)}));
+  vsDialog?.addEventListener("click", event => {
+    const move = event.target.closest("[data-vs]")?.dataset.vs;
+    if (move && vsBattle?.phase === "fight") vsRequest("vs_move", {move, id: vsBattle.id, round: vsBattle.round});
+  });
   async function api(action, extra = {}) {
     if (sessionEnded) throw Error(t("Открой /dojo заново"));
     const response = await fetch(`/miniapp/dojo/api/${action}`, {

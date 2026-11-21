@@ -29,6 +29,7 @@ ASSETS = {
     'style.css',
     'miner.js',
     'motion.js',
+    'assets/duel-court.webp',
     'assets/sensei.webp',
     'assets/loading-hero.webp',
     'assets/senseicoin-wordmark.svg',
@@ -206,7 +207,22 @@ def setup_dojo(app, container=None):
             return web.json_response({'error': 'Доступ только для администраторов.'}, status=403, headers=headers)
         try:
             service = container.dojo_miner_service
-            if action == 'entry':
+            if action.startswith('vs_'):
+                from src.services.dojo_duel import arena, publish
+                uid = user['id']
+                if action == 'vs_publish':
+                    result = await publish(container, uid, user.get('first_name') or 'Игрок', payload.get('bet'))
+                else:
+                    if action == 'vs_move':
+                        move = payload.get('move')
+                        if (move not in ('hit_l', 'hit_r', 'dodge_l', 'dodge_r') or
+                                type(payload.get('id')) is not int or type(payload.get('round')) is not int):
+                            raise GameError('Некорректный ход.')
+                        msg = await container.duel_service.process_move(payload['id'], uid, move, expected_round=payload['round'])
+                        if msg != 'Принято.':
+                            raise GameError(msg)
+                    result = await arena(container, uid)
+            elif action == 'entry':
                 # Only use start_param from initData after signature verification.
                 # Existing users without a referrer may bind; already-linked
                 # users are never reassigned by the server-side transaction.
@@ -366,7 +382,7 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/{asset:style\\.css|miner\\.js|motion\\.js}', page)
     app.router.add_get(
-        '/miniapp/dojo/assets/{asset:sensei\\.webp|loading-hero\\.webp|senseicoin-wordmark\\.svg|unbounded-variable\\.woff2|golos-text-variable\\.woff2|dseg7-classic-regular\\.woff2|sensei-style-(?:400|700)\\.woff2}', page)
+        '/miniapp/dojo/assets/{asset:duel-court\\.webp|sensei\\.webp|loading-hero\\.webp|senseicoin-wordmark\\.svg|unbounded-variable\\.woff2|golos-text-variable\\.woff2|dseg7-classic-regular\\.woff2|sensei-style-(?:400|700)\\.woff2}', page)
     app.router.add_post(
-        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|ref_claim|share|daily|daily_claim|chest}',
+        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|vs_state|vs_publish|vs_move|ref_claim|share|daily|daily_claim|chest}',
         api)
