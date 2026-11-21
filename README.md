@@ -40,14 +40,18 @@ senseirenderbot/
 │   │   ├── middlewares/     # Custom middleware
 │   │   ├── states/          # FSM states
 │   │   ├── keyboards/       # Keyboards
-│   │   ├── db.py            # MongoDB initialization
-│   │   └── main.py          # Entry point
+│   │   └── loader.py        # Bot/dispatcher construction
 │   ├── core/                # Core: config, DI container, providers
-│   ├── infra/               # Infrastructure layers (MongoDB)
+│   ├── infra/               # Infrastructure layers (MongoDB, MTProto, storage)
 │   ├── services/            # Business logic (games, economy, etc.)
-│   ├── domain/              # Domain models and resources
-│   └── texts/               # Localizable strings and phrases
-├── scripts/                 # Helper scripts (seed, cleanup, etc.)
+│   ├── domain/              # Domain models and repositories
+│   ├── texts/               # Localizable strings and phrases
+│   ├── web/                 # Mini App HTTP apps (dojo, hedgehog, daily_pet)
+│   ├── widgets/             # Card/render pipeline
+│   └── main.py              # Entry point
+├── scripts/                 # Helper scripts (migrations, diagnostics, builds)
+├── tests/                   # Unit + integration tests (MongoDB-backed)
+├── docs/                    # Engineering audits and design notes
 ├── .env.example             # Example environment variables file
 ├── docker-compose.yml       # Configuration to run MongoDB (and optionally other services)
 ├── Dockerfile               # Official production image
@@ -58,9 +62,16 @@ senseirenderbot/
            ci.yml           # GitHub Actions CI (run tests on push)
 
 Available Scripts
-- scripts/seed_data.py – populates database with initial data (users, achievements, etc.)
-- scripts/verify_deletion.py – verifies correct deletion of users
-- scripts/delete_users.py – deletes test users (as needed)
+- scripts/start_test_mongo.py – starts a local test MongoDB replica set (CI)
+- scripts/check_widgets.py – validates widget HTML in Telegram's QuickJS sandbox (CI)
+- scripts/migrate_comment_campaigns.py – one-time comment-campaign data migration
+- scripts/diagnose_emission.py – read-only SenseiCoin accounting diagnostic
+- scripts/prepare_emission_correction.py – prepares an emission correction plan
+- scripts/benchmark_read_refresh.py – read-refresh I/O benchmark
+- scripts/build_sensei_font.py / scripts/build_katana_previews.py – asset builders
+- scripts/widget_samples.py – widget visual sample generator
+- scripts/migrate_hedgehog_images.py – one-time GridFS image migration
+- scripts/deep_check.py – import/integrity check of the src tree
 
 Bot Commands
 The bot includes various commands for users and administrators. Key commands include:

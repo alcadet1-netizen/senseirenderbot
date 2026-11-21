@@ -17,7 +17,6 @@ from src.bot.handlers import setup_routers
 from src.bot.native_widgets import HedgehogWidgetMiddleware
 from src.bot.middlewares import (
     DatabaseMiddleware,
-    DependencyMiddleware,
     ThrottlingMiddleware,
     LoggingMiddleware,
     MaintenanceMiddleware,
@@ -262,7 +261,7 @@ async def main() -> None:
     dp.message.middleware(LoggingMiddleware())
     dp.message.middleware(MaintenanceMiddleware())
     dp.message.middleware(DatabaseMiddleware(container))
-    dp.message.outer_middleware(DependencyMiddleware(container))
+    dp.message.outer_middleware(DatabaseMiddleware(container))
     dp.message.middleware(SubscriptionMiddleware())
     dp.message.middleware(ThrottlingMiddleware(container.throttle_service))  # Fixed: pass throttle service
     dp.message.middleware(UserActivityMiddleware(container))
@@ -278,7 +277,7 @@ async def main() -> None:
     dp.callback_query.middleware(LoggingMiddleware())
     dp.callback_query.middleware(MaintenanceMiddleware())
     dp.callback_query.middleware(DatabaseMiddleware(container))
-    dp.callback_query.outer_middleware(DependencyMiddleware(container))
+    dp.callback_query.outer_middleware(DatabaseMiddleware(container))
 
     # Регистрируем middleware для chat_member
     dp.chat_member.middleware(DatabaseMiddleware(container))
