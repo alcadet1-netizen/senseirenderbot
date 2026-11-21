@@ -33,6 +33,6 @@ def create_bot() -> Bot:
     )
 
 
-def create_dispatcher() -> Dispatcher:
+def create_dispatcher(container) -> Dispatcher:
     """Создание диспетчера."""
-    return Dispatcher()
+    return Dispatcher(container=container)
