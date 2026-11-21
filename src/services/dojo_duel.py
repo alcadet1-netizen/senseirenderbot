@@ -88,7 +88,10 @@ async def open_invitation(container, uid, owner, token, *, accept=False):
     locked = await db.dojo_duel_offers.update_one(key, {'$set': {'status': 'joining'}})
     if not locked.matched_count:
         raise GameError('Вызов занят или истёк.')
-    result = await container.duel_service.create_duel(owner, uid, offer['bet'], offer['chat'], container.bot,
+    # A plain inline DM cannot be edited and Telegram does not reveal its peer.
+    # Once accepted, use the accepting player's bot DM for the arena chronicle.
+    arena_chat = uid if offer.get('inline_private') and not offer.get('inline_arena') else offer['chat']
+    result = await container.duel_service.create_duel(owner, uid, offer['bet'], arena_chat, container.bot,
                                                        request_id=f'dojo:{token}')
     if not isinstance(result, str):
         result.inline_arena = offer.get('inline_arena')
@@ -186,6 +189,9 @@ async def _publish(container, uid, name, bet, chat=None, rematch=None, recipient
     try:
         text = f'⚔️ {name} приглашает {mode}!\nСтавка каждого: {bet} Coin.\n{terms} Вызов действует 120 секунд.'
         markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f'Открыть дуэль · {bet} Coin', url=launch_url)]])
+        if chat > 0 or (inline_arena and duel.inline_private):
+            text += f'\n{launch_url}'
+            markup = None
         if inline_arena:
             await bot.edit_message_text(inline_message_id=inline_arena, text=text, parse_mode=None, reply_markup=markup)
         else:
