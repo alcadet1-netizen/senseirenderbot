@@ -216,6 +216,12 @@ def setup_dojo(app, container=None):
                     if not match:
                         raise GameError('Открой приглашение из Telegram.')
                     result = await open_invitation(container, uid, int(match[1]), match[2], accept=action == 'vs_accept')
+                elif action == 'vs_private_share':
+                    from src.services.dojo_duel import prepare_private_share
+                    result = await prepare_private_share(container, uid, user.get('first_name') or 'Игрок', payload.get('bet'))
+                elif action == 'vs_share_result':
+                    from src.services.dojo_duel import finish_private_share
+                    result = await finish_private_share(container, uid, payload.get('token'), payload.get('sent'))
                 elif action == 'vs_chats':
                     result = await chat_choices(container, uid)
                 elif action == 'vs_publish':
@@ -398,5 +404,5 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/assets/{asset:duel-court\\.webp|sensei\\.webp|loading-hero\\.webp|senseicoin-wordmark\\.svg|unbounded-variable\\.woff2|golos-text-variable\\.woff2|dseg7-classic-regular\\.woff2|sensei-style-(?:400|700)\\.woff2}', page)
     app.router.add_post(
-        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|vs_chats|vs_invite|vs_accept|vs_state|vs_publish|vs_commit|vs_move|ref_claim|share|daily|daily_claim|chest}',
+        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|vs_private_share|vs_share_result|vs_chats|vs_invite|vs_accept|vs_state|vs_publish|vs_commit|vs_move|ref_claim|share|daily|daily_claim|chest}',
         api)

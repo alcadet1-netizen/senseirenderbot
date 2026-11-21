@@ -129,3 +129,26 @@ async def test_secret_pair_is_atomic_round_scoped_and_locked():
         assert await submit(1, 2, 'hit_l', 'dodge_r') == 'Принято.'
     assert await submit(1, 2, 'hit_r', 'dodge_r') != 'Принято.'
     assert duel.actions == {1: {'attack': 'hit_l', 'dodge': 'dodge_r'}}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('sent', [True, False])
+async def test_prepared_dm_is_open_before_share_and_result_is_scoped(sent, monkeypatch):
+    from src.services import dojo_duel as vs
+    offers = NS(update_one=AsyncMock())
+    bot = NS(me=AsyncMock(return_value=NS(username='test_bot')),
+             save_prepared_inline_message=AsyncMock(return_value=NS(id='prepared')))
+    ctx = NS(bot=bot, duel_service=NS(_is_in_active_duel=lambda uid: False),
+             mongo_client=NS(database=NS(users=NS(find_one=AsyncMock(return_value={'id': 5})), dojo_duel_offers=offers)))
+    receipt = await vs.prepare_private_share(ctx, 5, 'Player', 300)
+    assert receipt['prepare_id'] == 'prepared'
+    card = bot.save_prepared_inline_message.await_args.kwargs
+    assert card['allow_user_chats'] and not card['allow_group_chats']
+    assert card['result'].reply_markup is None
+    assert 'startapp=vs_5_' + receipt['token'] in card['result'].input_message_content.message_text
+    assert offers.update_one.await_args.args[1]['$set']['status'] == 'open'
+    monkeypatch.setattr(vs, 'arena', AsyncMock(return_value={}))
+    await vs.finish_private_share(ctx, 5, receipt['token'], sent)
+    scope, changes = offers.update_one.await_args.args
+    assert scope == {'_id': 5, 'token': receipt['token'], 'status': 'open', 'share_pending': True}
+    assert ('expires' in changes['$set']) if sent else changes['$set']['status'] == 'closed'

@@ -1102,14 +1102,58 @@
   }
   $("vs-open")?.addEventListener("click", () => { vsDialog.showModal(); vsRequest("vs_state"); });
   $("vs-close")?.addEventListener("click", () => vsDialog.close());
-  vsDialog?.addEventListener("close", () => { clearTimeout(vsTimer); stopVsComic(); });
+  vsDialog?.addEventListener("close", () => { resumePrivateVs(false); clearTimeout(vsTimer); stopVsComic(); });
   $("vs-accept")?.addEventListener("click", () => vsRequest("vs_accept"));
   $("vs-rematch")?.addEventListener("click", () => vsRequest("vs_publish", {bet: vsBattle.bet, rematch: vsBattle.id}));
-  $("vs-send")?.addEventListener("click", () => {
+  // Navigation hint only; the actual offer and deadline always come from Mongo.
+  function resumePrivateVs(write) {
+    const key = `dojo:resume-private-vs:${currentUserId()}`;
+    try {
+      if (write === false) localStorage.removeItem(key);
+      if (write === true) localStorage.setItem(key, String(Date.now() + 120000));
+      return Number(localStorage.getItem(key)) > Date.now();
+    } catch { return false; }
+  }
+  function vsBet() {
     const bet = Number($("vs-bet").value);
-    if (!Number.isSafeInteger(bet) || bet < 300) return showToast("Минимальная ставка — 300 Coin", true);
-    if (!tg?.isVersionAtLeast?.("6.7") || !tg.switchInlineQuery) return showToast("Обнови Telegram для выбора чата", true);
-    tg.switchInlineQuery(`dojo_vs ${bet}`, ["users", "groups"]);
+    if (Number.isSafeInteger(bet) && bet >= 300) return bet;
+    showToast("Минимальная ставка — 300 Coin", true);
+  }
+  $("vs-send")?.addEventListener("click", () => {
+    if (vsBet()) $("vs-destinations").hidden = !$("vs-destinations").hidden;
+  });
+  $("vs-group")?.addEventListener("click", () => {
+    const bet = vsBet();
+    if (!bet) return;
+    if (!tg?.isVersionAtLeast?.("6.7") || !tg.switchInlineQuery) return showToast("Обнови Telegram для выбора группы", true);
+    tg.switchInlineQuery(`dojo_vs ${bet}`, ["groups"]);
+  });
+  $("vs-address")?.addEventListener("click", () => {
+    const bet = vsBet(), recipient = $("vs-handle").value.trim();
+    if (bet && recipient) vsRequest("vs_publish", {bet, recipient});
+  });
+  $("vs-dm")?.addEventListener("click", async () => {
+    const bet = vsBet();
+    if (!bet) return;
+    if (!tg?.isVersionAtLeast?.("8.0") || !tg.shareMessage) {
+      $("vs-by-name").hidden = false;
+      $("vs-handle").focus();
+      return;
+    }
+    const button = $("vs-dm");
+    button.disabled = true;
+    try {
+      const prepared = await api("vs_private_share", {bet});
+      resumePrivateVs(true);
+      let sent;
+      try { sent = await new Promise(resolve => tg.shareMessage(prepared.prepare_id, resolve)); }
+      catch (err) { await api("vs_share_result", {token:prepared.token, sent:false}); throw err; }
+      await api("vs_share_result", {token:prepared.token, sent:sent === true});
+      resumePrivateVs(sent === true);
+      vsRequest("vs_state");
+      if (!sent) showToast("Отправка отменена. Ставка не списана.");
+    } catch (err) { showToast(err.message, true); }
+    finally { button.disabled = false; }
   });
   vsDialog?.addEventListener("click", event => {
     const move = event.target.closest("[data-vs]")?.dataset.vs;
@@ -3209,6 +3253,9 @@
       if (new URLSearchParams(initData()).get("start_param")?.startsWith("vs_") && !sessionEnded) {
         if (!vsDialog.open) vsDialog.showModal();
         vsRequest("vs_invite");
+      } else if (!sessionEnded && resumePrivateVs()) {
+        if (!vsDialog.open) vsDialog.showModal();
+        vsRequest("vs_state");
       }
     });
     // A stalled request must never trap the player on the splash screen.
