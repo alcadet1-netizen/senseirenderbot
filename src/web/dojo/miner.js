@@ -949,30 +949,66 @@
     clearTimeout(frameTimer);
     vsPlaying = false;
     delete vsDialog.dataset.striker;
+    delete vsDialog.dataset.sequence;
   }
   function playVsComic(s) {
     const exchange = s.exchange;
     seenExchange = `${s.id}:${exchange.round}`;
     vsPlaying = true;
     $("vs-controls").hidden = true;
+    $("vs-rematch").hidden = true;
+    const reduced = document.documentElement.classList.contains("motion-reduced") ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const banner = vsDialog.querySelector(".vs-cut-title");
+    const caption = vsDialog.querySelector(".vs-cut-label");
+    const hits = s.hits.map((n, i) => n - Number(exchange.strikes[i].hit));
+    const score = () => {
+      ["vs-left", "vs-right"].forEach((id, i) => {
+        const node = $(id);
+        node.textContent = `${s.side === i ? "Ты · " : ""}${s.names[i]} · ${hits[i]}`;
+        node.dataset.health = String(Math.max(0, 2 - hits[1-i]));
+      });
+    };
+    score();
+    vsDialog.dataset.sequence = "intro";
+    caption.textContent = "ДОДЗЁ  /  ПОЕДИНОК";
+    banner.textContent = `Раунд ${exchange.round}`;
+    $("vs-status").textContent = "Ходы приняты · обмен ударами";
     const frame = side => {
+      vsDialog.dataset.sequence = "strike";
       const strike = exchange.strikes[side];
       vsDialog.dataset.striker = side ? "right" : "left";
+      // Restart the impact layers for each of the two distinct strikes.
+      const comic = vsDialog.querySelector(".vs-comic");
+      comic.classList.remove("is-striking");
+      void comic.offsetWidth;
+      comic.classList.add("is-striking");
+      vsDialog.dataset.evade = strike.dodge === "dodge_l" ? "left" : "right";
       vsDialog.dataset.outcome = strike.hit ? "hit" : "miss";
       vsDialog.dataset.direction = strike.attack === "hit_l" ? "left" : "right";
       vsDialog.querySelector(".vs-impact").textContent = strike.hit ? "БАМ!" : "МИМО!";
       const arrow = strike.attack === "hit_l" ? "←" : "→";
       $("vs-status").textContent = `Раунд ${exchange.round} · ${s.names[side]} ${arrow} · ${strike.hit ? "попадание" : "уворот"}`;
       frameTimer = setTimeout(() => {
-        if (!side) frame(1);
-        else { stopVsComic(); drawVs(vsBattle); }
-      }, 580);
+        hits[side] += Number(strike.hit);
+        score();
+        frameTimer = setTimeout(() => {
+          if (!side) return frame(1);
+          delete vsDialog.dataset.striker;
+          vsDialog.dataset.sequence = "outro";
+          caption.textContent = `ИТОГ ОБМЕНА  /  РАУНД ${exchange.round}`;
+          banner.textContent = `${hits[0]} : ${hits[1]}`;
+          frameTimer = setTimeout(() => { stopVsComic(); drawVs(vsBattle); }, reduced ? 180 : 750);
+        }, reduced ? 190 : 740);
+      }, reduced ? 0 : 440);
     };
-    frame(0);
+    frameTimer = setTimeout(() => frame(0), reduced ? 0 : 700);
   }
   function drawVs(s) {
     vsBattle = s;
+    if (vsPlaying) return; // Polling updates vsBattle, never interrupts the cutscene.
     const fighting = s.phase === "fight", ended = s.phase === "finished";
+    $("vs-rematch").hidden = !ended;
     $("vs-lobby").hidden = s.phase !== "lobby";
     $("vs-controls").hidden = !fighting;
     $("vs-left").textContent = s.names ? `${s.side === 0 ? "Ты · " : ""}${s.names[0]} · ${s.hits[0]}` : "Сэнсэй";
@@ -987,14 +1023,14 @@
       delete $(id).dataset.health;
       $(id).classList.remove("is-me");
     }
-    if (vsPlaying) { $("vs-controls").hidden = true; return; }
     if (s.exchange && `${s.id}:${s.exchange.round}` !== seenExchange && vsDialog.open) {
       playVsComic(s); return;
     }
     const resolved = fighting && s.exchange?.round === s.round;
-    $("vs-controls").hidden = !fighting || resolved || !s.round;
-    $("vs-status").textContent = resolved ? "Судья подводит итог…" : fighting ? `Раунд ${s.round} · ${s.seconds} с · ${s.bet} Coin` :
+    $("vs-controls").hidden = !fighting || resolved || !s.round || Boolean(s.moves?.attack && s.moves?.dodge);
+    $("vs-status").textContent = resolved ? "Судья подводит итог…" : fighting && s.moves?.attack && s.moves?.dodge ? "Ход зафиксирован · ждём соперника" : fighting ? `Раунд ${s.round} · ${s.seconds} с · ${s.bet} Coin` :
       ended ? (s.draw ? "Бой завершён без победителя" : s.winner ? "Победа!" : "Поражение") :
+      s.phase === "connecting" ? `Подключаем бойцов · ${s.seconds} с` :
       s.phase === "waiting" ? `Ждём соперника · ${s.chat} · ${s.seconds} с` : "Открытый вызов";
     for (const btn of vsDialog.querySelectorAll("[data-vs]"))
       btn.setAttribute("aria-pressed", Object.values(s.moves || {}).includes(btn.dataset.vs));
@@ -1013,7 +1049,25 @@
   $("vs-open")?.addEventListener("click", () => { vsDialog.showModal(); vsRequest("vs_state"); });
   $("vs-close")?.addEventListener("click", () => vsDialog.close());
   vsDialog?.addEventListener("close", () => { clearTimeout(vsTimer); stopVsComic(); });
-  $("vs-send")?.addEventListener("click", () => vsRequest("vs_publish", {bet: Number($("vs-bet").value)}));
+  $("vs-pick")?.addEventListener("click", async () => {
+    const pick = $("vs-pick"), select = $("vs-chat");
+    pick.disabled = true;
+    try {
+      const {chats} = await api("vs_chats");
+      select.replaceChildren(...chats.map(c => new Option(c.title, c.id)));
+      $("vs-destination").hidden = !chats.length;
+      if (!chats.length) showToast("Нет доступных групп. Напиши в чате, где Сенсей — администратор.", true);
+      else select.focus();
+    } catch (err) { showToast(err.message, true); }
+    finally { pick.disabled = false; }
+  });
+  $("vs-private")?.addEventListener("click", () => {
+    const recipient = $("vs-recipient").value.trim();
+    if (!recipient) return showToast("Укажи @username соперника", true);
+    vsRequest("vs_publish", {bet: Number($("vs-bet").value), recipient});
+  });
+  $("vs-rematch")?.addEventListener("click", () => vsRequest("vs_publish", {bet: vsBattle.bet, rematch: vsBattle.id}));
+  $("vs-send")?.addEventListener("click", () => vsRequest("vs_publish", {bet: Number($("vs-bet").value), chat: Number($("vs-chat").value)}));
   vsDialog?.addEventListener("click", event => {
     const move = event.target.closest("[data-vs]")?.dataset.vs;
     if (move && vsBattle?.phase === "fight") vsRequest("vs_move", {move, id: vsBattle.id, round: vsBattle.round});

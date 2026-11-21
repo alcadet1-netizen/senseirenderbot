@@ -208,10 +208,12 @@ def setup_dojo(app, container=None):
         try:
             service = container.dojo_miner_service
             if action.startswith('vs_'):
-                from src.services.dojo_duel import arena, publish
+                from src.services.dojo_duel import arena, publish, chat_choices
                 uid = user['id']
-                if action == 'vs_publish':
-                    result = await publish(container, uid, user.get('first_name') or 'Игрок', payload.get('bet'))
+                if action == 'vs_chats':
+                    result = await chat_choices(container, uid)
+                elif action == 'vs_publish':
+                    result = await publish(container, uid, user.get('first_name') or 'Игрок', payload.get('bet'), payload.get('chat'), payload.get('rematch'), payload.get('recipient'))
                 else:
                     if action == 'vs_move':
                         move = payload.get('move')
@@ -384,5 +386,5 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/assets/{asset:duel-court\\.webp|sensei\\.webp|loading-hero\\.webp|senseicoin-wordmark\\.svg|unbounded-variable\\.woff2|golos-text-variable\\.woff2|dseg7-classic-regular\\.woff2|sensei-style-(?:400|700)\\.woff2}', page)
     app.router.add_post(
-        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|vs_state|vs_publish|vs_move|ref_claim|share|daily|daily_claim|chest}',
+        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|vs_chats|vs_state|vs_publish|vs_move|ref_claim|share|daily|daily_claim|chest}',
         api)

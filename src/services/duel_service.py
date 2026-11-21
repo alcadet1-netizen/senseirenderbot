@@ -66,6 +66,8 @@ class Duel:
     actions: Dict[int, Dict[str, Optional[str]]] = field(default_factory=dict)
     # Structure: {uid: {"dodge": "dodge_l"|None, "attack": "hit_r"|None}}
 
+    dojo_only: bool = False
+    connected: set = field(default_factory=set)
     last_exchange: Optional[dict] = None
 
     # Concurrency
@@ -342,18 +344,22 @@ class DuelService:
 
                 # Cleanup accept buttons
                 try:
-                    await duel.bot.edit_message_reply_markup(None, duel.chat_id, duel.challenge_message_id, reply_markup=None)
+                    await duel.bot.edit_message_reply_markup(chat_id=duel.chat_id, message_id=duel.challenge_message_id, reply_markup=None)
                 except TelegramRetryAfter as e:
                     logger.warning(f"Duel {duel.id}: Hit flood control on accept markup cleanup, waiting {e.retry_after} seconds")
                     await asyncio.sleep(e.retry_after)
                     # Retry once after waiting
-                    await duel.bot.edit_message_reply_markup(None, duel.chat_id, duel.challenge_message_id, reply_markup=None)
+                    await duel.bot.edit_message_reply_markup(chat_id=duel.chat_id, message_id=duel.challenge_message_id, reply_markup=None)
                 except TelegramBadRequest as e:
                     logger.warning("Duel %s: accept markup cleanup failed: %s", duel.id, e)
                 except Exception:
                     logger.exception("Duel %s: accept markup cleanup failed critically", duel.id)
 
                 # Start
+                if duel.dojo_only:
+                    duel.round_deadline_mono = time.monotonic() + 120
+                    duel.timeout_task = asyncio.create_task(self._await_dojo_players(duel))
+                    return "Принято! Открой /dojo → VS."
                 asyncio.create_task(self._start_round(duel))
                 return "✅ Принято! Смотрите ЛС."
 
@@ -369,7 +375,10 @@ class DuelService:
             if duel.settlement_started: return "⏳ Результат дуэли подтверждается."
             if user_id not in (duel.challenger_id, duel.opponent_id): return "❜ Не ваш бой."
 
-            if expected_round is not None and (not duel.accepted or duel.round_num != expected_round or time.monotonic() >= duel.round_deadline_mono):
+            if duel.dojo_only and expected_round is None: return "Управление только в /dojo → VS."
+            if duel.dojo_only and all(duel.actions.get(user_id, {}).get(k) for k in ('attack', 'dodge')):
+                return "Ход уже зафиксирован."
+            if expected_round is not None and (not duel.accepted or not duel.round_num or duel.round_num != expected_round or time.monotonic() >= duel.round_deadline_mono):
                 return "Раунд уже сменился."
 
             # Update action
@@ -392,6 +401,7 @@ class DuelService:
         # 'open' doesn't need lock usually, but safe to have.
         # 'auto' and 'reset' modify state so need lock.
 
+        if duel.dojo_only: return "Управление только в /dojo → VS."
         async with duel.lock:
             if duel.finished: return "❜ Дуэль завершена."
             if duel.settlement_started: return "⏳ Результат дуэли подтверждается."
@@ -419,6 +429,7 @@ class DuelService:
         duel = self.duels.get(duel_id)
         if not duel: return "❜ Нет такой дуэли."
 
+        if duel.dojo_only: return "Управление только в /dojo → VS."
         async with duel.lock:
             if duel.finished: return "❜ Уже всё."
             if duel.settlement_started: return "⏳ Результат дуэли подтверждается."
@@ -430,11 +441,25 @@ class DuelService:
 
     # --- Internal Logic ---
 
+    async def _await_dojo_players(self, duel):
+        await self._update_arena(duel)
+        while not self._closing:
+            async with duel.lock:
+                if duel.finished or duel.settlement_started:
+                    return
+                if len(duel.connected) == 2:
+                    await self._start_round(duel)
+                    return
+                if time.monotonic() >= duel.round_deadline_mono:
+                    await self._finish_duel(duel, None, 'Подключение не состоялось. Ставки возвращаются.')
+                    return
+            await asyncio.sleep(1)
+
     async def _start_round(self, duel: Duel):
         if self._closing or duel.finished or duel.settlement_started:
             return
         duel.round_num += 1
-        duel.round_deadline_mono = time.monotonic() + DUEL_ROUND_TIMEOUT_SEC
+        duel.round_deadline_mono = time.monotonic() + (120 if duel.dojo_only else DUEL_ROUND_TIMEOUT_SEC)
 
         # Reset actions
         duel.actions[duel.challenger_id] = {"dodge": None, "attack": None}
@@ -450,6 +475,20 @@ class DuelService:
             duel.timeout_task = asyncio.create_task(self._wait_for_round(duel.id, duel.round_num))
 
     async def _wait_for_round(self, duel_id: int, round_num: int):
+        current = self.duels.get(duel_id)
+        if current and current.dojo_only:
+            while not self._closing:
+                async with current.lock:
+                    if current.finished or current.settlement_started or current.round_num != round_num:
+                        return
+                    if self._all_ready(current):
+                        await self._resolve_round(current)
+                        return
+                    if time.monotonic() >= current.round_deadline_mono:
+                        await self._finish_duel(current, None, 'Не все действия выбраны. Бой отменён без автохода.')
+                        return
+                await asyncio.sleep(.25)
+            return
         # Tick every second to update timer in arena
         everyone_ready = False
 
@@ -630,6 +669,8 @@ class DuelService:
                 result_lines.append(f"Счёт: {ch_hits} : {op_hits}")
                 if duel.bet > 0 and duel.payout_confirmed:
                     result_lines.append("Ставки возвращены игрокам.")
+            if duel.dojo_only:
+                result_lines.extend(line for line in duel.log_lines if line.startswith(("🔔", "🩸", "🔴 Атака", "🔵 Атака", "📊", "Подключение", "Не все действия")))
             log_view = "\n".join(result_lines)
         elif duel.settlement_started:
             log_view = "⏳ Результат дуэли подтверждается. Выплата пока не подтверждена."
@@ -670,7 +711,7 @@ class DuelService:
              lines.append(Visuals.frame_line_left(f"⏳ Ожидание: {left}с", w))
         else:
              # Progress bar for timer
-             bar = Visuals.progress_bar(left, DUEL_ROUND_TIMEOUT_SEC, length=8, style="square")
+             bar = Visuals.progress_bar(left, 120 if duel.dojo_only else DUEL_ROUND_TIMEOUT_SEC, length=8, style="square")
              lines.append(Visuals.frame_line_left(f"⏳ {bar}", w))
              lines.append(Visuals.frame_line_left(f"Раунд: {duel.round_num} | Ставка: {duel.bet}", w))
 
@@ -689,6 +730,8 @@ class DuelService:
         if duel.accepted and not duel.finished and not duel.settlement_started:
             controls_msg = "\n📩 <b>Управление боем — в ЛС с ботом!</b>\n<i>(Нажмите «Управление» если потеряли чат)</i>"
 
+        if duel.dojo_only and not duel.finished:
+            controls_msg = "Открой /dojo → VS. " + ("Ожидаем подключения обоих игроков (2 минуты)." if not duel.round_num else "Выбери уворот и удар.")
         text = (
             f"<pre>{html.escape(frame_text)}</pre>\n"
             f"<i>{html.escape(duel.arena_desc)}</i>\n"
@@ -699,7 +742,7 @@ class DuelService:
         )
 
         # Buttons
-        kb = None if duel.finished or duel.settlement_started else InlineKeyboardMarkup(inline_keyboard=[
+        kb = None if duel.dojo_only or duel.finished or duel.settlement_started else InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📩 Управление",
                                   callback_data=DuelUtilityCb(id=duel.id, u=0, a='open').pack())]
         ])
@@ -738,6 +781,7 @@ class DuelService:
             logger.exception(f"Duel {duel.id}: Arena update failed critically")
 
     async def _update_control_dm(self, duel: Duel, user_id: int):
+        if duel.dojo_only: return
         # Build text
         actions = duel.actions.get(user_id, {})
 
