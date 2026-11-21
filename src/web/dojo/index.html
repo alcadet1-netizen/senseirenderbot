@@ -965,16 +965,58 @@
           <button class="sheet-done" data-close="roadmap-sheet">CLOSE</button>
         </section>
       </div>
+      <!-- Local-space puppet, instantiated twice. Hips, knees, shoulders and
+           elbows are nested pivots; neither model contains any scenery. -->
+      <template id="vs-puppet">
+        <svg viewBox="0 0 172 188" focusable="false" aria-hidden="true" class="vs-puppet">
+          <g class="vs-body" stroke-linejoin="round" stroke-width="1.7" stroke="var(--rim)" fill="#092323">
+            <g transform="translate(73 109)"><g class="vs-rear-leg">
+              <path d="M-10 -7 Q9 -15 12 3 L-6 34 Q-17 43 -25 28Z"/>
+              <path d="M-22 23 L-4 29 -20 61 -39 63 Q-43 58 -32 53Z" fill="#061919"/>
+              <path d="M-30 51l11 4m-9-11 12 5" fill="none" opacity=".55"/>
+            </g></g>
+            <g transform="translate(81 111)"><g class="vs-lead-leg">
+              <path d="M-10 -8 Q1 -14 13 -5 L32 20 Q33 32 19 35 L-1 19Z"/>
+              <g transform="translate(25 26)"><g class="vs-shin">
+                <path d="M-9 -4 Q0 -12 9 -3 L7 23 18 28 Q22 34 -7 34 L-9 21Z" fill="#061919"/>
+                <path d="M-7 10l14 4m-14 2 13 4" opacity=".6"/>
+              </g></g>
+            </g></g>
+            <g transform="translate(77 108)"><g class="vs-spine">
+              <path d="M-14 -48 Q-1 -60 18 -45 L13 -22 16 -2 4 9 -18 3 -10 -19Z"/>
+              <path d="M-8 -49L4 -29 15 -44 5 -17Z" fill="var(--silk)"/>
+              <path d="M-17 -6l31 2 -1 7 -31 -1Z" fill="var(--rim)"/>
+              <path class="vs-sash" d="M-13 -4 Q-22 5 -42 0 Q-37 12 -26 10 L-34 20 Q-15 15 -10 1Z" fill="var(--silk)"/>
+              <g class="vs-head"><path d="M-14 -72 Q-13 -92 7 -91 Q27 -89 26 -70 L25 -65 20 -62 Q16 -48 2 -49 Q-14 -49 -14 -72Z" fill="#031011"/>
+              <path d="M-13 -72 Q5 -77 25 -76 L25 -72 Q8 -74 -13 -66Z" fill="var(--silk)"/>
+              <path d="M8 -72l16 2 -6 5Z" fill="#eaffeb" stroke="none"/>
+              <path d="M-12 -72 Q-22 -80 -36 -72 L-27 -73 -34 -67 Q-22 -72 -12 -68Z" fill="var(--silk)"/></g>
+              <path d="M-12 -46 Q-24 -42 -24 -24 L-10 -17 4 -31 -2 -37 -12 -30Z" fill="#0d3030"/>
+              <g transform="translate(10 -42)"><g class="vs-shoulder"><path d="M-8 -4 Q2 -15 9 -6 L20 10 10 21 -2 11Z"/>
+                <g transform="translate(15 15)"><g class="vs-elbow"><path d="M-6 -4 L6 6 24 -7 26 -15 20 -19 13 -16 12 -11Z" fill="#133532"/>
+                <path d="M3 -1l8 7m-4-12 8 7" opacity=".65"/>
+                <g transform="translate(21 -12)"><path d="M0 -3 Q24 -8 57 -35 Q38 -9 3 3Z" fill="#daffec"/><path d="M-7 5l11 -10m-2 0 4 7" stroke="#e8c486" stroke-width="4"/></g>
+                </g></g></g></g>
+            </g></g>
+          </g>
+        </svg>
+      </template>
       <dialog id="vs-dialog" aria-labelledby="vs-title">
         <div class="vs-stage">
           <header><div><small>ДОДЗЁ / АРЕНА</small><h2 id="vs-title">Дуэль</h2></div><button id="vs-close" aria-label="Закрыть">×</button></header>
           <div id="vs-score"><b id="vs-left">Сэнсэй</b><i>VS</i><b id="vs-right">Ниндзя</b></div>
-          <div class="vs-comic" aria-hidden="true"><div class="vs-panel left"></div><div class="vs-panel right"></div><div class="vs-slash"></div><div class="vs-sparks"></div><b class="vs-impact"></b><div class="vs-cut-card"><small class="vs-cut-label"></small><strong class="vs-cut-title"></strong></div></div>
+          <div class="vs-comic" aria-hidden="true"><div class="vs-fighter left"></div><div class="vs-fighter right"></div><svg class="vs-blade-art" viewBox="0 0 320 120" aria-hidden="true" focusable="false">
+              <g class="vs-sweep"><path class="vs-blade-wake" d="M12 106 Q107 22 288 14 Q127 42 12 106Z"/>
+                <path class="vs-blade-edge" pathLength="1" d="M12 106 Q118 26 288 14"/>
+                <path class="vs-blade-thread" pathLength="1" d="M44 100 Q138 39 240 29"/></g>
+            </svg><i class="vs-contact-ring"></i><div class="vs-sparks"></div><b class="vs-impact"></b><div class="vs-cut-card"><small class="vs-cut-label"></small><strong class="vs-cut-title"></strong></div></div>
           <div class="vs-console">
             <strong id="vs-status" role="status">Поиск соперника</strong>
-            <div id="vs-lobby" hidden><label>Ставка каждого <select id="vs-bet"><option value="0">Без ставки</option><option>300</option><option>500</option><option>1000</option></select> Coin</label>
-            <label>Личный вызов <input id="vs-recipient" type="text" maxlength="33" placeholder="@username" autocomplete="off" autocapitalize="none"></label><button id="vs-private">Отправить в личку</button><button id="vs-pick">Отправить в чат…</button><div id="vs-destination" hidden><label>Игровая группа <select id="vs-chat"></select></label><button id="vs-send">Отправить вызов</button></div><small>Вызов на 2 минуты. Ставки резервируются при принятии.</small></div>
-            <button id="vs-rematch" hidden>Реванш · та же ставка</button><div id="vs-controls" hidden><button data-vs="dodge_l">← Уворот</button><button data-vs="dodge_r">Уворот →</button><button data-vs="hit_l">← Удар</button><button data-vs="hit_r">Удар →</button></div>
+            <div id="vs-read" hidden aria-hidden="true"><span>Удар <b id="vs-read-hit"></b></span><span>Уворот <b id="vs-read-dodge"></b></span><strong id="vs-read-result"></strong></div>
+            <details id="vs-recap" hidden><summary>Разбор обмена</summary><ol></ol></details>
+            <div id="vs-lobby" hidden><label>Ставка каждого <input id="vs-bet" type="number" min="300" step="1" inputmode="numeric" value="300"> Coin</label>
+            <button id="vs-send">Отправить дуэль</button><small>Вызов на 2 минуты. Ставки резервируются при принятии.</small></div>
+            <button id="vs-accept" hidden>Принять вызов</button><button id="vs-rematch" hidden>Реванш · та же ставка</button><small id="vs-ready" hidden></small><div id="vs-controls" hidden><button data-vs="dodge_l">← Уворот</button><button data-vs="dodge_r">Уворот →</button><button data-vs="hit_l">← Удар</button><button data-vs="hit_r">Удар →</button><button id="vs-commit" disabled>Подтвердить ход</button></div>
           </div>
         </div>
       </dialog>

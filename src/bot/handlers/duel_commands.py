@@ -52,13 +52,13 @@ async def cmd_duel(message: Message, container: Container, bot: Bot, bet: int = 
             try:
                 bet = int(args[1])
             except ValueError:
-                await message.answer(f"{mention}\n\n❌ Ставка должна быть числом.\nПример: /duel 100", parse_mode="HTML")
+                await message.answer(f"{mention}\n\n❌ Ставка должна быть числом.\nПример: /duel 300", parse_mode="HTML")
                 return
         else:
             bet = 0 # Default bet
 
-    if bet < 0:
-        await message.answer(f"{mention}\n\n❌ Ставка не может быть отрицательной.", parse_mode="HTML")
+    if bet < 300:
+        await message.answer(f"{mention}\n\n❌ Минимальная ставка — 300 Coin.", parse_mode="HTML")
         return
 
     # Check reply
@@ -275,3 +275,47 @@ async def accept_dojo_challenge(query: CallbackQuery, container: Container, bot:
     result.challenge_message_id = query.message.message_id
     await container.duel_service.process_decision(result.id, opponent, 'a')
     await offers.update_one({'_id': uid, 'token': token}, {'$set': {'status': 'closed'}})
+
+
+@router.inline_query(F.query.startswith('dojo_vs '))
+async def inline_duel(query, container: Container, bot: Bot):
+    """The Telegram chooser supplies chat type, never a recipient's user ID."""
+    import secrets
+    import time
+    from aiogram.types import InlineQueryResultArticle, InputTextMessageContent
+    from pymongo.errors import DuplicateKeyError
+    match = re.fullmatch(r'dojo_vs ([0-9]{1,16})', query.query)
+    uid = query.from_user.id
+    bet = int(match[1]) if match else 0
+    db = container.mongo_client.database
+    results = []
+    if (300 <= bet <= 2**53-1 and query.chat_type in ('private', 'group', 'supergroup') and
+            not container.duel_service._is_in_active_duel(uid) and await db.users.find_one(
+                {'id': uid, 'is_banned': {'$ne': True}, 'coins': {'$gte': bet}})):
+        token = secrets.token_hex(12)
+        now = time.time()
+        try:
+            await db.dojo_duel_offers.update_one({'_id': uid, '$or': [{'expires': {'$lte': now}},
+                {'status': {'$in': ['draft', 'closed']}}]}, {'$set': dict(status='draft', token=token,
+                bet=bet, expires=now+120, title='Вызов в Telegram', chat=0, inline_private=query.chat_type=='private',
+                rival=None, rematch=None, inline_arena=None, message_id=None)}, upsert=True)
+        except DuplicateKeyError:
+            pass  # An already published challenge cannot be replaced by a preview.
+        else:
+            url = f'https://t.me/{(await bot.me()).username}?startapp=vs_{uid}_{token}'
+            title = f'⚔️ Отправить дуэль · {bet} Coin'
+            results.append(InlineQueryResultArticle(id=f'vs_{token}', title=title,
+                input_message_content=InputTextMessageContent(message_text=f'{query.from_user.full_name} вызывает на дуэль! Ставка каждого: {bet} Coin. Принять за 2 минуты.', parse_mode=None),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='Открыть дуэль', url=url)]])))
+    await query.answer(results, cache_time=0, is_personal=True)
+
+
+@router.chosen_inline_result(F.result_id.startswith('vs_'))
+async def sent_inline_duel(chosen, container: Container):
+    import time
+    if not chosen.inline_message_id:
+        return
+    now = time.time()
+    await container.mongo_client.database.dojo_duel_offers.update_one(
+        {'_id': chosen.from_user.id, 'token': chosen.result_id[3:], 'status': 'draft', 'expires': {'$gt': now}},
+        {'$set': {'status': 'open', 'expires': now+120, 'inline_arena': chosen.inline_message_id}})

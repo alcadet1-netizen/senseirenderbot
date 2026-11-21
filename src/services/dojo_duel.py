@@ -26,7 +26,8 @@ async def arena(container, uid):
     if duel and not offer:
         if not duel.round_num and time.monotonic() < duel.round_deadline_mono:
             duel.connected.add(uid)
-        return dict(phase='finished' if duel.finished else ('fight' if duel.round_num else 'connecting'), id=duel.id,
+        opponent = duel.actions.get(duel.opponent_id if uid == duel.challenger_id else duel.challenger_id, {})
+        return dict(opponent_ready=bool(opponent.get('attack') and opponent.get('dodge')), phase='finished' if duel.finished else ('fight' if duel.round_num else 'connecting'), id=duel.id,
                     round=duel.round_num, bet=duel.bet, exchange=duel.last_exchange,
                     side=int(uid == duel.opponent_id),
                     names=[duel.challenger_name or 'Сэнсэй', duel.opponent_name or 'Ниндзя'],
@@ -60,9 +61,66 @@ async def chat_choices(container, uid):
     return {'chats': choices}
 
 
+async def open_invitation(container, uid, owner, token, *, accept=False):
+    db = container.mongo_client.database
+    key = {'_id': owner, 'token': token, 'status': 'open', 'expires': {'$gt': time.time()}}
+    offer = await db.dojo_duel_offers.find_one(key)
+    if not offer or owner == uid:
+        return await arena(container, uid)
+    if offer.get('rival') not in (None, uid):
+        raise GameError('Это персональный вызов другому игроку.')
+    if offer['bet'] < 300:
+        raise GameError('Минимальная ставка — 300 Coin.')
+    if not accept:
+        return {'phase': 'invited', 'bet': offer['bet'], 'chat': offer['title']}
+    if offer['chat'] < 0:
+        member = await container.bot.get_chat_member(offer['chat'], uid)
+        if member.status in ('left', 'kicked') or getattr(member, 'is_member', True) is False:
+            raise GameError('Вызов доступен участникам этой группы.')
+    player = await db.users.find_one({'id': uid, 'is_banned': {'$ne': True}})
+    if not player or player.get('coins', 0) < offer['bet']:
+        raise GameError('Недостаточно Coin для ставки.')
+    if (offer['chat'] > 0 or offer.get('inline_private')) and (not player.get('has_katana') or player.get('coins', 0) <= 0):
+        raise GameError('Для личной дуэли нужны катана и положительный баланс.')
+    if container.duel_service._is_in_active_duel(uid):
+        raise GameError('Сначала заверши текущую дуэль.')
+    key['expires'] = {'$gt': time.time()}
+    locked = await db.dojo_duel_offers.update_one(key, {'$set': {'status': 'joining'}})
+    if not locked.matched_count:
+        raise GameError('Вызов занят или истёк.')
+    result = await container.duel_service.create_duel(owner, uid, offer['bet'], offer['chat'], container.bot,
+                                                       request_id=f'dojo:{token}')
+    if not isinstance(result, str):
+        result.inline_arena = offer.get('inline_arena')
+        result.inline_private = bool(offer.get('inline_private'))
+        result.dojo_only = True
+        result.challenge_message_id = offer.get('message_id')
+        await container.duel_service.process_decision(result.id, uid, 'a')
+    await db.dojo_duel_offers.update_one({'_id': owner, 'token': token}, {'$set': {'status': 'closed'}})
+    if isinstance(result, str):
+        raise GameError(result)
+    return await arena(container, uid)
+
+
 async def publish(container, uid, name, bet, chat=None, rematch=None, recipient=None):
-    if type(bet) is not int or bet not in (0, 300, 500, 1000):
-        raise GameError('Выбери ставку из списка.')
+    if rematch is not None:
+        duel = active_battle(container, uid)
+        if not duel or not duel.finished or duel.id != rematch or duel.bet != bet:
+            raise GameError('Реванш недоступен.')
+        rival = duel.opponent_id if uid == duel.challenger_id else duel.challenger_id
+        # Both requests share the finished match (and therefore the same lock).
+        async with duel.lock:
+            invitation = await container.mongo_client.database.dojo_duel_offers.find_one({
+                '_id': rival, 'rival': uid, 'rematch': rematch, 'status': 'open', 'expires': {'$gt': time.time()}})
+            if invitation:
+                return await open_invitation(container, uid, rival, invitation['token'], accept=True)
+            return await _publish(container, uid, name, bet, chat, rematch, recipient)
+    return await _publish(container, uid, name, bet, chat, rematch, recipient)
+
+
+async def _publish(container, uid, name, bet, chat=None, rematch=None, recipient=None):
+    if type(bet) is not int or not 300 <= bet <= 2**53-1:
+        raise GameError('Минимальная ставка — 300 Coin.')
     db = container.mongo_client.database
     player = await db.users.find_one({'id': uid, 'is_banned': {'$ne': True}})
     if not player or player.get('coins', 0) < bet:
@@ -92,7 +150,10 @@ async def publish(container, uid, name, bet, chat=None, rematch=None, recipient=
     elif type(chat) is not int or chat not in await chat_ids(container, uid):
         raise GameError('Выбери свою игровую группу.')
     bot = container.bot
-    if chat > 0:
+    inline_arena = duel.inline_arena if rematch is not None else None
+    if inline_arena:
+        title = 'Реванш'
+    elif chat > 0:
         try:
             private = await bot.get_chat(chat)
         except (TelegramBadRequest, TelegramForbiddenError):
@@ -110,20 +171,28 @@ async def publish(container, uid, name, bet, chat=None, rematch=None, recipient=
         title = (await bot.get_chat(chat)).title or 'Игровой чат'
     now = time.time()
     token = secrets.token_hex(12)
+    bot_name = (await bot.me()).username
+    launch_url = f'https://t.me/{bot_name}?startapp=vs_{uid}_{token}'
     offers = db.dojo_duel_offers
     try:
         await offers.update_one({'_id': uid, '$or': [{'expires': {'$lte': now}}, {'status': 'closed'}]}, {'$set': dict(
-            token=token, chat=chat, title=title, expires=now+120, status='open', bet=bet, rival=rival)}, upsert=True)
+            token=token, chat=chat, title=title, expires=now+120, status='open', bet=bet, rival=rival, rematch=rematch, message_id=None, inline_arena=inline_arena,
+            inline_private=bool(inline_arena and duel.inline_private))}, upsert=True)
     except DuplicateKeyError:
         raise GameError('Вызов уже опубликован. Новый доступен через две минуты.')
     mode = 'на реванш' if rematch is not None else 'на дуэль'
     terms = ('Только для тебя: нужна катана и положительный баланс, достаточный для ставки.'
              if chat > 0 else 'Прими приглашение, чтобы присоединиться.')
     try:
-        await bot.send_message(chat, f'⚔️ {name} приглашает {mode}!\nСтавка каждого: {bet} Coin.\n{terms} Вызов действует 120 секунд. Управление: /dojo → VS.',
-            parse_mode=None, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-                text=f'Принять дуэль · {bet} Coin', callback_data=f'vs:{uid}:{token}')]]))
+        text = f'⚔️ {name} приглашает {mode}!\nСтавка каждого: {bet} Coin.\n{terms} Вызов действует 120 секунд.'
+        markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f'Открыть дуэль · {bet} Coin', url=launch_url)]])
+        if inline_arena:
+            await bot.edit_message_text(inline_message_id=inline_arena, text=text, parse_mode=None, reply_markup=markup)
+        else:
+            sent = await bot.send_message(chat, text, parse_mode=None, reply_markup=markup)
     except (TelegramBadRequest, TelegramForbiddenError):
         await offers.update_one({'_id': uid, 'token': token}, {'$set': {'status': 'closed'}})
         raise GameError('Не удалось доставить вызов. Проверь доступ бота к чату.')
+    if not inline_arena:
+        await offers.update_one({'_id': uid, 'token': token}, {'$set': {'message_id': sent.message_id}})
     return {'phase': 'waiting', 'chat': title, 'seconds': 120}

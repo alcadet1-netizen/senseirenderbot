@@ -208,14 +208,26 @@ def setup_dojo(app, container=None):
         try:
             service = container.dojo_miner_service
             if action.startswith('vs_'):
-                from src.services.dojo_duel import arena, publish, chat_choices
+                from src.services.dojo_duel import arena, publish, chat_choices, open_invitation
                 uid = user['id']
-                if action == 'vs_chats':
+                if action in ('vs_invite', 'vs_accept'):
+                    param = dict(parse_qsl(payload['initData'])).get('start_param', '')
+                    match = re.fullmatch(r'vs_([1-9][0-9]{0,15})_([0-9a-f]{24})', param)
+                    if not match:
+                        raise GameError('Открой приглашение из Telegram.')
+                    result = await open_invitation(container, uid, int(match[1]), match[2], accept=action == 'vs_accept')
+                elif action == 'vs_chats':
                     result = await chat_choices(container, uid)
                 elif action == 'vs_publish':
                     result = await publish(container, uid, user.get('first_name') or 'Игрок', payload.get('bet'), payload.get('chat'), payload.get('rematch'), payload.get('recipient'))
                 else:
-                    if action == 'vs_move':
+                    if action == 'vs_commit':
+                        if type(payload.get('id')) is not int or type(payload.get('round')) is not int:
+                            raise GameError('Неверный раунд.')
+                        msg = await container.duel_service.commit_dojo_move(payload['id'], uid, payload['round'], payload.get('attack'), payload.get('dodge'))
+                        if msg != 'Принято.':
+                            raise GameError(msg)
+                    elif action == 'vs_move':
                         move = payload.get('move')
                         if (move not in ('hit_l', 'hit_r', 'dodge_l', 'dodge_r') or
                                 type(payload.get('id')) is not int or type(payload.get('round')) is not int):
@@ -386,5 +398,5 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/assets/{asset:duel-court\\.webp|sensei\\.webp|loading-hero\\.webp|senseicoin-wordmark\\.svg|unbounded-variable\\.woff2|golos-text-variable\\.woff2|dseg7-classic-regular\\.woff2|sensei-style-(?:400|700)\\.woff2}', page)
     app.router.add_post(
-        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|vs_chats|vs_state|vs_publish|vs_move|ref_claim|share|daily|daily_claim|chest}',
+        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|vs_chats|vs_invite|vs_accept|vs_state|vs_publish|vs_commit|vs_move|ref_claim|share|daily|daily_claim|chest}',
         api)
