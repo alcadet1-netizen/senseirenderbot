@@ -3,9 +3,10 @@
 """
 
 import time
+import math
 import html
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from aiogram import Router, F
 from aiogram.filters import Command
@@ -805,90 +806,47 @@ async def cmd_unban(message: Message, container: Container):
 @router.message(Command("senseimuteon", "addmute", "mute"))
 async def cmd_sensei_mute_on(message: Message, container: Container):
     """Замьютить пользователя (по нику или реплаю)."""
-    username = message.from_user.username
-    mention = f"@{username}" if username else f"<b>{message.from_user.full_name}</b>"
-
-    args = message.text.split()
-    hours = 0.0
-
-    # 1. Если реплай
-    if message.reply_to_message and message.reply_to_message.from_user:
-        target_user = message.reply_to_message.from_user
-        target_username_display = target_user.username or target_user.first_name
-
-        # /senseimuteon [часы]
-        if len(args) > 1:
-            try:
-                hours = float(args[1])
-            except ValueError:
-                pass
-
-        until = None
-        if hours > 0:
-            until = datetime.utcnow() + timedelta(hours=hours)
-
-        result = await container.moderation_service.mute_user(
-            user_id=target_user.id,
-            muted_by=message.from_user.id,
-            until=until
-        )
-
-        if result["success"]:
-            duration_text = f"на {hours} часов" if hours > 0 else "<b>навсегда</b>"
-            await message.answer(
-                f"{mention}\n\n🔇 Пользователь {target_username_display} замьючен {duration_text}.\n"
-                f"Все его сообщения будут удаляться.",
-                parse_mode="HTML"
-            )
-        else:
-            await message.answer(f"{mention}\n\n❌ {result.get('error', 'Ошибка')}", parse_mode="HTML")
-
-    # 2. Если аргументы: /senseimuteon @username [часы]
-    elif len(args) > 1:
-        target_username = args[1]
-
-        if len(args) > 2:
-            try:
-                hours = float(args[2])
-            except ValueError:
-                await message.answer(f"{mention}\n\n⚠️ Некорректное время", parse_mode="HTML")
-                return
-
-        result = await container.moderation_service.mute_user_by_username(target_username, hours=hours)
-
-        if result["success"]:
-            duration_text = f"на {hours} часов" if hours > 0 else "<b>навсегда</b>"
-            await message.answer(
-                f"{mention}\n\n🔇 Пользователь {result['username']} замьючен {duration_text}.\n"
-                f"Все его сообщения будут удаляться.",
-                parse_mode="HTML"
-            )
-        else:
-            await message.answer(f"{mention}\n\n❌ {result.get('error', 'Ошибка')}", parse_mode="HTML")
-
+    args = message.text.split()[1:]
+    reply = message.reply_to_message
+    if reply and (not reply.from_user or reply.sender_chat):
+        await message.answer('Нужен ответ на сообщение пользователя, не канала.')
+        return
+    if not reply and not args:
+        await message.answer('Пример: /senseimuteon @username 1 или ответ на сообщение: /senseimuteon 1. Без срока — бессрочно.')
+        return
+    duration = args if reply else args[1:]
+    try:
+        hours = float(duration[0]) if duration else 0
+        if len(duration) > 1 or not math.isfinite(hours) or hours < 0:
+            raise ValueError
+        until = datetime.now(timezone.utc) + timedelta(hours=hours) if hours else None
+    except (ValueError, OverflowError):
+        await message.answer('Укажи срок в часах, например 1. Мут не установлен.')
+        return
+    if reply:
+        name = reply.from_user.full_name
+        result = await container.moderation_service.mute_user(reply.from_user.id, muted_by=message.from_user.id, until=until)
     else:
-        await message.answer(f"{mention}\n\n⚠️ Использование:\n/senseimuteon (реплай) [часы]\n/senseimuteon @username [часы]", parse_mode="HTML")
+        name = args[0]
+        result = await container.moderation_service.mute_user_by_username(name, hours=hours, muted_by=message.from_user.id)
+    term = f'на {hours:g} ч' if hours else 'бессрочно'
+    await message.answer(f'🔇 {name}: мут {term}.' if result['success'] else result['error'], parse_mode=None)
 
 
 @router.message(Command("senseimuteoff", "offmute", "unmute"))
 async def cmd_sensei_mute_off(message: Message, container: Container):
-    """Снять мьют по нику."""
-    username = message.from_user.username
-    mention = f"@{username}" if username else f"<b>{message.from_user.full_name}</b>"
-
-    args = message.text.split()
-    if len(args) < 2:
-        await message.answer(f"{mention}\n\n⚠️ Использование: /senseimuteoff @username", parse_mode="HTML")
-        return
-
-    target_username = args[1]
-
-    result = await container.moderation_service.unmute_user_by_username(target_username)
-
-    if result["success"]:
-        await message.answer(f"{mention}\n\n🔊 Мьют снят с пользователя {result.get('username', target_username)}", parse_mode="HTML")
+    args = message.text.split()[1:]
+    reply = message.reply_to_message
+    if reply and reply.from_user and not reply.sender_chat and not args:
+        name = reply.from_user.full_name
+        result = await container.moderation_service.unmute_user(reply.from_user.id)
+    elif not reply and len(args) == 1:
+        name = args[0]
+        result = await container.moderation_service.unmute_user_by_username(name)
     else:
-        await message.answer(f"{mention}\n\n❌ {result.get('error', 'Ошибка')}", parse_mode="HTML")
+        await message.answer('Используй /senseimuteoff @username или ответь /senseimuteoff на сообщение пользователя.')
+        return
+    await message.answer(f'🔊 {name}: мут снят.' if result['success'] else result['error'], parse_mode=None)
 
 
 @router.message(Command("senseinewseasons"))

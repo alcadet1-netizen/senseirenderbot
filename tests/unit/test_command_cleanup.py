@@ -8,8 +8,8 @@ from src.bot.middlewares.cleanup import CommandCleanupMiddleware
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('text', ['Ежа', 'ежа', 'ЕЖА', 'фарм', 'фармить', 'фарма', 'ферма', '/senseidaily'])
-async def test_daily_invocation_deleted_after_result_and_tombstone_recorded(text):
+@pytest.mark.parametrize('text', ['Ежа', 'ежа', 'ЕЖА', 'фарм', 'фармить', 'фарма', 'ферма', '/senseidaily', 'Ап катана', 'АП КАТАНА', '/upkatana', r'\upkatana'])
+async def test_invocation_deleted_after_result_and_tombstone_recorded(text):
     event=AsyncMock(spec=Message)
     event.delete=AsyncMock()
     event.text=text
@@ -29,7 +29,7 @@ async def test_daily_invocation_deleted_after_result_and_tombstone_recorded(text
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('text,is_bot', [('Как получить ежа?',False),('Ежа',True),('Доброе утро',False)])
+@pytest.mark.parametrize('text,is_bot', [('Как получить ежа?',False),('Ежа',True),('Доброе утро',False), ('Как работает ап катана?',False), ('Ап катана',True)])
 async def test_cleanup_preserves_conversation_and_bot_result(text,is_bot):
     event=AsyncMock(spec=Message)
     event.delete=AsyncMock()
@@ -51,3 +51,14 @@ async def test_missing_delete_rights_does_not_remove_or_fail_result():
     with patch('src.bot.middlewares.cleanup.campaign_message_deleted',new=AsyncMock()) as deleted:
         assert await CommandCleanupMiddleware()(handler,event,{})=='result kept'
         deleted.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_katana_trigger_kept_if_handler_cannot_send_response():
+    event = AsyncMock(spec=Message)
+    event.delete = AsyncMock()
+    event.text = 'Ап катана'
+    event.from_user = SimpleNamespace(id=7, is_bot=False)
+    with pytest.raises(RuntimeError, match='delivery failed'):
+        await CommandCleanupMiddleware()(AsyncMock(side_effect=RuntimeError('delivery failed')), event, {})
+    event.delete.assert_not_awaited()

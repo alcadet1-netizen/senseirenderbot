@@ -5,6 +5,7 @@
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 import logging
+import re
 
 from aiogram import Bot
 from src.core.config import settings
@@ -26,16 +27,8 @@ class ModerationService:
         self.bank = self.db.bank  # legacy {_id: "main", balance: X}
         self.ledger = BankLedger(mongo_client)
         self.muted_users = self.db.muted_users  # For muted users
-        # Cache for quick mute checks: user_id -> muted_until (None for permanent)
-        self._muted_cache: dict[int, Optional[datetime]] = {}
-
-    async def load_muted_users_cache(self):
-        """Загрузить кэш замьюченных пользователей при старте."""
-        cursor = self.muted_users.find({})
-        self._muted_cache = {
-            doc["user_id"]: doc.get("muted_until")
-            async for doc in cursor
-        }
+    async def ensure_mute_index(self):
+        await self.muted_users.create_index([('user_id', 1), ('muted_until', 1)])
 
     async def handle_user_left(self, user_id: int) -> dict:
         """Обработать выход пользователя (автобан и конфискация)."""
@@ -188,11 +181,8 @@ class ModerationService:
         until: datetime = None
     ) -> dict:
         """Замьютить пользователя."""
-        # Check if already muted
-        if user_id in self._muted_cache:
-            existing_until = self._muted_cache[user_id]
-            if existing_until is None or existing_until > datetime.now(timezone.utc):
-                return {"success": False, "error": "Пользователь уже замьючен"}
+        if await self.is_muted(user_id):
+            return {"success": False, "error": "Пользователь уже замьючен"}
 
         # Add to muted users collection
         mute_doc = {
@@ -202,10 +192,7 @@ class ModerationService:
             "muted_at": datetime.now(timezone.utc),
             "muted_until": until,
         }
-        await self.muted_users.insert_one(mute_doc)
-
-        # Update cache
-        self._muted_cache[user_id] = until
+        await self.muted_users.update_one({"_id": user_id}, {"$set": mute_doc}, upsert=True)
 
         logger.info(f"User {user_id} muted. Reason: {reason}. Until: {until}")
         return {"success": True}
@@ -213,10 +200,7 @@ class ModerationService:
     async def unmute_user(self, user_id: int) -> dict:
         """Снять мьют с пользователя."""
         # Remove from muted users collection
-        result = await self.muted_users.delete_one({"user_id": user_id})
-
-        # Update cache
-        self._muted_cache.pop(user_id, None)
+        result = await self.muted_users.delete_many({"user_id": user_id})
 
         if result.deleted_count == 0:
             return {"success": False, "error": "Пользователь не был замьючен"}
@@ -226,22 +210,11 @@ class ModerationService:
 
     async def is_muted(self, user_id: int) -> bool:
         """Проверить, замьючен ли пользователь."""
-        # Quick check via cache
-        if user_id not in self._muted_cache:
-            return False
-
-        until = self._muted_cache[user_id]
-        now = datetime.now(timezone.utc)
-        if until is not None and now > until:
-            # Time expired
-            await self.unmute_user(user_id)
-            return False
-
-        return True
+        active = {"$or": [{"muted_until": None}, {"muted_until": {"$gt": datetime.now(timezone.utc)}}]}
+        return await self.muted_users.find_one({"user_id": user_id, **active}, {"_id": 1}) is not None
 
     async def get_muted_users(self) -> List[dict]:
-        """Получить список всех замьюченных пользователей."""
-        cursor = self.muted_users.find({})
+        cursor = self.muted_users.find({"$or": [{"muted_until": None}, {"muted_until": {"$gt": datetime.now(timezone.utc)}}]})
         mutes = await cursor.to_list(length=None)
 
         # Convert to list of dicts (excluding MongoDB _id if needed, but we can keep it)
@@ -256,6 +229,13 @@ class ModerationService:
             for m in mutes
         ]
 
+    async def _mute_target(self, username):
+        name = username.removeprefix('@')
+        if not re.fullmatch(r'[A-Za-z0-9_]{1,32}', name):
+            return None
+        rows = await self.users.find({'username': {'$regex': '^' + re.escape(name) + '$', '$options': 'i'}}).limit(2).to_list(length=2)
+        return rows[0] if len(rows) == 1 else None
+
     async def mute_user_by_username(
         self,
         username: str,
@@ -265,14 +245,9 @@ class ModerationService:
     ) -> dict:
         """Замьютить пользователя по нику."""
         # Find user by username
-        user = await self.users.find_one(
-            {"$or": [
-                {"username": username},
-                {"first_name": {"$regex": f"^{username}$", "$options": "i"}}
-            ]}
-        )
+        user = await self._mute_target(username)
         if not user:
-            return {"success": False, "error": "Пользователь не найден", "username": username}
+            return {"success": False, "error": "Не удалось определить пользователя. Ответь командой на его сообщение.", "username": username}
         user_id = user["id"]
 
         until = None
@@ -287,14 +262,9 @@ class ModerationService:
     async def unmute_user_by_username(self, username: str) -> dict:
         """Снять мьют по нику."""
         # Find user by username
-        user = await self.users.find_one(
-            {"$or": [
-                {"username": username},
-                {"first_name": {"$regex": f"^{username}$", "$options": "i"}}
-            ]}
-        )
+        user = await self._mute_target(username)
         if not user:
-            return {"success": False, "error": "Пользователь не найден", "username": username}
+            return {"success": False, "error": "Не удалось определить пользователя. Ответь командой на его сообщение.", "username": username}
         user_id = user["id"]
 
         result = await self.unmute_user(user_id)

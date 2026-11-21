@@ -5,7 +5,7 @@ from typing import Any, Awaitable, Callable, Dict
 import logging
 
 from aiogram import BaseMiddleware
-from aiogram.types import Message, TelegramObject
+from aiogram.types import Update, TelegramObject
 
 from src.core.container import Container
 from src.bot.middlewares.comment_campaign import campaign_message_deleted
@@ -16,29 +16,23 @@ logger = logging.getLogger(__name__)
 class ModerationMiddleware(BaseMiddleware):
     """Middleware для автоматического удаления сообщений замьюченных пользователей."""
 
+    def __init__(self, container: Container):
+        self.container = container
+
     async def __call__(
         self,
         handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
         event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
-        # Работаем только с сообщениями
-        if not isinstance(event, Message):
+        message = (event.message or event.edited_message) if isinstance(event, Update) else None
+        if (not message or message.chat.type not in ('group', 'supergroup') or
+                not message.from_user or message.sender_chat or message.from_user.is_bot or
+                message.successful_payment or message.new_chat_members or message.left_chat_member):
             return await handler(event, data)
-        
-        message: Message = event
-        
-        # Пропускаем, если нет отправителя
-        if not message.from_user:
-            return await handler(event, data)
-        
         user_id = message.from_user.id
-        
-        # Получаем контейнер с сервисами
-        container: Container = data.get("container")
-        if not container:
-            return await handler(event, data)
-        
+        container = self.container
+
         # Проверяем, замьючен ли пользователь
         try:
             is_muted = await container.moderation_service.is_muted(user_id)

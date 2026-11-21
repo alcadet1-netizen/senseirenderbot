@@ -104,9 +104,7 @@ async def on_startup(bot: Bot, container: Container) -> None:
         logger.warning(f"Failed to load visual style from DB, using default: {e}")
         Visuals.STYLE = "classic"
 
-    # Загружаем кэш модерации (if needed)
-    # TODO: implement muted users cache in MongoDB
-    logger.info("✅ Moderation cache loaded (placeholder)")
+    await container.moderation_service.ensure_mute_index()
 
     # Запускаем мониторинг активности чатов
     await container.chat_activity_service.start_monitoring(bot)
@@ -251,6 +249,7 @@ async def main() -> None:
     from src.bot.middlewares.join_events import JoinDiagnosticsMiddleware, JoinServiceMessageMiddleware
     dp.update.outer_middleware(JoinDiagnosticsMiddleware())
     dp.update.outer_middleware(GroupAdminMiddleware())
+    dp.update.outer_middleware(ModerationMiddleware(container))
     dp.update.outer_middleware(JoinServiceMessageMiddleware(container))
     from src.bot.middlewares.removed_music import RemovedMusicMiddleware
     dp.update.outer_middleware(RemovedMusicMiddleware())
@@ -263,7 +262,6 @@ async def main() -> None:
     dp.message.middleware(MaintenanceMiddleware())
     dp.message.middleware(DatabaseMiddleware(container))
     dp.message.outer_middleware(DependencyMiddleware(container))
-    dp.message.middleware(ModerationMiddleware())
     dp.message.middleware(SubscriptionMiddleware())
     dp.message.middleware(ThrottlingMiddleware(container.throttle_service))  # Fixed: pass throttle service
     dp.message.middleware(UserActivityMiddleware(container))
