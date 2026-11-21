@@ -943,8 +943,11 @@
   $("session-ended").addEventListener("cancel", event => event.preventDefault());
   // The server owns stake, participants, score and both round actions.
   const vsDialog = $("vs-dialog");
+  // Studio: left = sensei-1 (leaping slash), right = sensei-2 (frontal guard) — same soul, two keyframes
   for (const fighter of vsDialog.querySelectorAll(".vs-fighter")) {
-    fighter.append($("vs-puppet").content.cloneNode(true));
+    const tpl = fighter.classList.contains("left") ? "vs-puppet" : "vs-puppet-2";
+    const src = document.getElementById(tpl);
+    fighter.append((src || $("vs-puppet")).content.cloneNode(true));
   }
   let vsBattle, vsTimer, vsBusy = false;
   let seenExchange = "", vsPlaying = false, frameTimer;
@@ -953,7 +956,13 @@
     vsPlaying = false;
     delete vsDialog.dataset.striker;
     delete vsDialog.dataset.sequence;
-    for (const actor of vsDialog.querySelectorAll(".vs-fighter")) delete actor.dataset.pose;
+    delete vsDialog.dataset.evade;
+    delete vsDialog.dataset.outcome;
+    delete vsDialog.dataset.direction;
+    for (const actor of vsDialog.querySelectorAll(".vs-fighter")) { delete actor.dataset.pose; actor.classList.remove("is-dashing"); }
+    const stage = vsDialog.querySelector(".vs-stage");
+    stage?.classList.remove("is-storm","is-impact","is-flash","is-shake","is-zoom","is-slash","is-hitstop");
+    vsDialog.querySelector(".vs-comic")?.classList.remove("is-striking");
     $("vs-read").hidden = true;
   }
   function describeStrike(s, side) {
@@ -984,35 +993,72 @@
       });
     };
     score();
+    const stage = vsDialog.querySelector(".vs-stage");
+    const sub = vsDialog.querySelector(".vs-cut-sub");
     vsDialog.dataset.sequence = "intro";
+    if (stage) { stage.classList.add("is-storm"); stage.classList.remove("is-impact","is-flash","is-shake","is-zoom","is-slash","is-hitstop"); }
     caption.textContent = "ДОДЗЁ  /  ПОЕДИНОК";
     banner.textContent = `Раунд ${exchange.round}`;
+    if (sub) sub.textContent = "";
     $("vs-status").textContent = "Ходы приняты · обмен ударами";
+    // Intro holds 720ms like anime title card
     const frame = side => {
       $("vs-read").hidden = true;
       vsDialog.dataset.sequence = "strike";
       const strike = exchange.strikes[side];
       const actors = vsDialog.querySelectorAll(".vs-fighter");
-      for (const actor of actors) delete actor.dataset.pose;
+      for (const actor of actors) { delete actor.dataset.pose; actor.classList.remove("is-dashing"); }
       void actors[0].offsetWidth;
-      // Sensei (left) and Ninja (right) – reference style: mirrored sweep/kata
-      actors[side].dataset.pose = (exchange.round + side) % 2 ? "sweep" : "kick";
-      actors[1-side].dataset.pose = strike.hit ? "recoil" : "slip";
-      // eye flash for striker
-      actors[side].querySelector(".vs-eye")?.animate([{opacity:1, filter:"brightness(1.4)"},{opacity:1, filter:"brightness(2)"}], {duration: 180, easing: "ease-out"});
+      // Alternate choreography, keep manga posing: sweep = grounded horizontal slash, kick = aerial leap
+      const attackerPose = (exchange.round + side) % 2 ? "sweep" : "kick";
+      const defenderPose = strike.hit ? "recoil" : "slip";
+      actors[side].dataset.pose = attackerPose;
+      actors[1-side].dataset.pose = defenderPose;
+      actors[side].classList.add("is-dashing");
+      // Dynamic eye flare + trail swap: attacker gets bright flare, defender glints on dodge
+      try {
+        actors[side].querySelector(".vs-eye")?.animate([{opacity:.9, filter:"brightness(1.2) blur(0px)"},{opacity:1, filter:"brightness(2.2) blur(.2px)"},{opacity:1, filter:"brightness(1.6)"}], {duration: 420, easing: "ease-out"});
+      } catch {}
       vsDialog.dataset.striker = side ? "right" : "left";
-      // Restart the impact layers for each of the two distinct strikes.
+      vsDialog.dataset.evade = strike.dodge === "dodge_l" ? "left" : "right";
+      vsDialog.dataset.outcome = strike.hit ? "hit" : "miss";
+      vsDialog.dataset.direction = strike.attack === "hit_l" ? "left" : "right";
+      // Choose impact typography like shonen
+      const impact = vsDialog.querySelector(".vs-impact");
+      if (impact) impact.textContent = strike.hit ? (side===0 ? "ДЗАН!" : "БАМ!") : (defenderPose==="slip" ? "УКЛОН!" : "МИМО!");
+      // Storm = petals swirl, slash = afterimage
+      if (stage) {
+        stage.style.setProperty("--slash-dir", side ? "-1" : "1");
+        stage.classList.add("is-storm","is-slash");
+        stage.classList.remove("is-impact","is-flash","is-shake");
+        if (strike.hit) stage.classList.add("is-impact");
+      }
       const comic = vsDialog.querySelector(".vs-comic");
       comic.classList.remove("is-striking");
       void comic.offsetWidth;
       comic.classList.add("is-striking");
-      vsDialog.dataset.evade = strike.dodge === "dodge_l" ? "left" : "right";
-      vsDialog.dataset.outcome = strike.hit ? "hit" : "miss";
-      vsDialog.dataset.direction = strike.attack === "hit_l" ? "left" : "right";
-      vsDialog.querySelector(".vs-impact").textContent = strike.hit ? "БАМ!" : "МИМО!";
       const read = describeStrike(s, side);
       $("vs-status").textContent = `Раунд ${exchange.round} · атакует ${s.names[side]}`;
+      // Hit-stop timing: if hit, freeze 90ms at contact (anime impact frame)
+      const hitStop = (!reduced && strike.hit) ? 90 : 0;
+      const contactAt = reduced ? 0 : 240;
       frameTimer = setTimeout(() => {
+        if (hitStop) {
+          stage?.classList.add("is-hitstop");
+          // flash + shake peak exactly at contact
+          stage?.classList.add("is-flash","is-shake");
+          if (navigator.vibrate) try { navigator.vibrate(28); } catch {}
+          frameTimer = setTimeout(() => {
+            stage?.classList.remove("is-hitstop","is-flash","is-shake");
+            if (!reduced && strike.hit) stage?.classList.add("is-zoom");
+            showRead();
+          }, hitStop);
+        } else {
+          if (!reduced && strike.hit) stage?.classList.add("is-shake");
+          showRead();
+        }
+      }, contactAt);
+      function showRead() {
         $("vs-read-hit").textContent = read.arrow;
         $("vs-read-dodge").textContent = read.dodge;
         $("vs-read-result").textContent = read.outcome;
@@ -1021,17 +1067,21 @@
         hits[side] += Number(strike.hit);
         score();
         frameTimer = setTimeout(() => {
+          stage?.classList.remove("is-zoom","is-shake","is-slash");
           if (!side) return frame(1);
           $("vs-read").hidden = true;
           delete vsDialog.dataset.striker;
           vsDialog.dataset.sequence = "outro";
+          stage?.classList.remove("is-storm","is-impact");
+          stage?.classList.add("is-zoom");
           caption.textContent = `ИТОГ ОБМЕНА  /  РАУНД ${exchange.round}`;
           banner.textContent = `${hits[0]} : ${hits[1]}`;
-          frameTimer = setTimeout(() => { stopVsComic(); drawVs(vsBattle); }, reduced ? 180 : 750);
-        }, reduced ? 850 : 880);
-      }, reduced ? 0 : 440);
+          if (sub) sub.textContent = hits[0]===hits[1] ? "НИЧЬЯ В РАУНДЕ" : (hits[side] > hits[1-side] ? "ПРЕИМУЩЕСТВО" : "");
+          frameTimer = setTimeout(() => { stage?.classList.remove("is-zoom","is-storm"); stopVsComic(); drawVs(vsBattle); }, reduced ? 180 : 860);
+        }, reduced ? 520 : 680);
+      }
     };
-    frameTimer = setTimeout(() => frame(0), reduced ? 0 : 700);
+    frameTimer = setTimeout(() => frame(0), reduced ? 0 : 680);
   }
   let draftKey = "", draft = {};
   function paintDraft() {

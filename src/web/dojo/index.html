@@ -965,10 +965,12 @@
           <button class="sheet-done" data-close="roadmap-sheet">CLOSE</button>
         </section>
       </div>
-      <!-- Local-space ninja sprite, instantiated twice (one per fighter).
-           The sprite is baked in AI art; poses animate the fighter's transform. -->
+      <!-- Studio puppets: two distinct sculpts, cloth & blade glow baked, motion adds the life -->
       <template id="vs-puppet">
         <img class="vs-ninja" src="/miniapp/dojo/assets/ninja-sensei-1.png" alt="" aria-hidden="true" draggable="false" onerror="this.src='/miniapp/dojo/assets/ninja-fighter.jpg'" />
+      </template>
+      <template id="vs-puppet-2">
+        <img class="vs-ninja" src="/miniapp/dojo/assets/ninja-sensei-2.png" alt="" aria-hidden="true" draggable="false" onerror="this.src='/miniapp/dojo/assets/ninja-sensei-1.png'" />
       </template>
       <dialog id="vs-dialog" aria-labelledby="vs-title">
         <div class="vs-stage">
@@ -1003,14 +1005,21 @@
             <i class="vs-emblem" aria-hidden="true">VS</i>
             <b id="vs-right">Ниндзя</b>
           </div>
+          <div class="vs-parallax" aria-hidden="true"><span class="vs-parallax-clouds"></span><span class="vs-parallax-fire"></span></div>
+          <div class="vs-vignette" aria-hidden="true"></div>
+          <div class="vs-speedlines" aria-hidden="true"></div>
+          <div class="vs-hitflash" aria-hidden="true"></div>
           <div class="vs-comic" aria-hidden="true">
-            <div class="vs-fighter left" data-stance="guard"><span class="vs-eye"></span></div>
-            <div class="vs-fighter right" data-stance="guard"><span class="vs-eye"></span></div>
-            <svg class="vs-blade-art" viewBox="0 0 320 120" aria-hidden="true" focusable="false">
-              <g class="vs-sweep"><path class="vs-blade-wake" d="M12 106 Q107 22 288 14 Q127 42 12 106Z"/>
-                <path class="vs-blade-edge" pathLength="1" d="M12 106 Q118 26 288 14"/>
-                <path class="vs-blade-thread" pathLength="1" d="M44 100 Q138 39 240 29"/></g>
-            </svg><i class="vs-contact-ring"></i><div class="vs-sparks"></div><b class="vs-impact"></b><div class="vs-cut-card"><small class="vs-cut-label"></small><strong class="vs-cut-title"></strong></div>
+            <div class="vs-fighter left" data-stance="guard"><span class="vs-trail" aria-hidden="true"></span><span class="vs-eye"></span></div>
+            <div class="vs-fighter right" data-stance="guard"><span class="vs-trail" aria-hidden="true"></span><span class="vs-eye"></span></div>
+            <svg class="vs-blade-art" viewBox="0 0 320 140" aria-hidden="true" focusable="false">
+              <defs>
+                <linearGradient id="vs-blade-grad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#7affaa" stop-opacity="0"/><stop offset="18%" stop-color="#eafff3" stop-opacity="1"/><stop offset="55%" stop-color="#7affaa"/><stop offset="100%" stop-color="#00ff88" stop-opacity="0"/></linearGradient>
+                <filter id="vs-blade-glow"><feGaussianBlur stdDeviation="3.2"/><feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 13 -5"/></filter>
+              </defs>
+              <g class="vs-sweep"><path class="vs-blade-wake" d="M 10 118 Q 105 24 298 8 Q 128 48 10 118 Z" filter="url(#vs-blade-glow)"/><path class="vs-blade-core" pathLength="1" d="M12 106 Q118 26 288 14" stroke="url(#vs-blade-grad)" stroke-width="7" fill="none" stroke-linecap="round"/><path class="vs-blade-edge" pathLength="1" d="M12 106 Q118 26 288 14"/><path class="vs-blade-thread" pathLength="1" d="M44 100 Q138 39 240 29"/></g>
+            </svg><i class="vs-contact-ring"></i><div class="vs-sparks"><span class="vs-spark-core"></span><span class="vs-spark-ring"></span></div><b class="vs-impact"></b><div class="vs-cut-card"><small class="vs-cut-label"></small><strong class="vs-cut-title"></strong><span class="vs-cut-sub"></span></div>
+            <div class="vs-afterimage" aria-hidden="true"></div>
           </div>
           <strong id="vs-status" role="status">Поиск соперника</strong>
           <div class="vs-stance-hint" aria-hidden="true"><span>SENSEI</span><span>対</span><span>NINJA</span></div>
