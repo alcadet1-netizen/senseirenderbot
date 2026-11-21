@@ -29,6 +29,8 @@ ASSETS = {
     'style.css',
     'miner.js',
     'motion.js',
+    'assets/dojo-arena.jpg',
+    'assets/ninja-fighter.jpg',
     'assets/duel-court.webp',
     'assets/sensei.webp',
     'assets/loading-hero.webp',
@@ -178,6 +180,10 @@ def setup_dojo(app, container=None):
         response = web.FileResponse(ROOT / name, headers=headers)
         if name.endswith('.webp'):
             response.headers['Content-Type'] = 'image/webp'
+        elif name.endswith(('.jpg', '.jpeg')):
+            response.headers['Content-Type'] = 'image/jpeg'
+        elif name.endswith('.png'):
+            response.headers['Content-Type'] = 'image/png'
         response.headers['Content-Security-Policy'] = (
             "default-src 'none'; script-src 'self' https://telegram.org; style-src 'self'; "
             "img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; "
@@ -402,7 +408,7 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/{asset:style\\.css|miner\\.js|motion\\.js}', page)
     app.router.add_get(
-        '/miniapp/dojo/assets/{asset:duel-court\\.webp|sensei\\.webp|loading-hero\\.webp|senseicoin-wordmark\\.svg|unbounded-variable\\.woff2|golos-text-variable\\.woff2|dseg7-classic-regular\\.woff2|sensei-style-(?:400|700)\\.woff2}', page)
+        '/miniapp/dojo/assets/{asset:dojo-arena\\.jpg|ninja-fighter\\.jpg|duel-court\\.webp|sensei\\.webp|loading-hero\\.webp|senseicoin-wordmark\\.svg|unbounded-variable\\.woff2|golos-text-variable\\.woff2|dseg7-classic-regular\\.woff2|sensei-style-(?:400|700)\\.woff2}', page)
     app.router.add_post(
         '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|vs_private_share|vs_share_result|vs_chats|vs_invite|vs_accept|vs_state|vs_publish|vs_commit|vs_move|ref_claim|share|daily|daily_claim|chest}',
         api)
