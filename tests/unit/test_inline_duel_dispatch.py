@@ -11,7 +11,8 @@ from src.bot.loader import create_dispatcher
 
 
 @pytest.mark.asyncio
-async def test_dispatcher_injects_container_for_both_inline_duel_updates():
+@pytest.mark.parametrize('chat_type', ['private', 'group', 'supergroup'])
+async def test_dispatcher_injects_container_for_both_inline_duel_updates(chat_type):
     offers = NS(update_one=AsyncMock())
     container = NS(mongo_client=NS(database=NS(dojo_duel_offers=offers, users=NS(
         find_one=AsyncMock(return_value={'coins': 500})))), duel_service=NS(_is_in_active_duel=lambda _: False))
@@ -26,8 +27,16 @@ async def test_dispatcher_injects_container_for_both_inline_duel_updates():
     user = {'id': 7, 'first_name': 'Игрок', 'is_bot': False}
     async def feed(i, **event):
         await dp.feed_update(bot, Update.model_validate({'update_id': i, **event}, context={'bot': bot}))
-    await feed(1, inline_query={'id': 'q', 'from': user, 'query': 'dojo_vs 300', 'offset': '', 'chat_type': 'private'})
+    await feed(1, inline_query={'id': 'q', 'from': user, 'query': 'dojo_vs 300', 'offset': '', 'chat_type': chat_type})
     result = session.await_args.args[1].results[0]
-    await feed(2, chosen_inline_result={'result_id': result.id, 'from': user, 'query': 'dojo_vs 300', 'inline_message_id': 'post'})
+    link = f'https://t.me/dojo_test_bot?startapp=vs_7_{result.id[3:]}'
+    chosen = {'result_id': result.id, 'from': user, 'query': 'dojo_vs 300'}
+    if chat_type == 'private':
+        assert result.reply_markup is None and link in result.input_message_content.message_text
+        assert result.input_message_content.link_preview_options.is_disabled
+    else:
+        assert result.reply_markup.inline_keyboard[0][0].url == link
+        chosen['inline_message_id'] = 'post'
+    await feed(2, chosen_inline_result=chosen)
     assert offers.update_one.await_count == 2
     assert offers.update_one.await_args.args[1]['$set']['status'] == 'open'

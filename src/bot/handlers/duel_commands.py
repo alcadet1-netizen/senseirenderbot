@@ -282,7 +282,7 @@ async def inline_duel(query, container: Container, bot: Bot):
     """The Telegram chooser supplies chat type, never a recipient's user ID."""
     import secrets
     import time
-    from aiogram.types import InlineQueryResultArticle, InputTextMessageContent
+    from aiogram.types import InlineQueryResultArticle, InputTextMessageContent, LinkPreviewOptions
     from pymongo.errors import DuplicateKeyError
     match = re.fullmatch(r'dojo_vs ([0-9]{1,16})', query.query)
     uid = query.from_user.id
@@ -304,18 +304,22 @@ async def inline_duel(query, container: Container, bot: Bot):
         else:
             url = f'https://t.me/{(await bot.me()).username}?startapp=vs_{uid}_{token}'
             title = f'⚔️ Отправить дуэль · {bet} Coin'
+            private = query.chat_type == 'private'
+            text = f'{query.from_user.full_name} вызывает на дуэль! Ставка каждого: {bet} Coin. Принять за 2 минуты.'
             results.append(InlineQueryResultArticle(id=f'vs_{token}', title=title,
-                input_message_content=InputTextMessageContent(message_text=f'{query.from_user.full_name} вызывает на дуэль! Ставка каждого: {bet} Coin. Принять за 2 минуты.', parse_mode=None),
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='Открыть дуэль', url=url)]])))
+                input_message_content=InputTextMessageContent(message_text=f'{text}\n{url}' if private else text,
+                    parse_mode=None, link_preview_options=LinkPreviewOptions(is_disabled=True) if private else None),
+                reply_markup=None if private else InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text='Открыть дуэль', url=url)]])))
     await query.answer(results, cache_time=0, is_personal=True)
 
 
 @router.chosen_inline_result(F.result_id.startswith('vs_'))
 async def sent_inline_duel(chosen, container: Container):
     import time
-    if not chosen.inline_message_id:
-        return
     now = time.time()
+    # Telegram omits inline_message_id for messages without an inline keyboard.
+    scope = {} if chosen.inline_message_id else {'inline_private': True}
     await container.mongo_client.database.dojo_duel_offers.update_one(
-        {'_id': chosen.from_user.id, 'token': chosen.result_id[3:], 'status': 'draft', 'expires': {'$gt': now}},
+        {**scope, '_id': chosen.from_user.id, 'token': chosen.result_id[3:], 'status': 'draft', 'expires': {'$gt': now}},
         {'$set': {'status': 'open', 'expires': now+120, 'inline_arena': chosen.inline_message_id}})
