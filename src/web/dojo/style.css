@@ -151,7 +151,9 @@ button {
   border-radius: 999px;
   background: rgba(2, 13, 7, 0.68);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(10px);
+  /* backdrop-filter removed on purpose: this panel sits at 68-97%
+     opacity, so the blur behind it never reads -- it only re-blurred
+     the animated background on every frame. Gradient keeps the glass look. */
 }
 
 .lang-option {
@@ -221,7 +223,7 @@ button {
   font-size: 16px;
   font-weight: 600;
   font-style: italic;
-  backdrop-filter: blur(10px);
+  /* no backdrop-filter: at this opacity the blur never reads (see header note) */
   cursor: pointer;
   flex: 0 0 auto;
 }
@@ -391,7 +393,7 @@ button {
   box-shadow:
     0 14px 34px rgba(0, 0, 0, 0.38),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(12px);
+  /* no backdrop-filter: at this opacity the blur never reads (see header note) */
   flex: 0 0 auto;
 }
 
@@ -586,10 +588,7 @@ button {
   width: var(--size);
   height: calc(var(--size) * 0.72);
   border-radius: 72% 12% 68% 18% / 64% 18% 72% 26%;
-  background: linear-gradient(135deg, #ffe0ea 0%, #ffa8c7 48%, #d45d89 100%);
-  box-shadow:
-    0 1px 7px rgba(255, 120, 170, 0.26),
-    inset 0 0 5px rgba(255, 255, 255, 0.28);
+  background: #ffa8c7;
   opacity: 0;
   transform-origin: 50% 50%;
   animation: leaf-fall var(--duration) linear var(--delay) infinite;
@@ -632,7 +631,6 @@ button {
   letter-spacing: 0.28em;
   line-height: 1.32;
   text-orientation: upright;
-  text-shadow: 0 0 8px rgba(35, 255, 124, 0.38);
   white-space: nowrap;
   writing-mode: vertical-rl;
   animation: matrix-fall var(--duration) linear var(--delay) infinite;
@@ -676,9 +674,10 @@ button {
     rgba(36, 220, 115, 0.08) 46%,
     transparent 70%
   );
-  filter: blur(10px);
+  /* gradient is already soft: the 10px blur re-rasterised on every breathe frame */
   animation: breathe 4.2s ease-in-out infinite;
   pointer-events: none;
+  will-change: transform, opacity;
 }
 
 .orb-spark {
@@ -688,6 +687,7 @@ button {
   border: 1px dashed rgba(104, 255, 175, 0.34);
   animation: spin 28s linear infinite;
   pointer-events: none;
+  will-change: transform;
 }
 
 .orb-spark::before {
@@ -699,7 +699,7 @@ button {
   height: 8px;
   border-radius: 50%;
   background: var(--green-bright);
-  box-shadow: 0 0 18px rgba(74, 255, 150, 0.9);
+  box-shadow: 0 0 10px rgba(74, 255, 150, 0.7);
 }
 
 .orb-button {
@@ -829,15 +829,22 @@ button {
 }
 
 .phase-mining .orb-button {
+  /* static glow: animating box-shadow repainted the whole 182px disc every frame */
   box-shadow:
     0 0 0 8px rgba(51, 255, 143, 0.045),
     0 0 58px rgba(47, 255, 142, 0.34),
     inset 0 0 64px rgba(44, 255, 139, 0.18);
-  animation: core-pulse 2.6s ease-in-out infinite;
+}
+/* the pulse lives on the halo, which only animates transform + opacity */
+.phase-mining .orb-halo { animation: core-pulse-soft 2.6s ease-in-out infinite; }
+@keyframes core-pulse-soft {
+  0%, 100% { opacity: .78; transform: scale(.97); }
+  50%      { opacity: 1;   transform: scale(1.04); }
 }
 
 .phase-mining .orb::after {
   animation: ring-pulse 2.6s ease-out infinite;
+  will-change: transform, opacity;
 }
 
 .phase-mining .status {
@@ -886,7 +893,7 @@ button {
   border-radius: 22px;
   background: linear-gradient(180deg, rgba(2, 13, 7, 0.8), rgba(1, 7, 4, 0.93));
   box-shadow: var(--shadow);
-  backdrop-filter: blur(12px);
+  /* no backdrop-filter: at this opacity the blur never reads (see header note) */
   text-align: center;
   max-height: none;
   overflow: visible;
@@ -1202,7 +1209,7 @@ button {
   border-radius: 16px;
   background: rgba(3, 15, 9, 0.82);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(12px);
+  /* no backdrop-filter: at this opacity the blur never reads (see header note) */
 }
 
 .stat-row {
@@ -1408,7 +1415,7 @@ button {
     rgba(2, 11, 6, 0.62),
     rgba(1, 6, 3, 0.97)
   );
-  backdrop-filter: blur(14px);
+  /* no backdrop-filter: at this opacity the blur never reads (see header note) */
 }
 
 .tab {
@@ -1911,6 +1918,7 @@ button:focus-visible {
 
 .phase-mining .orb-button::before {
   animation: centre-pulse 2.6s ease-out infinite;
+  will-change: transform, opacity;
 }
 
 .orb-button {
@@ -2252,6 +2260,11 @@ button:focus-visible {
 .phase-mining .orb-scan {
   opacity: 1;
   animation: scan-orbit 3.2s linear infinite;
+  will-change: transform;
+  /* The radial mask was re-evaluated on every rotated frame. The conic gradient
+     already fades at both ends, so drop the mask and let the gradient do it. */
+  mask: none !important;
+  -webkit-mask: none !important;
 }
 
 .mining-particles {
@@ -2274,12 +2287,15 @@ button:focus-visible {
   width: var(--size);
   height: var(--size);
   border-radius: 50%;
-  background: #b9ffd6;
-  box-shadow:
-    0 0 6px rgba(109, 255, 171, 0.9),
-    0 0 12px rgba(64, 255, 150, 0.4);
+  background: #ccffe2;
   opacity: 0;
   animation: particle-rise var(--duration) linear var(--delay) infinite;
+  will-change: transform, opacity;
+}
+.mining-particles::after {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 60% 34% at 50% 72%, rgba(90, 255, 175, .14), transparent 72%);
 }
 
 /* --- Referral invite card ------------------------------------------------ */
@@ -3951,7 +3967,7 @@ button:focus-visible {
   box-shadow:
     0 15px 36px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(215, 255, 232, 0.07);
-  backdrop-filter: blur(14px);
+  /* no backdrop-filter: at this opacity the blur never reads (see header note) */
 }
 
 .energy::before {
@@ -4016,7 +4032,7 @@ button:focus-visible {
   box-shadow:
     0 10px 24px rgba(0, 0, 0, 0.28),
     inset 0 1px 0 rgba(215, 255, 232, 0.05);
-  backdrop-filter: blur(12px);
+  /* no backdrop-filter: at this opacity the blur never reads (see header note) */
 }
 
 .mine-meter-head {
@@ -4179,6 +4195,17 @@ button:focus-visible {
   filter: drop-shadow(0 0 5px rgba(76, 255, 155, 0.4));
 }
 
+/* The mist and dust fields need their own box: without it the 22 motes
+   fall into normal flow, collapse to a 0px-tall strip under the header
+   and rise out of the viewport instead of drifting across the scene. */
+.ambient-mist,
+.ambient-dust {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 /* Layered atmosphere: aura, slow light sweep, mist, dust, petals and code. */
 .ambient-aura,
 .ambient-ray,
@@ -4202,9 +4229,9 @@ button:focus-visible {
   );
 }
 
-.matrix-col {
-  filter: blur(0.3px);
-}
+/* blur(0.3px) on sliding glyph columns is imperceptible but costs a
+   re-raster per column per frame. */
+.matrix-col { }
 
 .ambient-scan {
   position: absolute;
@@ -4263,10 +4290,11 @@ button:focus-visible {
     rgba(18, 151, 76, 0.06) 42%,
     transparent 72%
   );
-  filter: blur(20px);
+  /* the radial gradient is already soft; a 20px blur on a moving layer is pure cost */
   opacity: 0.55;
   animation: ambient-mist var(--duration) ease-in-out var(--delay) infinite
     alternate;
+  will-change: transform, opacity;
 }
 
 .ambient-mote {
@@ -4276,13 +4304,19 @@ button:focus-visible {
   width: var(--size);
   height: var(--size);
   border-radius: 50%;
-  background: #c7ffdd;
-  box-shadow:
-    0 0 5px rgba(100, 255, 169, 0.9),
-    0 0 12px rgba(46, 255, 132, 0.5);
+  /* No box-shadow: 22 glowing dots animated a blurred shadow each frame.
+     The dot reads as glowing because it sits on the dark layer + shared bloom. */
+  background: #d6ffe6;
   opacity: 0;
   animation: ambient-mote-rise var(--duration) linear var(--delay) infinite;
   will-change: transform, opacity;
+}
+/* One soft bloom for the whole mote field instead of 22 shadows.
+   Container is #ambient-dust (there is no .ambient-motes element). */
+.ambient-dust::after {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 70% 40% at 50% 78%, rgba(70, 255, 160, .16), transparent 70%);
 }
 
 .phase-mining .matrix-layer {
@@ -4303,9 +4337,9 @@ button:focus-visible {
   );
 }
 
-.matrix-col {
-  filter: blur(0.3px);
-}
+/* blur(0.3px) on sliding glyph columns is imperceptible but costs a
+   re-raster per column per frame. */
+.matrix-col { }
 
 .ambient-scan {
   background: repeating-linear-gradient(
