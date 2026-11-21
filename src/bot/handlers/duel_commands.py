@@ -21,22 +21,43 @@ def make_decision_kb(duel_id: int, challenger_id: int, opponent_id: int) -> Inli
         InlineKeyboardButton(text="Отклонить ❌", callback_data=DuelDecisionCb(id=duel_id, d="x", c=challenger_id, o=opponent_id).pack()),
     ]])
 
-@router.message(F.reply_to_message & F.text.regexp(r"сенсей\s+дуэль(?:\s+(?:№\s*)?(\d+))?", flags=re.IGNORECASE))
-async def text_duel(message: Message, container: Container, bot: Bot):
-    """
-    Обработчик текстовой команды вызова на дуэль (regex).
-    Пример: "сенсей дуэль 100" или "сенсей дуэль" (ставка 0).
-    """
-    m = re.search(r"сенсей\s+дуэль(?:\s+(?:№\s*)?(\d+))?", message.text or "", re.IGNORECASE)
-    
-    bet = 0
-    if m and m.group(1):
-        try:
-            bet = int(m.group(1))
-        except ValueError:
-            await message.answer("❌ Некорректная ставка.")
-            return
+def _extract_bet(text: str) -> int | None:
+    if not text:
+        return None
+    nums = re.findall(r"\b(\d{3,16})\b", text)
+    if not nums:
+        m = re.search(r"№\s*(\d+)", text)
+        if m:
+            try:
+                return int(m.group(1))
+            except:
+                return None
+        return None
+    try:
+        return int(nums[-1])
+    except:
+        return None
 
+def _extract_username(text: str) -> str | None:
+    if not text:
+        return None
+    m = re.search(r"@([A-Za-z0-9_]{4,32})", text)
+    if m:
+        return m.group(1)
+    return None
+
+def _help_kb(bot_username: str | None = None, url: str | None = None) -> InlineKeyboardMarkup | None:
+    if not bot_username and not url:
+        return None
+    link = url or f"https://t.me/{bot_username}?start=dojo"
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="⛩ Открыть Додзё · VS", url=link)
+    ]])
+
+@router.message(F.text.regexp(r"сенсей\s+дуэль", flags=re.IGNORECASE))
+async def text_duel(message: Message, container: Container, bot: Bot):
+    """Поддержка: сенсей дуэль 500, сенсей дуэль @user 500, в ответе или с @."""
+    bet = _extract_bet(message.text or "")
     await cmd_duel(message, container, bot, bet=bet)
 
 @router.message(Command("duel", "senseiduel"))
@@ -45,44 +66,127 @@ async def cmd_duel(message: Message, container: Container, bot: Bot, bet: int = 
     username = message.from_user.username
     mention = f"@{username}" if username else f"<b>{html.escape(message.from_user.full_name)}</b>"
     
-    # Parse bet if not provided
+    # Parse bet if not provided - now supports @username anywhere
     if bet is None:
-        args = message.text.split()
-        if len(args) > 1:
-            try:
-                bet = int(args[1])
-            except ValueError:
-                await message.answer(f"{mention}\n\n❌ Ставка должна быть числом.\nПример: /duel 300", parse_mode="HTML")
-                return
-        else:
-            bet = 0 # Default bet
+        bet = _extract_bet(message.text or "")
+        if bet is None:
+            # Check if message is just "/duel" without bet -> default 300
+            # If no bet found but command present, use 300 as default
+            # Only if text is exactly command without numbers
+            args = (message.text or "").strip().split()
+            if len(args) == 1:
+                bet = 300
+            else:
+                # Try to parse second arg as bet for backwards compat
+                try:
+                    bet = int(args[1]) if len(args) > 1 else 300
+                except ValueError:
+                    # If args[1] is @username, bet may be in args[2]
+                    if len(args) > 2:
+                        try:
+                            bet = int(args[2])
+                        except:
+                            await message.answer(f"{mention}\n\n❌ Ставка должна быть числом.\nПример: <code>/duel 300</code> в ответе или <code>/duel @user 500</code>", parse_mode="HTML")
+                            return
+                    else:
+                        bet = 300
+        # Normalize bet 0 case from old logic
+        if bet == 0:
+            bet = 300
+
+    if bet is None:
+        bet = 300
 
     if bet < 300:
         await message.answer(f"{mention}\n\n❌ Минимальная ставка — 300 Coin.", parse_mode="HTML")
         return
-
-    # Check reply
-    if not message.reply_to_message or not message.reply_to_message.from_user:
-        await message.answer(f"{mention}\n\n❌ Ответь на сообщение того, кого хочешь вызвать на дуэль!", parse_mode="HTML")
+    if bet > 10_000_000:
+        await message.answer(f"{mention}\n\n❌ Максимальная ставка — 10 000 000 Coin.", parse_mode="HTML")
         return
 
-    opponent = message.reply_to_message.from_user
+    # Resolve opponent: reply > @mention > text_mention entity
+    opponent = None
+    opponent_username = None
+
+    # 1) reply
+    if message.reply_to_message and message.reply_to_message.from_user:
+        opponent = message.reply_to_message.from_user
+        # If reply is to bot itself, try to find @mention instead
+        if opponent.is_bot and opponent.id == bot.id:
+            opponent = None
+        # Also if reply exists but bet was meant for @username, prefer @ if present
+        # Keep reply as primary unless it is bot
+
+    # 2) @username in text (if no valid reply or reply is bot)
+    if opponent is None or (opponent and opponent.is_bot):
+        uname = _extract_username(message.text or "")
+        if uname:
+            # Lookup by username case-insensitive
+            try:
+                db_user = await container.mongo_client.database.users.find_one(
+                    {"username": {"$regex": f"^{re.escape(uname)}$", "$options": "i"}}
+                )
+                if db_user:
+                    # Create a synthetic user object compatible with later checks
+                    class _U:
+                        pass
+                    opponent = _U()
+                    opponent.id = db_user["id"]
+                    opponent.username = db_user.get("username")
+                    opponent.full_name = db_user.get("first_name") or uname
+                    opponent.is_bot = False
+                    opponent_username = uname
+                else:
+                    # Try to resolve via entities text_mention
+                    opponent = None
+            except Exception:
+                opponent = None
+
+    # 3) text_mention entity
+    if opponent is None and message.entities:
+        for ent in message.entities:
+            if ent.type == "text_mention" and getattr(ent, "user", None):
+                opponent = ent.user
+                break
+
+    if not opponent:
+        bot_name = (await bot.me()).username if hasattr(bot, 'me') else None
+        kb = None
+        try:
+            if bot_name:
+                kb = _help_kb(bot_username=bot_name)
+        except:
+            kb = None
+        await message.answer(
+            f"{mention}\n\n❌ Кого вызвать?\n"
+            f"• Ответь на сообщение игрока: <code>/duel 500</code>\n"
+            f"• Или укажи ник: <code>/duel @{username or 'user'} 500</code>\n"
+            f"• Или открой Додзё → VS и выбери ставку там.",
+            parse_mode="HTML", reply_markup=kb
+        )
+        return
+
     if opponent.id == user_id:
         await message.answer(f"{mention}\n\n❌ Бить себя — это странно. Сходи к психологу.", parse_mode="HTML")
         return
-    if opponent.is_bot:
+    if getattr(opponent, "is_bot", False):
         await message.answer(f"{mention}\n\n❌ Я не дерусь с коллегами. (И с другими ботами тоже).", parse_mode="HTML")
         return
 
     # Check database info
-    user = await container.user_service.get_profile(user_id)
-    opp_user = await container.user_service.get_profile(opponent.id)
+    try:
+        user = await container.user_service.get_profile(user_id)
+        opp_user = await container.user_service.get_profile(opponent.id)
+    except Exception:
+        user = None
+        opp_user = None
 
     if not user:
         await message.answer(f"{mention}\n\n❌ Ты не зарегистрирован. Напиши что-нибудь в чат.", parse_mode="HTML")
         return
     if not opp_user:
-        await message.answer(f"{mention}\n\n❌ Оппонент не зарегистрирован.", parse_mode="HTML")
+        opp_name = getattr(opponent, "username", None) or getattr(opponent, "full_name", "игрок")
+        await message.answer(f"{mention}\n\n❌ Оппонент @{html.escape(str(opp_name))} не зарегистрирован. Попроси его нажать /start.", parse_mode="HTML")
         return
         
     # Check eligibility (using internal method or service helper)
@@ -101,8 +205,13 @@ async def cmd_duel(message: Message, container: Container, bot: Bot, bet: int = 
         )
         
         if isinstance(result, str):
-            # Error message
-            await message.answer(f"{mention}\n\n{result}", parse_mode="HTML")
+            # Error message - add helpful context for common errors
+            extra = ""
+            if "Недостаточно" in result or "средств" in result:
+                extra = "\n\n💡 Пополни баланс через /senseidaily или забери награду в /dojo"
+            elif "занят" in result or "активной" in result:
+                extra = "\n\n⏳ Заверши текущую дуэль или подожди 60 сек."
+            await message.answer(f"{mention}\n\n{result}{extra}", parse_mode="HTML")
             return
             
         duel = result
@@ -112,8 +221,8 @@ async def cmd_duel(message: Message, container: Container, bot: Bot, bet: int = 
         await message.answer(f"{mention}\n\n❌ Ошибка при создании дуэли: {html.escape(str(e))}", parse_mode="HTML")
         return
     
-    opp_username = opponent.username
-    opp_mention = f"@{opp_username}" if opp_username else f"<b>{html.escape(opponent.full_name)}</b>"
+    opp_username = getattr(opponent, "username", None)
+    opp_mention = f"@{opp_username}" if opp_username else f"<b>{html.escape(getattr(opponent, 'full_name', str(opponent.id)))}</b>"
 
     # Send challenge
     try:
@@ -122,7 +231,8 @@ async def cmd_duel(message: Message, container: Container, bot: Bot, bet: int = 
             f"⚔️ <b>ВЫЗОВ НА ДУЭЛЬ!</b>\n"
             f"{mention} вызывает {opp_mention}!\n"
             f"💰 Ставка: <b>{bet}</b> монет\n"
-            f"⏳ Есть 120 секунд на принятие решения.",
+            f"⏳ Есть 120 секунд на принятие решения.\n"
+            f"<i>Или открой /dojo → VS для анимированной арены</i>",
             reply_markup=make_decision_kb(duel.id, user_id, opponent.id),
             parse_mode="HTML"
         )

@@ -992,12 +992,14 @@
       $("vs-read").hidden = true;
       vsDialog.dataset.sequence = "strike";
       const strike = exchange.strikes[side];
-      // Alternate the choreography, not the server's hit/dodge decision.
       const actors = vsDialog.querySelectorAll(".vs-fighter");
       for (const actor of actors) delete actor.dataset.pose;
       void actors[0].offsetWidth;
+      // Sensei (left) and Ninja (right) – reference style: mirrored sweep/kata
       actors[side].dataset.pose = (exchange.round + side) % 2 ? "sweep" : "kick";
       actors[1-side].dataset.pose = strike.hit ? "recoil" : "slip";
+      // eye flash for striker
+      actors[side].querySelector(".vs-eye")?.animate([{opacity:1, filter:"brightness(1.4)"},{opacity:1, filter:"brightness(2)"}], {duration: 180, easing: "ease-out"});
       vsDialog.dataset.striker = side ? "right" : "left";
       // Restart the impact layers for each of the two distinct strikes.
       const comic = vsDialog.querySelector(".vs-comic");
@@ -1121,6 +1123,17 @@
   }
   $("vs-send")?.addEventListener("click", () => {
     if (vsBet()) $("vs-destinations").hidden = !$("vs-destinations").hidden;
+  });
+  // Quick bet presets like reference card stakes
+  vsDialog?.querySelectorAll(".vs-bet-presets [data-bet]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      $("vs-bet").value = btn.dataset.bet;
+      vsDialog.querySelectorAll(".vs-bet-presets [data-bet]").forEach(b => b.classList.toggle("is-active", b===btn));
+    });
+  });
+  $("vs-bet")?.addEventListener("input", () => {
+    const v = $("vs-bet").value;
+    vsDialog.querySelectorAll(".vs-bet-presets [data-bet]").forEach(b => b.classList.toggle("is-active", b.dataset.bet===v));
   });
   $("vs-group")?.addEventListener("click", () => {
     const bet = vsBet();

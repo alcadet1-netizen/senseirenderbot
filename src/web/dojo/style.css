@@ -5868,3 +5868,105 @@ html.motion-reduced .vs-petals { display: none; }
   .vs-stage * { animation: none !important; transition-duration: .01ms !important; }
   .vs-petals { display: none; }
 }
+
+/* === Sensei vs Ninja — reference-accurate arena upgrade === */
+.vs-moon {
+  position: absolute; left: 50%; top: 14%; translate: -50% 0;
+  width: 88px; height: 88px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fffbe6 0%, #e8f0a0 42%, #a8c97a 65%, transparent 70%);
+  box-shadow: 0 0 18px #e8f0a0cc, 0 0 42px #7affaa55, inset 0 0 18px #ffffff;
+  opacity: .92;
+}
+.vs-temple-silhouette {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 60% 22% at 50% 55%, rgba(0,0,0,.55), transparent 70%),
+    linear-gradient(180deg, transparent 38%, rgba(1, 20, 12, .55) 70%, rgba(1, 12, 8, .78) 100%);
+}
+.vs-title-sensei, .vs-title-ninja {
+  font-family: "Unbounded", system-ui, sans-serif;
+  font-weight: 900; font-style: italic; letter-spacing: .02em;
+  font-size: clamp(16px, 4.5vw, 20px);
+  color: #7affaa; text-shadow: 0 0 10px #35ff85, 0 2px 0 #02140a;
+  background: linear-gradient(180deg, #eafff3, #7affaa);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.vs-title-ninja { color: #9effbd; }
+.vs-title-kanji {
+  display: inline-grid; place-items: center;
+  width: 26px; height: 26px; margin: 0 2px;
+  font-size: 16px; font-weight: 900; color: #ffe76b;
+  background: radial-gradient(circle, #fff7a0, #ffd65c 55%, #ff9d2e);
+  border-radius: 50%; box-shadow: 0 0 12px #ffd65c88, inset 0 1px 0 #fff;
+  -webkit-text-fill-color: #2a1a00; -webkit-text-stroke: 0;
+}
+.vs-stage .vs-top small { color: #7affaa; letter-spacing: .18em; }
+.vs-bet-row { display: grid; gap: 6px; text-align: center; }
+.vs-bet-row label { font-weight: 800; font-size: 12px; color: #b9e6cc; }
+.vs-bet-row input { width: 110px; padding: 8px 10px; margin-left: 6px; border-radius: 10px; border: 1px solid #3e8f5e; background: #041c0f; color: #eafff3; font-weight: 900; text-align: center; }
+.vs-bet-presets { display: flex; justify-content: center; gap: 6px; }
+.vs-bet-presets button {
+  min-width: 44px; padding: 6px 8px; border-radius: 999px;
+  border: 1px solid #3e8f5e; background: linear-gradient(180deg, #0a2e1d, #041c0f);
+  color: #9effbd; font-weight: 800; font-size: 12px; cursor: pointer;
+}
+.vs-bet-presets button:active, .vs-bet-presets button.is-active {
+  background: linear-gradient(180deg, #ffd65c, #ff9d2e); color: #2a1500; border-color: #ffd65c; box-shadow: 0 0 10px #ffd65c55;
+}
+.vs-stance-hint {
+  position: absolute; bottom: 42px; left: 50%; translate: -50% 0;
+  display: flex; gap: 8px; align-items: center; font-size: 9px; font-weight: 800; letter-spacing: .12em; color: #7affaa88;
+}
+.vs-fighter .vs-eye {
+  position: absolute; left: 50%; top: 18%; translate: -50% 0;
+  width: 18px; height: 8px; border-radius: 2px 2px 50% 50%;
+  background: #eafff3; box-shadow: 0 0 6px #7affaa, 0 0 12px #35ff85;
+  opacity: 0; transition: opacity .2s;
+}
+.vs-fighter .vs-eye::after {
+  content: ''; position: absolute; inset: 2px 4px; background: #7affaa; border-radius: 50%; filter: blur(1px);
+}
+.vs-stage:not([data-sequence=intro]) .vs-eye { opacity: 1; }
+.vs-ninja {
+  filter: drop-shadow(0 10px 12px rgba(0,0,0,.65)) drop-shadow(0 0 18px rgba(53,255,133,.45)) brightness(1.08) contrast(1.15);
+  border-radius: 50% 50% 12% 12% / 8% 8% 92% 92%;
+  background: radial-gradient(ellipse at 50% 80%, rgba(53,255,133,.18), transparent 62%);
+}
+.vs-fighter.left .vs-ninja { transform: scaleX(-1); }
+.vs-fighter[data-pose=sweep] .vs-ninja { filter: drop-shadow(0 10px 12px rgba(0,0,0,.65)) drop-shadow(0 0 28px #7affaa) brightness(1.2); }
+.vs-fighter[data-pose=kick] .vs-ninja { filter: drop-shadow(0 10px 12px rgba(0,0,0,.65)) drop-shadow(0 0 22px #9effbd) brightness(1.15); }
+/* Green aura behind fighters matching reference */
+.vs-fighter::before {
+  background: radial-gradient(ellipse 70% 45% at 50% 75%, #35ff85cc, transparent 68%);
+  opacity: .55; filter: blur(8px);
+}
+.vs-blade-art { color: #7affaa; filter: drop-shadow(0 0 12px #35ff85) drop-shadow(0 0 22px #35ff8566); }
+.vs-blade-wake { fill: #7affaa; opacity: .62; }
+.vs-blade-edge { stroke: #eafff3; stroke-width: 3.6; filter: drop-shadow(0 0 8px #eafff3); }
+.vs-impact { background: linear-gradient(165deg, #fff7a0, #ffd65c 35%, #ff8d2c); color: #2a1500; box-shadow: 0 6px 0 #7a3000, 0 0 28px #ffd65c88; }
+#vs-status { background: rgba(1, 18, 12, .88); border-color: #2fe07a; color: #c9ffe0; font-weight: 900; letter-spacing: .04em; }
+#vs-score b { background: linear-gradient(180deg, #052a1aee, #02140cee); border-color: #2fe07a55; }
+#vs-score b.is-me { border-color: #ffd65c; box-shadow: 0 0 16px #ffd65c44, inset 0 0 12px #ffd65c1a; }
+.vs-console { background: linear-gradient(180deg, #02160eee, #010e08f8); }
+#vs-send { background: linear-gradient(180deg, #7affaa, #2fdc7a 55%, #1a9d56); border-color: #7affaa; color: #02140a; font-weight: 900; letter-spacing: .06em; }
+#vs-send:hover { filter: brightness(1.08); box-shadow: 0 4px 0 #0c5c28, 0 0 28px #35ff8555; }
+.vs-petals i { background: linear-gradient(150deg, #ffd6e8, #ff8fb8 55%, #d94a7a); border-radius: 60% 40% 55% 45% / 55% 45% 60% 40%; }
+
+
+/* Poses: first-class combat choreography — sweep/kick/recoil/slip match reference manga */
+.vs-fighter[data-pose=sweep] { transform: translateX(var(--x, 0)) translateY(-6px) rotate(-6deg) scale(1.04); transition: transform .28s cubic-bezier(.2,.8,.2,1); }
+.vs-fighter.left[data-pose=sweep] { --x: 18px; }
+.vs-fighter.right[data-pose=sweep] { --x: -18px; }
+.vs-fighter[data-pose=kick] { transform: translateX(var(--x, 0)) translateY(-10px) rotate(4deg) scale(1.06); transition: transform .24s cubic-bezier(.2,.9,.2,1); }
+.vs-fighter.left[data-pose=kick] { --x: 22px; }
+.vs-fighter.right[data-pose=kick] { --x: -22px; }
+.vs-fighter[data-pose=recoil] { transform: translateX(var(--x, 0)) translateY(4px) rotate(3deg) scale(.98); filter: brightness(.85) saturate(.9); transition: transform .22s ease, filter .22s ease; }
+.vs-fighter.left[data-pose=recoil] { --x: -10px; }
+.vs-fighter.right[data-pose=recoil] { --x: 10px; }
+.vs-fighter[data-pose=slip] { transform: translateX(var(--x, 0)) translateY(-4px) rotate(-8deg) scale(1.02); transition: transform .2s ease; }
+.vs-fighter.left[data-pose=slip] { --x: -16px; }
+.vs-fighter.right[data-pose=slip] { --x: 16px; }
+.vs-comic.is-striking .vs-blade-art { animation: vs-blade 360ms cubic-bezier(.2,.8,.1,1) both; }
+@keyframes vs-blade { 0% { opacity:0; transform: translateX(-18px) scaleX(.7) } 22% { opacity:1 } 100% { opacity:0; transform: translateX(0) scaleX(1) } }
+.vs-comic.is-striking .vs-impact { animation: vs-impact-pop 420ms 180ms both; }
+@keyframes vs-impact-pop { 0% { transform: scale(.4) rotate(-6deg); opacity:0 } 35% { transform: scale(1.08) rotate(2deg); opacity:1 } 100% { transform: scale(1) rotate(0); opacity:1 } }
