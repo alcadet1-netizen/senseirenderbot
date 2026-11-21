@@ -66,6 +66,8 @@ class Duel:
     actions: Dict[int, Dict[str, Optional[str]]] = field(default_factory=dict)
     # Structure: {uid: {"dodge": "dodge_l"|None, "attack": "hit_r"|None}}
 
+    inline_arena: Optional[str] = None
+    inline_private: bool = False
     dojo_only: bool = False
     connected: set = field(default_factory=set)
     last_exchange: Optional[dict] = None
@@ -343,17 +345,18 @@ class DuelService:
                 if duel.timeout_task: duel.timeout_task.cancel()
 
                 # Cleanup accept buttons
-                try:
-                    await duel.bot.edit_message_reply_markup(chat_id=duel.chat_id, message_id=duel.challenge_message_id, reply_markup=None)
-                except TelegramRetryAfter as e:
-                    logger.warning(f"Duel {duel.id}: Hit flood control on accept markup cleanup, waiting {e.retry_after} seconds")
-                    await asyncio.sleep(e.retry_after)
-                    # Retry once after waiting
-                    await duel.bot.edit_message_reply_markup(chat_id=duel.chat_id, message_id=duel.challenge_message_id, reply_markup=None)
-                except TelegramBadRequest as e:
-                    logger.warning("Duel %s: accept markup cleanup failed: %s", duel.id, e)
-                except Exception:
-                    logger.exception("Duel %s: accept markup cleanup failed critically", duel.id)
+                if duel.challenge_message_id:
+                    try:
+                        await duel.bot.edit_message_reply_markup(chat_id=duel.chat_id, message_id=duel.challenge_message_id, reply_markup=None)
+                    except TelegramRetryAfter as e:
+                        logger.warning(f"Duel {duel.id}: Hit flood control on accept markup cleanup, waiting {e.retry_after} seconds")
+                        await asyncio.sleep(e.retry_after)
+                        # Retry once after waiting
+                        await duel.bot.edit_message_reply_markup(chat_id=duel.chat_id, message_id=duel.challenge_message_id, reply_markup=None)
+                    except TelegramBadRequest as e:
+                        logger.warning("Duel %s: accept markup cleanup failed: %s", duel.id, e)
+                    except Exception:
+                        logger.exception("Duel %s: accept markup cleanup failed critically", duel.id)
 
                 # Start
                 if duel.dojo_only:
@@ -364,6 +367,24 @@ class DuelService:
                 return "✅ Принято! Смотрите ЛС."
 
         return "⚠️ Ошибка."
+
+    async def commit_dojo_move(self, duel_id, uid, round_num, attack, dodge):
+        """Publish both secret choices together, never half a move."""
+        duel = self.duels.get(duel_id)
+        if not duel or not duel.dojo_only or uid not in (duel.challenger_id, duel.opponent_id):
+            return 'Это не твой бой.'
+        if attack not in HITS or dodge not in DODGES:
+            return 'Выбери направление удара и уворота.'
+        async with duel.lock:
+            if (not duel.accepted or duel.finished or duel.settlement_started or not round_num
+                    or duel.round_num != round_num or time.monotonic() >= duel.round_deadline_mono):
+                return 'Раунд уже завершён.'
+            previous = duel.actions.get(uid, {})
+            pair = {'attack': attack, 'dodge': dodge}
+            if previous.get('attack') and previous.get('dodge') and previous != pair:
+                return 'Ход уже зафиксирован.'
+            duel.actions[uid] = pair
+            return 'Принято.'
 
     async def process_move(self, duel_id: int, user_id: int, move: str, *, expected_round=None) -> str:
         # move is 'hit_l', 'hit_r', 'dodge_l', 'dodge_r'
@@ -748,7 +769,9 @@ class DuelService:
         ])
 
         try:
-            if not duel.arena_message_id:
+            if duel.inline_arena:
+                await duel.bot.edit_message_text(inline_message_id=duel.inline_arena, text=text, parse_mode="HTML")
+            elif not duel.arena_message_id:
                 msg = await duel.bot.send_message(duel.chat_id, text, reply_markup=kb, parse_mode="HTML")
                 duel.arena_message_id = msg.message_id
             else:
@@ -763,7 +786,9 @@ class DuelService:
             logger.warning(f"Duel {duel.id}: Hit flood control on arena update, waiting {e.retry_after} seconds")
             await asyncio.sleep(e.retry_after)
             # Retry once after waiting
-            if not duel.arena_message_id:
+            if duel.inline_arena:
+                await duel.bot.edit_message_text(inline_message_id=duel.inline_arena, text=text, parse_mode="HTML")
+            elif not duel.arena_message_id:
                 msg = await duel.bot.send_message(duel.chat_id, text, reply_markup=kb, parse_mode="HTML")
                 duel.arena_message_id = msg.message_id
             else:
@@ -1132,7 +1157,7 @@ class DuelService:
         # Bet checks - allow bet = 0 (no bet duel)
         if bet < 0:
             return "❜ Ставка не может быть отрицательной."
-        if bet != 0 and bet < 300:  # Only check minimum if bet > 0
+        if bet < 300:
             return "❜ Минимальная ставка — 300 монет."
 
         # Only check balances if there's an actual bet

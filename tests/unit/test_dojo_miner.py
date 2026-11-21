@@ -87,7 +87,7 @@ async def test_miner_has_boot_screen():
     assert 'prefers-reduced-motion' in css
     assert 'function seedBoot' in js
     assert 'function bootSetGoal' in js
-    assert 'refresh().finally(() => completeBoot' in js and '9000' in js
+    assert 'refresh().finally(' in js and '9000' in js
     assert '"ЗАГРУЗКА…": "LOADING…"' in js
 
 

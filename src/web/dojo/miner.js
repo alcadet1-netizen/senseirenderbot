@@ -943,6 +943,9 @@
   $("session-ended").addEventListener("cancel", event => event.preventDefault());
   // The server owns stake, participants, score and both round actions.
   const vsDialog = $("vs-dialog");
+  for (const fighter of vsDialog.querySelectorAll(".vs-fighter")) {
+    fighter.append($("vs-puppet").content.cloneNode(true));
+  }
   let vsBattle, vsTimer, vsBusy = false;
   let seenExchange = "", vsPlaying = false, frameTimer;
   function stopVsComic() {
@@ -950,6 +953,16 @@
     vsPlaying = false;
     delete vsDialog.dataset.striker;
     delete vsDialog.dataset.sequence;
+    for (const actor of vsDialog.querySelectorAll(".vs-fighter")) delete actor.dataset.pose;
+    $("vs-read").hidden = true;
+  }
+  function describeStrike(s, side) {
+    const strike = s.exchange.strikes[side];
+    const arrow = strike.attack === "hit_l" ? "←" : "→";
+    const dodge = strike.dodge === "dodge_l" ? "←" : "→";
+    // Only the server decides the outcome; directions explain it after reveal.
+    const outcome = strike.hit ? "Попадание" : "Уклонился!";
+    return {arrow, dodge, outcome, line: `${s.names[side]}: удар ${arrow} · ${s.names[1-side]}: уворот ${dodge} · ${outcome}`};
   }
   function playVsComic(s) {
     const exchange = s.exchange;
@@ -957,6 +970,7 @@
     vsPlaying = true;
     $("vs-controls").hidden = true;
     $("vs-rematch").hidden = true;
+    $("vs-recap").hidden = true;
     const reduced = document.documentElement.classList.contains("motion-reduced") ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const banner = vsDialog.querySelector(".vs-cut-title");
@@ -975,8 +989,15 @@
     banner.textContent = `Раунд ${exchange.round}`;
     $("vs-status").textContent = "Ходы приняты · обмен ударами";
     const frame = side => {
+      $("vs-read").hidden = true;
       vsDialog.dataset.sequence = "strike";
       const strike = exchange.strikes[side];
+      // Alternate the choreography, not the server's hit/dodge decision.
+      const actors = vsDialog.querySelectorAll(".vs-fighter");
+      for (const actor of actors) delete actor.dataset.pose;
+      void actors[0].offsetWidth;
+      actors[side].dataset.pose = (exchange.round + side) % 2 ? "sweep" : "kick";
+      actors[1-side].dataset.pose = strike.hit ? "recoil" : "slip";
       vsDialog.dataset.striker = side ? "right" : "left";
       // Restart the impact layers for each of the two distinct strikes.
       const comic = vsDialog.querySelector(".vs-comic");
@@ -987,27 +1008,42 @@
       vsDialog.dataset.outcome = strike.hit ? "hit" : "miss";
       vsDialog.dataset.direction = strike.attack === "hit_l" ? "left" : "right";
       vsDialog.querySelector(".vs-impact").textContent = strike.hit ? "БАМ!" : "МИМО!";
-      const arrow = strike.attack === "hit_l" ? "←" : "→";
-      $("vs-status").textContent = `Раунд ${exchange.round} · ${s.names[side]} ${arrow} · ${strike.hit ? "попадание" : "уворот"}`;
+      const read = describeStrike(s, side);
+      $("vs-status").textContent = `Раунд ${exchange.round} · атакует ${s.names[side]}`;
       frameTimer = setTimeout(() => {
+        $("vs-read-hit").textContent = read.arrow;
+        $("vs-read-dodge").textContent = read.dodge;
+        $("vs-read-result").textContent = read.outcome;
+        $("vs-read").hidden = false;
+        $("vs-status").textContent = read.line;
         hits[side] += Number(strike.hit);
         score();
         frameTimer = setTimeout(() => {
           if (!side) return frame(1);
+          $("vs-read").hidden = true;
           delete vsDialog.dataset.striker;
           vsDialog.dataset.sequence = "outro";
           caption.textContent = `ИТОГ ОБМЕНА  /  РАУНД ${exchange.round}`;
           banner.textContent = `${hits[0]} : ${hits[1]}`;
           frameTimer = setTimeout(() => { stopVsComic(); drawVs(vsBattle); }, reduced ? 180 : 750);
-        }, reduced ? 190 : 740);
+        }, reduced ? 850 : 880);
       }, reduced ? 0 : 440);
     };
     frameTimer = setTimeout(() => frame(0), reduced ? 0 : 700);
   }
+  let draftKey = "", draft = {};
+  function paintDraft() {
+    for (const btn of vsDialog.querySelectorAll("[data-vs]"))
+      btn.setAttribute("aria-pressed", Object.values(draft).includes(btn.dataset.vs));
+    $("vs-commit").disabled = !(draft.attack && draft.dodge);
+  }
   function drawVs(s) {
     vsBattle = s;
     if (vsPlaying) return; // Polling updates vsBattle, never interrupts the cutscene.
+    const key = `${s.id}:${s.round}`;
+    if (draftKey !== key) { draftKey = key; draft = {...s.moves}; }
     const fighting = s.phase === "fight", ended = s.phase === "finished";
+    $("vs-accept").hidden = s.phase !== "invited";
     $("vs-rematch").hidden = !ended;
     $("vs-lobby").hidden = s.phase !== "lobby";
     $("vs-controls").hidden = !fighting;
@@ -1023,17 +1059,35 @@
       delete $(id).dataset.health;
       $(id).classList.remove("is-me");
     }
+    $("vs-ready").hidden = !fighting;
+    $("vs-ready").textContent = s.opponent_ready ? "● Соперник готов" : "○ Соперник выбирает ход";
     if (s.exchange && `${s.id}:${s.exchange.round}` !== seenExchange && vsDialog.open) {
+      $("vs-ready").hidden = true;
       playVsComic(s); return;
+    }
+    const recap = $("vs-recap");
+    recap.hidden = !s.exchange;
+    const replayKey = s.exchange ? `${s.id}:${s.exchange.round}` : "";
+    if (recap.dataset.key !== replayKey) {
+      recap.dataset.key = replayKey;
+      recap.open = false;
+      if (s.exchange) {
+        recap.querySelector("summary").textContent = `Разбор обмена · раунд ${s.exchange.round}`;
+        recap.querySelector("ol").replaceChildren(...s.exchange.strikes.map((_, i) => {
+          const li = document.createElement("li");
+          li.textContent = describeStrike(s, i).line;
+          return li;
+        }));
+      }
     }
     const resolved = fighting && s.exchange?.round === s.round;
     $("vs-controls").hidden = !fighting || resolved || !s.round || Boolean(s.moves?.attack && s.moves?.dodge);
     $("vs-status").textContent = resolved ? "Судья подводит итог…" : fighting && s.moves?.attack && s.moves?.dodge ? "Ход зафиксирован · ждём соперника" : fighting ? `Раунд ${s.round} · ${s.seconds} с · ${s.bet} Coin` :
       ended ? (s.draw ? "Бой завершён без победителя" : s.winner ? "Победа!" : "Поражение") :
+      s.phase === "invited" ? `Приглашение · ${s.chat} · ставка каждого ${s.bet} Coin` :
       s.phase === "connecting" ? `Подключаем бойцов · ${s.seconds} с` :
       s.phase === "waiting" ? `Ждём соперника · ${s.chat} · ${s.seconds} с` : "Открытый вызов";
-    for (const btn of vsDialog.querySelectorAll("[data-vs]"))
-      btn.setAttribute("aria-pressed", Object.values(s.moves || {}).includes(btn.dataset.vs));
+    paintDraft();
   }
   async function vsRequest(action, args = {}) {
     if (vsBusy || !vsDialog.open) return;
@@ -1043,34 +1097,30 @@
     catch (err) { $("vs-status").textContent = err.message; }
     finally {
       vsBusy = false;
-      if (vsDialog.open && !sessionEnded) vsTimer = setTimeout(() => vsRequest("vs_state"), 2200);
+      if (vsDialog.open && !sessionEnded) vsTimer = setTimeout(() => vsRequest(vsBattle?.phase === "invited" ? "vs_invite" : "vs_state"), 2200);
     }
   }
   $("vs-open")?.addEventListener("click", () => { vsDialog.showModal(); vsRequest("vs_state"); });
   $("vs-close")?.addEventListener("click", () => vsDialog.close());
   vsDialog?.addEventListener("close", () => { clearTimeout(vsTimer); stopVsComic(); });
-  $("vs-pick")?.addEventListener("click", async () => {
-    const pick = $("vs-pick"), select = $("vs-chat");
-    pick.disabled = true;
-    try {
-      const {chats} = await api("vs_chats");
-      select.replaceChildren(...chats.map(c => new Option(c.title, c.id)));
-      $("vs-destination").hidden = !chats.length;
-      if (!chats.length) showToast("Нет доступных групп. Напиши в чате, где Сенсей — администратор.", true);
-      else select.focus();
-    } catch (err) { showToast(err.message, true); }
-    finally { pick.disabled = false; }
-  });
-  $("vs-private")?.addEventListener("click", () => {
-    const recipient = $("vs-recipient").value.trim();
-    if (!recipient) return showToast("Укажи @username соперника", true);
-    vsRequest("vs_publish", {bet: Number($("vs-bet").value), recipient});
-  });
+  $("vs-accept")?.addEventListener("click", () => vsRequest("vs_accept"));
   $("vs-rematch")?.addEventListener("click", () => vsRequest("vs_publish", {bet: vsBattle.bet, rematch: vsBattle.id}));
-  $("vs-send")?.addEventListener("click", () => vsRequest("vs_publish", {bet: Number($("vs-bet").value), chat: Number($("vs-chat").value)}));
+  $("vs-send")?.addEventListener("click", () => {
+    const bet = Number($("vs-bet").value);
+    if (!Number.isSafeInteger(bet) || bet < 300) return showToast("Минимальная ставка — 300 Coin", true);
+    if (!tg?.isVersionAtLeast?.("6.7") || !tg.switchInlineQuery) return showToast("Обнови Telegram для выбора чата", true);
+    tg.switchInlineQuery(`dojo_vs ${bet}`, ["users", "groups"]);
+  });
   vsDialog?.addEventListener("click", event => {
     const move = event.target.closest("[data-vs]")?.dataset.vs;
-    if (move && vsBattle?.phase === "fight") vsRequest("vs_move", {move, id: vsBattle.id, round: vsBattle.round});
+    if (move && vsBattle?.phase === "fight" && !vsPlaying) {
+      draft[move.startsWith("hit_") ? "attack" : "dodge"] = move;
+      paintDraft();
+    }
+    if (event.target.closest("#vs-commit") && !vsPlaying) {
+      if (vsBusy) return showToast("Обновление арены · нажми ещё раз");
+      vsRequest("vs_commit", {id: vsBattle.id, round: vsBattle.round, ...draft});
+    }
   });
   async function api(action, extra = {}) {
     if (sessionEnded) throw Error(t("Открой /dojo заново"));
@@ -3154,7 +3204,13 @@
   if (initData()) {
     bootSetGoal(26, t("ЗАГРУЗКА…"));
     // Other tabs load independently on first open in setTab().
-    refresh().finally(() => completeBoot(t("ЗАГРУЗКА…")));
+    refresh().finally(() => {
+      completeBoot(t("ЗАГРУЗКА…"));
+      if (new URLSearchParams(initData()).get("start_param")?.startsWith("vs_") && !sessionEnded) {
+        if (!vsDialog.open) vsDialog.showModal();
+        vsRequest("vs_invite");
+      }
+    });
     // A stalled request must never trap the player on the splash screen.
     window.setTimeout(() => completeBoot(t("ЗАГРУЗКА…")), 9000);
   } else {
