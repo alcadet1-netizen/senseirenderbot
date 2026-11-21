@@ -85,7 +85,7 @@ class ReferralService:
             activity_days=min(3, len(set(user.get('referral_activity_days') or []))),
             paid_upgrade=bool(user.get('referral_paid_upgrade')))
 
-    async def get_level_members(self, user_id: int, level: int = 1, limit: int = 10):
+    async def get_level_members(self, user_id: int, level: int = 1, limit: int = 10, offset: int = 0):
         """Public first/last names of one level of the user's own network.
 
         The Mini App mirrors the chat's ``Мои ученики`` view; it never returns
@@ -102,12 +102,20 @@ class ReferralService:
                 {'$unwind': '$children'},
                 {'$replaceRoot': {'newRoot': '$children'}},
             ]
-        pipeline += [{'$sort': {'id': 1}}, {'$limit': limit}]
+        pipeline += [{'$sort': {'id': 1}}, {'$skip': offset}, {'$limit': limit},
+                     {'$set': {'reward_key': {'$concat': [f'{user_id}:', {'$toString': '$id'}]}}},
+                     {'$lookup': {'from': 'dojo_ref_rewards', 'localField': 'reward_key',
+                                  'foreignField': '_id', 'as': 'rewards'}},
+                     {'$project': {'first_name': 1, 'username': 1, 'referral_bonus_paid': 1,
+                                   'reward': {'$arrayElemAt': ['$rewards', 0]}}}]
         rows = await db.users.aggregate(pipeline).to_list(length=limit)
         return [{
             'name': (row.get('first_name') or row.get('username') or 'Ученик')[:50],
             'username': row.get('username') or None,
             'active': bool(row.get('referral_bonus_paid')),
+            'pending': row.get('reward', {}).get('pending', 0) / 1000,
+            'lifetime': row.get('reward', {}).get('lifetime', 0) / 1000,
+            'token': row.get('reward', {}).get('token'),
         } for row in rows]
 
     async def get_top(self, limit=10):

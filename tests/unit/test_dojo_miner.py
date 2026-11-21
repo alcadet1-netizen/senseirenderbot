@@ -235,7 +235,7 @@ async def test_api_requires_signature_and_dispatches_actions():
             'paid_upgrade': True}
         assert data['share_body'].startswith('🥷') and '3 часа' in data['share_body']
         assert data['share_text'].endswith('start=ref_7')
-        referral_members.assert_awaited_once_with(7, level=2, limit=10)
+        referral_members.assert_awaited_once_with(7, level=2, limit=11, offset=0)
         response = await client.post('/miniapp/dojo/api/share', json={
             'initData': auth})
         assert response.status == 200

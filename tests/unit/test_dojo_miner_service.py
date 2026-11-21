@@ -32,7 +32,7 @@ def mock_mongo_transaction(monkeypatch):
         async with lock:
             return await atomic(mongo, callback)
     async def atomic(mongo, callback):
-        collections = [mongo.database.users, mongo.database.dojo_miners, mongo.database.bank, mongo.database.transactions]
+        collections = [mongo.database.users, mongo.database.dojo_miners, mongo.database.bank, mongo.database.transactions, mongo.database.dojo_ref_rewards]
         snapshots = [copy.deepcopy(c.docs) for c in collections]
         try: return await callback("session")
         except BaseException:
@@ -51,7 +51,7 @@ def service():
         dojo_miners=Miners(),
         users=Collection([{'id': 7, 'coins': 500}]),
         bank=Collection([{'_id': 'single', 'coins': 1000}]),
-        transactions=Collection(),
+        transactions=Collection(), dojo_ref_rewards=Collection(),
     )
     economy = SimpleNamespace(process_game_win=AsyncMock(return_value={
         'success': True, 'new_coins': 620}))
@@ -420,3 +420,35 @@ async def test_auto_collect_waits_for_funding_and_records_only_success():
         assert not renewed['auto_waiting'] and renewed['last_auto_collect_at'] == 11800
         assert renewed['phase'] == 'mining' and renewed['balance'] == 590
         assert len(mongo.database.transactions.docs) == 1
+
+
+@pytest.mark.asyncio
+async def test_mining_referral_bonuses_reserved_once_and_owner_claim_only():
+    mongo, dojo, _ = service()
+    db = mongo.database
+    for uid in (7, 8, 9):
+        db.users.docs[uid]['referrer_id'] = uid + 1
+        db.users.docs[uid + 1] = {'id': uid + 1, 'coins': 0}
+    with patch.object(miner.time, 'time', return_value=1000):
+        await dojo.start(7)
+    with patch.object(miner.time, 'time', return_value=11800):
+        db.bank.docs['single']['coins'] = 90
+        with pytest.raises(GameError):
+            await dojo.collect(7)
+        assert not db.dojo_ref_rewards.docs
+        db.bank.docs['single']['coins'] = 1000
+        await dojo.collect(7, automatic=True)
+        with pytest.raises(GameError):
+            await dojo.collect(7)
+    for owner, units in [(8, 9000), (9, 900), (10, 90)]:
+        reward = db.dojo_ref_rewards.docs[f'{owner}:7']
+        assert reward['pending'] == reward['lifetime'] == units
+        with pytest.raises(GameError):
+            await dojo.claim_referral_mining(7, reward['token'])
+        assert await dojo.claim_referral_mining(owner, reward['token']) == {'claimed': units / 1000}
+        with pytest.raises(GameError):
+            await dojo.claim_referral_mining(owner, reward['token'])
+        assert db.users.docs[owner]['coins'] == units / 1000
+        reward = db.dojo_ref_rewards.docs[f"{owner}:7"]
+        assert reward['pending'] == 0 and reward['lifetime'] == units
+    assert db.bank.docs['single']['coins'] == pytest.approx(900.01)

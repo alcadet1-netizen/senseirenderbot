@@ -115,13 +115,15 @@ async def _prepare_referral_share(container, user_id: int) -> dict:
     }
 
 
-async def _referrals_payload(container, user_id: int, level) -> dict:
+async def _referrals_payload(container, user_id: int, level, page=0) -> dict:
     """Reuse the /senseireferal data source so chat and Mini App never diverge."""
     level = _referral_level(level)
+    if type(page) is not int or not 0 <= page <= 2**31:
+        raise GameError('Неверная страница.')
     service = container.referral_service
     stats, members = await asyncio.gather(
         service.get_stats(user_id),
-        service.get_level_members(user_id, level=level, limit=10),
+        service.get_level_members(user_id, level=level, limit=11, offset=10 * page),
     )
 
     link = await _referral_link(container, user_id)
@@ -137,7 +139,8 @@ async def _referrals_payload(container, user_id: int, level) -> dict:
             for n in (1, 2, 3)
         ],
         'level': level,
-        'members': members,
+        'page': page, 'has_next': len(members) > 10,
+        'members': members[:10],
         'rank': {
             'id': rank.id_,
             'emoji': rank.emoji,
@@ -333,7 +336,9 @@ def setup_dojo(app, container=None):
                     invalidate()
             elif action == 'referrals':
                 result = await _referrals_payload(container, user['id'],
-                                                   payload.get('level', 1))
+                                                   payload.get('level', 1), payload.get('page', 0))
+            elif action == 'ref_claim':
+                result = await service.claim_referral_mining(user['id'], payload.get('token'))
             elif action == 'share':
                 result = await _prepare_referral_share(container, user['id'])
             else:
@@ -363,5 +368,5 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/assets/{asset:sensei\\.webp|loading-hero\\.webp|senseicoin-wordmark\\.svg|unbounded-variable\\.woff2|golos-text-variable\\.woff2|dseg7-classic-regular\\.woff2|sensei-style-(?:400|700)\\.woff2}', page)
     app.router.add_post(
-        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|share|daily|daily_claim|chest}',
+        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|ref_claim|share|daily|daily_claim|chest}',
         api)

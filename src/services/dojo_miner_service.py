@@ -8,11 +8,12 @@ state; start, collect and automatic cycles are validated and paid here.
 import asyncio
 import logging
 import time
+from uuid import uuid4
 from datetime import datetime, timezone
 from collections import defaultdict
 
 from src.services.hedgehog_service import GameError
-from src.services.referral_economy import transaction
+from src.services.referral_economy import RATES, ancestors, transaction
 
 CYCLE_SECONDS = 3 * 60 * 60
 CYCLE_HOURS = CYCLE_SECONDS / 3600
@@ -65,6 +66,7 @@ class DojoMinerService:
 
     async def ensure_indexes(self) -> None:
         await self.users.create_index('dojo_auto_collect')
+        await self.mongo.database.dojo_ref_rewards.create_index([('owner', 1), ('token', 1)])
 
     @staticmethod
     def _energy_at(doc: dict, now: float, finish: float, energy_start: int) -> float:
@@ -360,6 +362,32 @@ class DojoMinerService:
             )
             return await self.state(user_id)
 
+    async def claim_referral_mining(self, owner, token):
+        if not isinstance(token, str) or len(token) != 32:
+            raise GameError('Неверная награда.')
+        db = self.mongo.database
+
+        async def work(session):
+            row = await db.dojo_ref_rewards.find_one({'owner': owner, 'token': token}, session=session)
+            if not row or row['pending'] <= 0:
+                raise GameError('Нет доступного бонуса. Обнови список.')
+            reset = await db.dojo_ref_rewards.update_one(
+                {'_id': row['_id'], 'pending': row['pending']}, {'$set': {'pending': 0}}, session=session)
+            if not reset.matched_count:
+                raise GameError('Сумма изменилась. Обнови список.')
+            amount = row['pending'] / 1000
+            result = await self.users.update_one(
+                {'id': owner, 'is_banned': {'$ne': True}},
+                {'$inc': {'coins': amount, 'referral_earned': amount}}, session=session)
+            if not result.matched_count:
+                raise GameError('Награда недоступна для этого профиля.')
+            await db.transactions.insert_one(dict(user_id=owner, source_user_id=row['source'],
+                coins_change=amount, xp_change=0, tx_type='dojo_referral_claim',
+                created_at=datetime.now(timezone.utc)), session=session)
+            return {'claimed': amount}
+
+        return await transaction(self.mongo, work)
+
     async def collect(self, user_id: int, *, automatic=False) -> dict:
         """Commit the cycle, bank debit, player credit and receipt together."""
         async with self._locks[user_id]:
@@ -387,7 +415,23 @@ class DojoMinerService:
                      '$inc': {'version': 1}}, session=session)
                 if not claimed:
                     raise GameError('Награда уже получена. Обнови экран.')
-                remaining = amount
+                # Reserve bonuses with the mining payout. Integer thousandths
+                # keep pending balances exact across repeated small cycles.
+                bonus_units = 0
+                if amount and user.get('referrer_id'):
+                    db = self.mongo.database
+                    for parent, rate in zip(await ancestors(db, user_id, session), RATES):
+                        if parent.get('is_banned') or parent.get('is_bot'):
+                            continue
+                        units = int(amount * rate * 1000)
+                        owner = parent['id']
+                        await db.dojo_ref_rewards.update_one(
+                            {'_id': f'{owner}:{user_id}'},
+                            {'$setOnInsert': {'owner': owner, 'source': user_id, 'token': uuid4().hex},
+                             '$inc': {'pending': units, 'lifetime': units}},
+                            upsert=True, session=session)
+                        bonus_units += units
+                remaining = amount + bonus_units / 1000
                 # Both pre-migration bank accounts are spent in the same
                 # transaction; failure to cover the full reward aborts all.
                 for bank_id, field in (('single', 'coins'), ('main', 'balance')):
