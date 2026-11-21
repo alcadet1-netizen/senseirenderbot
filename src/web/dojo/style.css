@@ -5608,11 +5608,12 @@ html.motion-reduced #vs-score i.vs-emblem { animation: none; }
 .vs-comic { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
 .vs-comic.is-striking { animation: vs-combat-shake 1.32s both; }
 @keyframes vs-combat-shake {
-  0%, 16%, 100% { transform: translate(0, 0); }
-  34% { transform: translate(-2px, 1px); }
-  44% { transform: translate(2.5px, -1.5px); }
-  54% { transform: translate(-1.4px, .6px); }
-  64% { transform: translate(1px, .8px); }
+  0%, 18%, 100% { transform: translate3d(0,0,0); }
+  30%  { transform: translate3d(-1.6px,.8px,0); }
+  44%  { transform: translate3d(1.8px,-1.1px,0); }
+  58%  { transform: translate3d(-1px,.5px,0); }
+  72%  { transform: translate3d(.5px,.5px,0); }
+  86%  { transform: translate3d(-.2px,-.2px,0); }
 }
 html.motion-reduced .vs-comic.is-striking { animation: none; }
 @media (prefers-reduced-motion: reduce) { .vs-comic.is-striking { animation: none; } }
@@ -5755,7 +5756,7 @@ html.motion-reduced #vs-dialog .vs-contact-ring, html.motion-reduced #vs-dialog 
   background: linear-gradient(180deg, rgba(2, 24, 15, .94), rgba(2, 20, 13, .72));
   border: 1px solid #3fe78a55; box-shadow: 0 0 60px #35ff8526, inset 0 0 30px #35ff8518;
 }
-#vs-dialog:is([data-sequence=intro], [data-sequence=outro]) .vs-cut-card { display: block; animation: vs-cut-in .85s cubic-bezier(.2, .9, .3, 1.15) both; }
+#vs-dialog:is([data-sequence=intro], [data-sequence=outro]) .vs-cut-card { display: block; animation: vs-cut-in .78s cubic-bezier(.2, .9, .3, 1.12) both; }
 .vs-cut-card .vs-cut-label {
   display: block; color: #a5ffc8; font-size: 11px; font-weight: 900; letter-spacing: .3em; text-shadow: 0 1px 2px #000;
 }
@@ -6037,7 +6038,7 @@ html.motion-reduced .vs-petals { display: none; }
 .vs-stage.is-storm .vs-speedlines { opacity:.42; animation: vs-speedlines-burst .9s ease-out both; }
 .vs-stage.is-impact .vs-speedlines { opacity:.65; transform: scale(1.08); animation: vs-speedlines-impact .32s ease-out both; }
 @keyframes vs-speedlines-burst { 0% { transform: scale(.35) rotate(-8deg); opacity:0; } 18% { opacity:.45; } 100% { transform: scale(1.15) rotate(0deg); opacity:.28; } }
-@keyframes vs-speedlines-impact { 0% { transform: scale(.85) rotate(0deg); opacity:.7; filter: blur(0px); } 100% { transform: scale(1.25) rotate(2deg); opacity:0; filter: blur(1.2px); } }
+@keyframes vs-speedlines-impact { 0% { transform: scale(.9) rotate(0deg); opacity:.55; } 55% { opacity:.2; } 100% { transform: scale(1.2) rotate(1.4deg); opacity:0; } }
 
 /* Hit flash - anime white-out with green tint */
 .vs-hitflash {
@@ -6046,13 +6047,11 @@ html.motion-reduced .vs-petals { display: none; }
   mix-blend-mode: screen; filter: blur(2px);
 }
 .vs-stage.is-flash .vs-hitflash { animation: vs-flash 220ms ease-out both; }
-@keyframes vs-flash { 0% { opacity:0; transform: scale(.92); } 12% { opacity:.95; transform: scale(1); } 100% { opacity:0; transform: scale(1.08); } }
-
-/* --- Fighter: true anime puppet with secondary cloth ---------------------- */
-.vs-fighter {
-  width: 52%; bottom: 44px;
-  will-change: transform, opacity;
-  backface-visibility: hidden;
+@keyframes vs-flash {
+  0%   { opacity:0; transform: scale(.96); }
+  18%  { opacity:.82; transform: scale(1.01); }
+  46%  { opacity:.38; transform: scale(1.05); }
+  100% { opacity:0; transform: scale(1.09); }
 }
 .vs-fighter.left { left:-1%; }
 .vs-fighter.right { right:-1%; }
@@ -6159,22 +6158,21 @@ html.motion-reduced .vs-petals { display: none; }
 /* Camera shake + zoom on impact (applies to whole stage) */
 .vs-stage.is-shake { animation: vs-camera-shake 520ms cubic-bezier(.36,.02,.2,1) both; }
 @keyframes vs-camera-shake {
-  0% { transform: translate(0,0) scale(1); }
-  8% { transform: translate(-2px, 1px) scale(1.015) rotate(.2deg); }
-  14% { transform: translate(2.5px, -1px) scale(1.018) rotate(-.3deg); }
-  20% { transform: translate(-1.5px, -1.2px) scale(1.012) rotate(.25deg); }
-  28% { transform: translate(1px, 1px) scale(1.008) rotate(-.15deg); }
-  45% { transform: translate(0,0) scale(1.005); }
-  100%{ transform: translate(0,0) scale(1); }
+  0%   { transform: translate3d(0,0,0) scale(1); }
+  6%   { transform: translate3d(-1.6px,.8px,0) scale(1.012) rotate(.14deg); }
+  14%  { transform: translate3d(1.8px,-.7px,0) scale(1.014) rotate(-.2deg); }
+  24%  { transform: translate3d(-1.1px,-.9px,0) scale(1.009) rotate(.15deg); }
+  36%  { transform: translate3d(.7px,.6px,0) scale(1.005) rotate(-.09deg); }
+  52%  { transform: translate3d(-.3px,-.2px,0) scale(1.002) rotate(.04deg); }
+  72%  { transform: translate3d(.1px,.1px,0) scale(1.001); }
+  100% { transform: translate3d(0,0,0) scale(1); }
 }
 .vs-stage.is-zoom { animation: vs-camera-dolly 820ms cubic-bezier(.22,.7,.18,1) both; transform-origin: 50% 48%; }
-@keyframes vs-camera-dolly { 0% { transform: scale(1); } 28% { transform: scale(1.06); } 100% { transform: scale(1); } }
-
-/* --- Blade: neon photon sword with layered glow -------------------------- */
-.vs-blade-art {
-  top: 30%; left: 3%; width: 92%; height: auto;
-  filter: drop-shadow(0 0 18px rgba(53,255,133,.9));
-  opacity:0; transform-origin: 50% 50%;
+@keyframes vs-camera-dolly {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.055); }
+  62%  { transform: scale(1.028); }
+  100% { transform: scale(1); }
 }
 #vs-dialog[data-striker] .vs-blade-art { opacity:1; }
 #vs-dialog[data-striker=right] .vs-blade-art { transform: scaleX(-1); }
@@ -6187,9 +6185,9 @@ html.motion-reduced .vs-petals { display: none; }
 .vs-comic.is-striking .vs-blade-core { animation: vs-blade-core-draw 520ms cubic-bezier(.22,1,.36,1) both; }
 .vs-comic.is-striking .vs-blade-edge { animation: vs-blade-edge-draw 520ms cubic-bezier(.22,1,.36,1) both; }
 .vs-comic.is-striking .vs-blade-thread { animation: vs-blade-thread-draw 520ms cubic-bezier(.22,1,.36,1) both .04s; }
-@keyframes vs-blade-appear { 0% { opacity:0; transform: scaleX(-1) translateX(-16px) scale(.92) skewX(4deg); filter: blur(2px) brightness(1.3); } 18% { opacity:1; transform: scaleX(-1) translateX(0) scale(1.06) skewX(0); filter: blur(0) brightness(1.2); } 42% { opacity:1; transform: scaleX(-1) translateX(0) scale(1); } 72% { opacity:.55; } 100% { opacity:0; transform: scaleX(-1) translateX(0) scale(1); } }
+@keyframes vs-blade-appear { 0% { opacity:0; transform: scaleX(-1) translateX(-14px) scale(.94) skewX(3deg); } 20% { opacity:1; transform: scaleX(-1) translateX(0) scale(1.05); } 46% { opacity:.95; transform: scaleX(-1) translateX(0) scale(1); } 74% { opacity:.5; } 100% { opacity:0; transform: scaleX(-1) translateX(0) scale(1); } }
 #vs-dialog[data-striker=left] .vs-comic.is-striking .vs-blade-art { animation-name: vs-blade-appear-left; }
-@keyframes vs-blade-appear-left { 0% { opacity:0; transform: translateX(16px) scale(.92) skewX(-4deg); filter: blur(2px) brightness(1.3); } 18% { opacity:1; transform: translateX(0) scale(1.06) skewX(0); filter: blur(0) brightness(1.2); } 42% { opacity:1; transform: translateX(0) scale(1); } 72% { opacity:.55; } 100% { opacity:0; } }
+@keyframes vs-blade-appear-left { 0% { opacity:0; transform: translateX(14px) scale(.94) skewX(-3deg); } 20% { opacity:1; transform: translateX(0) scale(1.05); } 46% { opacity:.95; transform: translateX(0) scale(1); } 74% { opacity:.5; } 100% { opacity:0; } }
 @keyframes vs-blade-core-draw { 0% { stroke-dashoffset:1; opacity:0; } 14% { stroke-dashoffset:1; opacity:0; } 28% { stroke-dashoffset:0; opacity:1; } 68% { stroke-dashoffset:0; opacity:.9; } 100% { stroke-dashoffset:-1; opacity:0; } }
 @keyframes vs-blade-edge-draw { 0% { stroke-dashoffset:1; } 26% { stroke-dashoffset:0; } 70% { stroke-dashoffset:0; } 100% { stroke-dashoffset:-1; } }
 @keyframes vs-blade-thread-draw { 0% { stroke-dashoffset:1; opacity:0; } 18% { stroke-dashoffset:1; opacity:0; } 32% { stroke-dashoffset:0; opacity:1; } 100% { stroke-dashoffset:-1; opacity:0; } }
@@ -6213,7 +6211,7 @@ html.motion-reduced .vs-petals { display: none; }
 #vs-dialog[data-striker=right] .is-striking .vs-sparks { left:18%; }
 #vs-dialog[data-striker] .is-striking .vs-spark-core { animation: vs-spark-core 520ms cubic-bezier(.16,1,.3,1) both .04s; }
 #vs-dialog[data-striker] .is-striking .vs-spark-ring { animation: vs-spark-ring 620ms ease-out both .06s; }
-@keyframes vs-spark-core { 0% { opacity:0; transform: scale(.15); filter: brightness(1.8); } 18% { opacity:1; transform: scale(1.05); filter: brightness(1.4); } 55% { opacity:.9; transform: scale(.96); } 100% { opacity:0; transform: scale(1.45); filter: brightness(1); } }
+@keyframes vs-spark-core { 0% { opacity:0; transform: scale(.15); } 18% { opacity:1; transform: scale(1.05); } 55% { opacity:.9; transform: scale(.96); } 100% { opacity:0; transform: scale(1.45); } }
 @keyframes vs-spark-ring { 0% { opacity:0; transform: scale(.25); border-width:4px; } 20% { opacity:1; transform: scale(.62); border-width:3px; } 100% { opacity:0; transform: scale(1.45); border-width:1px; } }
 
 .vs-contact-ring {
@@ -6221,7 +6219,7 @@ html.motion-reduced .vs-petals { display: none; }
   filter: blur(.2px);
 }
 #vs-dialog[data-striker][data-outcome=hit] .is-striking .vs-contact-ring { display:block; animation: vs-contact-pulse 640ms cubic-bezier(.16,1,.3,1) both .08s; }
-@keyframes vs-contact-pulse { 0% { opacity:0; transform: scale(.12); filter: blur(.5px); } 18% { opacity:1; transform: scale(.58); filter: blur(0); } 52% { opacity:.85; transform: scale(1.15); } 100% { opacity:0; transform: scale(1.65); filter: blur(1px); } }
+@keyframes vs-contact-pulse { 0% { opacity:0; transform: scale(.12); } 18% { opacity:1; transform: scale(.58); } 52% { opacity:.85; transform: scale(1.15); } 100% { opacity:0; transform: scale(1.65); } }
 
 /* Impact typography - shonen manga with outline + halftone + extrude */
 .vs-impact {
@@ -6242,14 +6240,14 @@ html.motion-reduced .vs-petals { display: none; }
 }
 #vs-dialog[data-striker] .is-striking .vs-impact { animation: vs-impact-entrance 560ms cubic-bezier(.16,1.2,.22,1) both .12s; }
 @keyframes vs-impact-entrance {
-  0% { opacity:0; transform: rotate(-7deg) scale(.28) translateY(14px); filter: blur(4px) brightness(1.6); }
-  22% { opacity:1; transform: rotate(-7deg) scale(1.18) translateY(0); filter: blur(0) brightness(1.15); }
+  0% { opacity:0; transform: rotate(-7deg) scale(.3) translateY(14px); }
+  23% { opacity:1; transform: rotate(-7deg) scale(1.16) translateY(0); }
   36% { transform: rotate(-7deg) scale(.96); }
   52% { transform: rotate(-7deg) scale(1.04); }
   100%{ transform: rotate(-7deg) scale(1); opacity:1; }
 }
 #vs-dialog[data-striker=left] .is-striking .vs-impact { animation-name: vs-impact-entrance-left; }
-@keyframes vs-impact-entrance-left { 0% { opacity:0; transform: rotate(7deg) scale(.28) translateY(14px); filter: blur(4px) brightness(1.6); } 22% { opacity:1; transform: rotate(7deg) scale(1.18); } 36% { transform: rotate(7deg) scale(.96); } 52% { transform: rotate(7deg) scale(1.04); } 100% { transform: rotate(7deg) scale(1); } }
+@keyframes vs-impact-entrance-left { 0% { opacity:0; transform: rotate(7deg) scale(.3) translateY(14px); } 23% { opacity:1; transform: rotate(7deg) scale(1.16); } 36% { transform: rotate(7deg) scale(.96); } 52% { transform: rotate(7deg) scale(1.04); } 100% { transform: rotate(7deg) scale(1); } }
 
 /* Strike backdrop - manga concentrated lines */
 #vs-dialog[data-sequence=strike] .vs-comic::before {
@@ -6284,14 +6282,13 @@ html.motion-reduced .vs-petals { display: none; }
 .vs-cut-card .vs-cut-sub {
   display:block; margin-top:8px; font-size:10px; font-weight:800; letter-spacing:.22em; color:#ffd65c; opacity:.9;
 }
-@keyframes vs-cut-card-in { 0% { transform: translate(-50%,-50%) scale(.82) translateY(18px); opacity:0; filter: blur(6px); } 42% { transform: translate(-50%,-50%) scale(1.03) translateY(0); opacity:1; filter: blur(0); } 100% { transform: translate(-50%,-50%) scale(1); opacity:1; } }
+@keyframes vs-cut-card-in { 0% { transform: translate(-50%,-50%) scale(.9) translateY(14px); opacity:0; } 46% { transform: translate(-50%,-50%) scale(1.02) translateY(0); opacity:1; } 100% { transform: translate(-50%,-50%) scale(1); opacity:1; } }
 .vs-stage[data-sequence=intro] .vs-cut-card .vs-cut-sub::after { content:'· SENSEI CINEMA ·'; }
 .vs-stage[data-sequence=outro] .vs-cut-card .vs-cut-sub::after { content:'· КЛИНОК РЕШАЕТ ·'; }
 
 /* Sakura storm intensifies on clash */
 .vs-petals { transition: filter .3s, opacity .3s; }
-.vs-stage.is-storm .vs-petals i { animation-duration: calc(var(--d) * .45) !important; filter: brightness(1.15) saturate(1.2); }
-.vs-stage.is-storm .vs-petals { filter: blur(.2px) brightness(1.08); }
+.vs-stage.is-storm .vs-petals i { animation-duration: calc(var(--d) * .62) !important; }
 .vs-petals i { background: linear-gradient(165deg, #ffe6f0 0%, #ff9eb8 42%, #e94a7a 78%, #8a2a44 100%); box-shadow: 0 1px 4px rgba(255,120,160,.35), inset 0 1px 1px #fff8; }
 .vs-stage.is-impact .vs-petals i { animation-play-state: paused; opacity:.72; } /* hit-stop petals freeze like anime */
 
@@ -6305,7 +6302,10 @@ html.motion-reduced .vs-petals { display: none; }
 #vs-status::before { width:7px; height:7px; background:#7affaa; box-shadow: 0 0 8px #7affaa, 0 0 14px #35ff85; }
 
 /* Hit-stop: freeze everything for that anime impact frame */
-.vs-stage.is-hitstop, .vs-stage.is-hitstop * { animation-play-state: paused !important; transition: none !important; }
+.vs-stage.is-hitstop .vs-fighter,
+.vs-stage.is-hitstop .vs-comic,
+.vs-stage.is-hitstop .vs-petals i,
+.vs-stage.is-hitstop .vs-speedlines { animation-play-state: paused !important; }
 
 /* --- Score: life bars with shine ---------------------------------------- */
 #vs-score b::before { height:3px; bottom:7px; border-radius:99px; background: linear-gradient(90deg, #35ff85, #b9ff4f 55%, #7affaa); box-shadow: 0 0 8px #35ff85, 0 0 14px #35ff8555; }
@@ -6320,7 +6320,7 @@ html.motion-reduced .vs-petals { display: none; }
 /* === Sticker-man stage FX: neon trail + shockwave (matches reference glow) === */
 .vs-trail-canvas {
   position: absolute; inset: 0; z-index: 5; pointer-events: none; width: 100%; height: 100%;
-  mix-blend-mode: screen; opacity: .95;
+  opacity: .95;
 }
 
 /* sticker puppets: crisp chibi, neon glow baked in sprite + CSS halo */
@@ -6329,7 +6329,7 @@ html.motion-reduced .vs-petals { display: none; }
 /* depth: pagoda layers parallax on camera move */
 .vs-stage.is-shake .vs-bg { animation: none !important; }
 .vs-stage.is-shake .vs-parallax-clouds { transform: translateX(var(--shake-x,0)); }
-.vs-stage.is-zoom { transform: scale(1.04); transform-origin: 50% 44%; transition: transform .28s cubic-bezier(.16,.84,.28,1); }
+.vs-stage.is-zoom { transform-origin: 50% 44%; } /* dolly keyframes own the camera */
 
 /* impact chromatic shockwave */
 .vs-shockwave {
@@ -6343,24 +6343,14 @@ html.motion-reduced .vs-petals { display: none; }
 
 /* score health glitch on hit */
 #vs-score b.is-hit { animation: vs-health-hit 420ms ease-out; }
-@keyframes vs-health-hit { 0%{ transform: translateX(0) } 12%{ transform: translateX(-1px) } 24%{ transform: translateX(1.5px) } 36%{ transform: translateX(-1px) } 100%{ transform: translateX(0) } }
-
-/* petals react to shockwave */
-.vs-stage.is-impact .vs-petals i { animation: vs-petal-impact 520ms ease-out both; }
-@keyframes vs-petal-impact { 0%{ transform: translate(0,0) rotate(0deg) scale(1) } 30%{ transform: translate(calc(var(--burst-x, 0) * 22px), calc(var(--burst-y, 0) * -18px)) rotate(180deg) scale(1.15) } 100%{ transform: translate(calc(var(--burst-x, 0) * 8px), 40px) rotate(360deg) scale(1) } }
-
-/* =========================================================================
-   STICKER-MAN FIRST-CLASS ANIMATION + ACTION BUTTONS
-   Chibi squash/stretch, jelly recoil, bouncy idle. Eyes are baked into
-   the sprite — the old .vs-eye overlay is hidden (it floated on forehead).
-   ========================================================================= */
-
-/* --- Sprite cleanup: no fake eye, no clipped border-radius -------------- */
-.vs-fighter .vs-eye { display: none !important; }
-.vs-ninja {
-  border-radius: 0 !important;
-  background: none !important;
-  transform-origin: 50% 100%;
+@keyframes vs-health-hit {
+  0%   { transform: translate3d(0,0,0); }
+  14%  { transform: translate3d(-1.4px,0,0); }
+  28%  { transform: translate3d(1.2px,0,0); }
+  42%  { transform: translate3d(-.7px,0,0); }
+  58%  { transform: translate3d(.4px,0,0); }
+  76%  { transform: translate3d(-.15px,0,0); }
+  100% { transform: translate3d(0,0,0); }
 }
 .vs-fighter { width: 46%; bottom: 36px; transform-origin: 50% 100%; }
 .vs-fighter.left { left: 2%; }
@@ -6391,52 +6381,57 @@ html.motion-reduced .vs-petals { display: none; }
 .vs-fighter.right:not([data-pose])::before { animation-delay: -1.15s; }
 
 /* --- Strike: sweep (ground slash) — crouch → stretch lunge → bounce ----- */
-.vs-fighter[data-pose=sweep] { animation: vs-sticker-sweep 820ms cubic-bezier(.34,.56,.36,1) both; }
+.vs-fighter[data-pose=sweep] { animation: vs-sticker-sweep 820ms cubic-bezier(.32,.06,.24,1) both; }
 @keyframes vs-sticker-sweep {
   0%   { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
-  10%  { transform: translate3d(calc(var(--lunge)*-8px), 3px,0) rotate(calc(var(--lunge)*2deg)) scale(.93,1.07); }  /* anticipation crouch */
-  20%  { transform: translate3d(calc(var(--lunge)*10px), -3px,0) rotate(calc(var(--lunge)*-2deg)) scale(1.05,.95); }
-  29%  { transform: translate3d(calc(var(--lunge)*46px), -8px,0) rotate(calc(var(--lunge)*-6deg)) scale(1.16,.85) skewX(calc(var(--lunge)*-3deg)); } /* contact: smear stretch */
-  38%  { transform: translate3d(calc(var(--lunge)*42px), -4px,0) rotate(calc(var(--lunge)*-4deg)) scale(1.09,.92); } /* hold */
-  58%  { transform: translate3d(calc(var(--lunge)*16px), 1px,0) rotate(calc(var(--lunge)*-1deg)) scale(.98,1.02); }
-  76%  { transform: translate3d(calc(var(--lunge)*-3px), 0,0) rotate(calc(var(--lunge)*.5deg)) scale(1.02,.98); } /* overshoot bounce */
+  9%   { transform: translate3d(calc(var(--lunge)*-9px), 4px,0) rotate(calc(var(--lunge)*2.5deg)) scale(.92,1.08); } /* anticipation crouch */
+  17%  { transform: translate3d(calc(var(--lunge)*8px), -2px,0) rotate(calc(var(--lunge)*-1deg)) scale(1.03,.97); }
+  24%  { transform: translate3d(calc(var(--lunge)*34px), -6px,0) rotate(calc(var(--lunge)*-4deg)) scale(1.12,.89) skewX(calc(var(--lunge)*-2deg)); } /* accelerate */
+  29%  { transform: translate3d(calc(var(--lunge)*46px), -8px,0) rotate(calc(var(--lunge)*-6deg)) scale(1.15,.86) skewX(calc(var(--lunge)*-3deg)); } /* CONTACT */
+  38%  { transform: translate3d(calc(var(--lunge)*43px), -5px,0) rotate(calc(var(--lunge)*-4.5deg)) scale(1.1,.92); } /* follow-through */
+  52%  { transform: translate3d(calc(var(--lunge)*24px), 0,0) rotate(calc(var(--lunge)*-2deg)) scale(1.02,.98); }
+  68%  { transform: translate3d(calc(var(--lunge)*6px), 1px,0) rotate(calc(var(--lunge)*1deg)) scale(.98,1.02); } /* settle overshoot */
+  82%  { transform: translate3d(calc(var(--lunge)*-2px), 0,0) rotate(calc(var(--lunge)*.4deg)) scale(1.01,.99); }
   100% { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
 }
 
 /* --- Strike: kick (aerial hop) — crouch → hop stretch → landing squash -- */
-.vs-fighter[data-pose=kick] { animation: vs-sticker-kick 820ms cubic-bezier(.34,.56,.36,1) both; }
+.vs-fighter[data-pose=kick] { animation: vs-sticker-kick 820ms cubic-bezier(.32,.06,.24,1) both; }
 @keyframes vs-sticker-kick {
   0%   { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
-  10%  { transform: translate3d(calc(var(--lunge)*-7px), 4px,0) rotate(calc(var(--lunge)*3deg)) scale(.92,1.08); } /* crouch */
-  21%  { transform: translate3d(calc(var(--lunge)*20px), -22px,0) rotate(calc(var(--lunge)*-5deg)) scale(1.1,.9) skewX(calc(var(--lunge)*-2deg)); } /* airborne */
-  29%  { transform: translate3d(calc(var(--lunge)*45px), -64px,0) rotate(calc(var(--lunge)*-4deg)) scale(1.08,.93); } /* contact mid-air */
-  45%  { transform: translate3d(calc(var(--lunge)*30px), 2px,0) rotate(0) scale(.94,1.07); } /* landing squash */
-  62%  { transform: translate3d(calc(var(--lunge)*12px), -3px,0) rotate(calc(var(--lunge)*1deg)) scale(1.03,.97); } /* bounce */
-  80%  { transform: translate3d(calc(var(--lunge)*3px), 0,0) scale(.99,1.01); }
+  9%   { transform: translate3d(calc(var(--lunge)*-8px), 5px,0) rotate(calc(var(--lunge)*3deg)) scale(.91,1.09); } /* crouch */
+  18%  { transform: translate3d(calc(var(--lunge)*14px), -14px,0) rotate(calc(var(--lunge)*-4deg)) scale(1.09,.91) skewX(calc(var(--lunge)*-2deg)); } /* launch */
+  29%  { transform: translate3d(calc(var(--lunge)*42px), -22px,0) rotate(calc(var(--lunge)*-3deg)) scale(1.08,.93); } /* CONTACT: hop, stays inside the stage */
+  42%  { transform: translate3d(calc(var(--lunge)*34px), -6px,0) rotate(calc(var(--lunge)*1deg)) scale(.96,1.05); } /* land */
+  56%  { transform: translate3d(calc(var(--lunge)*18px), 2px,0) rotate(0) scale(1.03,.97); } /* bounce */
+  72%  { transform: translate3d(calc(var(--lunge)*6px), -1px,0) rotate(calc(var(--lunge)*1deg)) scale(.99,1.01); }
+  86%  { transform: translate3d(calc(var(--lunge)*1px), 0,0) scale(1.005,.995); }
   100% { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
 }
 
 /* --- Recoil: hit squash → jelly wobble → recover ------------------------ */
-.vs-fighter[data-pose=recoil] { animation: vs-sticker-recoil 780ms cubic-bezier(.3,.7,.4,1) both; }
+.vs-fighter[data-pose=recoil] { animation: vs-sticker-recoil 820ms cubic-bezier(.26,.1,.28,1) both; }
 @keyframes vs-sticker-recoil {
-  0%, 18% { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
-  29%  { transform: translate3d(calc(var(--lunge)*-22px), 6px,0) rotate(calc(var(--lunge)*9deg)) scale(1.18,.76) skewX(calc(var(--lunge)*5deg)); } /* flat squash */
-  40%  { transform: translate3d(calc(var(--lunge)*-17px), 3px,0) rotate(calc(var(--lunge)*5deg)) scale(1.05,.93); }
-  54%  { transform: translate3d(calc(var(--lunge)*-11px), 1px,0) rotate(calc(var(--lunge)*-3deg)) scale(.96,1.05); } /* jelly wobble */
-  68%  { transform: translate3d(calc(var(--lunge)*-6px), 0,0) rotate(calc(var(--lunge)*1.5deg)) scale(1.03,.97); }
-  84%  { transform: translate3d(calc(var(--lunge)*-1px), 0,0) rotate(0) scale(1,1); }
-  100% { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
+  0%, 20% { transform: translate3d(0,0,0) rotate(0) scale(1,1); opacity:1; }
+  29%  { transform: translate3d(calc(var(--lunge)*-22px), 6px,0) rotate(calc(var(--lunge)*9deg)) scale(1.18,.76) skewX(calc(var(--lunge)*5deg)); opacity:.87; } /* CONTACT squash */
+  38%  { transform: translate3d(calc(var(--lunge)*-20px), 4px,0) rotate(calc(var(--lunge)*6deg)) scale(1.07,.93); opacity:.93; }
+  50%  { transform: translate3d(calc(var(--lunge)*-14px), 2px,0) rotate(calc(var(--lunge)*-2.5deg)) scale(.97,1.04); opacity:.99; } /* jelly wobble */
+  62%  { transform: translate3d(calc(var(--lunge)*-9px), 0,0) rotate(calc(var(--lunge)*1.6deg)) scale(1.02,.98); }
+  74%  { transform: translate3d(calc(var(--lunge)*-5px), 0,0) rotate(calc(var(--lunge)*-.8deg)) scale(.995,1.005); }
+  86%  { transform: translate3d(calc(var(--lunge)*-2px), 0,0) rotate(calc(var(--lunge)*.4deg)) scale(1.002,.998); }
+  100% { transform: translate3d(0,0,0) rotate(0) scale(1,1); opacity:1; }
 }
 
 /* --- Slip: duck + slide back with motion blur, stretch recover ---------- */
-.vs-fighter[data-pose=slip] { animation: vs-sticker-slip 780ms cubic-bezier(.3,.7,.4,1) both; }
+.vs-fighter[data-pose=slip] { animation: vs-sticker-slip 820ms cubic-bezier(.26,.1,.28,1) both; }
 @keyframes vs-sticker-slip {
-  0%   { transform: translate3d(0,0,0) scale(1,1) rotate(0); }
-  16%  { transform: translate3d(calc(var(--lunge)*-5px), -2px,0) scale(.98,1.03) rotate(calc(var(--lunge)*-2deg)); }
-  30%  { transform: translate3d(calc(var(--lunge)*-24px), 13px,0) scale(1.1,.7) rotate(calc(var(--lunge)*-11deg)); opacity:.94; } /* duck slide */
-  46%  { transform: translate3d(calc(var(--lunge)*-17px), 6px,0) scale(1.03,.88) rotate(calc(var(--lunge)*-5deg)); opacity:.98; }
-  64%  { transform: translate3d(calc(var(--lunge)*-6px), 0,0) scale(.98,1.04) rotate(calc(var(--lunge)*-1deg)); } /* stretch back up */
-  82%  { transform: translate3d(calc(var(--lunge)*-1px), 0,0) scale(1.01,.99); }
+  0%   { transform: translate3d(0,0,0) scale(1,1) rotate(0); opacity:1; }
+  15%  { transform: translate3d(calc(var(--lunge)*-5px), -2px,0) scale(.98,1.03) rotate(calc(var(--lunge)*-2deg)); }
+  29%  { transform: translate3d(calc(var(--lunge)*-25px), 13px,0) scale(1.1,.71) rotate(calc(var(--lunge)*-11deg)); opacity:.94; } /* CONTACT duck slide */
+  42%  { transform: translate3d(calc(var(--lunge)*-20px), 8px,0) scale(1.06,.82) rotate(calc(var(--lunge)*-7deg)); opacity:.97; }
+  56%  { transform: translate3d(calc(var(--lunge)*-12px), 2px,0) scale(.99,1.03) rotate(calc(var(--lunge)*-2deg)); } /* rise */
+  70%  { transform: translate3d(calc(var(--lunge)*-6px), 0,0) scale(1.02,.98) rotate(calc(var(--lunge)*.6deg)); }
+  84%  { transform: translate3d(calc(var(--lunge)*-2px), 0,0) scale(.995,1.005); }
   100% { transform: translate3d(0,0,0) scale(1,1) rotate(0); opacity:1; }
 }
 
@@ -6561,7 +6556,7 @@ html.motion-reduced #vs-controls .vs-move-row button.is-selected { animation: no
 /* The sprites are trimmed to their bounding box, so the old border-radius
    mask, background glow and screen blend would either clip the katana arc or
    punch holes through the black body. Alpha handles it now. */
-.vs-fighter { width: min(44%, 210px); bottom: 30px; }
+.vs-fighter { width: min(40%, 188px, 62%); bottom: 26px; }
 .vs-fighter.left { left: 1%; }
 .vs-fighter.right { right: 1%; }
 .vs-ninja {
@@ -6569,4 +6564,40 @@ html.motion-reduced #vs-controls .vs-move-row button.is-selected { animation: no
   border-radius: 0; background: none;
   image-rendering: auto;
 }
-.vs-fighter::after { left: 16%; right: 16%; bottom: -2%; height: 9%; }
+.vs-fighter::after { left: 18%; right: 18%; bottom: -1%; height: 8%; }
+
+/* --- Smoothness pass: continuity between poses and idle, aura charge --------- */
+
+/* The idle bounce restarts from 0 when a pose ends, which read as a visible pop.
+   Start it one beat into the cycle (squash phase) so it continues the recovery
+   instead of snapping upright. */
+.vs-fighter:not([data-pose]) .vs-ninja {
+  animation-delay: -0.32s;
+}
+.vs-fighter.right:not([data-pose]) .vs-ninja { animation-delay: -1.47s; }
+
+/* Attacker charge: the aura swells, then settles. Transform/opacity only —
+   no filter, no sprite re-raster. */
+/* Needs to outrank .vs-fighter:not([data-pose])::before (0,3,1) */
+.vs-fighter.is-charging:not([data-pose])::before,
+.vs-fighter.is-charging[data-pose]::before { animation: vs-aura-charge 560ms cubic-bezier(.22,.7,.3,1) both; }
+@keyframes vs-aura-charge {
+  0%   { opacity: .62; transform: scale(1); }
+  28%  { opacity: 1;   transform: scale(1.26); }
+  58%  { opacity: .92; transform: scale(1.1); }
+  100% { opacity: .62; transform: scale(1); }
+}
+
+/* Aura base: promote so scale changes stay on the compositor. */
+.vs-fighter::before { will-change: transform, opacity; }
+
+/* Soft handoff: keep a touch of motion on the sprite while the pose's final
+   frame settles, so the transition back to idle is a glide, not a cut. */
+.vs-fighter[data-pose] { animation-fill-mode: both; }
+
+/* Impact flash layer: promote once instead of compositing from scratch. */
+.vs-hitflash { will-change: opacity, transform; }
+
+/* Speedlines and shockwave: same, they animate every impact. */
+.vs-speedlines { will-change: opacity, transform; }
+.vs-shockwave { will-change: opacity, transform; }

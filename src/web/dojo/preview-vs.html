@@ -152,16 +152,18 @@
         dialog.dataset.sequence = "intro";
         stage.classList.add("is-storm");
         cut(true, "Раунд 1", "");
-        await wait(680);
+        await wait(840);
         for (const side of [0, 1]) {
           const hit = side === 0;                       // SENSEI lands, NINJA misses
           const attackerPose = side === 0 ? "sweep" : "kick";
           dialog.dataset.sequence = "strike";
-          for (const f of fighters) { delete f.dataset.pose; f.classList.remove("is-dashing"); }
+          for (const f of fighters) { delete f.dataset.pose; f.classList.remove("is-dashing", "is-charging"); }
           void fighters[0].offsetWidth;                  // restart the animation
           fighters[side].dataset.pose = attackerPose;
           fighters[1 - side].dataset.pose = hit ? "recoil" : "slip";
           fighters[side].classList.add("is-dashing");
+          for (const f of fighters) f.classList.remove("is-charging");
+          requestAnimationFrame(() => fighters[side].classList.add("is-charging"));
           dialog.dataset.striker = side ? "right" : "left";
           dialog.dataset.outcome = hit ? "hit" : "miss";
           dialog.dataset.direction = "right";
@@ -188,7 +190,7 @@
           dialog.querySelector("#vs-read-dodge").textContent = side ? "←" : "→";
           dialog.querySelector("#vs-read-result").textContent = hit ? "Попадание" : "Уклонился!";
           status.textContent = `SENSEI: удар → · NINJA: уворот → · ${hit ? "Попадание" : "Уклонился!"}`;
-          await wait(680);
+          await wait(840);
           read.hidden = true;
           stage.classList.remove("is-zoom", "is-shake", "is-slash");
           comic.classList.remove("is-striking");
@@ -198,7 +200,7 @@
         dialog.dataset.sequence = "outro";
         cut(true, `${hits[0]} : ${hits[1]}`, "ПРЕИМУЩЕСТВО");
         stage.classList.add("is-zoom");
-        await wait(860);
+        await wait(900);
         stage.classList.remove("is-storm", "is-zoom");
         cut(false);
         delete dialog.dataset.sequence;

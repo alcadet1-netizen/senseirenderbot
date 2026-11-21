@@ -959,6 +959,7 @@
   // neon slash trail canvas (green energy streak, matches sticker glow)
   const vsTrailCanvas = vsDialog.querySelector(".vs-trail-canvas");
   const vsTrailCtx = vsTrailCanvas ? vsTrailCanvas.getContext("2d", {alpha:true, desynchronized:true}) : null;
+  if (vsTrailCtx) vsTrailCtx.globalCompositeOperation = "lighter"; // additive neon, no CSS blend
   // Match the backing store to the element so strokes are not drawn at 640x360 then upscaled.
   // Capped at 1.5x DPR: the trail is a soft glow, extra pixels buy nothing but fill cost.
   let trailDpr = 1;
@@ -991,6 +992,12 @@
     vsTrailCtx.setTransform(trailDpr, 0, 0, trailDpr, 0, 0);
     vsTrailCtx.clearRect(0,0,w,h);
     if (t <= 0 || t >= 1) return;
+    // Envelope: fade in over the first 22%, fade out over the last 38%.
+    // Without it the streak popped on and cut off, which is what made the
+    // swing feel choppy rather than like a blade passing through air.
+    const fadeIn = Math.min(1, t / 0.22);
+    const fadeOut = t < 0.62 ? 1 : 1 - (t - 0.62) / 0.38;
+    const fade = Math.max(0, Math.min(fadeIn, fadeOut));
     // bezier from attacker to center
     const fromX = side===0 ? w*0.26 : w*0.74;
     const toX = w*0.5;
@@ -999,24 +1006,32 @@
     const e = 1 - Math.pow(1 - t, 3);
     const x = fromX + (toX - fromX) * e + Math.sin(e*Math.PI)* 10 * (side? -1:1);
     const y = fromY + (toY - fromY) * e + Math.sin(e*Math.PI*2)* -6;
-    const len = 120 * (1 - Math.abs(e-.5)*1.2);
+    // Length grows into the strike, then trails off — never a hard edge.
+    const grow = Math.min(1, t / 0.3);
+    const len = 130 * grow * (1 - Math.abs(e-.5)*1.1);
     const ang = (side===0 ? -12 : 12) * Math.PI/180 + Math.sin(e*Math.PI)* .45;
+    const dx = Math.cos(ang)*len*.5, dy = Math.sin(ang)*len*.5;
     vsTrailCtx.save();
     vsTrailCtx.lineCap = "round"; vsTrailCtx.lineJoin="round";
-    // outer glow
-    vsTrailCtx.strokeStyle = `rgba(122,255,170,${0.22 * (1-e)})`;
-    vsTrailCtx.lineWidth = 18;
-    vsTrailCtx.beginPath(); vsTrailCtx.moveTo(x - Math.cos(ang)*len*.5, y - Math.sin(ang)*len*.5); vsTrailCtx.lineTo(x + Math.cos(ang)*len*.5, y + Math.sin(ang)*len*.5); vsTrailCtx.stroke();
+    // outer glow (additive via globalCompositeOperation set on the context)
+    vsTrailCtx.strokeStyle = `rgba(122,255,170,${0.16 * fade})`;
+    vsTrailCtx.lineWidth = 20;
+    vsTrailCtx.beginPath(); vsTrailCtx.moveTo(x-dx, y-dy); vsTrailCtx.lineTo(x+dx, y+dy); vsTrailCtx.stroke();
+    // mid bloom
+    vsTrailCtx.strokeStyle = `rgba(170,255,205,${0.42 * fade})`;
+    vsTrailCtx.lineWidth = 8;
+    vsTrailCtx.beginPath(); vsTrailCtx.moveTo(x-dx, y-dy); vsTrailCtx.lineTo(x+dx, y+dy); vsTrailCtx.stroke();
     // core
-    vsTrailCtx.strokeStyle = `rgba(234,255,243,${0.95 * (1-e*0.6)})`;
-    vsTrailCtx.lineWidth = 4.2;
-    vsTrailCtx.beginPath(); vsTrailCtx.moveTo(x - Math.cos(ang)*len*.5, y - Math.sin(ang)*len*.5); vsTrailCtx.lineTo(x + Math.cos(ang)*len*.5, y + Math.sin(ang)*len*.5); vsTrailCtx.stroke();
-    // particles sparkle along trail
-    if (hit && t > .35 && t < .62) {
-      vsTrailCtx.fillStyle = `rgba(255,235,120,${0.9})`;
+    vsTrailCtx.strokeStyle = `rgba(240,255,248,${0.9 * fade})`;
+    vsTrailCtx.lineWidth = 3.2;
+    vsTrailCtx.beginPath(); vsTrailCtx.moveTo(x-dx, y-dy); vsTrailCtx.lineTo(x+dx, y+dy); vsTrailCtx.stroke();
+    // particles sparkle along trail, fading with the envelope
+    if (hit && t > .3 && t < .66) {
+      vsTrailCtx.fillStyle = `rgba(255,235,120,${0.8 * fade})`;
       for(let i=0;i<3;i++){ const px = x + (Math.random()-.5)*16; const py = y + (Math.random()-.5)*10; vsTrailCtx.beginPath(); vsTrailCtx.arc(px,py, 1.6,0,Math.PI*2); vsTrailCtx.fill(); }
     }
     vsTrailCtx.restore();
+    vsTrailCtx.globalCompositeOperation = "lighter";
   }
   function clearTrail(){ if(vsTrailCtx) vsTrailCtx.clearRect(0,0,vsTrailCanvas.width,vsTrailCanvas.height); cancelAnimationFrame(trailRaf); }
   let vsBattle, vsTimer, vsBusy = false;
@@ -1029,7 +1044,7 @@
     delete vsDialog.dataset.evade;
     delete vsDialog.dataset.outcome;
     delete vsDialog.dataset.direction;
-    for (const actor of vsDialog.querySelectorAll(".vs-fighter")) { delete actor.dataset.pose; actor.classList.remove("is-dashing"); }
+    for (const actor of vsDialog.querySelectorAll(".vs-fighter")) { delete actor.dataset.pose; actor.classList.remove("is-dashing","is-charging"); }
     clearTrail();
     const stage = vsDialog.querySelector(".vs-stage");
     stage?.classList.remove("is-storm","is-impact","is-flash","is-shake","is-zoom","is-slash","is-hitstop");
@@ -1078,7 +1093,7 @@
       vsDialog.dataset.sequence = "strike";
       const strike = exchange.strikes[side];
       const actors = vsDialog.querySelectorAll(".vs-fighter");
-      for (const actor of actors) { delete actor.dataset.pose; actor.classList.remove("is-dashing"); }
+      for (const actor of actors) { delete actor.dataset.pose; actor.classList.remove("is-dashing","is-charging"); }
       void actors[0].offsetWidth;
       // Alternate choreography, keep manga posing: sweep = grounded horizontal slash, kick = aerial leap
       const attackerPose = (exchange.round + side) % 2 ? "sweep" : "kick";
@@ -1086,10 +1101,11 @@
       actors[side].dataset.pose = attackerPose;
       actors[1-side].dataset.pose = defenderPose;
       actors[side].classList.add("is-dashing");
-      // Attacker aura flare (eyes are baked into the sticker sprite)
-      try {
-        actors[side].animate([{filter:"brightness(1)"},{filter:"brightness(1.35) saturate(1.2)"},{filter:"brightness(1)"}], {duration: 460, easing: "ease-out"});
-      } catch {}
+      // Attacker aura flare: class-driven, animates transform/opacity only.
+      // (Animating filter here re-rasterised the whole sprite every frame.)
+      for (const actor of actors) actor.classList.remove("is-charging");
+      void 0;
+      requestAnimationFrame(() => actors[side].classList.add("is-charging"));
       vsDialog.dataset.striker = side ? "right" : "left";
       vsDialog.dataset.evade = strike.dodge === "dodge_l" ? "left" : "right";
       vsDialog.dataset.outcome = strike.hit ? "hit" : "miss";
@@ -1125,7 +1141,7 @@
       const read = describeStrike(s, side);
       $("vs-status").textContent = `Раунд ${exchange.round} · атакует ${s.names[side]}`;
       // Hit-stop timing: if hit, freeze 90ms at contact (anime impact frame)
-      const hitStop = (!reduced && strike.hit) ? 90 : 0;
+      const hitStop = (!reduced && strike.hit) ? 70 : 0;
       const contactAt = reduced ? 0 : 240;
       frameTimer = setTimeout(() => {
         if (hitStop) {
@@ -1159,6 +1175,7 @@
         $("vs-status").textContent = read.line;
         hits[side] += Number(strike.hit);
         score();
+        // Let the pose play out fully before the readout appears.
         frameTimer = setTimeout(() => {
           stage?.classList.remove("is-zoom","is-shake","is-slash");
           if (!side) return frame(1);
@@ -1170,11 +1187,11 @@
           caption.textContent = `ИТОГ ОБМЕНА  /  РАУНД ${exchange.round}`;
           banner.textContent = `${hits[0]} : ${hits[1]}`;
           if (sub) sub.textContent = hits[0]===hits[1] ? "НИЧЬЯ В РАУНДЕ" : (hits[side] > hits[1-side] ? "ПРЕИМУЩЕСТВО" : "");
-          frameTimer = setTimeout(() => { stage?.classList.remove("is-zoom","is-storm"); stopVsComic(); drawVs(vsBattle); }, reduced ? 180 : 860);
-        }, reduced ? 520 : 680);
+          frameTimer = setTimeout(() => { stage?.classList.remove("is-zoom","is-storm"); stopVsComic(); drawVs(vsBattle); }, reduced ? 180 : 900);
+        }, reduced ? 520 : 840);
       }
     };
-    frameTimer = setTimeout(() => frame(0), reduced ? 0 : 680);
+    frameTimer = setTimeout(() => frame(0), reduced ? 0 : 720);
   }
   let draftKey = "", draft = {};
   function paintDraft() {
