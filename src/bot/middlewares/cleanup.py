@@ -8,6 +8,9 @@ from src.bot.middlewares.comment_campaign import campaign_message_deleted
 
 logger = logging.getLogger(__name__)
 
+TEXT_TRIGGERS = frozenset({"ежа", "фарм", "фармить", "фарма", "ферма", "ап катана", "\\upkatana"})
+
+
 class CommandCleanupMiddleware(BaseMiddleware):
     """Middleware для удаления сообщений с командами."""
 
@@ -23,12 +26,11 @@ class CommandCleanupMiddleware(BaseMiddleware):
         result = await handler(event, data)
 
         # Delete only the user's invocation, never the bot's result. Exact
-        # aliases must not match ordinary conversation mentioning a hedgehog.
-        daily_aliases = {"ежа", "фарм", "фармить", "фарма", "ферма"}
+        # aliases must not match ordinary conversation.
         if (isinstance(event, Message) and event.text
                 and (event.text.startswith('/') or (
                     event.from_user and not event.from_user.is_bot
-                    and event.text.lower() in daily_aliases))):
+                    and event.text.lower() in TEXT_TRIGGERS))):
             logger.debug("[CLEANUP] Attempting to delete command message")
             try:
                 await event.delete()
