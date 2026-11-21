@@ -943,12 +943,10 @@
   $("session-ended").addEventListener("cancel", event => event.preventDefault());
   // The server owns stake, participants, score and both round actions.
   const vsDialog = $("vs-dialog");
-  // Studio sprites: 4 key sculpt variations, blended via src swap + cross-fade
+  // Sticker-man puppets: two chibi sprites, motion is CSS squash/stretch (no sprite swap)
   const SPRITES = {
     sensei1: "/miniapp/dojo/assets/ninja-sensei-1.png",
     sensei2: "/miniapp/dojo/assets/ninja-sensei-2.png",
-    dash: "/miniapp/dojo/assets/ninja-dash.png",
-    recoil: "/miniapp/dojo/assets/ninja-recoil.png",
   };
   // preload
   Object.values(SPRITES).forEach(u=>{ const im=new Image(); im.src=u; });
@@ -958,17 +956,7 @@
     fighter.append((src || $("vs-puppet")).content.cloneNode(true));
     fighter.dataset.base = fighter.classList.contains("left") ? "sensei1" : "sensei2";
   }
-  function setFighterSprite(fighter, key) {
-    const img = fighter.querySelector(".vs-ninja");
-    if (!img) return;
-    const url = SPRITES[key] || SPRITES[fighter.dataset.base];
-    if (img.src.includes(url)) return;
-    fighter.classList.add("is-morphing");
-    img.style.opacity = "0";
-    setTimeout(()=>{ img.src = url; img.style.opacity="1"; }, 60);
-    setTimeout(()=> fighter.classList.remove("is-morphing"), 220);
-  }
-  // trail canvas (volumetric neon streak)
+  // neon slash trail canvas (green energy streak, matches sticker glow)
   const vsTrailCanvas = vsDialog.querySelector(".vs-trail-canvas");
   const vsTrailCtx = vsTrailCanvas ? vsTrailCanvas.getContext("2d", {alpha:true}) : null;
   let trailRaf = 0;
@@ -1077,10 +1065,6 @@
       // Alternate choreography, keep manga posing: sweep = grounded horizontal slash, kick = aerial leap
       const attackerPose = (exchange.round + side) % 2 ? "sweep" : "kick";
       const defenderPose = strike.hit ? "recoil" : "slip";
-      // pro sprite morph - dash flash then strike, recoil on hit
-      setFighterSprite(actors[side], "dash");
-      setTimeout(()=> setFighterSprite(actors[side], actors[side].dataset.base), 220);
-      if (strike.hit) { setFighterSprite(actors[1-side], "recoil"); setTimeout(()=> setFighterSprite(actors[1-side], actors[1-side].dataset.base), 520); }
       actors[side].dataset.pose = attackerPose;
       actors[1-side].dataset.pose = defenderPose;
       actors[side].classList.add("is-dashing");

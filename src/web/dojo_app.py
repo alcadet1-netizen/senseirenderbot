@@ -34,8 +34,7 @@ ASSETS = {
     'assets/dojo-temple-bg.jpg',
     'assets/ninja-sensei-1.png',
     'assets/ninja-sensei-2.png',
-    'assets/ninja-recoil.png',
-    'assets/ninja-dash.png',
+    'assets/sticker-hero-vs.jpg',
     'assets/duel-court.webp',
     'assets/sensei.webp',
     'assets/loading-hero.webp',
@@ -413,7 +412,7 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/{asset:style\\.css|miner\\.js|motion\\.js}', page)
     app.router.add_get(
-        '/miniapp/dojo/assets/{asset:dojo-arena\\.jpg|ninja-fighter\\.jpg|dojo-temple-bg\\.jpg|ninja-sensei-1\\.png|ninja-sensei-2\\.png|duel-court\\.webp|sensei\\.webp|loading-hero\\.webp|senseicoin-wordmark\\.svg|unbounded-variable\\.woff2|golos-text-variable\\.woff2|dseg7-classic-regular\\.woff2|sensei-style-(?:400|700)\\.woff2}', page)
+        '/miniapp/dojo/assets/{asset:dojo-arena\\.jpg|ninja-fighter\\.jpg|dojo-temple-bg\\.jpg|ninja-sensei-1\\.png|ninja-sensei-2\\.png|sticker-hero-vs\\.jpg|duel-court\\.webp|sensei\\.webp|loading-hero\\.webp|senseicoin-wordmark\\.svg|unbounded-variable\\.woff2|golos-text-variable\\.woff2|dseg7-classic-regular\\.woff2|sensei-style-(?:400|700)\\.woff2}', page)
     app.router.add_post(
         '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|vs_private_share|vs_share_result|vs_chats|vs_invite|vs_accept|vs_state|vs_publish|vs_commit|vs_move|ref_claim|share|daily|daily_claim|chest}',
         api)
