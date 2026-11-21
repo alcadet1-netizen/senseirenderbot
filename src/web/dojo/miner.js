@@ -958,7 +958,23 @@
   }
   // neon slash trail canvas (green energy streak, matches sticker glow)
   const vsTrailCanvas = vsDialog.querySelector(".vs-trail-canvas");
-  const vsTrailCtx = vsTrailCanvas ? vsTrailCanvas.getContext("2d", {alpha:true}) : null;
+  const vsTrailCtx = vsTrailCanvas ? vsTrailCanvas.getContext("2d", {alpha:true, desynchronized:true}) : null;
+  // Match the backing store to the element so strokes are not drawn at 640x360 then upscaled.
+  // Capped at 1.5x DPR: the trail is a soft glow, extra pixels buy nothing but fill cost.
+  let trailDpr = 1;
+  function sizeTrail() {
+    if (!vsTrailCanvas || !vsTrailCtx) return;
+    const rect = vsTrailCanvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    trailDpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    const w = Math.round(rect.width * trailDpr), h = Math.round(rect.height * trailDpr);
+    if (vsTrailCanvas.width !== w || vsTrailCanvas.height !== h) {
+      vsTrailCanvas.width = w;
+      vsTrailCanvas.height = h;
+    }
+  }
+  sizeTrail();
+  window.addEventListener("resize", () => { sizeTrail(); clearTrail(); }, {passive:true});
   let trailRaf = 0;
   let shockEl = null;
   function ensureShock(){
@@ -971,7 +987,8 @@
   }
   function paintBladeTrail(t, side, hit) {
     if (!vsTrailCtx || !vsTrailCanvas) return;
-    const w = vsTrailCanvas.width, h = vsTrailCanvas.height;
+    const w = vsTrailCanvas.width / trailDpr, h = vsTrailCanvas.height / trailDpr;
+    vsTrailCtx.setTransform(trailDpr, 0, 0, trailDpr, 0, 0);
     vsTrailCtx.clearRect(0,0,w,h);
     if (t <= 0 || t >= 1) return;
     // bezier from attacker to center
@@ -1175,16 +1192,36 @@
     if (label) label.textContent = done === 2 ? "В бой! ⚔️" : done === 1 ? "Остался один ход" : "Выбери удар и уворот";
     commit.querySelectorAll(".vs-commit-dots i").forEach((dot, i) => dot.classList.toggle("is-on", i < done));
   }
+  // Write helpers: a no-op write still costs a style pass in a WebView, and
+  // reassigning dataset values can restart attribute-driven animations.
+  function setText(id, value) {
+    const node = $(id);
+    if (node && node.textContent !== value) node.textContent = value;
+  }
+  function setHidden(id, hidden) {
+    const node = $(id);
+    if (!node) return;
+    const next = Boolean(hidden);
+    if (node.hidden !== next) node.hidden = next;
+  }
+  function setData(node, key, value) {
+    if (!node) return;
+    const next = String(value);
+    if (node.dataset[key] !== next) node.dataset[key] = next;
+  }
+  function setClass(node, name, on) {
+    if (node) node.classList.toggle(name, on);
+  }
   function drawVs(s) {
     vsBattle = s;
     if (vsPlaying) return; // Polling updates vsBattle, never interrupts the cutscene.
     const key = `${s.id}:${s.round}`;
     if (draftKey !== key) { draftKey = key; draft = {...s.moves}; }
     const fighting = s.phase === "fight", ended = s.phase === "finished";
-    $("vs-accept").hidden = s.phase !== "invited";
-    $("vs-rematch").hidden = !ended;
-    $("vs-lobby").hidden = s.phase !== "lobby";
-    $("vs-controls").hidden = !fighting;
+    setHidden("vs-accept", s.phase !== "invited");
+    setHidden("vs-rematch", !ended);
+    setHidden("vs-lobby", s.phase !== "lobby");
+    setHidden("vs-controls", !fighting);
     $("vs-left").textContent = s.names ? `${s.side === 0 ? "Ты · " : ""}${s.names[0]} · ${s.hits[0]}` : "Сэнсэй";
     $("vs-right").textContent = s.names ? `${s.hits[1]} · ${s.names[1]}${s.side === 1 ? " · Ты" : ""}` : "Ниндзя";
     if (s.hits) {
@@ -1198,13 +1235,13 @@
       $(id).classList.remove("is-me");
     }
     $("vs-ready").hidden = !fighting;
-    $("vs-ready").textContent = s.opponent_ready ? "● Соперник готов" : "○ Соперник выбирает ход";
+    setText("vs-ready", s.opponent_ready ? "● Соперник готов" : "○ Соперник выбирает ход");
     if (s.exchange && `${s.id}:${s.exchange.round}` !== seenExchange && vsDialog.open) {
-      $("vs-ready").hidden = true;
+      setHidden("vs-ready", true);
       playVsComic(s); return;
     }
     const recap = $("vs-recap");
-    recap.hidden = !s.exchange;
+    if (recap.hidden === Boolean(s.exchange)) recap.hidden = !s.exchange;
     const replayKey = s.exchange ? `${s.id}:${s.exchange.round}` : "";
     if (recap.dataset.key !== replayKey) {
       recap.dataset.key = replayKey;
@@ -1219,12 +1256,13 @@
       }
     }
     const resolved = fighting && s.exchange?.round === s.round;
-    $("vs-controls").hidden = !fighting || resolved || !s.round || Boolean(s.moves?.attack && s.moves?.dodge);
-    $("vs-status").textContent = resolved ? "Судья подводит итог…" : fighting && s.moves?.attack && s.moves?.dodge ? "Ход зафиксирован · ждём соперника" : fighting ? `Раунд ${s.round} · ${s.seconds} с · ${s.bet} Coin` :
+    setHidden("vs-controls", !fighting || resolved || !s.round || Boolean(s.moves?.attack && s.moves?.dodge));
+    const statusLine = resolved ? "Судья подводит итог…" : fighting && s.moves?.attack && s.moves?.dodge ? "Ход зафиксирован · ждём соперника" : fighting ? `Раунд ${s.round} · ${s.seconds} с · ${s.bet} Coin` :
       ended ? (s.draw ? "Бой завершён без победителя" : s.winner ? "Победа!" : "Поражение") :
       s.phase === "invited" ? `Приглашение · ${s.chat} · ставка каждого ${s.bet} Coin` :
       s.phase === "connecting" ? `Подключаем бойцов · ${s.seconds} с` :
       s.phase === "waiting" ? `Ждём соперника · ${s.chat} · ${s.seconds} с` : "Открытый вызов";
+    if ($("vs-status").textContent !== statusLine) $("vs-status").textContent = statusLine;
     paintDraft();
   }
   async function vsRequest(action, args = {}) {
@@ -1235,7 +1273,13 @@
     catch (err) { $("vs-status").textContent = err.message; }
     finally {
       vsBusy = false;
-      if (vsDialog.open && !sessionEnded) vsTimer = setTimeout(() => vsRequest(vsBattle?.phase === "invited" ? "vs_invite" : "vs_state"), 2200);
+      if (vsDialog.open && !sessionEnded && !document.hidden) {
+        const waiting = vsBattle?.phase === "invited";
+        // While the opponent is just picking (no clock pressure) 2.2s is enough;
+        // in a live round poll a bit faster so the exchange starts without lag.
+        const delay = waiting ? 2400 : vsPlaying ? 3200 : 1600;
+        vsTimer = setTimeout(() => vsRequest(waiting ? "vs_invite" : "vs_state"), delay);
+      }
     }
   }
   $("vs-open")?.addEventListener("click", () => { vsDialog.showModal(); vsRequest("vs_state"); });

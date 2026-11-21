@@ -5470,8 +5470,7 @@ html.motion-reduced #vs-open span { animation: none; }
   box-shadow: 0 30px 90px #00000099, 0 0 0 1px #0d3324, 0 0 60px #0c402433;
 }
 #vs-dialog::backdrop {
-  background: radial-gradient(circle at 50% 32%, #01281c80, #00150ff2);
-  backdrop-filter: blur(3px) saturate(210%);
+  background: radial-gradient(circle at 50% 32%, #01281cd9, #00150ff7);
 }
 #vs-dialog[open] { animation: vs-dialog-in .42s cubic-bezier(.2, 1.3, .35, 1) both; }
 @keyframes vs-dialog-in { from { transform: translateY(26px) scale(.92); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -5482,6 +5481,7 @@ html.motion-reduced #vs-dialog[open] { animation: none; }
 
 .vs-stage {
   position: relative; isolation: isolate; overflow: hidden;
+  contain: layout paint style;
   display: flex; flex-direction: column;
   height: min(46dvh, 400px); min-height: 262px;
   background: url('assets/duel-court.webp') center / cover; /* fallback when the arena renders slowly */
@@ -5510,6 +5510,7 @@ html.motion-reduced .vs-glow { animation: none; }
   position: absolute; left: -28%; right: -28%; bottom: -8%; height: 40%;
   background: linear-gradient(180deg, transparent, rgba(130, 255, 196, .09) 60%, rgba(5, 28, 19, .9));
   filter: blur(10px); animation: vs-mist 12s ease-in-out infinite alternate;
+  will-change: transform;
 }
 @keyframes vs-mist { from { transform: translateX(-7%); } to { transform: translateX(7%); } }
 html.motion-reduced .vs-mist { animation: none; }
@@ -5528,8 +5529,8 @@ html.motion-reduced .vs-mist { animation: none; }
   opacity: var(--o);
   background: linear-gradient(150deg, #ffe3f0, #ff8fc0 70%);
   border-radius: 62% 38% 58% 42%;
-  filter: blur(.5px);
   animation: vs-petal-fall var(--d) linear infinite;
+  will-change: transform;
   animation-delay: var(--dl);
 }
 @keyframes vs-petal-fall {
@@ -5560,7 +5561,7 @@ html.motion-reduced .vs-petals i { animation: none; }
 #vs-close {
   flex: none; width: 34px; height: 34px; border-radius: 50%; padding: 0; line-height: 1;
   border: 1px solid #64c78c; background: rgba(3, 26, 17, .72); color: #b8ffcf; font-size: 19px; font-weight: 700;
-  cursor: pointer; backdrop-filter: blur(4px); text-shadow: 0 1px 2px #000;
+  cursor: pointer; text-shadow: 0 1px 2px #000;
   transition: transform .15s ease, color .15s ease, box-shadow .15s ease;
 }
 #vs-close:hover { transform: rotate(90deg) scale(1.06); color: #fff; box-shadow: 0 0 16px #35f58566; }
@@ -5571,8 +5572,7 @@ html.motion-reduced .vs-petals i { animation: none; }
 }
 #vs-score b {
   position: relative; min-width: 0; border: 1px solid #59d86f55; border-radius: 12px;
-  background: linear-gradient(180deg, #04271bd1, #03190f2a);
-  backdrop-filter: blur(6px);
+  background: linear-gradient(180deg, #04271bf2, #03190f66);
   text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;
   font-size: 14px; font-weight: 800; color: #eafff3; padding: 8px 10px 13px;
   text-shadow: 0 1px 2px #000;
@@ -5619,20 +5619,19 @@ html.motion-reduced .vs-comic.is-striking { animation: none; }
 
 .vs-fighter {
   position: absolute; bottom: 50px; width: 50%; z-index: 1; pointer-events: none;
-  transform-origin: 50% 100%; will-change: transform, opacity;
+  transform-origin: 50% 100%;
 }
 .vs-fighter.left { left: 1%; --lunge: 1; }
 .vs-fighter.right { right: 1%; --lunge: -1; }
 .vs-ninja {
   position: relative; z-index: 1; display: block; width: 100%; height: auto;
   user-select: none;
-  filter: drop-shadow(0 14px 16px rgba(0, 18, 8, .65)) drop-shadow(0 0 26px rgba(53, 255, 133, .34));
 }
 .vs-fighter.left .vs-ninja { /* sticker sprite already faces right — no mirror */ }
 .vs-fighter::before { /* energy aura */
   content: ''; position: absolute; inset: -18% -10% 0; z-index: 0;
   background: radial-gradient(ellipse at 50% 72%, #35ff8530, transparent 62%);
-  filter: blur(6px); animation: vs-aura 2.7s ease-in-out infinite alternate;
+  animation: vs-aura 2.7s ease-in-out infinite alternate;
 }
 .vs-fighter.right::before { animation-delay: -1.35s; }
 @keyframes vs-aura { from { opacity: .55; } to { opacity: 1; } }
@@ -5662,12 +5661,12 @@ html.motion-reduced .vs-fighter .vs-ninja { animation: none; }
   74% { transform: translate(calc(var(--lunge) * 22px), 2px) scale(1); }
   100% { transform: translate(0, 0) scale(1); }
 }
-.vs-fighter[data-pose=sweep] .vs-ninja,
-.vs-fighter[data-pose=kick] .vs-ninja { animation: vs-sword-flash 1.32s both; }
-@keyframes vs-sword-flash {
-  0%, 18% { filter: drop-shadow(0 14px 16px rgba(0, 18, 8, .65)) drop-shadow(0 0 26px rgba(53, 255, 133, .34)); }
-  40% { filter: drop-shadow(0 14px 16px rgba(0, 18, 8, .55)) drop-shadow(0 0 52px rgba(110, 255, 170, .85)); }
-  74% { filter: drop-shadow(0 14px 16px rgba(0, 18, 8, .65)) drop-shadow(0 0 26px rgba(53, 255, 133, .34)); }
+.vs-fighter[data-pose=sweep]::before,
+.vs-fighter[data-pose=kick]::before { animation: vs-aura-flare .82s ease-out both; }
+@keyframes vs-aura-flare {
+  0%, 14% { opacity: .62; transform: scale(1); }
+  34%     { opacity: 1;   transform: scale(1.3); }
+  100%    { opacity: .62; transform: scale(1); }
 }
 .vs-fighter[data-pose=recoil] { animation: vs-recoil 1.32s cubic-bezier(.4, .02, .2, .98) both; }
 @keyframes vs-recoil {
@@ -5774,10 +5773,9 @@ html.motion-reduced #vs-dialog .vs-cut-card { animation: none; }
   position: absolute; left: 50%; bottom: 12px; translate: -50% 0; z-index: 5;
   display: flex; align-items: center; justify-content: center; gap: 9px; max-width: 93%;
   padding: 10px 18px; border-radius: 999px; line-height: 1.35;
-  background: rgba(2, 26, 17, .84); border: 1px solid #3f8f63;
+  background: rgba(2, 26, 17, .93); border: 1px solid #3f8f63;
   box-shadow: 0 8px 26px #000a, inset 0 1px 0 #ffffff14;
   color: #a5ffcb; font-size: clamp(11px, 3.2vw, 13.5px); font-weight: 800; letter-spacing: .03em; text-align: center;
-  backdrop-filter: blur(8px);
 }
 #vs-status::before {
   content: ''; flex: none; width: 8px; height: 8px; border-radius: 50%;
@@ -5927,18 +5925,16 @@ html.motion-reduced .vs-petals { display: none; }
   content: ''; position: absolute; inset: 2px 4px; background: #7affaa; border-radius: 50%; filter: blur(1px);
 }
 .vs-stage:not([data-sequence=intro]) .vs-eye { opacity: 1; }
-.vs-ninja {
-  filter: drop-shadow(0 10px 12px rgba(0,0,0,.65)) drop-shadow(0 0 18px rgba(53,255,133,.45)) brightness(1.08) contrast(1.15);
-  border-radius: 50% 50% 12% 12% / 8% 8% 92% 92%;
-  background: radial-gradient(ellipse at 50% 80%, rgba(53,255,133,.18), transparent 62%);
-}
+.vs-ninja { background: none; }
 .vs-fighter.left .vs-ninja { /* sticker sprite already faces right — no mirror */ }
-.vs-fighter[data-pose=sweep] .vs-ninja { filter: drop-shadow(0 10px 12px rgba(0,0,0,.65)) drop-shadow(0 0 28px #7affaa) brightness(1.2); }
-.vs-fighter[data-pose=kick] .vs-ninja { filter: drop-shadow(0 10px 12px rgba(0,0,0,.65)) drop-shadow(0 0 22px #9effbd) brightness(1.15); }
+/* pose highlights ride on the aura layer (transform only, no re-filter) */
 /* Green aura behind fighters matching reference */
 .vs-fighter::before {
-  background: radial-gradient(ellipse 70% 45% at 50% 75%, #35ff85cc, transparent 68%);
-  opacity: .55; filter: blur(8px);
+  background:
+    radial-gradient(ellipse 46% 40% at 50% 74%, rgba(122, 255, 170, .5), transparent 66%),
+    radial-gradient(ellipse 72% 46% at 50% 76%, rgba(53, 255, 133, .34), transparent 70%);
+  opacity: .62; transform: translateZ(0);
+  transition: transform .24s ease, opacity .24s ease;
 }
 .vs-blade-art { color: #7affaa; filter: drop-shadow(0 0 12px #35ff85) drop-shadow(0 0 22px #35ff8566); }
 .vs-blade-wake { fill: #7affaa; opacity: .62; }
@@ -5960,7 +5956,7 @@ html.motion-reduced .vs-petals { display: none; }
 .vs-fighter[data-pose=kick] { transform: translateX(var(--x, 0)) translateY(-10px) rotate(4deg) scale(1.06); transition: transform .24s cubic-bezier(.2,.9,.2,1); }
 .vs-fighter.left[data-pose=kick] { --x: 22px; }
 .vs-fighter.right[data-pose=kick] { --x: -22px; }
-.vs-fighter[data-pose=recoil] { transform: translateX(var(--x, 0)) translateY(4px) rotate(3deg) scale(.98); filter: brightness(.85) saturate(.9); transition: transform .22s ease, filter .22s ease; }
+.vs-fighter[data-pose=recoil] { transform: translateX(var(--x, 0)) translateY(4px) rotate(3deg) scale(.98); transition: transform .22s ease; }
 .vs-fighter.left[data-pose=recoil] { --x: -10px; }
 .vs-fighter.right[data-pose=recoil] { --x: 10px; }
 .vs-fighter[data-pose=slip] { transform: translateX(var(--x, 0)) translateY(-4px) rotate(-8deg) scale(1.02); transition: transform .2s ease; }
@@ -5985,13 +5981,12 @@ html.motion-reduced .vs-petals { display: none; }
   overflow: hidden;
   position: relative;
 }
-.vs-scene { filter: saturate(1.15) contrast(1.08) brightness(0.98); }
+.vs-scene { --x: 0; }
 .vs-bg {
-  animation: vs-drift 28s ease-in-out infinite alternate, vs-bg-breathe 6s ease-in-out infinite;
+  animation: vs-drift 34s ease-in-out infinite alternate;
   will-change: transform;
   transform-origin: 50% 38%;
 }
-@keyframes vs-bg-breathe { 0%,100% { filter: brightness(1) saturate(1.15); } 50% { filter: brightness(1.06) saturate(1.22); } }
 .vs-moon {
   width: 92px; height: 92px;
   background: radial-gradient(circle at 34% 30%, #fffde8 0%, #f0f7b8 28%, #c8e8a0 52%, #8ec49a 68%, transparent 71%);
@@ -6016,11 +6011,10 @@ html.motion-reduced .vs-petals { display: none; }
     radial-gradient(ellipse 22% 20% at 55% 82%, rgba(80,255,160,.28), transparent 65%),
     radial-gradient(ellipse 24% 16% at 88% 76%, rgba(53,255,133,.26), transparent 62%),
     linear-gradient(180deg, transparent 10%, rgba(8,50,30,.18) 55%, rgba(2,20,12,.55));
-  filter: blur(10px) brightness(1.1);
-  animation: vs-fire-flicker 1.9s ease-in-out infinite alternate;
-  mix-blend-mode: screen;
+  filter: blur(9px) brightness(1.14);
+  animation: vs-fire-flicker 2.6s ease-in-out infinite alternate;
 }
-@keyframes vs-fire-flicker { 0% { opacity:.85; transform: scaleY(1) translateY(0); filter: blur(10px) brightness(1.1); } 100% { opacity:1; transform: scaleY(1.06) translateY(-2px); filter: blur(11px) brightness(1.18); } }
+@keyframes vs-fire-flicker { 0% { opacity:.8; } 100% { opacity:1; } }
 .vs-vignette {
   position:absolute; inset:0; z-index:3; pointer-events:none;
   background: radial-gradient(ellipse 78% 72% at 50% 45%, transparent 58%, rgba(0,10,6,.45) 82%, rgba(0,0,0,.72) 100%),
@@ -6029,7 +6023,7 @@ html.motion-reduced .vs-petals { display: none; }
 .vs-stage::before { /* subtle film grain */
   content:''; position:absolute; inset:0; z-index:2; pointer-events:none; opacity:.07;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
-  mix-blend-mode: overlay; animation: vs-grain 1.2s steps(6) infinite;
+  mix-blend-mode: overlay;
 }
 @keyframes vs-grain { 0%{ transform:translate(0,0) } 20%{ transform:translate(-1%,-1%) } 40%{ transform:translate(1%,.5%) } 60%{ transform:translate(-.5%,1%) } 80%{ transform:translate(1%,-1%) } 100%{ transform:translate(0,0) } }
 
@@ -6057,21 +6051,16 @@ html.motion-reduced .vs-petals { display: none; }
 /* --- Fighter: true anime puppet with secondary cloth ---------------------- */
 .vs-fighter {
   width: 52%; bottom: 44px;
-  filter: drop-shadow(0 12px 18px rgba(0,12,6,.78)) drop-shadow(0 0 24px rgba(53,255,133,.28));
-  will-change: transform, filter, opacity;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
 }
 .vs-fighter.left { left:-1%; }
 .vs-fighter.right { right:-1%; }
 .vs-ninja {
   width:100%; height:auto; display:block; position:relative; z-index:1;
-  filter: contrast(1.12) brightness(1.05) drop-shadow(0 0 14px rgba(106,255,170,.35));
-  transform-origin: 50% 88%; /* feet pivot like studio */
+  transform-origin: 50% 88%;
   image-rendering: -webkit-optimize-contrast;
-  /* subtle outline to pop from dark temple */
-  -webkit-filter: drop-shadow(1px 0 0 rgba(120,255,170,.35)) drop-shadow(-1px 0 0 rgba(0,0,0,.85)) drop-shadow(0 1px 0 rgba(0,0,0,.9));
 }
-/* Double-ninja variety: second fighter uses different sculpt */
-.vs-fighter.right .vs-ninja { filter: contrast(1.1) brightness(1.02) hue-rotate(4deg) drop-shadow(0 0 16px rgba(60,255,150,.32)); }
 
 /* Eye - dual slit with bloom breathing */
 .vs-fighter .vs-eye {
@@ -6088,7 +6077,7 @@ html.motion-reduced .vs-petals { display: none; }
 .vs-trail {
   position:absolute; inset:0; z-index:0; opacity:0; pointer-events:none;
   background: inherit; background: radial-gradient(ellipse 70% 46% at 52% 62%, rgba(122,255,170,.18), transparent 68%);
-  filter: blur(8px); transform: translateX(0);
+  transform: translateX(0);
 }
 .vs-fighter.is-dashing .vs-trail { opacity:.55; animation: vs-trail-ghost 520ms ease-out both; }
 @keyframes vs-trail-ghost { 0% { transform: translateX(calc(var(--lunge,1) * -10px)) scaleX(.94); opacity:.45; } 100% { transform: translateX(0) scaleX(1); opacity:0; } }
@@ -6101,8 +6090,7 @@ html.motion-reduced .vs-petals { display: none; }
   animation: vs-aura-breathe 2.8s ease-in-out infinite alternate;
 }
 @keyframes vs-aura-breathe { from { transform: scale(.96); opacity:.52; } to { transform: scale(1.04); opacity:.78; } }
-.vs-stage.is-impact .vs-fighter[data-pose] { filter: brightness(1.18) saturate(1.15); }
-.vs-stage.is-impact .vs-fighter[data-pose]::before { opacity:1; filter: blur(12px) brightness(1.3); }
+.vs-stage.is-impact .vs-fighter[data-pose]::before { opacity:1; transform: scale(1.18); }
 
 /* Afterimage - manga phantom during sword swing */
 .vs-afterimage {
@@ -6130,43 +6118,43 @@ html.motion-reduced .vs-petals { display: none; }
 .vs-fighter[data-pose=slip]   { animation: vs-slip-matrix 720ms cubic-bezier(.22,.9,.28,1) both; }
 
 @keyframes vs-sweep-arc {
-  0%   { transform: translate3d(0,0,0) rotate(0) scale(1,1); filter: brightness(1); }
-  10%  { transform: translate3d(calc(var(--lunge)*-7px), 2px,0) rotate(calc(var(--lunge)*3deg)) scale(.97,1.03); filter: brightness(.94); } /* anticipation */
+  0%   { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
+  10%  { transform: translate3d(calc(var(--lunge)*-7px), 2px,0) rotate(calc(var(--lunge)*3deg)) scale(.97,1.03); }
   22%  { transform: translate3d(calc(var(--lunge)*-4px), 1px,0) rotate(calc(var(--lunge)*1deg)) scale(1,1); }
-  38%  { transform: translate3d(calc(var(--lunge)*44px), -8px,0) rotate(calc(var(--lunge)*-7deg)) scale(1.07,.93) skewX(calc(var(--lunge)*-2deg)); filter: brightness(1.12) blur(.4px); } /* extreme smear */
-  44%  { transform: translate3d(calc(var(--lunge)*38px), -5px,0) rotate(calc(var(--lunge)*-5deg)) scale(1.04,.97); filter: brightness(1.14); } /* contact hold */
+  38%  { transform: translate3d(calc(var(--lunge)*44px), -8px,0) rotate(calc(var(--lunge)*-7deg)) scale(1.07,.93) skewX(calc(var(--lunge)*-2deg)); }
+  44%  { transform: translate3d(calc(var(--lunge)*38px), -5px,0) rotate(calc(var(--lunge)*-5deg)) scale(1.04,.97); }
   62%  { transform: translate3d(calc(var(--lunge)*14px), 2px,0) rotate(calc(var(--lunge)*-1deg)) scale(.99,1.01); }
-  100% { transform: translate3d(0,0,0) rotate(0) scale(1,1); filter: brightness(1); }
+  100% { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
 }
 @keyframes vs-kick-arc {
   0%   { transform: translate3d(0,0,0) rotate(0) scale(1); }
   11%  { transform: translate3d(calc(var(--lunge)*-8px), 3px,0) rotate(calc(var(--lunge)*4deg)) scale(.96,1.04); }
-  24%  { transform: translate3d(calc(var(--lunge)*50px), -11px,0) rotate(calc(var(--lunge)*-4deg)) scale(1.09,.91) skewX(calc(var(--lunge)*-3deg)); filter: blur(.5px) brightness(1.15); }
-  42%  { transform: translate3d(calc(var(--lunge)*42px), -6px,0) rotate(calc(var(--lunge)*-2deg)) scale(1.05,.96); filter: brightness(1.18); }
+  24%  { transform: translate3d(calc(var(--lunge)*50px), -11px,0) rotate(calc(var(--lunge)*-4deg)) scale(1.09,.91) skewX(calc(var(--lunge)*-3deg)); }
+  42%  { transform: translate3d(calc(var(--lunge)*42px), -6px,0) rotate(calc(var(--lunge)*-2deg)) scale(1.05,.96); }
   68%  { transform: translate3d(calc(var(--lunge)*10px), 2px,0) rotate(0) scale(.99,1.01); }
   100% { transform: translate3d(0,0,0) rotate(0) scale(1); }
 }
 @keyframes vs-recoil-hit {
-  0%   { transform: translate3d(0,0,0) rotate(0) scale(1); filter: brightness(1); }
+  0%   { transform: translate3d(0,0,0) rotate(0) scale(1); }
   18%  { transform: translate3d(0,0,0) rotate(0) scale(1); }
-  34%  { transform: translate3d(calc(var(--lunge)*-22px), 6px,0) rotate(calc(var(--lunge)*9deg)) scale(.96,1.04) skewX(calc(var(--lunge)*4deg)); filter: brightness(.82) saturate(.9) blur(.3px); } /* hit squash */
-  44%  { transform: translate3d(calc(var(--lunge)*-18px), 4px,0) rotate(calc(var(--lunge)*6deg)) scale(.97,1.02); filter: brightness(.88); } /* hold */
+  34%  { transform: translate3d(calc(var(--lunge)*-22px), 6px,0) rotate(calc(var(--lunge)*9deg)) scale(.96,1.04) skewX(calc(var(--lunge)*4deg)); opacity:.86; }
+  44%  { transform: translate3d(calc(var(--lunge)*-18px), 4px,0) rotate(calc(var(--lunge)*6deg)) scale(.97,1.02); opacity:.94; }
   72%  { transform: translate3d(calc(var(--lunge)*-6px), 1px,0) rotate(calc(var(--lunge)*1deg)) scale(1.01,.99); }
-  100% { transform: translate3d(0,0,0) rotate(0) scale(1); filter: brightness(1); }
+  100% { transform: translate3d(0,0,0) rotate(0) scale(1); opacity:1; }
 }
 @keyframes vs-slip-matrix {
-  0%   { transform: translate3d(0,0,0) scaleY(1) rotate(0); filter: blur(0); }
+  0%   { transform: translate3d(0,0,0) scaleY(1) rotate(0); }
   26%  { transform: translate3d(calc(var(--lunge)*-4px), -2px,0) scaleY(1.02) rotate(calc(var(--lunge)*-1deg)); }
-  38%  { transform: translate3d(calc(var(--lunge)*-18px), 10px,0) scaleY(.78) scaleX(1.06) rotate(calc(var(--lunge)*-9deg)); filter: blur(.6px); opacity:.92; } /* matrix lean */
+  38%  { transform: translate3d(calc(var(--lunge)*-18px), 10px,0) scaleY(.78) scaleX(1.06) rotate(calc(var(--lunge)*-9deg)); opacity:.92; }
   54%  { transform: translate3d(calc(var(--lunge)*-14px), 6px,0) scaleY(.88) rotate(calc(var(--lunge)*-4deg)); opacity:.98; }
-  100% { transform: translate3d(0,0,0) scaleY(1) rotate(0); opacity:1; filter: blur(0); }
+  100% { transform: translate3d(0,0,0) scaleY(1) rotate(0); opacity:1; }
 }
 
 /* Enter: cinematic dolly from darkness with motion blur */
 #vs-dialog[data-sequence=intro] .vs-fighter.left  { animation: vs-enter-left 980ms cubic-bezier(.16,.84,.28,1.12) both; }
 #vs-dialog[data-sequence=intro] .vs-fighter.right { animation: vs-enter-right 980ms cubic-bezier(.16,.84,.28,1.12) both .11s; }
-@keyframes vs-enter-left  { 0% { transform: translate3d(-86px, 8px,0) scale(.88) blur(3px); opacity:0; filter: brightness(.7) blur(4px); } 55% { transform: translate3d(6px,-4px,0) scale(1.03) blur(0); opacity:1; filter: brightness(1.08) blur(0); } 100% { transform: translate3d(0,0,0) scale(1); opacity:1; } }
-@keyframes vs-enter-right { 0% { transform: translate3d(86px, 8px,0) scale(.88) blur(3px); opacity:0; filter: brightness(.7) blur(4px); } 55% { transform: translate3d(-6px,-4px,0) scale(1.03) blur(0); opacity:1; filter: brightness(1.08) blur(0); } 100% { transform: translate3d(0,0,0) scale(1); opacity:1; } }
+@keyframes vs-enter-left  { 0% { transform: translate3d(-86px, 8px,0) scale(.9); opacity:0; } 55% { transform: translate3d(6px,-4px,0) scale(1.03); opacity:1; } 100% { transform: translate3d(0,0,0) scale(1); opacity:1; } }
+@keyframes vs-enter-right { 0% { transform: translate3d(86px, 8px,0) scale(.9); opacity:0; } 55% { transform: translate3d(-6px,-4px,0) scale(1.03); opacity:1; } 100% { transform: translate3d(0,0,0) scale(1); opacity:1; } }
 
 /* Camera shake + zoom on impact (applies to whole stage) */
 .vs-stage.is-shake { animation: vs-camera-shake 520ms cubic-bezier(.36,.02,.2,1) both; }
@@ -6185,7 +6173,7 @@ html.motion-reduced .vs-petals { display: none; }
 /* --- Blade: neon photon sword with layered glow -------------------------- */
 .vs-blade-art {
   top: 30%; left: 3%; width: 92%; height: auto;
-  filter: drop-shadow(0 0 14px rgba(53,255,133,.95)) drop-shadow(0 0 30px rgba(53,255,133,.45));
+  filter: drop-shadow(0 0 18px rgba(53,255,133,.9));
   opacity:0; transform-origin: 50% 50%;
 }
 #vs-dialog[data-striker] .vs-blade-art { opacity:1; }
@@ -6277,7 +6265,6 @@ html.motion-reduced .vs-petals { display: none; }
   top: 38%; width: 88%; max-width: 360px; padding: 16px 18px 14px; border-radius: 18px;
   background: linear-gradient(180deg, rgba(3,32,20,.96), rgba(2,20,13,.88));
   border: 1px solid rgba(123,255,170,.42); box-shadow: 0 8px 36px rgba(0,0,0,.55), 0 0 48px rgba(53,255,133,.18), inset 0 1px 0 rgba(255,255,255,.08);
-  backdrop-filter: blur(10px);
   transform-origin: 50% 50%;
 }
 .vs-cut-card::before { /* brush underline */
@@ -6313,7 +6300,7 @@ html.motion-reduced .vs-petals { display: none; }
   bottom: 10px; padding: 10px 16px 10px 14px; gap:8px; max-width:94%;
   background: linear-gradient(180deg, rgba(4,30,20,.92), rgba(2,16,11,.96));
   border: 1px solid rgba(85,220,150,.42); box-shadow: 0 8px 28px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.07), 0 0 18px rgba(53,255,133,.14);
-  font-size: clamp(11px,3vw,13px); letter-spacing:.02em; backdrop-filter: blur(10px) saturate(1.2);
+  font-size: clamp(11px,3vw,13px); letter-spacing:.02em;
 }
 #vs-status::before { width:7px; height:7px; background:#7affaa; box-shadow: 0 0 8px #7affaa, 0 0 14px #35ff85; }
 
@@ -6337,7 +6324,7 @@ html.motion-reduced .vs-petals { display: none; }
 }
 
 /* sticker puppets: crisp chibi, neon glow baked in sprite + CSS halo */
-.vs-fighter .vs-ninja { will-change: transform, filter; backface-visibility: hidden; }
+.vs-fighter .vs-ninja { backface-visibility: hidden; }
 
 /* depth: pagoda layers parallax on camera move */
 .vs-stage.is-shake .vs-bg { animation: none !important; }
@@ -6374,7 +6361,6 @@ html.motion-reduced .vs-petals { display: none; }
   border-radius: 0 !important;
   background: none !important;
   transform-origin: 50% 100%;
-  will-change: transform, filter;
 }
 .vs-fighter { width: 46%; bottom: 36px; transform-origin: 50% 100%; }
 .vs-fighter.left { left: 2%; }
@@ -6410,11 +6396,11 @@ html.motion-reduced .vs-petals { display: none; }
   0%   { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
   10%  { transform: translate3d(calc(var(--lunge)*-8px), 3px,0) rotate(calc(var(--lunge)*2deg)) scale(.93,1.07); }  /* anticipation crouch */
   20%  { transform: translate3d(calc(var(--lunge)*10px), -3px,0) rotate(calc(var(--lunge)*-2deg)) scale(1.05,.95); }
-  29%  { transform: translate3d(calc(var(--lunge)*46px), -8px,0) rotate(calc(var(--lunge)*-6deg)) scale(1.16,.85) skewX(calc(var(--lunge)*-3deg)); filter: brightness(1.2) blur(.4px); } /* contact: smear stretch */
-  38%  { transform: translate3d(calc(var(--lunge)*42px), -4px,0) rotate(calc(var(--lunge)*-4deg)) scale(1.09,.92); filter: brightness(1.22); } /* hold */
+  29%  { transform: translate3d(calc(var(--lunge)*46px), -8px,0) rotate(calc(var(--lunge)*-6deg)) scale(1.16,.85) skewX(calc(var(--lunge)*-3deg)); } /* contact: smear stretch */
+  38%  { transform: translate3d(calc(var(--lunge)*42px), -4px,0) rotate(calc(var(--lunge)*-4deg)) scale(1.09,.92); } /* hold */
   58%  { transform: translate3d(calc(var(--lunge)*16px), 1px,0) rotate(calc(var(--lunge)*-1deg)) scale(.98,1.02); }
   76%  { transform: translate3d(calc(var(--lunge)*-3px), 0,0) rotate(calc(var(--lunge)*.5deg)) scale(1.02,.98); } /* overshoot bounce */
-  100% { transform: translate3d(0,0,0) rotate(0) scale(1,1); filter: brightness(1); }
+  100% { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
 }
 
 /* --- Strike: kick (aerial hop) — crouch → hop stretch → landing squash -- */
@@ -6422,24 +6408,24 @@ html.motion-reduced .vs-petals { display: none; }
 @keyframes vs-sticker-kick {
   0%   { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
   10%  { transform: translate3d(calc(var(--lunge)*-7px), 4px,0) rotate(calc(var(--lunge)*3deg)) scale(.92,1.08); } /* crouch */
-  21%  { transform: translate3d(calc(var(--lunge)*20px), -22px,0) rotate(calc(var(--lunge)*-5deg)) scale(1.1,.9) skewX(calc(var(--lunge)*-2deg)); filter: blur(.5px); } /* airborne */
-  29%  { transform: translate3d(calc(var(--lunge)*45px), -64px,0) rotate(calc(var(--lunge)*-4deg)) scale(1.08,.93); filter: brightness(1.22) blur(.4px); } /* contact mid-air */
+  21%  { transform: translate3d(calc(var(--lunge)*20px), -22px,0) rotate(calc(var(--lunge)*-5deg)) scale(1.1,.9) skewX(calc(var(--lunge)*-2deg)); } /* airborne */
+  29%  { transform: translate3d(calc(var(--lunge)*45px), -64px,0) rotate(calc(var(--lunge)*-4deg)) scale(1.08,.93); } /* contact mid-air */
   45%  { transform: translate3d(calc(var(--lunge)*30px), 2px,0) rotate(0) scale(.94,1.07); } /* landing squash */
   62%  { transform: translate3d(calc(var(--lunge)*12px), -3px,0) rotate(calc(var(--lunge)*1deg)) scale(1.03,.97); } /* bounce */
   80%  { transform: translate3d(calc(var(--lunge)*3px), 0,0) scale(.99,1.01); }
-  100% { transform: translate3d(0,0,0) rotate(0) scale(1,1); filter: brightness(1); }
+  100% { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
 }
 
 /* --- Recoil: hit squash → jelly wobble → recover ------------------------ */
 .vs-fighter[data-pose=recoil] { animation: vs-sticker-recoil 780ms cubic-bezier(.3,.7,.4,1) both; }
 @keyframes vs-sticker-recoil {
   0%, 18% { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
-  29%  { transform: translate3d(calc(var(--lunge)*-22px), 6px,0) rotate(calc(var(--lunge)*9deg)) scale(1.18,.76) skewX(calc(var(--lunge)*5deg)); filter: brightness(.78) saturate(.85) blur(.4px); } /* flat squash */
-  40%  { transform: translate3d(calc(var(--lunge)*-17px), 3px,0) rotate(calc(var(--lunge)*5deg)) scale(1.05,.93); filter: brightness(.9); }
+  29%  { transform: translate3d(calc(var(--lunge)*-22px), 6px,0) rotate(calc(var(--lunge)*9deg)) scale(1.18,.76) skewX(calc(var(--lunge)*5deg)); } /* flat squash */
+  40%  { transform: translate3d(calc(var(--lunge)*-17px), 3px,0) rotate(calc(var(--lunge)*5deg)) scale(1.05,.93); }
   54%  { transform: translate3d(calc(var(--lunge)*-11px), 1px,0) rotate(calc(var(--lunge)*-3deg)) scale(.96,1.05); } /* jelly wobble */
   68%  { transform: translate3d(calc(var(--lunge)*-6px), 0,0) rotate(calc(var(--lunge)*1.5deg)) scale(1.03,.97); }
   84%  { transform: translate3d(calc(var(--lunge)*-1px), 0,0) rotate(0) scale(1,1); }
-  100% { transform: translate3d(0,0,0) rotate(0) scale(1,1); filter: brightness(1); }
+  100% { transform: translate3d(0,0,0) rotate(0) scale(1,1); }
 }
 
 /* --- Slip: duck + slide back with motion blur, stretch recover ---------- */
@@ -6447,26 +6433,26 @@ html.motion-reduced .vs-petals { display: none; }
 @keyframes vs-sticker-slip {
   0%   { transform: translate3d(0,0,0) scale(1,1) rotate(0); }
   16%  { transform: translate3d(calc(var(--lunge)*-5px), -2px,0) scale(.98,1.03) rotate(calc(var(--lunge)*-2deg)); }
-  30%  { transform: translate3d(calc(var(--lunge)*-24px), 13px,0) scale(1.1,.7) rotate(calc(var(--lunge)*-11deg)); filter: blur(.7px); opacity:.94; } /* duck slide */
+  30%  { transform: translate3d(calc(var(--lunge)*-24px), 13px,0) scale(1.1,.7) rotate(calc(var(--lunge)*-11deg)); opacity:.94; } /* duck slide */
   46%  { transform: translate3d(calc(var(--lunge)*-17px), 6px,0) scale(1.03,.88) rotate(calc(var(--lunge)*-5deg)); opacity:.98; }
   64%  { transform: translate3d(calc(var(--lunge)*-6px), 0,0) scale(.98,1.04) rotate(calc(var(--lunge)*-1deg)); } /* stretch back up */
   82%  { transform: translate3d(calc(var(--lunge)*-1px), 0,0) scale(1.01,.99); }
-  100% { transform: translate3d(0,0,0) scale(1,1) rotate(0); opacity:1; filter: blur(0); }
+  100% { transform: translate3d(0,0,0) scale(1,1) rotate(0); opacity:1; }
 }
 
 /* --- Enter: bounce in with landing squash (two bounces) ----------------- */
 #vs-dialog[data-sequence=intro] .vs-fighter.left  { animation: vs-sticker-enter-l 980ms cubic-bezier(.3,.9,.4,1.15) both; }
 #vs-dialog[data-sequence=intro] .vs-fighter.right { animation: vs-sticker-enter-r 980ms cubic-bezier(.3,.9,.4,1.15) both .12s; }
 @keyframes vs-sticker-enter-l {
-  0%   { transform: translate3d(-90px, -14px,0) scale(.9,.9); opacity: 0; filter: brightness(.7) blur(3px); }
-  45%  { transform: translate3d(4px, -6px,0) scale(1.04,.96); opacity: 1; filter: brightness(1.06) blur(0); }
+  0%   { transform: translate3d(-90px, -14px,0) scale(.9,.9); opacity: 0; }
+  45%  { transform: translate3d(4px, -6px,0) scale(1.04,.96); opacity: 1; }
   62%  { transform: translate3d(0, 3px,0) scale(.95,1.06); }   /* landing squash */
   78%  { transform: translate3d(0, -2px,0) scale(1.02,.98); }  /* bounce */
   100% { transform: translate3d(0,0,0) scale(1,1); opacity: 1; }
 }
 @keyframes vs-sticker-enter-r {
-  0%   { transform: translate3d(90px, -14px,0) scale(.9,.9); opacity: 0; filter: brightness(.7) blur(3px); }
-  45%  { transform: translate3d(-4px, -6px,0) scale(1.04,.96); opacity: 1; filter: brightness(1.06) blur(0); }
+  0%   { transform: translate3d(90px, -14px,0) scale(.9,.9); opacity: 0; }
+  45%  { transform: translate3d(-4px, -6px,0) scale(1.04,.96); opacity: 1; }
   62%  { transform: translate3d(0, 3px,0) scale(.95,1.06); }
   78%  { transform: translate3d(0, -2px,0) scale(1.02,.98); }
   100% { transform: translate3d(0,0,0) scale(1,1); opacity: 1; }
@@ -6581,12 +6567,6 @@ html.motion-reduced #vs-controls .vs-move-row button.is-selected { animation: no
 .vs-ninja {
   width: 100%; height: auto; display: block;
   border-radius: 0; background: none;
-  filter: drop-shadow(0 10px 14px rgba(0, 14, 7, .7)) drop-shadow(0 0 18px rgba(53, 255, 133, .38));
   image-rendering: auto;
 }
-.vs-fighter.right .vs-ninja {
-  filter: drop-shadow(0 10px 14px rgba(0, 14, 7, .7)) drop-shadow(0 0 18px rgba(70, 255, 150, .36));
-}
-.vs-fighter[data-pose=sweep] .vs-ninja { filter: drop-shadow(0 10px 14px rgba(0,14,7,.7)) drop-shadow(0 0 34px rgba(122,255,170,.85)) brightness(1.12); }
-.vs-fighter[data-pose=kick] .vs-ninja { filter: drop-shadow(0 10px 14px rgba(0,14,7,.7)) drop-shadow(0 0 30px rgba(158,255,189,.8)) brightness(1.1); }
 .vs-fighter::after { left: 16%; right: 16%; bottom: -2%; height: 9%; }
