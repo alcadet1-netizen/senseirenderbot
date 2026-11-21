@@ -1,4 +1,5 @@
 """Start/profile mining entry points, live katana preview and removed triggers."""
+import html
 from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock, patch
 
@@ -43,7 +44,7 @@ def test_other_easter_eggs_still_work():
 
 
 @pytest.mark.asyncio
-async def test_mysensei_sends_the_current_katana_gif_and_live_length():
+async def test_mysensei_sends_one_card_with_live_katana_and_guide():
     from src.bot.handlers.user_commands import show_profile
 
     profile = {
@@ -88,10 +89,12 @@ async def test_mysensei_sends_the_current_katana_gif_and_live_length():
     message.answer.assert_awaited_once()
     text = message.answer.call_args.args[0]
     assert 'Кровавая луна' in text
-    assert '250.4 см · уровень 13/15' in text
-    send.assert_awaited_once_with(
-        message, 250.4, position=position, owner_name='Ronin', animate=True,
-    )
+    from src.widgets.katana_models import model_caption
+    assert model_caption(250.4) in html.unescape(text) and '№7 из 128' in text
+    assert 'USDT' not in text and '1 234.56 Coin' in text
+    buttons = _buttons(message.answer.call_args.kwargs['reply_markup'])
+    assert any(b.url == 'https://telegra.ph/FULL-GAMEPLAY-GUIDE-11-21' for b in buttons)
+    send.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -143,3 +146,11 @@ async def test_start_command_wires_the_mining_button_to_the_mini_app():
     markup = message.answer.await_args_list[-1].kwargs['reply_markup']
     button, = [b for b in _buttons(markup) if b.text == '⛏ Майнинг']
     assert button.web_app.url == url
+
+
+def test_group_mining_link_and_start_guide():
+    from src.core.visuals import Visuals
+    link = 'https://t.me/test_bot?start=dojo'
+    mining, = [b for b in _buttons(get_profile_keyboard(7, miner_link=link)) if b.text == '⛏ Майнинг']
+    assert mining.url == link and mining.web_app is None
+    assert 'https://telegra.ph/FULL-GAMEPLAY-GUIDE-11-21' in Visuals.start_menu('Игрок')

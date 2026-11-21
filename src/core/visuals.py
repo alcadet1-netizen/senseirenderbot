@@ -8,7 +8,7 @@ import random
 import hashlib
 from typing import List, Dict, Any, Tuple, Sequence, Optional
 
-from src.core.constants import EXCHANGE_COINS_TO_TICKET, EXCHANGE_TICKET_TO_COINS, TOTAL_EMISSION_CAP
+from src.core.constants import EXCHANGE_COINS_TO_TICKET, EXCHANGE_TICKET_TO_COINS, TOTAL_EMISSION_CAP, PLAYER_GUIDE_URL
 
 
 def _clamp_int(n: int, lo: int, hi: int) -> int:
@@ -628,58 +628,18 @@ class Visuals:
         role: Optional[str] = None,
     ) -> str:
         """Карточка профиля пользователя."""
-        username_short = cls._ellipsize(username, 14)
-        name_line = cls._ellipsize(level_name, 20)
-        
-        # Progress bar
-        xp_bar = cls.progress_bar(xp, xp_next, length=12)
-        
-        # Katana info: cosmetic model names are the 15 length levels.
-        from src.widgets.katana_models import katana_name, model_index
-        katana_title = "Нет катаны"
-        katana_level = 0
-        if has_katana:
-            katana_level = model_index(katana_length)
-            katana_title = katana_name(katana_length)
-        katana_title_short = cls._ellipsize(katana_title, 20)
-
-        box_lines = [
-            f"ПРОФИЛЬ {username_short}",
-        ]
-        
-        if role:
-            box_lines.append(f"👺 {role}")
-            
-        box_lines.extend([
-            f"⭐ Уровень: {level}",
-            f"👤 {name_line}",
-            f"🔥 XP: {int(xp)}/{int(xp_next)}",
-            f"{xp_bar}",
-            f"💰 {cls._fmt_coins(coins)} Coin  🎫 {tickets}  💬 {messages}",
-            f"💱 ≈ {coins * 0.0002:,.2f} USDT",
-        ])
-        
-        if has_katana:
-            box_lines.append(f"🗡 {katana_length:.1f} см · уровень {katana_level + 1}/15")
-            box_lines.append(f"{katana_title_short}")
-            
-        box_lines.append(f"⚔ W{wins} / L{losses}")
-
-        # Основная карточка + катана-арт ниже (как "деталь")
-        art_ascii = ""
-        if has_katana:
-             art_ascii = cls.get_katana_art_ascii(katana_length)
-             
-        if cls.STYLE == "crypto":
-             art_block = f"<code>{art_ascii}</code>" if art_ascii else ""
-        else:
-             art_block = f"<pre>{art_ascii}</pre>" if art_ascii else ""
-
+        from src.widgets.katana_models import model_caption
+        balance = f"{coins:,.3f}".rstrip("0").rstrip(".").replace(",", " ")
+        identity = cls._esc(username) + (f" · {cls._esc(role)}" if role else "")
+        xp_line = f"{xp:,} / {xp_next:,} XP" if xp < xp_next else f"{xp:,} XP"
+        blade = cls._esc(model_caption(katana_length)) if has_katana else "Катаны пока нет"
         return (
-            f"<b>📈 {cls._esc(username_short)}</b>\n"
-            f"{cls._frame(box_lines, width=cls.FRAME_W_PROFILE)}\n"
-            f"{art_block}\n"
-            f"<i>{cls._esc(random.choice(cls.WISDOM))}</i>"
+            f"🏯 <b>Мой Сенсей</b> · {identity}\n"
+            f"{cls._esc(level_name)} · уровень {level} · {xp_line.replace(',', ' ')}\n\n"
+            f"<b>Кошелёк</b>\n{balance} Coin · Билеты: {tickets}\n\n"
+            f"<b>Катана</b>\n{blade}\n\n"
+            f"<b>Активность</b>\nСообщения: {messages} · Серия: {streak} дн.\n"
+            f"Достижения: {achievements_count} · Дуэли: {wins} побед / {losses} поражений"
         )
 
     @classmethod
@@ -988,7 +948,7 @@ class Visuals:
             cls.frame_bottom_left(w),
         ]
         menu = "<pre>\n" + "\n".join(lines) + "\n</pre>"
-        link = '<a href="https://telegra.ph/SENSEI-BOT-ULTIMATE-GUIDE-01-05">🏯 SENSEI BOT: ULTIMATE GUIDE</a>'
+        link = f'<a href="{PLAYER_GUIDE_URL}">📖 Полный гайд по игре</a>'
         return f"{menu}\n{link}"
 
     @classmethod
