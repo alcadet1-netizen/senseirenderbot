@@ -171,11 +171,11 @@ async def test_mini_app_level_members_are_scoped_and_public():
     rows = await service.get_level_members(7, level=3, limit=10)
     pipeline = users.aggregate.call_args.args[0]
     assert pipeline[0] == {'$match': {'referrer_id': 7}}
-    assert sum('$lookup' in step for step in pipeline) == 2
+    assert sum(step.get('$lookup', {}).get('from') == 'users' for step in pipeline) == 2
     assert {'$limit': 10} in pipeline
     assert rows == [
-        {'name': 'Ученик', 'username': 'student', 'active': True},
-        {'name': 'quiet', 'username': 'quiet', 'active': False},
+        {'name': 'Ученик', 'username': 'student', 'active': True, 'pending': 0, 'lifetime': 0, 'token': None},
+        {'name': 'quiet', 'username': 'quiet', 'active': False, 'pending': 0, 'lifetime': 0, 'token': None},
     ]
 
 

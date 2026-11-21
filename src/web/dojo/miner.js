@@ -51,6 +51,8 @@
     "Sensei в имени": "Sensei in name",
     "Реферальная ссылка в BIO": "Referral link in BIO",
     "Добавь Sensei в имя или @username Telegram": "Add Sensei to your Telegram name or @username",
+    "Добыча · всего принесено": "Mining · total earned",
+    "Бонус за сбор добычи: I — 10%, II — 1%, III — 0,1%. Нажми сумму рядом с именем, чтобы забрать.": "Collected mining bonuses: I — 10%, II — 1%, III — 0.1%. Tap the amount beside a name to claim it.",
     "Размести свою реферальную ссылку в BIO Telegram": "Add your referral link to your Telegram BIO",
     "Каждый день · UTC": "Every day · UTC",
     "✓ Получено сегодня": "✓ Claimed today",
@@ -923,6 +925,7 @@
   let referrals = null;
   let referralsLoaded = false;
   let referralLevel = 1;
+  let referralPage = 0;
   let referralBusy = false;
   let referralReload = false;
   let referralAttempted = false;
@@ -2515,9 +2518,39 @@
       name.textContent = member.username
         ? `@${member.username}`
         : member.name || t("Ученик");
-      row.append(status, name);
+      const reward = document.createElement("button");
+      reward.type = "button";
+      reward.className = "ref-level ref-claim";
+      reward.disabled = !(member.pending > 0);
+      reward.textContent = `${t("Забрать")} ${coinExact(member.pending || 0)} Coin`;
+      reward.onclick = async () => {
+        reward.disabled = true;
+        try {
+          const result = await api("ref_claim", {token: member.token});
+          showToast(`+${coinExact(result.claimed)} Coin`);
+          await refresh(true);
+        } catch (error) { showToast(error.message, true); }
+        finally { await loadReferrals(true); }
+      };
+      const total = document.createElement("small");
+      total.textContent = `${t("Добыча · всего принесено")}: ${coinExact(member.lifetime || 0)} Coin`;
+      name.append(document.createElement("br"), total);
+      row.append(status, name, reward);
       list.appendChild(row);
     });
+    if (referralPage || referrals.has_next) {
+      const nav = document.createElement("div");
+      nav.className = "ref-levels";
+      for (const [step, label, enabled] of [[-1, "←", referralPage > 0], [1, "→", referrals.has_next]]) {
+        const button = document.createElement("button");
+        button.className = "ref-level";
+        button.textContent = `${label} ${referralPage + step + 1}`;
+        button.hidden = !enabled;
+        button.onclick = () => { referralPage += step; members.replaceChildren(); loadReferrals(true); };
+        nav.append(button);
+      }
+      list.append(nav);
+    }
     members.replaceChildren(list);
   }
 
@@ -2538,10 +2571,10 @@
     referralAttempted = true;
     referralBusy = true;
     try {
-      const data = await api("referrals", { level: referralLevel });
+      const data = await api("referrals", { level: referralLevel, page: referralPage });
       // A level switched while this request was in flight; the queued reload
       // will render the level the player actually selected.
-      if (data.level !== referralLevel) return;
+      if (data.level !== referralLevel || (data.page || 0) !== referralPage) return;
       referrals = data;
       referralsLoaded = true;
       renderReferrals();
@@ -2759,6 +2792,7 @@
       const level = Number(button.dataset.refLevel);
       if (level === referralLevel || ![1, 2, 3].includes(level)) return;
       referralLevel = level;
+      referralPage = 0;
       document.querySelectorAll("[data-ref-level]").forEach((node) => {
         node.classList.toggle(
           "active",
