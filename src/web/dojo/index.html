@@ -231,6 +231,7 @@
         </section>
 
         <section id="view-mining" class="view view-mining">
+          <button id="vs-open" aria-label="VS — арена дуэлей">VS</button>
           <div id="mine-meter" class="mine-meter is-idle">
             <div class="mine-meter-head">
               <span data-i18n="ПРОГРЕСС ЦИКЛА">ПРОГРЕСС ЦИКЛА</span>
@@ -964,6 +965,19 @@
           <button class="sheet-done" data-close="roadmap-sheet">CLOSE</button>
         </section>
       </div>
+      <dialog id="vs-dialog" aria-labelledby="vs-title">
+        <div class="vs-stage">
+          <header><div><small>ДОДЗЁ / АРЕНА</small><h2 id="vs-title">Дуэль</h2></div><button id="vs-close" aria-label="Закрыть">×</button></header>
+          <div id="vs-score"><b id="vs-left">Сэнсэй</b><i>VS</i><b id="vs-right">Ниндзя</b></div>
+          <div class="vs-comic" aria-hidden="true"><div class="vs-panel left"></div><div class="vs-panel right"></div><div class="vs-slash"></div><b class="vs-impact"></b></div>
+          <div class="vs-console">
+            <strong id="vs-status" role="status">Поиск соперника</strong>
+            <div id="vs-lobby" hidden><label>Ставка каждого <select id="vs-bet"><option value="0">Без ставки</option><option>300</option><option>500</option><option>1000</option></select> Coin</label>
+            <button id="vs-send">Бросить вызов в активный чат</button><small>Вызов на 2 минуты. Ставки резервируются при принятии.</small></div>
+            <div id="vs-controls" hidden><button data-vs="dodge_l">← Уворот</button><button data-vs="dodge_r">Уворот →</button><button data-vs="hit_l">← Удар</button><button data-vs="hit_r">Удар →</button></div>
+          </div>
+        </div>
+      </dialog>
     </main>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="/miniapp/dojo/miner.js"></script>
