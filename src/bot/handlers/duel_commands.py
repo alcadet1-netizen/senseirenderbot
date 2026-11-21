@@ -252,21 +252,26 @@ async def accept_dojo_challenge(query: CallbackQuery, container: Container, bot:
     offer = await offers.find_one(key)
     if not offer:
         return await query.answer('Вызов занят или истёк.')
+    if offer.get('rival') not in (None, opponent):
+        return await query.answer('Это персональный вызов другому игроку.')
     player = await db.users.find_one({'id': opponent, 'is_banned': {'$ne': True}})
     if not player or player.get('coins', 0) < offer['bet']:
         return await query.answer('Открой /start и проверь баланс для ставки.', show_alert=True)
+    if offer['chat'] > 0 and (not player.get('has_katana') or player.get('coins', 0) <= 0):
+        return await query.answer('Для личной дуэли нужны катана и положительный баланс Coin.', show_alert=True)
     if container.duel_service._is_in_active_duel(opponent):
         return await query.answer('Сначала заверши свою дуэль.')
     key['expires'] = {'$gt': time.time()}
     locked = await offers.update_one(key, {'$set': {'status': 'joining'}})
     if not locked.matched_count:
         return await query.answer('Вызов занят или истёк.')
-    await query.answer('Открываем арену…')
+    await query.answer('Открой /dojo → VS. На подключение — 2 минуты.', show_alert=True)
     result = await container.duel_service.create_duel(uid, opponent, offer['bet'], offer['chat'], bot,
                                                        request_id=f'dojo:{token}')
     if isinstance(result, str):
         await offers.update_one({'_id': uid, 'token': token}, {'$set': {'status': 'closed'}})
         return await query.message.edit_text(result, parse_mode=None)
+    result.dojo_only = True
     result.challenge_message_id = query.message.message_id
     await container.duel_service.process_decision(result.id, opponent, 'a')
     await offers.update_one({'_id': uid, 'token': token}, {'$set': {'status': 'closed'}})
