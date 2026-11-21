@@ -943,9 +943,65 @@
   $("session-ended").addEventListener("cancel", event => event.preventDefault());
   // The server owns stake, participants, score and both round actions.
   const vsDialog = $("vs-dialog");
+  // Sticker-man puppets: two chibi sprites, motion is CSS squash/stretch (no sprite swap)
+  const SPRITES = {
+    sensei1: "/miniapp/dojo/assets/ninja-sensei-1.png",
+    sensei2: "/miniapp/dojo/assets/ninja-sensei-2.png",
+  };
+  // preload
+  Object.values(SPRITES).forEach(u=>{ const im=new Image(); im.src=u; });
   for (const fighter of vsDialog.querySelectorAll(".vs-fighter")) {
-    fighter.append($("vs-puppet").content.cloneNode(true));
+    const tpl = fighter.classList.contains("left") ? "vs-puppet" : "vs-puppet-2";
+    const src = document.getElementById(tpl);
+    fighter.append((src || $("vs-puppet")).content.cloneNode(true));
+    fighter.dataset.base = fighter.classList.contains("left") ? "sensei1" : "sensei2";
   }
+  // neon slash trail canvas (green energy streak, matches sticker glow)
+  const vsTrailCanvas = vsDialog.querySelector(".vs-trail-canvas");
+  const vsTrailCtx = vsTrailCanvas ? vsTrailCanvas.getContext("2d", {alpha:true}) : null;
+  let trailRaf = 0;
+  let shockEl = null;
+  function ensureShock(){
+    if (shockEl) return shockEl;
+    shockEl = document.createElement("i");
+    shockEl.className = "vs-shockwave";
+    shockEl.setAttribute("aria-hidden","true");
+    vsDialog.querySelector(".vs-comic")?.appendChild(shockEl);
+    return shockEl;
+  }
+  function paintBladeTrail(t, side, hit) {
+    if (!vsTrailCtx || !vsTrailCanvas) return;
+    const w = vsTrailCanvas.width, h = vsTrailCanvas.height;
+    vsTrailCtx.clearRect(0,0,w,h);
+    if (t <= 0 || t >= 1) return;
+    // bezier from attacker to center
+    const fromX = side===0 ? w*0.26 : w*0.74;
+    const toX = w*0.5;
+    const fromY = h*0.48, toY = h*0.52;
+    // ease: fast out then slow
+    const e = 1 - Math.pow(1 - t, 3);
+    const x = fromX + (toX - fromX) * e + Math.sin(e*Math.PI)* 10 * (side? -1:1);
+    const y = fromY + (toY - fromY) * e + Math.sin(e*Math.PI*2)* -6;
+    const len = 120 * (1 - Math.abs(e-.5)*1.2);
+    const ang = (side===0 ? -12 : 12) * Math.PI/180 + Math.sin(e*Math.PI)* .45;
+    vsTrailCtx.save();
+    vsTrailCtx.lineCap = "round"; vsTrailCtx.lineJoin="round";
+    // outer glow
+    vsTrailCtx.strokeStyle = `rgba(122,255,170,${0.22 * (1-e)})`;
+    vsTrailCtx.lineWidth = 18;
+    vsTrailCtx.beginPath(); vsTrailCtx.moveTo(x - Math.cos(ang)*len*.5, y - Math.sin(ang)*len*.5); vsTrailCtx.lineTo(x + Math.cos(ang)*len*.5, y + Math.sin(ang)*len*.5); vsTrailCtx.stroke();
+    // core
+    vsTrailCtx.strokeStyle = `rgba(234,255,243,${0.95 * (1-e*0.6)})`;
+    vsTrailCtx.lineWidth = 4.2;
+    vsTrailCtx.beginPath(); vsTrailCtx.moveTo(x - Math.cos(ang)*len*.5, y - Math.sin(ang)*len*.5); vsTrailCtx.lineTo(x + Math.cos(ang)*len*.5, y + Math.sin(ang)*len*.5); vsTrailCtx.stroke();
+    // particles sparkle along trail
+    if (hit && t > .35 && t < .62) {
+      vsTrailCtx.fillStyle = `rgba(255,235,120,${0.9})`;
+      for(let i=0;i<3;i++){ const px = x + (Math.random()-.5)*16; const py = y + (Math.random()-.5)*10; vsTrailCtx.beginPath(); vsTrailCtx.arc(px,py, 1.6,0,Math.PI*2); vsTrailCtx.fill(); }
+    }
+    vsTrailCtx.restore();
+  }
+  function clearTrail(){ if(vsTrailCtx) vsTrailCtx.clearRect(0,0,vsTrailCanvas.width,vsTrailCanvas.height); cancelAnimationFrame(trailRaf); }
   let vsBattle, vsTimer, vsBusy = false;
   let seenExchange = "", vsPlaying = false, frameTimer;
   function stopVsComic() {
@@ -953,7 +1009,14 @@
     vsPlaying = false;
     delete vsDialog.dataset.striker;
     delete vsDialog.dataset.sequence;
-    for (const actor of vsDialog.querySelectorAll(".vs-fighter")) delete actor.dataset.pose;
+    delete vsDialog.dataset.evade;
+    delete vsDialog.dataset.outcome;
+    delete vsDialog.dataset.direction;
+    for (const actor of vsDialog.querySelectorAll(".vs-fighter")) { delete actor.dataset.pose; actor.classList.remove("is-dashing"); }
+    clearTrail();
+    const stage = vsDialog.querySelector(".vs-stage");
+    stage?.classList.remove("is-storm","is-impact","is-flash","is-shake","is-zoom","is-slash","is-hitstop");
+    vsDialog.querySelector(".vs-comic")?.classList.remove("is-striking");
     $("vs-read").hidden = true;
   }
   function describeStrike(s, side) {
@@ -984,33 +1047,94 @@
       });
     };
     score();
+    const stage = vsDialog.querySelector(".vs-stage");
+    const sub = vsDialog.querySelector(".vs-cut-sub");
     vsDialog.dataset.sequence = "intro";
+    if (stage) { stage.classList.add("is-storm"); stage.classList.remove("is-impact","is-flash","is-shake","is-zoom","is-slash","is-hitstop"); }
     caption.textContent = "ДОДЗЁ  /  ПОЕДИНОК";
     banner.textContent = `Раунд ${exchange.round}`;
+    if (sub) sub.textContent = "";
     $("vs-status").textContent = "Ходы приняты · обмен ударами";
+    // Intro holds 720ms like anime title card
     const frame = side => {
       $("vs-read").hidden = true;
       vsDialog.dataset.sequence = "strike";
       const strike = exchange.strikes[side];
-      // Alternate the choreography, not the server's hit/dodge decision.
       const actors = vsDialog.querySelectorAll(".vs-fighter");
-      for (const actor of actors) delete actor.dataset.pose;
+      for (const actor of actors) { delete actor.dataset.pose; actor.classList.remove("is-dashing"); }
       void actors[0].offsetWidth;
-      actors[side].dataset.pose = (exchange.round + side) % 2 ? "sweep" : "kick";
-      actors[1-side].dataset.pose = strike.hit ? "recoil" : "slip";
+      // Alternate choreography, keep manga posing: sweep = grounded horizontal slash, kick = aerial leap
+      const attackerPose = (exchange.round + side) % 2 ? "sweep" : "kick";
+      const defenderPose = strike.hit ? "recoil" : "slip";
+      actors[side].dataset.pose = attackerPose;
+      actors[1-side].dataset.pose = defenderPose;
+      actors[side].classList.add("is-dashing");
+      // Attacker aura flare (eyes are baked into the sticker sprite)
+      try {
+        actors[side].animate([{filter:"brightness(1)"},{filter:"brightness(1.35) saturate(1.2)"},{filter:"brightness(1)"}], {duration: 460, easing: "ease-out"});
+      } catch {}
       vsDialog.dataset.striker = side ? "right" : "left";
-      // Restart the impact layers for each of the two distinct strikes.
+      vsDialog.dataset.evade = strike.dodge === "dodge_l" ? "left" : "right";
+      vsDialog.dataset.outcome = strike.hit ? "hit" : "miss";
+      vsDialog.dataset.direction = strike.attack === "hit_l" ? "left" : "right";
+      // Choose impact typography like shonen
+      const impact = vsDialog.querySelector(".vs-impact");
+      if (impact) impact.textContent = strike.hit ? (side===0 ? "ДЗАН!" : "БАМ!") : (defenderPose==="slip" ? "УКЛОН!" : "МИМО!");
+      // Storm = petals swirl, slash = afterimage + shockwave + volumetric trail
+      if (stage) {
+        stage.style.setProperty("--slash-dir", side ? "-1" : "1");
+        stage.classList.add("is-storm","is-slash");
+        stage.classList.remove("is-impact","is-flash","is-shake");
+        if (strike.hit) stage.classList.add("is-impact");
+        // shockwave center
+        ensureShock(); shockEl.style.left = "50%"; shockEl.style.top = "52%";
+      }
+      // volumetric neon trail animates over 380ms via rAF
+      if (!reduced) {
+        let start=null;
+        const dur = 380;
+        const onTrail = (now)=> {
+          if(!start) start=now;
+          const t = Math.min(1, (now-start)/dur);
+          paintBladeTrail(t, side, strike.hit);
+          if (t < 1) trailRaf = requestAnimationFrame(onTrail); else { setTimeout(clearTrail, 80); }
+        };
+        cancelAnimationFrame(trailRaf); trailRaf = requestAnimationFrame(onTrail);
+      }
       const comic = vsDialog.querySelector(".vs-comic");
       comic.classList.remove("is-striking");
       void comic.offsetWidth;
       comic.classList.add("is-striking");
-      vsDialog.dataset.evade = strike.dodge === "dodge_l" ? "left" : "right";
-      vsDialog.dataset.outcome = strike.hit ? "hit" : "miss";
-      vsDialog.dataset.direction = strike.attack === "hit_l" ? "left" : "right";
-      vsDialog.querySelector(".vs-impact").textContent = strike.hit ? "БАМ!" : "МИМО!";
       const read = describeStrike(s, side);
       $("vs-status").textContent = `Раунд ${exchange.round} · атакует ${s.names[side]}`;
+      // Hit-stop timing: if hit, freeze 90ms at contact (anime impact frame)
+      const hitStop = (!reduced && strike.hit) ? 90 : 0;
+      const contactAt = reduced ? 0 : 240;
       frameTimer = setTimeout(() => {
+        if (hitStop) {
+          stage?.classList.add("is-hitstop");
+          // burst petals outward from impact point
+          vsDialog.querySelectorAll(".vs-petals i").forEach(p=>{
+            p.style.setProperty("--burst-x", ((Math.random()-.5)*2).toFixed(2));
+            p.style.setProperty("--burst-y", ((Math.random()-.5)*2).toFixed(2));
+          });
+          // health bar punch
+          const defenderCard = side ? $("vs-left") : $("vs-right");
+          defenderCard?.classList.add("is-hit"); setTimeout(()=> defenderCard?.classList.remove("is-hit"), 440);
+          // flash + shake peak exactly at contact
+          stage?.classList.add("is-flash","is-shake");
+          if (navigator.vibrate) try { navigator.vibrate([22,18,28]); } catch {}
+          frameTimer = setTimeout(() => {
+            stage?.classList.remove("is-hitstop","is-flash","is-shake");
+            if (!reduced && strike.hit) stage?.classList.add("is-zoom");
+            showRead();
+          }, hitStop);
+        } else {
+          if (!reduced && strike.hit) stage?.classList.add("is-shake");
+          showRead();
+        }
+      }, contactAt);
+      function showRead() {
         $("vs-read-hit").textContent = read.arrow;
         $("vs-read-dodge").textContent = read.dodge;
         $("vs-read-result").textContent = read.outcome;
@@ -1019,23 +1143,37 @@
         hits[side] += Number(strike.hit);
         score();
         frameTimer = setTimeout(() => {
+          stage?.classList.remove("is-zoom","is-shake","is-slash");
           if (!side) return frame(1);
           $("vs-read").hidden = true;
           delete vsDialog.dataset.striker;
           vsDialog.dataset.sequence = "outro";
+          stage?.classList.remove("is-storm","is-impact");
+          stage?.classList.add("is-zoom");
           caption.textContent = `ИТОГ ОБМЕНА  /  РАУНД ${exchange.round}`;
           banner.textContent = `${hits[0]} : ${hits[1]}`;
-          frameTimer = setTimeout(() => { stopVsComic(); drawVs(vsBattle); }, reduced ? 180 : 750);
-        }, reduced ? 850 : 880);
-      }, reduced ? 0 : 440);
+          if (sub) sub.textContent = hits[0]===hits[1] ? "НИЧЬЯ В РАУНДЕ" : (hits[side] > hits[1-side] ? "ПРЕИМУЩЕСТВО" : "");
+          frameTimer = setTimeout(() => { stage?.classList.remove("is-zoom","is-storm"); stopVsComic(); drawVs(vsBattle); }, reduced ? 180 : 860);
+        }, reduced ? 520 : 680);
+      }
     };
-    frameTimer = setTimeout(() => frame(0), reduced ? 0 : 700);
+    frameTimer = setTimeout(() => frame(0), reduced ? 0 : 680);
   }
   let draftKey = "", draft = {};
   function paintDraft() {
-    for (const btn of vsDialog.querySelectorAll("[data-vs]"))
-      btn.setAttribute("aria-pressed", Object.values(draft).includes(btn.dataset.vs));
-    $("vs-commit").disabled = !(draft.attack && draft.dodge);
+    const picked = Object.values(draft);
+    for (const btn of vsDialog.querySelectorAll("[data-vs]")) {
+      const on = picked.includes(btn.dataset.vs);
+      btn.setAttribute("aria-pressed", String(on));
+      btn.classList.toggle("is-selected", on);
+    }
+    const done = Number(Boolean(draft.attack)) + Number(Boolean(draft.dodge));
+    const commit = $("vs-commit");
+    commit.disabled = done < 2;
+    commit.classList.toggle("is-ready", done === 2);
+    const label = commit.querySelector(".vs-commit-label");
+    if (label) label.textContent = done === 2 ? "В бой! ⚔️" : done === 1 ? "Остался один ход" : "Выбери удар и уворот";
+    commit.querySelectorAll(".vs-commit-dots i").forEach((dot, i) => dot.classList.toggle("is-on", i < done));
   }
   function drawVs(s) {
     vsBattle = s;
@@ -1122,6 +1260,17 @@
   $("vs-send")?.addEventListener("click", () => {
     if (vsBet()) $("vs-destinations").hidden = !$("vs-destinations").hidden;
   });
+  // Quick bet presets like reference card stakes
+  vsDialog?.querySelectorAll(".vs-bet-presets [data-bet]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      $("vs-bet").value = btn.dataset.bet;
+      vsDialog.querySelectorAll(".vs-bet-presets [data-bet]").forEach(b => b.classList.toggle("is-active", b===btn));
+    });
+  });
+  $("vs-bet")?.addEventListener("input", () => {
+    const v = $("vs-bet").value;
+    vsDialog.querySelectorAll(".vs-bet-presets [data-bet]").forEach(b => b.classList.toggle("is-active", b.dataset.bet===v));
+  });
   $("vs-group")?.addEventListener("click", () => {
     const bet = vsBet();
     if (!bet) return;
@@ -1160,6 +1309,7 @@
     if (move && vsBattle?.phase === "fight" && !vsPlaying) {
       draft[move.startsWith("hit_") ? "attack" : "dodge"] = move;
       paintDraft();
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch {}
     }
     if (event.target.closest("#vs-commit") && !vsPlaying) {
       if (vsBusy) return showToast("Обновление арены · нажми ещё раз");
