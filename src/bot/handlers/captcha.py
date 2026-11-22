@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 router = Router(name="captcha")
 
 
-async def _grant_access(bot, chat_id: int, message_id: int | None, user_name: str = "сенсей") -> None:
+async def _grant_access(bot, chat_id: int, message_id: int | None, user_name: str = "сенсей", container=None) -> None:
     """Сообщает об успехе и убирает кнопку, чтобы её нельзя было нажать снова."""
     try:
         await bot.edit_message_text(
@@ -47,6 +47,48 @@ async def _grant_access(bot, chat_id: int, message_id: int | None, user_name: st
 
     # Доступ открыт — сразу показываем обычное приветствие, чтобы игрок не
     # остался с пустым экраном после проверки.
+    await _send_menu(bot, chat_id, user_name)
+    await _replay_pending_start(bot, chat_id, container)
+
+
+async def _replay_pending_start(bot, chat_id: int, container) -> None:
+    """Отрабатывает диплинк, который пришёл до капчи.
+
+    Игрок перешёл по ``/start ref_123`` и упёрся в капчу. Ссылку мы
+    сохранили; теперь, когда доступ открыт, повторяем её обработку — иначе
+    приглашение терялось бы навсегда.
+    """
+    service = getattr(container, "captcha_service", None)
+    if service is None:
+        return
+    try:
+        args = await service.pop_pending_start_args(chat_id)
+    except Exception as exc:
+        logger.debug("Unable to read pending start args: %s", exc)
+        return
+    if not args:
+        return
+
+    try:
+        if args.startswith("ref_"):
+            referral = getattr(container, "referral_service", None)
+            if referral is not None:
+                _, message = await referral.process_referral(chat_id, args)
+                await bot.send_message(chat_id, message, parse_mode="HTML")
+                logger.info("Pending referral applied for user %s", chat_id)
+        elif args.startswith("check_"):
+            # Чек активируется кнопкой в интерфейсе чека; здесь достаточно
+            # вернуть игроку ссылку, чтобы он не искал её заново.
+            await bot.send_message(
+                chat_id,
+                "🎟 Чек из ссылки ждёт активации: открой его в меню бота.",
+            )
+    except Exception as exc:
+        logger.warning("Unable to replay pending start for %s: %s", chat_id, exc)
+
+
+async def _send_menu(bot, chat_id: int, user_name: str) -> None:
+    """Показывает обычное меню после (или повторно после) проверки."""
     try:
         from src.bot.keyboards.reply import get_main_keyboard
         from src.core.visuals import Visuals
@@ -87,7 +129,10 @@ async def cb_captcha_check(callback: CallbackQuery, container: Container) -> Non
         await callback.answer("Эта проверка устарела. Возьми новую.", show_alert=True)
         return
     if state.get("status") == "passed":
+        # Кнопка осталась в переписке. Молчать нельзя: игрок нажал и ждёт
+        # хоть какой-то реакции, поэтому заново показываем меню.
         await callback.answer("Уже пройдено ✅")
+        await _send_menu(callback.bot, callback.message.chat.id, user.first_name or "сенсей")
         return
 
     expected = state.get("reaction")
@@ -100,7 +145,7 @@ async def cb_captcha_check(callback: CallbackQuery, container: Container) -> Non
         await callback.answer("Проверка пройдена ✅")
         await _grant_access(
             callback.bot, callback.message.chat.id,
-            state.get("message_id"), user.first_name or "сенсей",
+            state.get("message_id"), user.first_name or "сенсей", container,
         )
         return
 
@@ -156,6 +201,29 @@ async def _replace_with_blocked(callback: CallbackQuery) -> None:
         )
     except Exception:
         pass
+
+
+@router.message(F.text.startswith("/captcha"))
+async def cmd_captcha(message: Message, container: Container) -> None:
+    """Показывает капчу по команде — например, если сообщение потерялось."""
+    user = message.from_user
+    service = getattr(container, "captcha_service", None)
+    if service is None or user is None:
+        return
+    if message.chat.type != "private":
+        await message.answer("Проверка работает только в личных сообщениях.")
+        return
+    if await service.is_passed(user.id):
+        await message.answer("Проверка уже пройдена ✅")
+        return
+
+    state = await service.issue(user.id, keep_active=True)
+    sent = await message.answer(
+        CaptchaPresenter.render_request(state["reaction"], user.first_name or "друг"),
+        parse_mode="HTML",
+        reply_markup=CaptchaPresenter.keyboard(state["reaction"], state["nonce"]),
+    )
+    await service.attach_message(user.id, sent.message_id)
 
 
 @router.callback_query(F.data == "captcha:restart")
@@ -215,4 +283,5 @@ async def on_reaction(event: MessageReactionUpdated, container: Container) -> No
             event.chat.id,
             state.get("message_id") or event.message_id,
             user.first_name or "сенсей",
+            container,
         )

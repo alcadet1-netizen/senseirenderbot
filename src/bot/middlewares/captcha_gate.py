@@ -25,9 +25,10 @@ from src.core.container import Container
 
 logger = logging.getLogger(__name__)
 
-# Команды, которые не открывают доступ, но нужны, чтобы не запереть игрока:
-# повторный показ капчи и выход из бота.
-ALLOWED_COMMANDS = ("/start", "/captcha", "/help")
+# Команды, которые не открывают доступ, но нужны, чтобы не запереть игрока.
+# Список должен совпадать с реально существующими хендлерами: команда из
+# этого списка без хендлера молча провалилась бы, и игрок остался бы ни с чем.
+ALLOWED_COMMANDS = ("/start", "/captcha")
 
 
 def _command_of(message: Message) -> str:
@@ -90,7 +91,7 @@ class CaptchaGateMiddleware(BaseMiddleware):
         if command and command not in ALLOWED_COMMANDS:
             # Команда до прохождения капчи не выполняется: иначе игрок просто
             # обойдёт проверку, вызвав /daily вместо капчи.
-            await self._send_challenge(message, service, retry=True)
+            await self._send_challenge(message, service, retry=True, data=data)
             return None
 
         if command:
@@ -100,14 +101,22 @@ class CaptchaGateMiddleware(BaseMiddleware):
 
         # Любое прочее сообщение непроверенного игрока тоже упирается в капчу:
         # иначе он просто написал бы «привет» и получил доступ к триггерам.
-        await self._send_challenge(message, service, retry=True)
+        await self._send_challenge(message, service, retry=True, data=data)
         return None
 
-    async def _send_challenge(self, message: Message, service, retry: bool = False) -> None:
-        """Выдаёт капчу и отправляет её игроку."""
+    async def _send_challenge(
+        self, message: Message, service, retry: bool = False, data: Dict[str, Any] | None = None
+    ) -> None:
+        """Показывает капчу, переиспользуя уже выданную попытку.
+
+        Если у игрока есть действующая капча, показываем ту же реакцию, а не
+        выдаём новую. Иначе каждое новое сообщение меняло ожидаемый эмодзи и
+        обесценивало кнопку на предыдущем: человек ставил одну реакцию, а
+        проверялась уже другая.
+        """
         user = message.from_user
         try:
-            state = await service.issue(user.id)
+            state = await service.issue(user.id, keep_active=True)
         except Exception as exc:
             logger.error("Unable to issue captcha for %s: %s", user.id, exc)
             return
@@ -119,6 +128,25 @@ class CaptchaGateMiddleware(BaseMiddleware):
             text += "\n\n<i>Доступ к боту откроется после проверки.</i>"
 
         try:
+            # Если капча уже висит в переписке, не заваливаем чат копиями:
+            # правим прошлое сообщение, чтобы у игрока был один актуальный
+            # запрос и одна рабочая кнопка.
+            bot = data.get("bot") or message.bot
+            previous = state.get("message_id")
+            if previous and state.get("status") == "pending" and bot is not None:
+                try:
+                    await bot.edit_message_text(
+                        text=text,
+                        chat_id=message.chat.id,
+                        message_id=int(previous),
+                        parse_mode="HTML",
+                        reply_markup=CaptchaPresenter.keyboard(reaction, state["nonce"]),
+                    )
+                    return
+                except Exception:
+                    # Сообщение могли удалить — тогда отправим новое ниже.
+                    pass
+
             sent = await message.answer(
                 text,
                 parse_mode="HTML",

@@ -209,3 +209,76 @@ async def test_start_after_captcha_registers_the_player():
     await cmd_start(message, NS(args=None), container)
 
     get_or_create.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_repeat_click_after_success_shows_the_menu_again():
+    """Кнопка остаётся в переписке: повторное нажатие должно что-то вернуть."""
+    service = build_service()
+    state = await service.issue(7)
+    await service.attach_message(7, 555)
+    await service.mark_passed(7)
+
+    callback, bot = make_callback(nonce=state["nonce"])
+    await cb_captcha_check(callback, NS(captcha_service=service))
+
+    assert callback.answer.await_args.args[0] == "Уже пройдено ✅"
+    assert bot.send_message.await_count == 1, "меню должно появиться снова"
+
+
+@pytest.mark.asyncio
+async def test_captcha_command_repeats_the_active_challenge():
+    """/captcha показывает ту же реакцию, что уже ждёт бот."""
+    from src.bot.handlers.captcha import cmd_captcha
+
+    service = build_service()
+    state = await service.issue(7)
+
+    message = NS(
+        from_user=NS(id=7, first_name="Player"),
+        chat=NS(id=7, type="private"),
+        answer=AsyncMock(return_value=NS(message_id=77)),
+    )
+    await cmd_captcha(message, NS(captcha_service=service))
+
+    text = message.answer.await_args.args[0]
+    assert state["reaction"] in text
+    assert (await service.get_state(7))["message_id"] == 77
+
+
+@pytest.mark.asyncio
+async def test_captcha_command_is_silent_for_verified_players():
+    from src.bot.handlers.captcha import cmd_captcha
+
+    service = build_service()
+    await service.issue(7)
+    await service.mark_passed(7)
+
+    message = NS(
+        from_user=NS(id=7, first_name="Player"),
+        chat=NS(id=7, type="private"),
+        answer=AsyncMock(),
+    )
+    await cmd_captcha(message, NS(captcha_service=service))
+
+    assert message.answer.await_args.args[0] == "Проверка уже пройдена ✅"
+
+
+@pytest.mark.asyncio
+async def test_pending_referral_is_replayed_after_captcha():
+    """Реферальная ссылка, съеденная капчей, отрабатывает после проверки."""
+    from src.bot.handlers.captcha import _replay_pending_start
+
+    service = build_service()
+    await service.issue(7)
+    await service.save_pending_start_args(7, "ref_12345")
+
+    referral = NS(process_referral=AsyncMock(return_value=(True, "Ты приглашён!")))
+    bot = NS(send_message=AsyncMock())
+    await _replay_pending_start(bot, 7, NS(captcha_service=service, referral_service=referral))
+
+    referral.process_referral.assert_awaited_once_with(7, "ref_12345")
+    bot.send_message.assert_awaited_once()
+    # Повторно не отыгрывается.
+    await _replay_pending_start(bot, 7, NS(captcha_service=service, referral_service=referral))
+    assert referral.process_referral.await_count == 1

@@ -29,6 +29,9 @@ class FakeCollection:
             doc[key] = value
         for key, value in (update.get("$inc") or {}).items():
             doc[key] = doc.get(key, 0) + value
+        # $unset есть в настоящем Mongo; без него фейк врал бы про удаление.
+        for key in (update.get("$unset") or {}):
+            doc.pop(key, None)
         return NS(matched_count=1, modified_count=1)
 
     async def find_one_and_update(self, query, update, upsert=False, return_document=None):
@@ -171,3 +174,88 @@ async def test_reactions_contain_handles_objects_and_dicts():
     assert svc.reactions_contain([{"emoji": "👍"}], "🔥") is False
     assert svc.reactions_contain(None, "🔥") is False
     assert svc.reactions_contain([NS(emoji="👍"), obj], "🔥") is True
+
+
+# ---------------------------------------------------------------------------
+# Повторная выдача капчи
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_second_message_keeps_the_same_challenge():
+    """Второе сообщение не должно менять реакцию и гасить прошлую кнопку."""
+    svc = build_service()
+    first = await svc.issue(7)
+    second = await svc.issue(7, keep_active=True)
+
+    assert second["reaction"] == first["reaction"]
+    assert second["nonce"] == first["nonce"]
+
+
+@pytest.mark.asyncio
+async def test_expired_challenge_is_replaced_on_new_request():
+    svc = build_service()
+    first = await svc.issue(7)
+    svc.collection.docs[7]["expires_at"] = 1
+
+    second = await svc.issue(7, keep_active=True)
+    assert second["nonce"] != first["nonce"]
+    assert second["expires_at"] > 1
+
+
+@pytest.mark.asyncio
+async def test_fresh_issue_without_keep_active_always_rotates():
+    """Явный запрос новой попытки (кнопка «заново») обязан её обновить."""
+    svc = build_service()
+    first = await svc.issue(7)
+    second = await svc.issue(7)
+    assert second["nonce"] != first["nonce"]
+
+
+# ---------------------------------------------------------------------------
+# Блокировка после промахов не должна быть вечной
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_block_after_max_attempts_expires():
+    svc = build_service()
+    state = await svc.issue(7)
+    for _ in range(MAX_ATTEMPTS):
+        await svc.verify(7, new_reactions=[{"emoji": "🤮"}])
+
+    # Срок блокировки записан — значит она снимется сама.
+    stored = svc.collection.docs[7]
+    assert stored["status"] == "failed"
+    assert stored["expires_at"] > 1
+
+    # Просрочили — проверка больше не считается вечной блокировкой.
+    stored["expires_at"] = 1
+    result = await svc.verify(7, new_reactions=[{"emoji": state["reaction"]}])
+    assert result["reason"] == "expired", "истёкшая блокировка не должна держать навсегда"
+
+
+@pytest.mark.asyncio
+async def test_legacy_block_without_expiry_is_treated_as_expired():
+    """Старые записи без срока не должны запирать игрока."""
+    svc = build_service()
+    await svc.issue(7)
+    svc.collection.docs[7]["status"] = "failed"
+    svc.collection.docs[7].pop("expires_at", None)
+
+    result = await svc.verify(7, new_reactions="[]")
+    assert result["reason"] == "expired"
+
+
+# ---------------------------------------------------------------------------
+# Отложенный диплинк
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_pending_start_args_survive_challenge_issue():
+    """Ссылка, пришедшая до капчи, не должна теряться при её выдаче."""
+    svc = build_service()
+    await svc.save_pending_start_args(7, "ref_12345")
+    await svc.issue(7)
+
+    assert await svc.pop_pending_start_args(7) == "ref_12345"
+    # Второй раз уже пусто: обработали один раз.
+    assert await svc.pop_pending_start_args(7) is None

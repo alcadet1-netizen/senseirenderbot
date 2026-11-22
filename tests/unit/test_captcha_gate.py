@@ -17,13 +17,16 @@ class FakeService:
         self.reaction = reaction
         self.issued = 0
         self.attached = None
+        self.keep_active = []
 
     async def is_passed(self, user_id):
         return self.passed
 
-    async def issue(self, user_id):
+    async def issue(self, user_id, *, keep_active: bool = False):
         self.issued += 1
-        return {"reaction": self.reaction, "nonce": "abc123", "status": "pending"}
+        self.keep_active.append(keep_active)
+        return {"reaction": self.reaction, "nonce": "abc123", "status": "pending",
+                "message_id": None}
 
     async def attach_message(self, user_id, message_id):
         self.attached = (user_id, message_id)

@@ -168,7 +168,16 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
             if not passed:
                 from src.bot.presenters.captcha_presenter import CaptchaPresenter
 
-                state = await service.issue(message.from_user.id)
+                # Диплинк сохраняем ДО выдачи капчи: issue() перезаписывает
+                # документ состояния, и записанное после неё поле выжило бы
+                # только случайно.
+                if command.args:
+                    await service.save_pending_start_args(message.from_user.id, command.args)
+
+                # keep_active: если игрок уже получил капчу, показываем ту же
+                # реакцию. Иначе повторный /start менял ожидание и обнулял
+                # кнопку на предыдущем сообщении.
+                state = await service.issue(message.from_user.id, keep_active=True)
                 sent = await message.answer(
                     CaptchaPresenter.render_request(
                         state["reaction"], message.from_user.first_name or "друг"

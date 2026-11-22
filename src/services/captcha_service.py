@@ -88,8 +88,24 @@ class CaptchaService:
             return False
         return state.get("status") == STATUS_PASSED
 
-    async def issue(self, user_id: int) -> dict:
-        """Создаёт новую попытку и возвращает её параметры."""
+    async def issue(self, user_id: int, *, keep_active: bool = False) -> dict:
+        """Создаёт новую попытку и возвращает её параметры.
+
+        ``keep_active=True`` возвращает уже выданную действующую капчу вместо
+        новой. Без этого каждое сообщение игрока перевыдавало капчу с другой
+        реакцией, и кнопка на предыдущем сообщении тут же становилась
+        недействительной: человек ставил одну реакцию, а проверялась другая.
+        """
+        if keep_active:
+            existing = await self.get_state(user_id)
+            if (
+                existing
+                and existing.get("status") == STATUS_PENDING
+                and not self._is_expired(existing)
+                and existing.get("reaction")
+            ):
+                return existing
+
         reaction = random.choice(CAPTCHA_REACTIONS)
         now = int(time.time())
         state = {
@@ -170,10 +186,58 @@ class CaptchaService:
         )
         attempts = int((result or {}).get("attempts") or 0)
         if attempts >= MAX_ATTEMPTS:
-            await self.collection.update_one(
-                {"user_id": int(user_id)}, {"$set": {"status": STATUS_FAILED}}
-            )
+            await self.block_until_ttl(user_id)
         return attempts
+
+    async def block_until_ttl(self, user_id: int) -> None:
+        """Блокировка с ограниченным сроком, а не навсегда.
+
+        Раньше после пяти промахов статус оставался ``failed`` без срока, и
+        снять его могла только новая капча. Если игрок закрывал бота, он
+        оставался заблокированным. Теперь блокировка живёт столько же,
+        сколько обычная попытка.
+        """
+        now = int(time.time())
+        await self.collection.update_one(
+            {"user_id": int(user_id)},
+            {"$set": {
+                "status": STATUS_FAILED,
+                "expires_at": now + CAPTCHA_TTL_SECONDS,
+                "expires_at_ttl": datetime.fromtimestamp(
+                    now + CAPTCHA_TTL_SECONDS, tz=timezone.utc
+                ),
+            }},
+            upsert=True,
+        )
+
+    async def save_pending_start_args(self, user_id: int, args: str) -> None:
+        """Запоминает аргументы /start, пришедшие до прохождения капчи.
+
+        Без этого переход по реферальной ссылке или чеку от нового игрока
+        пропадал: капча съедала /start ref_123, и приглашение терялось.
+        """
+        if not args:
+            return
+        try:
+            await self.collection.update_one(
+                {"user_id": int(user_id)}, {"$set": {"pending_start_args": args}}
+            )
+        except Exception as exc:
+            logger.debug("Unable to store pending start args: %s", exc)
+
+    async def pop_pending_start_args(self, user_id: int) -> Optional[str]:
+        """Отдаёт и очищает отложенные аргументы /start."""
+        state = await self.get_state(user_id)
+        args = (state or {}).get("pending_start_args")
+        if not args:
+            return None
+        try:
+            await self.collection.update_one(
+                {"user_id": int(user_id)}, {"$unset": {"pending_start_args": ""}}
+            )
+        except Exception:
+            pass
+        return args
 
     async def reset(self, user_id: int) -> None:
         await self.collection.delete_one({"user_id": int(user_id)})
@@ -222,9 +286,11 @@ class CaptchaService:
             return {"ok": False, "reason": "no_captcha"}
         if state.get("status") == STATUS_PASSED:
             return {"ok": True, "reason": "already"}
-        if self._is_expired(state):
+        blocked_forever = state.get("status") == STATUS_FAILED and not state.get("expires_at")
+        if self._is_expired(state) or blocked_forever:
             return {"ok": False, "reason": "expired"}
         if state.get("status") == STATUS_FAILED:
+            # Блокировка живёт до своего срока; пока он не вышел — отказ.
             return {"ok": False, "reason": "too_many"}
 
         if message_id is not None and state.get("message_id") not in (None, int(message_id)):
