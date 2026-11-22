@@ -6,11 +6,21 @@ import time
 from collections import defaultdict
 from datetime import datetime, timezone
 
+import logging
+
 from pymongo import ReturnDocument
 
 from src.core.exceptions import DailyAlreadyClaimedError
 from src.services.hedgehog_service import GameError, utc_day
 from src.services.bank_ledger import BankLedger
+
+
+logger = logging.getLogger(__name__)
+
+# How long a 'sending' reservation is considered live. A real send takes a few
+# seconds; anything older (or without a timestamp, i.e. left by a process that
+# died mid-send) is abandoned and may be taken over.
+NOTICE_LEASE_SECONDS = 15 * 60
 
 
 class PetRateLimit(GameError):
@@ -83,19 +93,37 @@ class DailyPetService:
             return_document=ReturnDocument.AFTER)
         return saved['daily_pet'] if saved else await self.owned(token, user_id)
 
-    async def reserve_notice(self, token, user_id):
+    async def reserve_notice(self, token, user_id, *, lease_seconds=None):
         """At-most-once send admission, persisted before contacting Telegram.
 
-        Do not expire this claim: a timeout/crash may follow a successful send.
-        The existing token is the idempotency key; rewards are unaffected.
+        A reservation older than NOTICE_LEASE_SECONDS -- or one without a
+        timestamp, left behind by a process that died between Telegram's reply
+        and mark_delivered -- is abandoned and taken over: the photo was almost
+        certainly not delivered, and the user would otherwise be blocked until
+        the next day. Fresh reservations are never taken over, because a send
+        may be in flight right now. The reward itself is not re-credited either
+        way; rewards are unaffected.
         """
+        lease = NOTICE_LEASE_SECONDS if lease_seconds is None else lease_seconds
+        now = time.time()
         for _ in range(8):
             session = await self.owned(token, user_id)
-            if session.get('delivered') or session.get('notice_state'):
+            if session.get('delivered'):
                 return False
+            notice_state = session.get('notice_state')
+            if notice_state:
+                if notice_state == 'sent':
+                    return False
+                reserved_at = session.get('notice_reserved_at')
+                age = (now - reserved_at) if isinstance(reserved_at, (int, float)) else None
+                if age is not None and age < lease:
+                    return False  # Fresh reservation: a send may be in flight.
+                logger.warning('Taking over abandoned hedgehog notice reservation user=%s state=%s age=%s',
+                               user_id, notice_state,
+                               f'{age:.0f}s' if age is not None else 'unknown (legacy, no timestamp)')
             saved = await self.users.find_one_and_update(
                 {'id': user_id, 'daily_pet': session},
-                {'$set': {'daily_pet': {**session, 'notice_state': 'sending'}}},
+                {'$set': {'daily_pet': {**session, 'notice_state': 'sending', 'notice_reserved_at': now}}},
                 return_document=ReturnDocument.AFTER)
             if saved:
                 return True
@@ -112,6 +140,7 @@ class DailyPetService:
             return False
         released = {**session}
         released.pop('notice_state', None)
+        released.pop('notice_reserved_at', None)
         saved = await self.users.find_one_and_update(
             {'id': user_id, 'daily_pet': session},
             {'$set': {'daily_pet': released}}, return_document=ReturnDocument.AFTER)
@@ -138,6 +167,7 @@ class DailyPetService:
                 {'$set': {'daily_pet': updated, 'hedgehog_images_seen': images_seen}},
                 return_document=ReturnDocument.AFTER)
             if saved:
+                logger.info('Hedgehog notice image rerolled user=%s from=%s to=%s', user_id, current, image_name)
                 return image_name
         return None
 
@@ -146,9 +176,11 @@ class DailyPetService:
             session = await self.owned(token, user_id)
             if session.get('delivered'):
                 return
+            delivered_session = {**session, 'delivered': True, 'notice_state': 'sent'}
+            delivered_session.pop('notice_reserved_at', None)
             saved = await self.users.find_one_and_update(
                 {'id': user_id, 'daily_pet': session},
-                {'$set': {'daily_pet': {**session, 'delivered': True, 'notice_state': 'sent'}}},
+                {'$set': {'daily_pet': delivered_session}},
                 return_document=ReturnDocument.AFTER)
             if saved:
                 return
