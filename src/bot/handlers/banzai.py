@@ -142,6 +142,14 @@ async def cmd_banzai(message: Message, command: CommandObject, container: Contai
         await _handle_rules_command(message)
         return
 
+    if cmd_obj.action == BanzaiActionType.STATS:
+        await _handle_stats_command(message, service)
+        return
+
+    if cmd_obj.action == BanzaiActionType.TOP:
+        await _handle_top_command(message, service)
+        return
+
     # Check if game is active
     if await service.is_active(chat_id):
         await _handle_active_game_command(message, service, cmd_obj, chat_id)
@@ -186,6 +194,39 @@ async def _handle_status_command(message: Message, service, chat_id: int) -> Non
     text = _create_frame("⏳ БАНЗАЙ АКТИВЕН", lines)
     await message.answer(text, parse_mode="HTML")
     await service.refresh_window(chat_id, message.bot, force=True)
+    await _delete_trigger_safe(message)
+
+
+async def _handle_stats_command(message: Message, service) -> None:
+    """Личная статистика игрока по сохранённым партиям."""
+    stats = await service.get_player_stats(message.from_user.id)
+    lines = [
+        f"🏆 Побед: {stats.get('wins', 0)}",
+        "",
+        "Считаются партии с момента появления истории.",
+    ]
+    text = _create_frame("📊 БАНЗАЙ: ТВОЯ СТАТИСТИКА", lines)
+    await message.answer(text, parse_mode="HTML")
+    await _delete_trigger_safe(message)
+
+
+async def _handle_top_command(message: Message, service) -> None:
+    """Последние завершённые партии в этом чате."""
+    results = await service.get_recent_results(message.chat.id, limit=5)
+    if not results:
+        text = _create_frame("🏆 БАНЗАЙ: ИСТОРИЯ", ["Пока ни одной завершённой партии."])
+        await message.answer(text, parse_mode="HTML")
+        await _delete_trigger_safe(message)
+        return
+
+    lines = []
+    for row in results:
+        winner = row.get("winner_id")
+        minutes = row.get("duration_minutes") or 0
+        name = await service.get_winner_name(message.chat.id, message.bot, winner)
+        lines.append(f"• {name} · {minutes} мин")
+    text = _create_frame("🏆 БАНЗАЙ: ПОСЛЕДНИЕ ИГРЫ", lines)
+    await message.answer(text, parse_mode="HTML")
     await _delete_trigger_safe(message)
 
 

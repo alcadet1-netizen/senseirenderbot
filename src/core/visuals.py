@@ -457,27 +457,92 @@ class Visuals:
 
     @staticmethod
     def frame_line_left(text: str, width: int = 28, align: str = "left") -> str:
+        """Строка внутри рамки.
+
+        Текст подгоняется под ширину рамки: длинные строки обрезаются с
+        многоточием, а не вылезают за правый край. Раньше строка просто
+        дописывалась после ``┃ ``, и любое длинное имя или строка статистики
+        ломали рамку в моноширинном выводе.
+        """
         text = str(text)
         if Visuals.STYLE == "crypto":
             return text.strip()
 
-        if Visuals.STYLE == "clean":
-            if align == "center":
-                if width < len(text):
-                    width = len(text)
-                return text.center(width).rstrip()
-            return text
+        # "┃ " занимает 2 колонки, поэтому текст должен влезть в width-2.
+        content_w = max(1, width - 2)
 
+        if Visuals.STYLE == "clean":
+            clipped, _ = Visuals._clip_to_width(text, content_w)
+            if align == "center":
+                return Visuals._pad_to_width(clipped, content_w)
+            return clipped
+
+        clipped, used = Visuals._clip_to_width(text, content_w)
         if align == "center":
-            # "┃ " takes 2 chars. We aim for `width` total chars? 
-            # Original frame_line returned width chars exactly.
-            # Here we might just want to center relative to the implied width.
-            content_w = width - 2
-            if content_w < len(text):
-                content_w = len(text)
-            padded = text.center(content_w)
-            return f"┃ {padded}"
-        return f"┃ {text}"
+            return f"┃ {Visuals._pad_to_width(clipped, content_w)}"
+        return f"┃ {clipped}"
+
+    # -------------------------
+    # 📐 ШИРИНА СТРОКИ
+    # -------------------------
+
+    @staticmethod
+    def _char_width(ch: str) -> int:
+        """Сколько колонок занимает один символ в моноширинном <pre>.
+
+        Эмодзи и CJK рисуются вдвое шире латиницы; комбинирующие знаки и
+        variation selectors не занимают места вообще. Без этого счёт по
+        ``len()`` врал ровно на столько, на сколько рамка разъезжалась.
+        """
+        import unicodedata
+
+        code = ord(ch)
+        if unicodedata.combining(ch) or ch in ("\ufe0f", "\ufe0e", "\u200d"):
+            return 0
+        # Эмодзи и пиктограммы.
+        if (
+            0x1F300 <= code <= 0x1FAFF
+            or 0x2600 <= code <= 0x27BF
+            or 0x1F000 <= code <= 0x1F2FF
+            or code in (0x2B50, 0x2B55, 0x231A, 0x231B, 0x23E9, 0x23EA, 0x23F0)
+        ):
+            return 2
+        if unicodedata.east_asian_width(ch) in ("W", "F"):
+            return 2
+        return 1
+
+    @staticmethod
+    def _vwidth_str(text: str) -> int:
+        return sum(Visuals._char_width(ch) for ch in str(text))
+
+    @staticmethod
+    def _clip_to_width(text: str, limit: int) -> tuple[str, int]:
+        """Обрезает строку до ``limit`` колонок, добавляя многоточие."""
+        text = str(text)
+        if Visuals._vwidth_str(text) <= limit:
+            return text, Visuals._vwidth_str(text)
+        ellipsis = "…"
+        budget = max(0, limit - 1)
+        out: list[str] = []
+        used = 0
+        for ch in text:
+            w = Visuals._char_width(ch)
+            if used + w > budget:
+                break
+            out.append(ch)
+            used += w
+        return "".join(out).rstrip() + ellipsis, used + 1
+
+    @staticmethod
+    def _pad_to_width(text: str, limit: int) -> str:
+        """Центрирует строку по видимой ширине и добивает пробелами."""
+        text = str(text)
+        used = Visuals._vwidth_str(text)
+        if used >= limit:
+            return text
+        left = (limit - used) // 2
+        right = limit - used - left
+        return " " * left + text + " " * right
 
     @staticmethod
     def frame_separator_left(width: int = 28) -> str:
