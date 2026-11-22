@@ -62,11 +62,11 @@ async def test_approved_join_request_routes_through_aiogram(existing, coins):
         'new_chat_member': {'status': 'member', 'user': user},
         'via_join_request': True,
     }})
+    get_or_create = AsyncMock(return_value={'created': not existing, 'user': {'coins': coins}})
     container = SimpleNamespace(
         throttle_service=SimpleNamespace(throttle=AsyncMock(return_value=True)),
         moderation_service=SimpleNamespace(unban_user=AsyncMock(return_value={'success': False})),
-        user_service=SimpleNamespace(get_or_create=AsyncMock(return_value={
-            'created': not existing, 'user': {'coins': coins}})),
+        user_service=SimpleNamespace(get_or_create=get_or_create),
     )
     dp = Dispatcher()
     dp.chat_member.register(on_user_join, ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
@@ -74,36 +74,32 @@ async def test_approved_join_request_routes_through_aiogram(existing, coins):
     try:
         with patch.object(bot, 'send_message', new_callable=AsyncMock) as send:
             await dp.feed_update(bot, update, container=container)
-        assert send.await_count == (1 if existing else 2)
+        # Joining is greeting-only: exactly one message, no starter kit.
+        assert send.await_count == 1
         greeting = send.await_args_list[0]
         assert greeting.args[0] == -100
         assert 'tg://user?id=77' in greeting.args[1]
         assert '&lt;New &amp; student&gt;' in greeting.args[1]
-        container.user_service.get_or_create.assert_awaited_once()
-        if not existing:
-            text = send.await_args_list[1].args[1]
-            assert 'СТАРТОВЫЙ НАБОР' in text and '10 см' in text and 'Уровень 1' in text
-            assert ('+3 000 Coin' if coins else '0 Coin') in text
-            if not coins:
-                assert '3 000' not in text
+        get_or_create.assert_not_awaited()
     finally:
         await bot.session.close()
 
 
 @pytest.mark.asyncio
-async def test_two_join_updates_send_only_one_welcome_and_grant():
+async def test_two_join_updates_send_only_one_welcome_and_no_grant():
     from src.bot.handlers.events import _handle_join
     user = User(id=77, is_bot=False, first_name='New')
     event = SimpleNamespace(chat=SimpleNamespace(id=-100, type='supergroup'), answer=AsyncMock())
+    get_or_create = AsyncMock(return_value={'created': True, 'user': {'coins': 3000}})
     container = SimpleNamespace(
         throttle_service=SimpleNamespace(throttle=AsyncMock(side_effect=[True, False])),
         moderation_service=SimpleNamespace(unban_user=AsyncMock(return_value={'success': False})),
-        user_service=SimpleNamespace(get_or_create=AsyncMock(return_value={'created': True, 'user': {'coins': 3000}})),
+        user_service=SimpleNamespace(get_or_create=get_or_create),
     )
     await _handle_join(user, container, event)
     await _handle_join(user, container, event)
-    assert event.answer.await_count == 2  # welcome + starter, no duplicate pair
-    container.user_service.get_or_create.assert_awaited_once()
+    assert event.answer.await_count == 1  # a single greeting, no starter notice
+    get_or_create.assert_not_awaited()
     container.moderation_service.unban_user.assert_awaited_once()
     assert container.throttle_service.throttle.await_args.kwargs == {
         'key': '-100:77', 'limit_seconds': 15, 'scope': 'join_welcome'}
@@ -143,10 +139,11 @@ async def test_service_join_passes_admin_check_but_bypasses_blocking_message_mid
         'from': {'id': 78, 'is_bot': False, 'first_name': 'Inviter'},
         'new_chat_members': [user],
     }})
+    get_or_create = AsyncMock(return_value={'created': True, 'user': {'coins': 3000}})
     container = SimpleNamespace(
         throttle_service=SimpleNamespace(throttle=AsyncMock(return_value=True)),
         moderation_service=SimpleNamespace(unban_user=AsyncMock(return_value={'success': False})),
-        user_service=SimpleNamespace(get_or_create=AsyncMock(return_value={'created': True, 'user': {'coins': 3000}})),
+        user_service=SimpleNamespace(get_or_create=get_or_create),
     )
     dp = Dispatcher()
     dp.update.outer_middleware(JoinDiagnosticsMiddleware())
@@ -159,9 +156,9 @@ async def test_service_join_passes_admin_check_but_bypasses_blocking_message_mid
         with patch.object(bot, 'get_chat_member', new_callable=AsyncMock, return_value=SimpleNamespace(status='administrator')), \
              patch.object(Bot, '__call__', new_callable=AsyncMock) as send:
             await dp.feed_update(bot, update)
-        assert send.await_count == 2
+        assert send.await_count == 1
         assert 'tg://user?id=77' in send.await_args_list[0].args[0].text
-        container.user_service.get_or_create.assert_awaited_once()
+        get_or_create.assert_not_awaited()
     finally:
         group_admin_access.invalidate(bot.id, -100222)
         await bot.session.close()
@@ -195,8 +192,8 @@ async def test_random_existing_welcome_templates_use_safe_mention(username, temp
     assert template in WELCOME_PHRASES
     user = User(id=77, is_bot=False, first_name='<Николай & друг>', username=username)
     event = SimpleNamespace(chat=SimpleNamespace(id=-100, type='supergroup'), answer=AsyncMock())
-    container = SimpleNamespace(user_service=SimpleNamespace(get_or_create=AsyncMock(
-        return_value={'created': True, 'user': {'coins': 3000}})))
+    get_or_create = AsyncMock(return_value={'created': True, 'user': {'coins': 3000}})
+    container = SimpleNamespace(user_service=SimpleNamespace(get_or_create=get_or_create))
     with patch('src.texts.phrases.random.choice', return_value=template) as choice:
         await _send_welcome_message(user, container, event)
     choice.assert_called_once_with(WELCOME_PHRASES)
@@ -205,5 +202,5 @@ async def test_random_existing_welcome_templates_use_safe_mention(username, temp
     assert greeting == template.replace('@{username}', '{username}').format(username=mention)
     assert '@<a' not in greeting
     assert event.answer.await_args_list[0].kwargs['parse_mode'] == 'HTML'
-    assert event.answer.await_count == 2
-    assert 'СТАРТОВЫЙ НАБОР' in event.answer.await_args_list[1].args[0]
+    assert event.answer.await_count == 1
+    assert 'СТАРТОВЫЙ НАБОР' not in event.answer.await_args_list[0].args[0]

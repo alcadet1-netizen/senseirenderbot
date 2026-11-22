@@ -30,16 +30,22 @@ def test_model_names_follow_the_fifteen_length_levels(index):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('created,answers', [(True, 2), (False, 1)])
-async def test_welcome_only_announces_kit_for_new_profile(created, answers):
+@pytest.mark.parametrize('created', [True, False])
+async def test_join_greets_only_and_never_registers_or_pays(created):
+    """Joining is greeting-only: no profile creation, no starter kit.
+
+    The kit is paid for the first message a player writes in the chat, so a
+    walk-in must leave no trace in the economy.
+    """
     from src.bot.handlers.events import _send_welcome_message
     user = NS(id=7, is_bot=False, username='newuser', first_name='New', last_name=None)
-    container = NS(user_service=NS(get_or_create=AsyncMock(return_value={'created': created, 'user': {'coins': 3000}})))
+    get_or_create = AsyncMock(return_value={'created': created, 'user': {'coins': 3000}})
+    container = NS(user_service=NS(get_or_create=get_or_create))
     event = NS(chat=NS(id=-100, type='supergroup', username='airchatton'), answer=AsyncMock())
     await _send_welcome_message(user, container, event)
-    assert event.answer.await_count == answers
-    if created:
-        assert 'СТАРТОВЫЙ НАБОР' in event.answer.call_args.args[0]
+    assert event.answer.await_count == 1
+    assert 'СТАРТОВЫЙ НАБОР' not in event.answer.call_args.args[0]
+    get_or_create.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -118,15 +124,17 @@ async def test_existing_start_does_not_announce_or_regrant_kit():
 
 
 @pytest.mark.asyncio
-async def test_zero_starter_coins_notice_on_group_join():
+async def test_group_join_does_not_touch_the_economy_even_when_kit_is_zero():
     from src.bot.handlers.events import _send_welcome_message
     user = NS(id=7, is_bot=False, username='newuser', first_name='New', last_name=None)
     event = NS(chat=NS(id=-100, type='group'), answer=AsyncMock())
-    container = NS(user_service=NS(get_or_create=AsyncMock(return_value={
-        'created': True, 'user': {'coins': 0}})))
+    get_or_create = AsyncMock(return_value={'created': True, 'user': {'coins': 0}})
+    container = NS(user_service=NS(get_or_create=get_or_create))
     await _send_welcome_message(user, container, event)
-    assert '0 Coin' in event.answer.await_args_list[-1].args[0]
-    assert '3 000' not in event.answer.await_args_list[-1].args[0]
+    assert event.answer.await_count == 1
+    text = event.answer.await_args_list[0].args[0]
+    assert 'СТАРТОВЫЙ НАБОР' not in text and 'Coin' not in text
+    get_or_create.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -157,3 +165,60 @@ def test_join_service_message_does_not_precreate_inviter_profile():
         chat=Chat(id=-100, type='supergroup'), from_user=inviter, new_chat_members=[member])
     middleware = UserActivityMiddleware(NS(throttle_service=NS()))
     assert middleware._is_valid_event(event) is False
+
+
+@pytest.mark.asyncio
+async def test_first_group_message_pays_the_kit_exactly_once(monkeypatch):
+    """The starter kit belongs to the first message a player writes in a chat.
+
+    The second message finds an existing profile and must never reserve the
+    kit again, so the starter amount is reported only for the first one.
+    """
+    from src.services.economy_service import EconomyService
+
+    created = {}
+
+    class Users:
+        async def find_one(self, query, *a, **k):
+            return created.get('doc')
+
+        async def insert_one(self, document):
+            created['doc'] = dict(document)
+            return NS(inserted_id='x')
+
+        async def update_one(self, *a, **k):
+            return NS(matched_count=0, modified_count=0)
+
+    class Emission:
+        calls = 0
+
+        async def reserve_starter(self, user_id, amount):
+            Emission.calls += 1
+            return amount
+
+    svc = EconomyService.__new__(EconomyService)
+    svc.users = Users()
+    svc.emission = Emission()
+    svc._locks = {}
+
+    # Stop right after profile creation: the reward transaction is covered by
+    # the economy tests, here we only assert who pays the kit.
+    class Stop(Exception):
+        pass
+
+    async def stop(*a, **k):
+        raise Stop
+
+    monkeypatch.setattr('src.services.economy_service.transaction', stop)
+    monkeypatch.setattr(EconomyService, '_get_total_coins_in_circulation', stop, raising=False)
+
+    with pytest.raises(Stop):
+        await svc.process_message_reward(7, first_name='New')
+    assert created['doc']['coins'] == STARTER_COINS
+    assert created['doc']['has_katana'] is True
+    assert created['doc']['katana_length'] == STARTER_KATANA_LENGTH
+    assert Emission.calls == 1
+
+    with pytest.raises(Stop):
+        await svc.process_message_reward(7, first_name='New')
+    assert Emission.calls == 1, 'второе сообщение не резервирует набор повторно'

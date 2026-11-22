@@ -9,7 +9,6 @@ from aiogram.types import ChatMemberUpdated, Message
 from aiogram.filters import ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER
 
 from src.core.container import Container
-from src.core.visuals import Visuals
 from src.texts.phrases import get_random_ban_phrase, get_random_phrase, get_random_welcome
 
 router = Router(name="events")
@@ -24,20 +23,15 @@ async def _answer_join(event, text):
 
 
 async def _send_welcome_message(user, container: Container, event):
-    """Welcome the actual joined user; do not grant the starter twice."""
+    """Greet a joined user. Joining never registers and never pays a reward.
+
+    The starter kit belongs to the first message a player writes in the chat
+    (see EconomyService.process_message_reward). Creating the profile here
+    would reserve and credit the kit for someone who only walked in, so the
+    join path is greeting-only.
+    """
     if user.is_bot or event.chat.type not in ("group", "supergroup"):
         return
-
-    registration = None
-    try:
-        registration = await container.user_service.get_or_create(
-            user_id=user.id, username=user.username,
-            first_name=user.first_name or "", last_name=user.last_name,
-        )
-    except Exception:
-        # A temporary database error should not suppress the welcome or invent
-        # a reward. Registration may be retried by the normal user flow.
-        logging.exception("Unable to register joined user %s", user.id)
 
     name = " ".join((user.first_name or f"User {user.id}").split())[:80]
     mention = f'<a href="tg://user?id={user.id}">{html.escape(name)}</a>'
@@ -49,14 +43,6 @@ async def _send_welcome_message(user, container: Container, event):
         logging.info("Join welcome sent chat=%s user=%s", event.chat.id, user.id)
     except Exception:
         logging.exception("Unable to send welcome to chat %s for user %s", event.chat.id, user.id)
-
-    if registration and registration.get('created'):
-        try:
-            bonus_text = Visuals.welcome_bonus_message(
-                name=user.username or name, coins=registration["user"]["coins"])
-            await _answer_join(event, bonus_text)
-        except Exception:
-            logging.exception("Unable to send starter notice to chat %s for user %s", event.chat.id, user.id)
 
 
 async def _clear_pending_join(container, chat_id, user_id):

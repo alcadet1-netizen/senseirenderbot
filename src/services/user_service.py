@@ -19,6 +19,52 @@ logger = logging.getLogger(__name__)
 class UserService:
     """Сервис для работы с пользователями."""
 
+    @staticmethod
+    def new_profile(
+        user_id: int,
+        *,
+        username: Optional[str] = None,
+        first_name: str = "",
+        last_name: Optional[str] = None,
+        is_bot: bool = False,
+        coins: float = 0.0,
+        created_at=None,
+    ) -> dict:
+        """The one canonical shape of a freshly registered player.
+
+        Every registration path builds the document here so a new account
+        cannot end up without a katana, with a different level, or with a
+        different starter length depending on which handler created it.
+        ``coins`` is the starter amount the emission service actually allowed.
+        """
+        stamp = created_at or datetime.now(timezone.utc)
+        return {
+            "id": user_id,
+            "username": username,
+            "first_name": first_name,
+            "last_name": last_name,
+            "is_bot": is_bot,
+            "xp": STARTER_XP,
+            "coins": coins,
+            "messages_count": 0,
+            "wins": 0,
+            "losses": 0,
+            "daily_streak": 0,
+            "last_daily": None,
+            "is_banned": False,
+            "ban_reason": None,
+            "is_muted": False,
+            "mute_until": None,
+            "has_katana": True,
+            "katana_length": STARTER_KATANA_LENGTH,
+            "last_katana_up": None,
+            "referrer_id": None,
+            "referral_count": 0,
+            "can_receive_broadcast": True,
+            "created_at": stamp,
+            "updated_at": stamp,
+        }
+
     def __init__(self, mongo_client: MongoClient):
         self.mongo_client = mongo_client
         self.db: AsyncIOMotorDatabase = mongo_client.database
@@ -113,31 +159,10 @@ class UserService:
                 except Exception:
                     logger.exception("Starter emission unavailable for user=%s", user_id)
                     starter = 0.0
-                new_user = {
-                    "id": user_id,
-                    "username": username,
-                    "first_name": first_name,
-                    "last_name": last_name,
-                    "is_bot": is_bot,
-                    "xp": STARTER_XP,
-                    "coins": starter,
-                    "messages_count": 0,
-                    "wins": 0,
-                    "losses": 0,
-                    "daily_streak": 0,
-                    "last_daily": None,
-                    "is_banned": False,
-                    "ban_reason": None,
-                    "is_muted": False,
-                    "mute_until": None,
-                    "has_katana": True,
-                    "katana_length": STARTER_KATANA_LENGTH,
-                    "last_katana_up": None,
-                    "referrer_id": None,
-                    "referral_count": 0,
-                    "can_receive_broadcast": True,
-                    "created_at": datetime.now(timezone.utc),
-                }
+                new_user = self.new_profile(
+                    user_id, username=username, first_name=first_name,
+                    last_name=last_name, is_bot=is_bot, coins=starter,
+                )
                 try:
                     await self.users.insert_one(new_user)
                 except DuplicateKeyError:

@@ -56,34 +56,14 @@ class UserRepository(BaseRepository):
         created = False
 
         if user is None:
-            # Create new user
-            from datetime import datetime, timezone
-            user = {
-                "id": user_id,
-                "username": username,
-                "first_name": first_name,
-                "last_name": last_name,
-                "is_bot": is_bot,
-                "xp": 0,
-                "coins": 0.0,
-                "messages_count": 0,
-                "wins": 0,
-                "losses": 0,
-                "daily_streak": 0,
-                "last_daily": None,
-                "is_banned": False,
-                "ban_reason": None,
-                "is_muted": False,
-                "mute_until": None,
-                "has_katana": False,
-                "katana_length": 0.0,
-                "last_katana_up": None,
-                "referrer_id": None,
-                "referral_count": 0,
-                "can_receive_broadcast": True,
-                "created_at": datetime.now(timezone.utc),
-                "updated_at": datetime.now(timezone.utc)
-            }
+            # Same canonical shape as every other registration path: a new
+            # account always starts with the katana, otherwise /upkatana and
+            # the duel commands refuse a player who was created right here.
+            from src.services.user_service import UserService
+            user = UserService.new_profile(
+                user_id, username=username, first_name=first_name,
+                last_name=last_name, is_bot=is_bot,
+            )
 
             result = await self.collection.insert_one(user)
             user["_id"] = result.inserted_id
