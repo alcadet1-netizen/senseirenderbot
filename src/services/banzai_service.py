@@ -10,6 +10,7 @@ import logging
 import random
 from typing import Optional, Dict, Set, Tuple, List
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.errors import DuplicateKeyError
 from src.infra.mongo.client import MongoClient
 from src.services.chat_activity_service import ChatActivityService
 from src.services.lottery_service import LotteryService
@@ -52,35 +53,47 @@ class BanzaiService:
         # Collections
         self.banzai_games = self.db.banzai_games
         self.banzai_chat_activity = self.db.banzai_chat_activity
+        # Уникальный индекс (chat_id, round) делает отправку оклика атомарной:
+        # вставка второго документа за тот же раунд падает с DuplicateKeyError.
+        self.banzai_callouts = self.db.banzai_callouts
 
         # Ensure indexes
         asyncio.create_task(self._ensure_indexes())
 
-    async def update_user_activity(self, chat_id: int, user_id: int) -> None:
-        """Обновляет активность пользователя в чате для игры БАНЗАЙ.
-        Добавляет запись в сортированный набор (в MongoDB мы сохраняем документ с индексом).
-        Для простоты сохраняем отдельный документ, но можем использовать сортированный набор через MongoDB.
-        Однако для получения последних пользователей нам нужна сортировка по timestamp.
-        Мы будем сохранять документы и создавать индекс по (chat_id, timestamp) для быстрого доступа.
+    async def update_user_activity(self, chat_id: int, user_id: int, is_bot: bool = False) -> None:
+        """Отмечает сообщение игрока в чате для игры БАНЗАЙ.
+
+        Боты — не игроки: их сообщения не занимают место в «Последних ходах»,
+        не попадают в счётчик «Люди» и не сбрасывают таймер тишины, иначе
+        приветствие бота само сбивает отсчёт.
+
+        ``silence_round`` — номер раунда тишины; растёт при каждом сбросе
+        таймера. К нему привязана отправка предупреждения за минуту, поэтому
+        после «перебил» оклик приходит заново, а в рамках одного раунда —
+        строго один раз.
         """
+        if is_bot:
+            return
+
+        now_ts = int(time.time())
         doc = {
             "chat_id": chat_id,
             "user_id": user_id,
-            "timestamp": int(time.time()),
+            "timestamp": now_ts,
         }
         await self.banzai_chat_activity.insert_one(doc)
 
-        now_ts = int(time.time())
-
-        # Also update the game document's last_activity if the game is active,
-        # count resets and track unique users who reset the silence timer.
-        await self.banzai_games.update_one(
+        # Сбрасываем таймер и открываем новый раунд тишины. Номер раунда
+        # увеличиваем атомарно ($inc), чтобы два одновременных сообщения не
+        # получили один и тот же номер: иначе оклик «осталась минута» мог бы
+        # не прийти после перебоя.
+        await self.banzai_games.find_one_and_update(
             {"_id": chat_id, "active": True},
             {
                 "$set": {"last_activity": now_ts, "one_minute_callout_done": False},
-                "$inc": {"resets": 1},
+                "$inc": {"resets": 1, "silence_round": 1},
                 "$addToSet": {"reset_makers": user_id}
-            }
+            },
         )
 
     async def _ensure_indexes(self):
@@ -95,6 +108,17 @@ class BanzaiService:
             await self.banzai_chat_activity.create_index(
                 "timestamp",
                 expireAfterSeconds=24 * 60 * 60
+            )
+            # Один оклик «осталась минута» на чат и раунд тишины.
+            await self.banzai_callouts.create_index(
+                [("chat_id", 1), ("round", 1)],
+                unique=True,
+            )
+            # Страховка: если очистка при остановке не отработала (падение
+            # процесса), старые претензии сами уедут через двое суток.
+            await self.banzai_callouts.create_index(
+                "created_at",
+                expireAfterSeconds=48 * 60 * 60,
             )
         except Exception as e:
             logger.warning(f"Не удалось создать индексы для banzai collections: {e}")
@@ -152,6 +176,7 @@ class BanzaiService:
             "message_id": None,
             "reset_makers": [],  # Список уникальных пользователей, сделавших сброс
             "one_minute_callout_done": False,
+            "silence_round": 0,
             "last_taunt_ts": 0,
         }
 
@@ -161,8 +186,11 @@ class BanzaiService:
             upsert=True
         )
 
-        # Очищаем старые записи активности для этого чата (опционально)
+        # Очищаем старые записи активности и претензий на оклик для этого
+        # чата: раунд тишины начинается заново с нуля, иначе старая претензия
+        # заблокировала бы предупреждение за минуту в новой игре.
         await self.banzai_chat_activity.delete_many({"chat_id": chat_id})
+        await self.banzai_callouts.delete_many({"chat_id": chat_id})
 
         # Запускаем воркер
         if chat_id in self._workers:
@@ -257,6 +285,7 @@ class BanzaiService:
         # Удаляем документ игры и связанные данные
         await self.banzai_games.delete_one({"_id": chat_id})
         await self.banzai_chat_activity.delete_many({"chat_id": chat_id})
+        await self.banzai_callouts.delete_many({"chat_id": chat_id})
 
         # Очищаем кэш интерфейса и открепляем сообщение
         message_id = await self.get_game_message_id(chat_id)
@@ -388,9 +417,12 @@ class BanzaiService:
         contenders: List[Tuple[int, int]] = []
         try:
             cursor = self.banzai_chat_activity.find(
-                {"chat_id": chat_id, "timestamp": {"$gte": started_at_ts}}
+                {"chat_id": chat_id, "timestamp": {"$gte": started_at_ts},
+                 "is_bot": {"$ne": True}}
             ).sort("timestamp", -1)
             async for doc in cursor:
+                if doc.get("is_bot"):
+                    continue
                 uid = doc["user_id"]
                 ts = doc["timestamp"]
                 contenders.append((uid, ts))
@@ -718,13 +750,18 @@ class BanzaiService:
             return
 
     async def _get_last_user_and_ts(self, chat_id: int) -> Tuple[Optional[int], Optional[int]]:
-        """Получает последнего пользователя и его timestamp из коллекции активности БАНЗАЙ."""
+        """Получает последнего игрока и timestamp его сообщения.
+
+        Записи ботов, оставшиеся в базе с прежних версий, пропускаем: иначе
+        бот оказался бы королём или победителем банзая.
+        """
         try:
-            latest = await self.banzai_chat_activity.find_one(
-                {"chat_id": chat_id},
-                sort=[("timestamp", -1)]
-            )
-            if latest:
+            cursor = self.banzai_chat_activity.find(
+                {"chat_id": chat_id, "is_bot": {"$ne": True}}
+            ).sort("timestamp", -1).limit(10)
+            async for latest in cursor:
+                if latest.get("is_bot"):
+                    continue
                 return latest["user_id"], latest["timestamp"]
         except Exception:
             pass
@@ -732,16 +769,39 @@ class BanzaiService:
         return None, None
 
     async def _send_one_minute_callout(self, chat_id: int, bot: Bot, started_at_ts: int) -> None:
-        """Отправляет уведомление за одну минуту до конца игры."""
-        callout_key = f"banzai:{chat_id}:callout_1m"
-        # Проверяем, не отправляли ли мы уже это уведомление
+        """Отправляет уведомление за одну минуту до конца игры.
+
+        Оклик привязан к раунду тишины (``silence_round``), а не к игре
+        целиком: каждый новый раунд — новый оклик. Внутри раунда он строго
+        один: претензия на отправку занимается атомарной вставкой в
+        ``banzai_callouts`` с уникальным индексом (chat_id, round), поэтому
+        два воркера не пришлют два одинаковых предупреждения.
+        """
         game = await self.banzai_games.find_one({"_id": chat_id})
-        if game and game.get("one_minute_callout_done", False):
+        if not game or not game.get("active", False):
+            return
+        if game.get("one_minute_callout_done", False):
+            return
+
+        round_no = int(game.get("silence_round") or 0)
+        try:
+            await self.banzai_callouts.insert_one({
+                "chat_id": chat_id,
+                "round": round_no,
+                "created_at": int(time.time()),
+            })
+        except DuplicateKeyError:
+            # Оклик за этот раунд уже забрал другой воркер.
+            await self.banzai_games.update_one(
+                {"_id": chat_id},
+                {"$set": {"one_minute_callout_done": True}}
+            )
             return
 
         last_user_id, last_user_ts = await self._get_last_user_and_ts(chat_id)
         if not last_user_id or not last_user_ts or last_user_ts < started_at_ts:
-            # Если нет действительного лидера, просто отмечаем как отправленное и выходим
+            # Действительного лидера нет — оклик отправлять некому, но раунд
+            # считаем отработанным, чтобы не долбить чат пустыми окликами.
             await self.banzai_games.update_one(
                 {"_id": chat_id},
                 {"$set": {"one_minute_callout_done": True}}
