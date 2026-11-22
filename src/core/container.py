@@ -51,7 +51,16 @@ class Container:
     _banzai_service: Optional["BanzaiService"] = field(default=None, init=False, repr=False)
     _xrocket_service: Optional["XRocketService"] = field(default=None, init=False, repr=False)
     _chat_settings_service: Optional["ChatSettingsService"] = field(default=None, init=False, repr=False)
+    _captcha_service: Optional["CaptchaService"] = field(default=None, init=False, repr=False)
     _hedgehog_gridfs: Optional["HedgehogGridFS"] = field(default=None, init=False, repr=False)
+
+    @property
+    def captcha_service(self):
+        """Капча на входе в личку. Создаётся лениво, как остальные сервисы."""
+        if self._captcha_service is None:
+            from src.services.captcha_service import CaptchaService
+            self._captcha_service = CaptchaService(self.mongo_client)
+        return self._captcha_service
 
     @property
     def comment_campaign_service(self):
