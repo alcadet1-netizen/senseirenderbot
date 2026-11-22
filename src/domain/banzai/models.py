@@ -10,6 +10,8 @@ class BanzaiActionType(str, Enum):
     ADD_TIME = "add_time"
     SET_TIME = "set_time"
     SET_REWARD = "set_reward"
+    STATS = "stats"
+    TOP = "top"
     UNKNOWN = "unknown"
 
 class BanzaiCommand(BaseModel):

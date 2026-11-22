@@ -166,6 +166,25 @@ class BanzaiPresenter:
         return "<pre>\n" + "\n".join(lines) + "\n</pre>"
 
     @staticmethod
+    def render_dm_final_reminder(is_leader: bool = False) -> str:
+        """Личное напоминание о финале участнику текущей партии."""
+        w = 32
+        lines = [
+            Visuals.frame_top_left(w),
+            Visuals.frame_line_left("🚨 БАНЗАЙ: ФИНАЛ", w, "center"),
+            Visuals.frame_separator_left(w),
+            Visuals.frame_line_left("Осталась 1 минута!", w, "center"),
+        ]
+        if is_leader:
+            lines.append(Visuals.frame_line_left("👑 Ты сейчас король.", w))
+            lines.append(Visuals.frame_line_left("Не пиши — и победа твоя.", w))
+        else:
+            lines.append(Visuals.frame_line_left("Король ещё не закреплён.", w))
+            lines.append(Visuals.frame_line_left("Одно сообщение — и ты сверху.", w))
+        lines.append(Visuals.frame_bottom_left(w))
+        return "<pre>\n" + "\n".join(lines) + "\n</pre>"
+
+    @staticmethod
     def render_one_minute_callout(leader_mention: str) -> str:
         w = 34
         lines = [

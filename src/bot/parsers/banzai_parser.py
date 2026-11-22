@@ -3,6 +3,22 @@ from typing import Optional
 from src.domain.banzai.models import BanzaiActionType, BanzaiCommand
 
 
+# Русские синонимы подкоманд. Ключ — как пишет игрок, значение — канонический
+# английский глагол, который дальше разбирает основная ветка.
+ALIASES = {
+    "стоп": "stop",
+    "остановить": "stop",
+    "статус": "status",
+    "правила": "rules",
+    "старт": "start",
+    "запуск": "start",
+    "статистика": "stats",
+    "стата": "stats",
+    "топ": "top",
+    "рейтинг": "top",
+}
+
+
 class BanzaiCommandParser:
     """Парсер команд БАНЗАЙ."""
 
@@ -39,6 +55,9 @@ class BanzaiCommandParser:
         action = BanzaiActionType.UNKNOWN
         if action_str:
             action_str_lower = action_str.lower()
+            # Русские подкоманды: роутер ловит /банзай, но аргументы раньше
+            # понимались только по-английски, и «/банзай стоп» уходил в UNKNOWN.
+            action_str_lower = ALIASES.get(action_str_lower, action_str_lower)
             if action_str_lower == "stop":
                 action = BanzaiActionType.STOP
             elif action_str_lower == "status":
@@ -51,6 +70,10 @@ class BanzaiCommandParser:
                 action = BanzaiActionType.SET_TIME
             elif action_str_lower == "set_reward":
                 action = BanzaiActionType.SET_REWARD
+            elif action_str_lower == "stats":
+                action = BanzaiActionType.STATS
+            elif action_str_lower == "top":
+                action = BanzaiActionType.TOP
             elif action_str_lower == "start":
                 # Если указано действие start, то считаем, что нужно запустить игру
                 # Но в оригинале действие start не используется, запуск происходит без указания действия

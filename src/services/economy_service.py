@@ -569,6 +569,63 @@ class EconomyService:
         """Получить текущий баланс банка."""
         return await self._get_bank_balance()
 
+    async def pay_game_reward_from_bank(
+        self, user_id: int, coins: float, *, description: str = "Game win"
+    ) -> dict:
+        """Выплатить награду за игру из SenseiBank, не печатая новые Coin.
+
+        ``process_game_win`` резервирует награду в эмиссии, то есть создаёт
+        новые монеты. Для призовых это неверно: банк — единственный источник,
+        и если он пуст, игрок получает отказ, а не свежую эмиссию.
+        """
+        coins = float(coins or 0)
+        if coins <= 0:
+            return {'success': True, 'coins_earned': 0.0, 'from_bank': True}
+
+        async def pay(session):
+            current = await self.users.find_one({'id': user_id}, session=session)
+            if not current:
+                return {'success': False, 'reason': 'user_not_found'}
+            if current.get('is_banned'):
+                return {'success': False, 'reason': 'banned'}
+
+            remaining = coins
+            accounts = []
+            total = 0.0
+            for bank_id, field in (('single', 'coins'), ('main', 'balance')):
+                account = await self.bank.find_one({'_id': bank_id}, session=session) or {}
+                available = max(0.0, float(account.get(field, 0) or 0))
+                accounts.append((bank_id, field, available))
+                total += available
+            if coins > total:
+                return {'success': False, 'reason': 'insufficient_bank',
+                        'bank_balance': total, 'required': coins}
+
+            for bank_id, field, available in accounts:
+                take = min(remaining, available)
+                if take <= 0:
+                    continue
+                debit = await self.bank.update_one(
+                    {'_id': bank_id, field: {'$gte': take}},
+                    {'$inc': {field: -take}}, session=session)
+                if not debit.matched_count:
+                    raise RuntimeError('bank balance changed during reward payout')
+                remaining -= take
+
+            credited = await self.users.update_one(
+                {'id': user_id}, {'$inc': {'coins': coins}}, session=session)
+            if not credited.matched_count:
+                raise RuntimeError('player unavailable during reward payout')
+
+            await self.transactions.insert_one({
+                'user_id': user_id, 'tx_type': 'game_win', 'coins_change': coins,
+                'xp_change': 0, 'description': description, 'funding_source': 'senseibank',
+                'created_at': datetime.now(timezone.utc)}, session=session)
+            return {'success': True, 'coins_earned': coins, 'from_bank': True,
+                    'new_coins': current.get('coins', 0.0) + coins}
+
+        return await transaction(self.mongo_client, pay)
+
     async def distribute_zov_reward(self, user_id: int, amount: float) -> bool:
         """Pay the existing zov reward atomically, without a transaction journal entry."""
         return (await self._bank_user_transfer(user_id, amount))['success']

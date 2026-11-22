@@ -20,9 +20,22 @@ from src.bot.presenters.banzai_presenter import BanzaiPresenter
 from src.core.visuals import Visuals
 from datetime import datetime, timezone
 from aiogram import Bot
+from aiogram.exceptions import TelegramForbiddenError
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 logger = logging.getLogger(__name__)
+
+# Сколько последних ходов показываем в окне игры. Список уникален по игрокам
+# и ограничен, иначе окно растёт бесконечно и тянет историю всей партии.
+CONTENDERS_LIMIT = 12
+
+# Приз за победу. Выплачивается из SenseiBank; если банк не покрывает,
+# игрок остаётся с билетом и GRAM-наградой, но без монет.
+BANZAI_PRIZE_COINS = 500.0
+
+# Сколько длительностей партии допустимо «пережить» в простое. Всё, что старше,
+# при рестарте считается брошенным и закрывается, а не доигрывается.
+MAX_STALE_MULTIPLIER = 3
 
 
 class BanzaiService:
@@ -47,6 +60,10 @@ class BanzaiService:
         self._last_ui_edit_ts: Dict[int, float] = {}
         self._last_taunt_ts: Dict[int, float] = {}
         self._user_display_cache: Dict[int, tuple[str, float]] = {}
+        # Кому уже отправляли напоминание в ЛС в текущей партии. Держим в
+        # памяти: перебор раундов не должен превращаться в поток сообщений,
+        # а лишний запрос в Mongo на каждое сообщение в чате не нужен.
+        self._dm_notified: Dict[int, Set[int]] = {}
         # Track deletion tasks to avoid garbage collection warnings (Python 3.10+)
         self._deletion_tasks: Dict[int, Set[asyncio.Task]] = {}
 
@@ -56,6 +73,7 @@ class BanzaiService:
         # Уникальный индекс (chat_id, round) делает отправку оклика атомарной:
         # вставка второго документа за тот же раунд падает с DuplicateKeyError.
         self.banzai_callouts = self.db.banzai_callouts
+        self.banzai_results = self.db.banzai_results
 
         # Ensure indexes
         asyncio.create_task(self._ensure_indexes())
@@ -76,24 +94,29 @@ class BanzaiService:
             return
 
         now_ts = int(time.time())
-        doc = {
-            "chat_id": chat_id,
-            "user_id": user_id,
-            "timestamp": now_ts,
-        }
-        await self.banzai_chat_activity.insert_one(doc)
 
-        # Сбрасываем таймер и открываем новый раунд тишины. Номер раунда
-        # увеличиваем атомарно ($inc), чтобы два одновременных сообщения не
-        # получили один и тот же номер: иначе оклик «осталась минута» мог бы
-        # не прийти после перебоя.
-        await self.banzai_games.find_one_and_update(
-            {"_id": chat_id, "active": True},
-            {
-                "$set": {"last_activity": now_ts, "one_minute_callout_done": False},
-                "$inc": {"resets": 1, "silence_round": 1},
-                "$addToSet": {"reset_makers": user_id}
-            },
+        # Раньше эти две записи шли строго друг за другом, и каждое сообщение
+        # в чате ждало два раунда к Mongo до того, как бот начинал отвечать.
+        # Коллекции разные, поэтому bulk_write их не объединит, но отправлять
+        # их параллельно можно: задержка одна вместо двух.
+        await asyncio.gather(
+            self.banzai_chat_activity.insert_one({
+                "chat_id": chat_id,
+                "user_id": user_id,
+                "timestamp": now_ts,
+            }),
+            # Сбрасываем таймер и открываем новый раунд тишины. Номер раунда
+            # увеличиваем атомарно ($inc), чтобы два одновременных сообщения не
+            # получили один и тот же номер: иначе оклик «осталась минута» мог
+            # бы не прийти после перебоя в одном из них.
+            self.banzai_games.find_one_and_update(
+                {"_id": chat_id, "active": True},
+                {
+                    "$set": {"last_activity": now_ts, "one_minute_callout_done": False},
+                    "$inc": {"resets": 1, "silence_round": 1},
+                    "$addToSet": {"reset_makers": user_id}
+                },
+            ),
         )
 
     async def _ensure_indexes(self):
@@ -120,6 +143,9 @@ class BanzaiService:
                 "created_at",
                 expireAfterSeconds=48 * 60 * 60,
             )
+            # История игр: быстрый поиск по чату и по игроку.
+            await self.banzai_results.create_index([("chat_id", 1), ("finished_at", -1)])
+            await self.banzai_results.create_index([("winner_id", 1), ("finished_at", -1)])
         except Exception as e:
             logger.warning(f"Не удалось создать индексы для banzai collections: {e}")
 
@@ -132,9 +158,6 @@ class BanzaiService:
 
     def _started_at_key(self, chat_id: int) -> str:
         return f"banzai:{chat_id}:started_at"
-
-    def _one_minute_callout_key(self, chat_id: int) -> str:
-        return f"banzai:{chat_id}:callout_1m"
 
     def _reward_ton_key(self, chat_id: int) -> str:
         return f"banzai:{chat_id}:reward_ton"
@@ -191,6 +214,7 @@ class BanzaiService:
         # заблокировала бы предупреждение за минуту в новой игре.
         await self.banzai_chat_activity.delete_many({"chat_id": chat_id})
         await self.banzai_callouts.delete_many({"chat_id": chat_id})
+        self._dm_notified.pop(chat_id, None)
 
         # Запускаем воркер
         if chat_id in self._workers:
@@ -295,6 +319,7 @@ class BanzaiService:
         self._last_ui_text.pop(chat_id, None)
         self._last_ui_edit_ts.pop(chat_id, None)
         self._last_taunt_ts.pop(chat_id, None)
+        self._dm_notified.pop(chat_id, None)
         if chat_id in self._deletion_tasks:
             self._cleanup_deletion_tasks(chat_id)
 
@@ -327,8 +352,11 @@ class BanzaiService:
         reward_ton = game.get("reward_ton", 0.0)
         resets = game.get("resets", 0)
 
-        # Получаем последнего пользователя и его timestamp через chat_activity_service
-        last_user_id, last_user_ts = await self._get_last_user_and_ts(chat_id)
+        # Последний ход строго текущей партии: без ограничения по started_at
+        # лидером считался бы тот, кто писал ещё до запуска игры.
+        last_user_id, last_user_ts = await self._get_last_user_and_ts(
+            chat_id, since_ts=started_at
+        )
 
         return {
             "active": active,
@@ -342,16 +370,45 @@ class BanzaiService:
         }
 
     async def restore_workers(self, bot: Bot) -> int:
-        """Восстанавливает активные работники после перезапуска бота."""
+        """Восстанавливает активные игры после перезапуска бота.
+
+        Партия могла пережить простой дольше своей длительности: пока бот
+        лежал, тишина в чате «шла». Без пересчёта такая игра завершилась бы
+        мгновенно на первом же тике, отдав победу случайному игроку. Поэтому
+        слишком старые партии честно закрываются, а окно и таймер остальных
+        сдвигаются к моменту рестарта.
+        """
         restored = 0
+        now = int(time.time())
         try:
-            # Находим все активные игры
             async for game in self.banzai_games.find({"active": True}):
                 chat_id = game["_id"]
                 if chat_id in self._workers and not self._workers[chat_id].done():
                     continue
 
-                duration_minutes = game.get("duration_minutes", 10)
+                duration_minutes = int(game.get("duration_minutes") or 10)
+                started_at = game.get("started_at")
+                if started_at:
+                    age = now - int(started_at)
+                    if age > duration_minutes * 60 * MAX_STALE_MULTIPLIER:
+                        await self.banzai_games.delete_one({"_id": chat_id})
+                        await self.banzai_chat_activity.delete_many({"chat_id": chat_id})
+                        await self.banzai_callouts.delete_many({"chat_id": chat_id})
+                        logger.info(
+                            "Banzai in chat %s is stale (%ss old), dropped instead of restored",
+                            chat_id, age,
+                        )
+                        continue
+
+                # Перезапуск не должен выглядеть как мгновенная победа:
+                # отодвигаем старт партии к текущему моменту, чтобы отсчёт
+                # тишины пошёл заново и у игроков было время на реакцию.
+                await self.banzai_games.update_one(
+                    {"_id": chat_id},
+                    {"$set": {"started_at": now, "last_activity": now,
+                              "one_minute_callout_done": False}},
+                )
+
                 task = asyncio.create_task(self._game_worker(chat_id, bot, duration_minutes))
                 self._workers[chat_id] = task
                 restored += 1
@@ -413,27 +470,40 @@ class BanzaiService:
         if leader_id:
             leader_name = await self._get_user_display(chat_id, bot, int(leader_id))
 
-        # Получаем всех конкурентов (последних активных пользователей), без лимита 5.
+        # Последний ход каждого участника текущей игры. Раньше здесь тянулась
+        # вся история сообщений с начала партии — на живом чате это тысячи
+        # документов каждые 6 секунд. Агрегация отдаёт по одному документу на
+        # игрока, а лимит ограничивает её фиксированным окном.
         contenders: List[Tuple[int, int]] = []
         try:
-            cursor = self.banzai_chat_activity.find(
-                {"chat_id": chat_id, "timestamp": {"$gte": started_at_ts},
-                 "is_bot": {"$ne": True}}
-            ).sort("timestamp", -1)
+            cursor = self.banzai_chat_activity.aggregate([
+                {"$match": {
+                    "chat_id": chat_id,
+                    "timestamp": {"$gte": started_at_ts},
+                    "is_bot": {"$ne": True},
+                }},
+                {"$sort": {"timestamp": -1}},
+                {"$group": {
+                    "_id": "$user_id",
+                    "ts": {"$first": "$timestamp"},
+                }},
+                {"$sort": {"ts": -1}},
+                {"$limit": CONTENDERS_LIMIT},
+            ])
             async for doc in cursor:
-                if doc.get("is_bot"):
-                    continue
-                uid = doc["user_id"]
-                ts = doc["timestamp"]
-                contenders.append((uid, ts))
+                contenders.append((doc["_id"], doc["ts"]))
         except Exception as e:
             logger.debug(f"Ошибка при получении contendors: {e}")
             contenders = []
 
         contenders = list(reversed(contenders))  # От старых к новым для отображения
-        rendered_contenders: List[Tuple[str, int]] = []
-        for uid, ts in contenders:
-            rendered_contenders.append((self._get_user_display_cached(uid), ts))
+        # Забаненные не должны светиться в «Последних ходах»: они уже не игроки.
+        banned = await self._banned_user_ids([uid for uid, _ in contenders])
+        rendered_contenders: List[Tuple[str, int]] = [
+            (self._get_user_display_cached(uid), ts)
+            for uid, ts in contenders
+            if uid not in banned
+        ]
 
         return {
             "active": 1,
@@ -546,12 +616,10 @@ class BanzaiService:
                 if last_activity_ts is None:
                     last_activity_ts = started_at_ts
 
-                # Получаем текущего лидера (последнего пользователя) и его timestamp
-                current_leader_id, current_leader_ts = await self._get_last_user_and_ts(chat_id)
-
-                # Игнорируем лидеров из до начала игры (для отображения лидера)
-                if current_leader_ts and current_leader_ts < started_at_ts:
-                    current_leader_id = None
+                # Текущий лидер — строго среди ходов этой партии.
+                current_leader_id, current_leader_ts = await self._get_last_user_and_ts(
+                    chat_id, since_ts=started_at_ts
+                )
 
                 # Обновляем предыдущий timestamp активности для обнаружения сброса
                 if last_activity_ts:
@@ -595,8 +663,16 @@ class BanzaiService:
                     else:
                         last_known_leader_name = "Никто"
 
-                # Периодически обновляем интерфейс
-                if tick_counter % update_interval == 0:
+                # Уведомление за минуту — до обновления окна: иначе последний
+                # кадр успевает показать точный остаток и слепой финал ломается.
+                last_minute = 0 < remaining_seconds <= 60
+                if last_minute:
+                    await self._send_one_minute_callout(chat_id, bot, started_at_ts)
+
+                # Периодически обновляем интерфейс. В последнюю минуту окно
+                # замирает: победа должна зависеть от выдержки, а не от того,
+                # кто точнее смотрит на таймер.
+                if tick_counter % update_interval == 0 and not last_minute:
                     elapsed_seconds = max(0, int(time.time()) - started_at_ts)
                     await self._update_game_interface(
                         chat_id=chat_id,
@@ -608,10 +684,6 @@ class BanzaiService:
                         silence_seconds=silence_duration,
                         elapsed_seconds=elapsed_seconds,
                     )
-
-                # Отправляем уведомление за 1 минуту до конца
-                if 0 < remaining_seconds <= 60:
-                    await self._send_one_minute_callout(chat_id, bot, started_at_ts)
 
                 # Проверяем на завершение игры по времени
                 if silence_duration > duration_seconds:
@@ -749,24 +821,57 @@ class BanzaiService:
             logger.debug(f"Error updating game interface in chat {chat_id}: {e}")
             return
 
-    async def _get_last_user_and_ts(self, chat_id: int) -> Tuple[Optional[int], Optional[int]]:
-        """Получает последнего игрока и timestamp его сообщения.
+    async def _get_last_user_and_ts(
+        self, chat_id: int, since_ts: Optional[int] = None
+    ) -> Tuple[Optional[int], Optional[int]]:
+        """Последний *живой* игрок и время его сообщения.
 
-        Записи ботов, оставшиеся в базе с прежних версий, пропускаем: иначе
-        бот оказался бы королём или победителем банзая.
+        Пропускаем:
+        * ботов — их сообщения не ходы, иначе бот стал бы королём;
+        * забаненных в боте — иначе забаненный уносил бы 500 Coin и билет.
+
+        ``since_ts`` ограничивает поиск текущей игрой: без него последним
+        «игроком» мог оказаться тот, кто писал ещё до старта партии.
         """
         try:
-            cursor = self.banzai_chat_activity.find(
-                {"chat_id": chat_id, "is_bot": {"$ne": True}}
-            ).sort("timestamp", -1).limit(10)
+            query: dict = {"chat_id": chat_id, "is_bot": {"$ne": True}}
+            if since_ts is not None:
+                query["timestamp"] = {"$gte": int(since_ts)}
+            cursor = self.banzai_chat_activity.find(query).sort("timestamp", -1).limit(25)
             async for latest in cursor:
                 if latest.get("is_bot"):
                     continue
-                return latest["user_id"], latest["timestamp"]
+                user_id = latest["user_id"]
+                if await self._is_banned(user_id):
+                    continue
+                return user_id, latest["timestamp"]
         except Exception:
             pass
 
         return None, None
+
+    async def _banned_user_ids(self, user_ids: List[int]) -> Set[int]:
+        """Один запрос вместо проверки каждого игрока по отдельности."""
+        ids = {int(uid) for uid in user_ids if uid is not None}
+        if not ids:
+            return set()
+        try:
+            cursor = self.db.users.find(
+                {"id": {"$in": list(ids)}, "is_banned": True}, {"id": 1}
+            )
+            return {int(doc["id"]) for doc in await cursor.to_list(length=None)}
+        except Exception:
+            return set()
+
+    async def _is_banned(self, user_id: int) -> bool:
+        """Забанен ли игрок в боте (отсутствующий профиль — не бан)."""
+        try:
+            profile = await self.db.users.find_one(
+                {"id": int(user_id)}, {"is_banned": 1}
+            )
+            return bool((profile or {}).get("is_banned"))
+        except Exception:
+            return False
 
     async def _send_one_minute_callout(self, chat_id: int, bot: Bot, started_at_ts: int) -> None:
         """Отправляет уведомление за одну минуту до конца игры.
@@ -798,8 +903,10 @@ class BanzaiService:
             )
             return
 
-        last_user_id, last_user_ts = await self._get_last_user_and_ts(chat_id)
-        if not last_user_id or not last_user_ts or last_user_ts < started_at_ts:
+        last_user_id, last_user_ts = await self._get_last_user_and_ts(
+            chat_id, since_ts=started_at_ts
+        )
+        if not last_user_id or not last_user_ts:
             # Действительного лидера нет — оклик отправлять некому, но раунд
             # считаем отработанным, чтобы не долбить чат пустыми окликами.
             await self.banzai_games.update_one(
@@ -831,6 +938,108 @@ class BanzaiService:
         except Exception as e:
             logger.error(f"Failed to send Banzai 1-minute callout: {e}")
 
+        # Напоминание в личку — только тем, кто реально играет в этой партии.
+        await self._notify_participants_dm(chat_id, bot, started_at_ts, last_user_id)
+
+    async def _record_result(
+        self, *, chat_id: int, winner_id: Optional[int],
+        duration_minutes: int, started_at_ts: Optional[int],
+    ) -> None:
+        """Сохраняет итог партии для истории и статистики игроков."""
+        now = int(time.time())
+        await self.banzai_results.insert_one({
+            "chat_id": chat_id,
+            "winner_id": int(winner_id) if winner_id else None,
+            "duration_minutes": int(duration_minutes),
+            "started_at": int(started_at_ts) if started_at_ts else None,
+            "finished_at": now,
+            "duration_seconds": max(0, now - int(started_at_ts)) if started_at_ts else None,
+        })
+
+    async def get_player_stats(self, user_id: int, limit: int = 500) -> Dict[str, int]:
+        """Статистика игрока по сохранённым партиям.
+
+        Побед и участий в старых партиях нет — история пишется с момента
+        появления ``banzai_results``, поэтому цифры честные, а не выдуманные
+        из билетов лотереи.
+        """
+        stats = {"wins": 0}
+        try:
+            stats["wins"] = await self.banzai_results.count_documents(
+                {"winner_id": int(user_id)}
+            )
+        except Exception as e:
+            logger.debug(f"Статистика банзая недоступна: {e}")
+        return stats
+
+    async def get_winner_name(self, chat_id: int, bot: Bot, user_id: Optional[int]) -> str:
+        """Имя победителя для истории: «Никто», если партия без победителя."""
+        if not user_id:
+            return "Никто"
+        return await self._get_user_display(chat_id, bot, int(user_id))
+
+    async def get_recent_results(self, chat_id: int, limit: int = 5) -> List[Dict]:
+        """Последние завершённые партии в этом чате."""
+        try:
+            cursor = self.banzai_results.find({"chat_id": chat_id}).sort(
+                "finished_at", -1
+            ).limit(max(1, int(limit)))
+            return await cursor.to_list(length=None)
+        except Exception:
+            return []
+
+    async def _notify_participants_dm(
+        self, chat_id: int, bot: Bot, started_at_ts: int, leader_id: Optional[int]
+    ) -> int:
+        """Личное напоминание о финале — участникам текущей партии.
+
+        «Участник» здесь значит «сделал ход в этой игре»: записи активности
+        ограничены ``started_at_ts``, поэтому случайные люди и те, кто писал
+        до старта, напоминание не получат. Каждому — не больше одного раза
+        за партию, иначе игра начнёт спамить личку на каждом раунде.
+        """
+        notified = self._dm_notified.setdefault(chat_id, set())
+        try:
+            cursor = self.banzai_chat_activity.aggregate([
+                {"$match": {
+                    "chat_id": chat_id,
+                    "timestamp": {"$gte": int(started_at_ts)},
+                    "is_bot": {"$ne": True},
+                }},
+                {"$group": {"_id": "$user_id"}},
+                {"$limit": 200},
+            ])
+            participants = [doc["_id"] for doc in await cursor.to_list(length=None)]
+        except Exception as e:
+            logger.debug(f"Не удалось собрать участников для ЛС-напоминания: {e}")
+            return 0
+
+        if not participants:
+            return 0
+
+        banned = await self._banned_user_ids(participants)
+        targets = [int(uid) for uid in participants
+                   if uid and int(uid) not in banned and int(uid) not in notified]
+        if not targets:
+            return 0
+
+        sent = 0
+        for uid in targets:
+            body = BanzaiPresenter.render_dm_final_reminder(
+                is_leader=(leader_id is not None and int(leader_id) == uid)
+            )
+            try:
+                await bot.send_message(uid, body, parse_mode="HTML")
+                notified.add(uid)
+                sent += 1
+            except TelegramForbiddenError:
+                # Игрок не открывал чат с ботом или заблокировал его — это не
+                # ошибка игры, просто пропускаем и больше не пробуем.
+                notified.add(uid)
+            except Exception as e:
+                logger.debug(f"Не удалось отправить напоминание игроку {uid}: {e}")
+        return sent
+
     async def _finish_game(self, chat_id: int, bot: Bot, duration_minutes: int):
         """Завершает игру и распределяет награды."""
         started_at_ts = None
@@ -838,13 +1047,8 @@ class BanzaiService:
         if started_at_raw and "started_at" in started_at_raw:
             started_at_ts = started_at_raw["started_at"]
 
-        last_user_id, last_user_ts = await self._get_last_user_and_ts(chat_id)
-
-        # Проверяем валидность победителя
-        winner_id = None
-        if last_user_id and last_user_ts and started_at_ts:
-            if last_user_ts >= started_at_ts:
-                winner_id = last_user_id
+        # Победитель — только участник этой партии и только не забаненный.
+        winner_id, _ = await self._get_last_user_and_ts(chat_id, since_ts=started_at_ts)
 
         winner_name = None
         if winner_id:
@@ -855,8 +1059,18 @@ class BanzaiService:
                 # 1. Билет в лотерею
                 await self.lottery_service.add_ticket(int(winner_id), source="banzai_win")
 
-                # 2. Монеты
-                await self.economy_service.process_game_win(int(winner_id), coins=500.0, xp=0, description="Banzai Win")
+                # 2. Монеты — из SenseiBank, не из эмиссии. process_game_win
+                # резервирует новые Coin под общий лимит эмиссии; для призовых
+                # это неверно: банк платит уже существующими и отказывает,
+                # если их нет.
+                payout = await self.economy_service.pay_game_reward_from_bank(
+                    int(winner_id), BANZAI_PRIZE_COINS, description="Banzai Win"
+                )
+                if not payout.get("success"):
+                    logger.warning(
+                        "Banzai prize not paid for chat=%s user=%s: %s",
+                        chat_id, winner_id, payout.get("reason"),
+                    )
 
                 # 3. GRAM (если есть)
                 reward_ton = 0.0
@@ -892,7 +1106,9 @@ class BanzaiService:
                         Visuals.frame_separator_left(w),
                         Visuals.frame_line_left("🎁 Трофеи:", w),
                         Visuals.frame_line_left("🎫 1 Билет", w),
-                        Visuals.frame_line_left("💰 +500 Coins", w),
+                        Visuals.frame_line_left(
+                            f"💰 +{BANZAI_PRIZE_COINS:,.0f} Coins"
+                            + ("" if payout.get("success") else " (банк пуст)"), w),
                     ]
                     if reward_ton > 0:
                         lines.append(Visuals.frame_line_left(f"💎 +{reward_ton} GRAM", w))
@@ -926,6 +1142,17 @@ class BanzaiService:
             silence_seconds=0,
             elapsed_seconds=total_elapsed_seconds,
         )
+
+        # Сохраняем результат: без этого у игры нет ни истории, ни лидерборда.
+        try:
+            await self._record_result(
+                chat_id=chat_id,
+                winner_id=winner_id,
+                duration_minutes=duration_minutes,
+                started_at_ts=started_at_ts,
+            )
+        except Exception as e:
+            logger.warning("Не удалось записать историю банзая для %s: %s", chat_id, e)
 
         # Unpin the game message when game finishes
         message_id = await self.get_game_message_id(chat_id)
