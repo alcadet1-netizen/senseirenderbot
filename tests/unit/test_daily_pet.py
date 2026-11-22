@@ -368,7 +368,7 @@ async def test_ambiguous_photo_failure_never_resends_same_notice():
 
 
 @pytest.mark.asyncio
-async def test_explicit_telegram_photo_rejection_releases_notice_for_safe_retry():
+async def test_explicit_telegram_photo_rejection_rerolls_image_and_delivers_immediately():
     from aiogram.exceptions import TelegramBadRequest
     from aiogram.methods import SendPhoto
     from src.bot.presenters.daily_hedgehog import send_daily_hedgehog
@@ -377,7 +377,56 @@ async def test_explicit_telegram_photo_rejection_releases_notice_for_safe_retry(
     message = SimpleNamespace(chat=SimpleNamespace(id=-100, type='supergroup'), answer=AsyncMock(),
                               answer_photo=AsyncMock())
     message.answer_photo.side_effect = [
-        TelegramBadRequest(method=SendPhoto(chat_id=-100, photo='invalid'), message='Bad Request: wrong file identifier'),
+        TelegramBadRequest(method=SendPhoto(chat_id=-100, photo='invalid'), message='Bad Request: IMAGE_PROCESS_FAILED'),
+        None,
+    ]
+    await send_daily_hedgehog(message, user, container)
+    coins = db.users.docs[7]['coins']
+    assert message.answer_photo.await_count == 2
+    message.answer.assert_not_awaited()
+    assert db.users.docs[7]['daily_pet']['delivered']
+    assert db.users.docs[7]['coins'] == coins
+
+
+@pytest.mark.asyncio
+async def test_photo_rejection_falls_back_to_text_with_reward_summary_without_double_payout():
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.methods import SendPhoto
+    from src.bot.presenters.daily_hedgehog import send_daily_hedgehog
+    db, service, container, _ = setup()
+    user = SimpleNamespace(id=7, username=None, first_name='H', last_name=None, is_bot=False)
+    message = SimpleNamespace(chat=SimpleNamespace(id=-100, type='supergroup'), answer=AsyncMock(),
+                              answer_photo=AsyncMock(side_effect=TelegramBadRequest(
+                                  method=SendPhoto(chat_id=-100, photo='x'),
+                                  message='Bad Request: not enough rights to send photos to the chat')))
+    await send_daily_hedgehog(message, user, container)
+    coins = db.users.docs[7]['coins']
+    message.answer_photo.assert_awaited_once()
+    message.answer.assert_awaited_once()
+    text = message.answer.await_args.args[0]
+    assert 'XP' in text and 'монет' in text and 'Серия:' in text
+    assert db.users.docs[7]['daily_pet']['delivered']
+    # Calling again afterwards sees today's daily as already claimed (no double reward).
+    await send_daily_hedgehog(message, user, container)
+    assert db.users.docs[7]['coins'] == coins
+    assert 'уже получена' in message.answer.await_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_total_delivery_rejection_releases_notice_for_safe_retry():
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.methods import SendMessage, SendPhoto
+    from src.bot.presenters.daily_hedgehog import send_daily_hedgehog
+    db, service, container, _ = setup()
+    user = SimpleNamespace(id=7, username=None, first_name='H', last_name=None, is_bot=False)
+    message = SimpleNamespace(chat=SimpleNamespace(id=-100, type='supergroup'), answer=AsyncMock(),
+                              answer_photo=AsyncMock())
+    message.answer_photo.side_effect = [
+        TelegramBadRequest(method=SendPhoto(chat_id=-100, photo='invalid'), message='Bad Request: TOPIC_CLOSED'),
+        None,
+    ]
+    message.answer.side_effect = [
+        TelegramBadRequest(method=SendMessage(chat_id=-100, text='x'), message='Bad Request: TOPIC_CLOSED'),
         None,
     ]
     await send_daily_hedgehog(message, user, container)
@@ -388,6 +437,48 @@ async def test_explicit_telegram_photo_rejection_releases_notice_for_safe_retry(
     assert message.answer_photo.await_count == 2
     assert db.users.docs[7]['daily_pet']['delivered']
     assert db.users.docs[7]['coins'] == coins
+
+
+@pytest.mark.asyncio
+async def test_oversized_or_exif_jpeg_is_normalized_and_corrupt_gridfs_image_rerolls():
+    import io
+    from PIL import Image
+    from src.bot.presenters.daily_hedgehog import normalize_photo_bytes, send_daily_hedgehog
+    raw_buf = io.BytesIO()
+    Image.new('RGB', (5856, 2848), color=(40, 90, 60)).save(raw_buf, format='JPEG', quality=92)
+    normalized = normalize_photo_bytes(raw_buf.getvalue())
+    with Image.open(io.BytesIO(normalized)) as checked:
+        assert max(checked.size) <= 2560
+        assert checked.format == 'JPEG'
+
+    db, service, container, _ = setup()
+    good_buf = io.BytesIO()
+    Image.new('RGB', (640, 480), color=(120, 80, 40)).save(good_buf, format='JPEG')
+    good_bytes = good_buf.getvalue()
+
+    container.hedgehog_gridfs.list_images.return_value = [
+        {'id': 'bad', 'filename': 'bad.jpg', 'length': 128},
+        {'id': 'good', 'filename': 'good.jpg', 'length': len(good_bytes)},
+    ]
+    container.hedgehog_gridfs.get_random_image.return_value = {'id': 'good', 'filename': 'good.jpg'}
+
+    async def get_by_name(name):
+        return b'not-a-valid-jpeg-binary-payload-at-all-0123456789' if name == 'bad.jpg' else good_bytes
+
+    async def get_by_id(fid):
+        return b'not-a-valid-jpeg-binary-payload-at-all-0123456789' if fid == 'bad' else good_bytes
+
+    container.hedgehog_gridfs.get_image.side_effect = get_by_name
+    container.hedgehog_gridfs.get_image_by_id.side_effect = get_by_id
+
+    user = SimpleNamespace(id=7, username=None, first_name='H', last_name=None, is_bot=False)
+    message = SimpleNamespace(chat=SimpleNamespace(id=-100, type='supergroup'), answer=AsyncMock(),
+                              answer_photo=AsyncMock())
+    with patch('src.services.hedgehog_gallery.secrets.choice', side_effect=lambda seq: 'bad.jpg' if 'bad.jpg' in seq else seq[0]):
+        await send_daily_hedgehog(message, user, container)
+    message.answer_photo.assert_awaited_once()
+    assert db.users.docs[7]['daily_pet']['image_name'] == 'good.jpg'
+    assert db.users.docs[7]['daily_pet']['delivered']
 
 
 @pytest.mark.asyncio
