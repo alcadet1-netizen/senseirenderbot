@@ -117,6 +117,30 @@ class DailyPetService:
             {'$set': {'daily_pet': released}}, return_document=ReturnDocument.AFTER)
         return bool(saved)
 
+    async def replace_image(self, token, user_id, *, exclude=()):
+        """Select and persist a replacement image while a notice is reserved for sending."""
+        from src.services.hedgehog_gallery import select_image
+        for _ in range(8):
+            user = await self.users.find_one({'id': user_id})
+            session = (user or {}).get('daily_pet', {})
+            if (not user or user.get('is_banned') or session.get('token') != token
+                    or user.get('hedgehog_day') != session.get('day')
+                    or session.get('delivered')):
+                return None
+            current = session.get('image_name')
+            excluded = set(exclude or ())
+            if current:
+                excluded.add(current)
+            image_name, images_seen = await select_image(user, self.hedgehog_gridfs, exclude=excluded)
+            updated = {**session, 'image_name': image_name}
+            saved = await self.users.find_one_and_update(
+                {'id': user_id, 'daily_pet': session},
+                {'$set': {'daily_pet': updated, 'hedgehog_images_seen': images_seen}},
+                return_document=ReturnDocument.AFTER)
+            if saved:
+                return image_name
+        return None
+
     async def mark_delivered(self, token, user_id):
         for _ in range(8):
             session = await self.owned(token, user_id)

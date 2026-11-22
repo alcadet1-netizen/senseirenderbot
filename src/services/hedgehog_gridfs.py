@@ -37,11 +37,21 @@ class HedgehogGridFS:
         return upload_stream._id
 
     async def get_image(self, filename: str) -> Optional[bytes]:
-        """Retrieve image by filename. Returns bytes or None if not found."""
+        """Retrieve image by filename. Prefers a non-empty file if duplicates exist."""
+        try:
+            cursor = self.bucket.find({"filename": filename})
+            async for file in cursor:
+                if getattr(file, "length", 0) > 0:
+                    stream = await self.bucket.open_download_stream(file._id)
+                    content = await stream.read()
+                    if content:
+                        return content
+        except Exception:
+            pass
         try:
             download_stream = await self.bucket.open_download_stream_by_name(filename)
             content = await download_stream.read()
-            return content
+            return content if content else None
         except Exception:
             return None
 
@@ -50,15 +60,17 @@ class HedgehogGridFS:
         try:
             download_stream = await self.bucket.open_download_stream(file_id)
             content = await download_stream.read()
-            return content
+            return content if content else None
         except Exception:
             return None
 
     async def list_images(self) -> List[dict]:
-        """List all images in the bucket."""
+        """List all non-empty images in the bucket."""
         cursor = self.bucket.find({})
         files = []
         async for file in cursor:
+            if getattr(file, "length", 0) <= 0:
+                continue
             files.append({
                 "id": file._id,
                 "filename": file.filename,
