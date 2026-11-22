@@ -496,3 +496,42 @@ async def test_repeated_command_after_ambiguous_delivery_explains_without_resend
     assert 'не подтверждена' in message.answer.await_args.args[0]
     assert db.users.docs[7]['coins'] == coins
     assert db.users.docs[7]['daily_pet']['notice_state'] == 'sending'
+
+
+@pytest.mark.asyncio
+async def test_stale_reservation_from_crashed_process_is_taken_over_once():
+    import time
+    db, service, _, _ = setup()
+    result, token = await issue(service)
+    coins = db.users.docs[7]['coins']
+    assert await service.reserve_notice(token, 7)
+    session = db.users.docs[7]['daily_pet']
+    assert isinstance(session.get('notice_reserved_at'), (int, float))
+    # Fresh reservation is never taken over.
+    assert not await service.reserve_notice(token, 7)
+    # Simulate an abandoned reservation: crashed mid-send, timestamp in the past.
+    session['notice_reserved_at'] = time.time() - 4000
+    assert await service.reserve_notice(token, 7)
+    assert db.users.docs[7]['coins'] == coins  # reward is not re-credited
+    # And again: the freshly refreshed reservation holds the line.
+    assert not await service.reserve_notice(token, 7)
+
+
+@pytest.mark.asyncio
+async def test_legacy_reservation_without_timestamp_unblocks_next_command():
+    """Users bricked by the pre-lease deploy (notice_state='sending', no timestamp) self-heal."""
+    import time
+    from src.bot.presenters.daily_hedgehog import send_daily_hedgehog
+    db, service, container, _ = setup()
+    user = SimpleNamespace(id=7, username=None, first_name='H', last_name=None, is_bot=False)
+    result, token = await issue(service)
+    await service.reserve_notice(token, 7)
+    db.users.docs[7]['daily_pet'].pop('notice_reserved_at', None)  # legacy shape
+    coins = db.users.docs[7]['coins']
+    message = SimpleNamespace(chat=SimpleNamespace(id=-100, type='supergroup'), answer=AsyncMock(),
+                              answer_photo=AsyncMock())
+    await send_daily_hedgehog(message, user, container)
+    message.answer_photo.assert_awaited_once()
+    assert db.users.docs[7]['daily_pet']['delivered']
+    assert not db.users.docs[7]['daily_pet'].get('notice_reserved_at')  # popped by mark_delivered
+    assert db.users.docs[7]['coins'] == coins  # reward is not re-credited
