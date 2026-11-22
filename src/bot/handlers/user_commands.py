@@ -155,6 +155,39 @@ async def cmd_start(message: Message, command: CommandObject, container: Contain
     if not message.from_user:
         return
 
+    # Новый игрок в личке сначала проходит капчу. Проверка стоит до создания
+    # профиля: пока человек не доказал, что он человек, профиль и стартовый
+    # набор ему не положены.
+    if message.chat.type == "private":
+        service = getattr(container, "captcha_service", None)
+        if service is not None:
+            try:
+                passed = await service.is_passed(message.from_user.id)
+            except Exception:
+                passed = True  # база недоступна — не запираем игрока
+            if not passed:
+                from src.bot.presenters.captcha_presenter import CaptchaPresenter
+
+                # Диплинк сохраняем ДО выдачи капчи: issue() перезаписывает
+                # документ состояния, и записанное после неё поле выжило бы
+                # только случайно.
+                if command.args:
+                    await service.save_pending_start_args(message.from_user.id, command.args)
+
+                # keep_active: если игрок уже получил капчу, показываем ту же
+                # реакцию. Иначе повторный /start менял ожидание и обнулял
+                # кнопку на предыдущем сообщении.
+                state = await service.issue(message.from_user.id, keep_active=True)
+                sent = await message.answer(
+                    CaptchaPresenter.render_request(
+                        state["reaction"], message.from_user.first_name or "друг"
+                    ),
+                    parse_mode="HTML",
+                    reply_markup=CaptchaPresenter.keyboard(state["reaction"], state["nonce"]),
+                )
+                await service.attach_message(message.from_user.id, sent.message_id)
+                return
+
     registration = await container.user_service.get_or_create(
         user_id=message.from_user.id,
         username=message.from_user.username,

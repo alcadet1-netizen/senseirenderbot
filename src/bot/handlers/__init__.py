@@ -38,6 +38,7 @@ from src.bot.handlers.sensei_check import router as sensei_check_router
 from src.bot.handlers.roulette import router as roulette_router
 from src.bot.handlers.bomb import router as bomb_router
 from src.bot.handlers.wave import router as wave_router
+from src.bot.handlers.captcha import router as captcha_router
 
 
 def setup_routers() -> Router:
@@ -46,6 +47,10 @@ def setup_routers() -> Router:
 
     # Service messages about joins must not be consumed by general text routers.
     main_router.include_router(events_router)
+
+    # Капча: её кнопки и обновления реакций должны обрабатываться раньше
+    # остальных роутеров, чтобы не зависеть от чужого фильтра по тексту.
+    main_router.include_router(captcha_router)
     main_router.include_router(dojo_router)
     main_router.include_router(dojo_tasks_admin_router)
     main_router.include_router(fly_router)

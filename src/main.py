@@ -258,6 +258,11 @@ async def main() -> None:
     dp.update.outer_middleware(HedgehogWidgetMiddleware(container))
 
     # Регистрируем middleware для сообщений
+    # Капча стоит до всех прочих обработчиков сообщений: непроверенный
+    # игрок не должен дойти ни до одной команды в личке.
+    from src.bot.middlewares.captcha_gate import CaptchaGateMiddleware
+    dp.message.outer_middleware(CaptchaGateMiddleware(container))
+
     dp.message.middleware(LoggingMiddleware())
     dp.message.middleware(MaintenanceMiddleware())
     dp.message.middleware(DatabaseMiddleware(container))
@@ -281,6 +286,10 @@ async def main() -> None:
 
     # Регистрируем middleware для chat_member
     dp.chat_member.middleware(DatabaseMiddleware(container))
+
+    # Обновления реакций нужны капче в личке: без контейнера хендлер не
+    # найдёт сервис и молча ничего не сделает.
+    dp.message_reaction.middleware(DatabaseMiddleware(container))
 
     # Подключаем роутеры
     main_router = setup_routers()
@@ -319,7 +328,9 @@ async def main() -> None:
             try:
                 await dp.start_polling(
                     bot,
-                    allowed_updates=list(dict.fromkeys([*dp.resolve_used_update_types(), "channel_post", "message", "chat_member", "chat_join_request", "pre_checkout_query", "widget_query", "shared_widget_query"])),
+                    # message_reaction нужен капче: без него Telegram не
+                    # присылает обновления реакций вообще.
+                    allowed_updates=list(dict.fromkeys([*dp.resolve_used_update_types(), "channel_post", "message", "chat_member", "chat_join_request", "pre_checkout_query", "message_reaction", "widget_query", "shared_widget_query"])),
                     # Keep the session open until in-flight handlers have drained.
                     close_bot_session=False,
                 )
