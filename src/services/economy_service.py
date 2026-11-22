@@ -124,6 +124,12 @@ class EconomyService:
         """Return coins that already belong to players back to the bank."""
         await self.ledger.deposit(amount)
 
+    @staticmethod
+    def _new_profile(user_id: int, **fields) -> dict:
+        """Delegate to the one canonical profile shape (never a partial copy)."""
+        from src.services.user_service import UserService
+        return UserService.new_profile(user_id, **fields)
+
     async def _grant_starter(self, user_id: int) -> float:
         """Reserve a registration starter kit under the global emission cap."""
         try:
@@ -159,31 +165,10 @@ class EconomyService:
                 # Create new user with starter bonuses, but only after the
                 # starter amount has been atomically reserved under the cap.
                 starter = await self._grant_starter(user_id)
-                user = {
-                    "id": user_id,
-                    "username": username,
-                    "first_name": first_name,
-                    "last_name": last_name,
-                    "is_bot": is_bot,
-                    "xp": STARTER_XP,
-                    "coins": starter,
-                    "messages_count": 0,
-                    "wins": 0,
-                    "losses": 0,
-                    "daily_streak": 0,
-                    "last_daily": None,
-                    "is_banned": False,
-                    "ban_reason": None,
-                    "is_muted": False,
-                    "mute_until": None,
-                    "has_katana": True,
-                    "katana_length": STARTER_KATANA_LENGTH,
-                    "last_katana_up": None,
-                    "referrer_id": None,
-                    "referral_count": 0,
-                    "can_receive_broadcast": True,
-                    "created_at": datetime.now(timezone.utc),
-                }
+                user = self._new_profile(
+                    user_id, username=username, first_name=first_name,
+                    last_name=last_name, is_bot=is_bot, coins=starter,
+                )
                 try:
                     await self.users.insert_one(user)
                 except DuplicateKeyError:
@@ -691,31 +676,7 @@ class EconomyService:
             if user is None:
                 # Create new user with starter bonuses, capped like any mint.
                 starter = await self._grant_starter(user_id)
-                user = {
-                    "id": user_id,
-                    "username": None,
-                    "first_name": "",
-                    "last_name": None,
-                    "is_bot": False,
-                    "xp": STARTER_XP,
-                    "coins": starter,
-                    "messages_count": 0,
-                    "wins": 0,
-                    "losses": 0,
-                    "daily_streak": 0,
-                    "last_daily": None,
-                    "is_banned": False,
-                    "ban_reason": None,
-                    "is_muted": False,
-                    "mute_until": None,
-                    "has_katana": True,
-                    "katana_length": STARTER_KATANA_LENGTH,
-                    "last_katana_up": None,
-                    "referrer_id": None,
-                    "referral_count": 0,
-                    "can_receive_broadcast": True,
-                    "created_at": datetime.now(timezone.utc),
-                }
+                user = self._new_profile(user_id, coins=starter)
                 try:
                     await self.users.insert_one(user)
                 except DuplicateKeyError:

@@ -12,9 +12,7 @@ from src.core.constants import (
     DAILY_BASE_COINS,
     DAILY_BASE_XP,
     DAILY_STREAK_BONUSES,
-    STARTER_XP,
     STARTER_COINS,
-    STARTER_KATANA_LENGTH,
 )
 from src.core.exceptions import DailyAlreadyClaimedError
 from src.infra.mongo.client import MongoClient
@@ -73,27 +71,11 @@ class DailyService:
                 except Exception:
                     logger.exception("Starter emission unavailable for user=%s", user_id)
                     starter = 0.0
-                user_doc = {
-                    "id": user_id,
-                    "username": username or "",
-                    "first_name": first_name,
-                    "is_bot": is_bot,
-                    "is_banned": False,
-                    "coins": starter,
-                    "xp": STARTER_XP,
-                    "level": 1,
-                    "messages_count": 0,
-                    "daily_streak": 0,
-                    "last_daily": None,
-                    "has_katana": True,
-                    "katana_length": STARTER_KATANA_LENGTH,
-                    "achievements_count": 0,
-                    "wins": 0,
-                    "losses": 0,
-                    "role": None,
-                    "created_at": datetime.now(timezone.utc),
-                    "updated_at": datetime.now(timezone.utc),
-                }
+                from src.services.user_service import UserService
+                user_doc = UserService.new_profile(
+                    user_id, username=username or "", first_name=first_name,
+                    is_bot=is_bot, coins=starter,
+                )
                 try:
                     await self.users.insert_one(user_doc)
                 except DuplicateKeyError:
