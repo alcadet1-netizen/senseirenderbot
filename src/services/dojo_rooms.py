@@ -23,7 +23,10 @@ logger = logging.getLogger(__name__)
 ROOM_MIN_BET = 300
 ROOM_MAX_BET = 10_000_000
 ROOM_TTL_SECONDS = 300
-ROOM_MAX_ACTIVE = 3          # сколько открытых комнат может держать один игрок
+# Одна открытая комната на игрока. Три оказалось вредным: игрок жал
+# «Создать» ещё раз, думал, что первая не сработала, и в списке появлялись
+# три одинаковые комнаты от одного человека.
+ROOM_MAX_ACTIVE = 1
 ROOM_EXPIRED_KEEP = 3600     # сколько держим истёкшие записи до уборки
 
 COLLECTION = 'dojo_duel_rooms'
@@ -83,12 +86,22 @@ class DojoRooms:
             raise GameError('Недостаточно Coin для такой ставки.')
 
         mine = await self.collection.count_documents(
-            {'owner_id': int(user_id), 'status': {'$in': [STATUS_OPEN, STATUS_JOINING]}})
+            {'owner_id': int(user_id), 'status': {'$in': [STATUS_OPEN, STATUS_JOINING]},
+             'expires': {'$gt': _now()}})
         if mine >= ROOM_MAX_ACTIVE:
-            raise GameError('У тебя уже открыто несколько комнат. Закрой лишние.')
+            raise GameError('У тебя уже есть комната. Закрой её или дождись соперника.')
 
         if self.container.duel_service._is_in_active_duel(int(user_id)):
             raise GameError('Сначала заверши текущую дуэль.')
+        # Два приглашения одновременно ломают друг друга: принявший
+        # персональный вызов получает отказ от create_duel, потому что
+        # создатель уже «занят» комнатой, и комната при этом остаётся
+        # висеть. Пусть будет один активный вызов.
+        pending = await db.dojo_duel_offers.find_one(
+            {'_id': int(user_id), 'status': {'$in': ['open', 'joining']},
+             'expires': {'$gt': _now()}})
+        if pending:
+            raise GameError('У тебя уже есть приглашение на дуэль. Дождись его или отмени.')
 
         token = secrets.token_hex(8)
         now = _now()
@@ -133,6 +146,15 @@ class DojoRooms:
             {'token': 1, 'owner_id': 1, 'owner_name': 1, 'bet': 1, 'created': 1, 'expires': 1}
         ).sort('created', -1).limit(max(1, min(int(limit), 50)))
         rooms = [doc async for doc in cursor]
+        # Комната игрока, который уже дерётся, бесполезна: войти в неё
+        # нельзя. Раньше она висела в списке до истечения TTL и все
+        # получали отказ «Сначала заверши текущую дуэль».
+        alive = []
+        for doc in rooms:
+            if doc['owner_id'] != viewer_id and self.container.duel_service._is_in_active_duel(doc['owner_id']):
+                continue
+            alive.append(doc)
+        rooms = alive
         return {
             'rooms': [self._public(r, viewer=viewer_id) for r in rooms],
             'mine': [self._public(r, viewer=viewer_id) for r in rooms
@@ -215,12 +237,22 @@ class DojoRooms:
                 room['owner_id'], int(user_id), bet, int(user_id), self.container.bot,
                 request_id=f'room:{token}')
             if isinstance(result, str):
-                # Денег не хватило у одного из игроков — комната возвращается
-                # в список, чтобы её мог взять кто-то другой.
+                # Не хватило денег. Важно понять у КОГО: если у создателя,
+                # комната мертва и должна закрыться, иначе она будет
+                # обманывать всех желающих. Если у вошедшего — просто
+                # вернём комнату в список.
+                owner_ok = await self._owner_can_pay(room['owner_id'], bet)
+                if owner_ok:
+                    await self.collection.update_one(
+                        {'token': token, 'status': STATUS_JOINING},
+                        {'$set': {'status': STATUS_OPEN, 'rival_id': None}})
+                    raise GameError('Недостаточно Coin для этой ставки.')
                 await self.collection.update_one(
-                    {'token': token, 'status': STATUS_JOINING},
-                    {'$set': {'status': STATUS_OPEN, 'rival_id': None}})
-                raise GameError(result)
+                    {'token': token},
+                    {'$set': {'status': STATUS_CLOSED, 'closed': _now()}})
+                logger.info('Room closed: owner %s can no longer pay %s', room['owner_id'], bet)
+                raise GameError('Хозяин комнаты больше не может поставить столько. '
+                                'Создай свою комнату.')
 
             result.dojo_only = True
             result.room_token = token
@@ -251,6 +283,16 @@ class DojoRooms:
             raise GameError('Не удалось подключиться. Попробуй ещё раз.')
 
         return {'joined': True, 'duel_id': result.id, 'token': token}
+
+    async def _owner_can_pay(self, owner_id: int, bet: int) -> bool:
+        """Может ли создатель комнаты прямо сейчас оплатить ставку."""
+        try:
+            owner = await self.container.mongo_client.database.users.find_one(
+                {'id': int(owner_id), 'is_banned': {'$ne': True}})
+        except Exception:
+            # База не ответила — не закрываем комнату наугад.
+            return True
+        return bool(owner) and owner.get('coins', 0) >= bet
 
     async def sync_result(self, token: str, duel_id: int, finished: bool) -> None:
         """Отмечает комнату завершённой, когда бой закончился."""

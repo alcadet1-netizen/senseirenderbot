@@ -1324,12 +1324,33 @@
       if (vsDialog?.open && !document.hidden) roomsTimer = setTimeout(loadRooms, 4000);
     }
   }
+  // Комната могла истечь, пока игрок смотрел на арену. Молчаливое
+  // исчезновение читается как поломка: скажем, что произошло и что делать.
+  let hadOwnRoom = false;
+  function noteRoomExpired(snapshot) {
+    const rooms = snapshot?.rooms || [];
+    const mine = rooms.some(r => r.is_mine);
+    if (hadOwnRoom && !mine) {
+      const hint = $("vs-rooms-hint");
+      if (hint) {
+        hint.textContent = "Комната закрылась. Создай новую.";
+        hint.dataset.sticky = "1";
+      }
+      showToast("Комната закрылась — 5 минут истекли");
+    }
+    if (mine) {
+      const hint = $("vs-rooms-hint");
+      if (hint) delete hint.dataset.sticky;
+    }
+    hadOwnRoom = mine || (vsBattle?.phase === "room");
+  }
   function drawRooms(snapshot) {
     const list = $("vs-room-list");
     if (!list) return;
+    noteRoomExpired(snapshot);
     const rooms = snapshot?.rooms || [];
     const hint = $("vs-rooms-hint");
-    if (hint) hint.textContent = rooms.length
+    if (hint && !hint.dataset.sticky) hint.textContent = rooms.length
       ? `${rooms.length} ${rooms.length === 1 ? "комната ждёт" : "комнат ждут"} соперника`
       : "Создай комнату — подключится любой";
     // Перестраиваем только при реальном изменении: иначе кнопки
@@ -1358,17 +1379,35 @@
         action.textContent = "Закрыть";
         action.addEventListener("click", async () => {
           action.disabled = true;
-          try { await api("vs_room_close", {token: room.token}); list.dataset.key = ""; await loadRooms(); }
-          catch (err) { showToast(err.message, true); action.disabled = false; }
+          action.textContent = "Закрываем…";
+          try {
+            await api("vs_room_close", {token: room.token});
+            showToast("Комната закрыта. Ставка не списана.");
+            list.dataset.key = "";
+            await loadRooms();
+          } catch (err) {
+            showToast(err.message, true);
+            action.disabled = false;
+            action.textContent = "Закрыть";
+          }
         });
       } else {
         action.textContent = "Войти";
         action.addEventListener("click", async () => {
           action.disabled = true;
+          action.textContent = "Входим…";
           try {
             await api("vs_room_join", {token: room.token});
+            // Без явного подтверждения игрок не понимает, что вход
+            // состоялся: экран просто меняется.
+            showToast(`Ты в бою · ставка ${room.bet} Coin`);
+            if (navigator.vibrate) try { navigator.vibrate(18); } catch {}
             vsRequest("vs_state");
-          } catch (err) { showToast(err.message, true); action.disabled = false; }
+          } catch (err) {
+            showToast(err.message, true);
+            action.disabled = false;
+            action.textContent = "Войти";
+          }
         });
       }
       row.append(title, stake, action);

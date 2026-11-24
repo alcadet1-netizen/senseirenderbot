@@ -112,6 +112,8 @@ class Database:
         self.users = NS(find_one=AsyncMock(return_value=(
             {'id': 1, 'coins': coins, 'is_banned': False})))
         self.dojo_duel_rooms = Rooms()
+        # Персональные вызовы: комната и вызов не должны существовать вместе.
+        self.dojo_duel_offers = Rooms()
 
     @property
     def docs(self):
@@ -270,12 +272,15 @@ async def test_player_already_in_a_duel_cannot_open_or_join_rooms():
 
 
 @pytest.mark.asyncio
-async def test_too_many_open_rooms_are_capped():
-    rooms, _, _, _ = build()
-    for _ in range(3):
+async def test_only_one_room_per_player():
+    """Вторая комната путает: игрок думает, что первая не сработала."""
+    from src.services.dojo_rooms import ROOM_MAX_ACTIVE
+
+    rooms, _, _, docs = build()
+    await rooms.create(1, 'Вася', 300)
+    with pytest.raises(GameError, match='уже есть комната'):
         await rooms.create(1, 'Вася', 300)
-    with pytest.raises(GameError):
-        await rooms.create(1, 'Вася', 300)
+    assert len(docs) == ROOM_MAX_ACTIVE == 1
 
 
 @pytest.mark.asyncio
@@ -388,3 +393,76 @@ async def test_owner_sees_his_room_in_arena_while_waiting():
     assert state['phase'] == 'room'
     assert state['room']['bet'] == 800
     assert '800' in state['chat']
+
+
+# ---------------------------------------------------------------------------
+# Логика приглашений: одно активное, честные отказы, живые комнаты
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_room_cannot_coexist_with_personal_invitation():
+    """Два приглашения ломают друг друга: принявший получает отказ."""
+    rooms, db, _, _ = build()
+    db.dojo_duel_offers.docs.append(
+        {'_id': 1, 'status': 'open', 'expires': time.time() + 100, 'bet': 500})
+    with pytest.raises(GameError, match='приглашение'):
+        await rooms.create(1, 'Вася', 500)
+    assert db.docs == []
+
+
+@pytest.mark.asyncio
+async def test_personal_invitation_is_blocked_by_open_room():
+    """Обратная сторона: при живой комнате вызов в группу не создаётся."""
+    from src.services.dojo_duel import publish
+
+    rooms, db, engine, _ = build(coins=9000)
+    engine.duels = {}
+    container = NS(mongo_client=NS(database=db), duel_service=engine, bot=NS(),
+                   dojo_rooms=rooms, settings=NS(main_chat_id=-100))
+    await rooms.create(1, 'Вася', 500)
+
+    with pytest.raises(GameError, match='открыта комната'):
+        await publish(container, 1, 'Вася', 500, chat=-100)
+
+
+@pytest.mark.asyncio
+async def test_room_of_player_already_in_duel_is_hidden():
+    """Иначе все видят комнату, в которую физически нельзя войти."""
+    rooms, _, engine, _ = build()
+    await rooms.create(1, 'Вася', 500)
+    engine._is_in_active_duel = Mock(side_effect=lambda uid: uid == 1)
+
+    assert (await rooms.list_open(2))['rooms'] == []
+    # Владелец свою комнату по-прежнему видит.
+    assert await rooms.my_room(1) is not None
+
+
+@pytest.mark.asyncio
+async def test_broke_owner_closes_the_room_with_a_clear_reason():
+    """«У вас недостаточно» от эскроу — про чужие деньги, это путало."""
+    rooms, db, engine, docs = build()
+    created = await rooms.create(1, 'Вася', 500)
+    engine.create_duel.return_value = '❜ У вас недостаточно средств для такой ставки.'
+    db.users.find_one = AsyncMock(side_effect=lambda q, *a, **k: (
+        {'id': 1, 'coins': 50, 'is_banned': False} if q.get('id') == 1
+        else {'id': 2, 'coins': 5000, 'is_banned': False}))
+
+    with pytest.raises(GameError, match='Хозяин комнаты'):
+        await rooms.join(2, created['token'])
+
+    assert docs[0]['status'] == 'closed', 'мёртвая комната не должна висеть в списке'
+
+
+@pytest.mark.asyncio
+async def test_broke_joiner_gets_his_own_message_and_room_survives():
+    rooms, db, engine, docs = build()
+    created = await rooms.create(1, 'Вася', 500)
+    engine.create_duel.return_value = '❜ У вас недостаточно средств для такой ставки.'
+    db.users.find_one = AsyncMock(side_effect=lambda q, *a, **k: (
+        {'id': 1, 'coins': 5000, 'is_banned': False} if q.get('id') == 1
+        else {'id': 2, 'coins': 50, 'is_banned': False}))
+
+    with pytest.raises(GameError, match='Недостаточно Coin'):
+        await rooms.join(2, created['token'])
+
+    assert docs[0]['status'] == 'open'

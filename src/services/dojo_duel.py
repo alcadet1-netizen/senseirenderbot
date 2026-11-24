@@ -182,6 +182,16 @@ async def _publish(container, uid, name, bet, chat=None, rematch=None, recipient
         raise GameError('Профиль недоступен или недостаточно Coin.')
     if container.duel_service._is_in_active_duel(uid):
         raise GameError('Сначала заверши текущую дуэль.')
+    # Обратная сторона той же проверки, что и в комнатах: два приглашения
+    # одновременно ломают друг друга. Если у игрока открыта комната, второе
+    # приглашение вводит в заблуждение всех, кто на него откликнется.
+    if rematch is None and recipient is None:
+        try:
+            open_room = await container.dojo_rooms.my_room(uid)
+        except Exception:
+            open_room = None
+        if open_room:
+            raise GameError('У тебя открыта комната. Закрой её или дождись соперника.')
     rival = None
     if recipient is not None and (chat is not None or rematch is not None):
         raise GameError("Выбери один способ приглашения.")

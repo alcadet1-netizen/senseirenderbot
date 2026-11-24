@@ -6833,3 +6833,5 @@ html.motion-reduced .vs-fighter[data-pose] {
 }
 .vs-chat-panel button:active { transform: scale(.985); }
 .vs-chat-panel .vs-chat-cancel { text-align: center; color: #ff9a9a; border-color: #6b2e2e; }
+
+.vs-rooms-note { display: block; font-size: 11px; line-height: 1.35; color: #7fa88c; margin-top: -2px; }
