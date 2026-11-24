@@ -41,7 +41,7 @@ async def test_admin_task_create_edit_and_validate():
     with pytest.raises(GameError):
         await tasks.save_admin_task({**data, 'kind': 'link', 'target': 'javascript:alert(1)'}, 7)
     bot.get_chat_member.return_value = SimpleNamespace(status='member')
-    with pytest.raises(GameError, match='администратором'):
+    with pytest.raises(GameError, match='не администратор'):
         await tasks.save_admin_task(data, 7)
 
 
@@ -180,3 +180,75 @@ async def test_profile_admin_controls_are_hidden_and_do_not_use_html_for_titles(
     assert 'id="admin-task-form"' in profile and 'id="admin-grant-form"' in profile
     assert 'model?.is_admin' in js and 'title.textContent = task.title' in js
     assert 'Подтвердить выдачу' in js
+
+
+@pytest.mark.asyncio
+async def test_admin_task_duplicate_channel_is_rejected():
+    """Один канал — одно задание: иначе игрок «подписывается» дважды.
+
+    Slug считается от случайного create_key, поэтому раньше каждое нажатие
+    «Новое задание» добавляло ещё одну запись на тот же самый канал.
+    """
+    container, tasks, _, bot = service()
+    bot.id = 99
+    bot.get_chat = AsyncMock(return_value=SimpleNamespace(id=-100123, type='channel'))
+    bot.get_chat_member.return_value = SimpleNamespace(status='administrator')
+    data = {'kind': 'channel', 'title': 'Канал', 'target': '@MyChannel',
+            'reward_coins': 20, 'create_key': 'request-12345'}
+    first = await tasks.save_admin_task(data, 7)
+
+    # Другой create_key = другая форма, но канал тот же.
+    with pytest.raises(GameError, match='уже есть'):
+        await tasks.save_admin_task({**data, 'title': 'Дубль',
+                                     'create_key': 'request-67890'}, 7)
+
+    # Регистр username не должен обходить проверку.
+    with pytest.raises(GameError, match='уже есть'):
+        await tasks.save_admin_task({**data, 'target': '@mychannel',
+                                     'create_key': 'request-99999'}, 7)
+
+    # При редактировании тот же канал — это не дубль.
+    edited = await tasks.save_admin_task(
+        {**data, 'slug': first['slug'], 'title': 'Обновлено'}, 7)
+    assert edited['slug'] == first['slug'] and edited['title'] == 'Обновлено'
+
+
+@pytest.mark.asyncio
+async def test_admin_task_duplicate_link_is_rejected():
+    container, tasks, _, bot = service()
+    bot.id = 99
+    base = {'kind': 'link', 'title': 'Приложение', 'target': 'https://t.me/dupe_bot?start=1',
+            'reward_coins': 20, 'create_key': 'link-key-0001'}
+    await tasks.save_admin_task(base, 7)
+    with pytest.raises(GameError, match='уже есть'):
+        await tasks.save_admin_task({**base, 'create_key': 'link-key-0002'}, 7)
+
+
+@pytest.mark.asyncio
+async def test_admin_save_returns_slug_of_existing_task_on_duplicate():
+    """409 должен не просто ругаться, а нести slug — иначе UI не подскажет выход."""
+    container, tasks, _, bot = service()
+    bot.id = 99
+    bot.get_chat = AsyncMock(return_value=SimpleNamespace(id=-100123, type='channel'))
+    bot.get_chat_member.return_value = SimpleNamespace(status='administrator')
+    saved = await tasks.save_admin_task(
+        {'kind': 'channel', 'title': 'Первый', 'target': '@dupechannel',
+         'reward_coins': 20, 'create_key': 'dupe-key-0001'}, 7)
+
+    container.settings = SimpleNamespace(bot_token='test-token', maintenance_mode=False,
+                                         admin_ids=[7])
+    container.dojo_miner_service = SimpleNamespace(state=AsyncMock(return_value={'phase': 'ready'}))
+    container.dojo_task_service = tasks
+    app = web.Application(); setup_dojo(app, container)
+    auth = signed(now=int(time.time()))
+    async with TestClient(TestServer(app)) as client:
+        response = await client.post('/miniapp/dojo/api/admin_save', json={
+            'initData': auth,
+            'task': {'kind': 'channel', 'title': 'Второй', 'target': '@dupechannel',
+                     'reward_coins': 20, 'create_key': 'dupe-key-0002'},
+        })
+        assert response.status == 409
+        body = await response.json()
+        assert body['code'] == 'task_exists'
+        assert body['slug'] == saved['slug'] and body['title'] == 'Первый'
+        assert 'уже есть' in body['error']

@@ -4,6 +4,7 @@ import copy
 import hashlib
 import hmac
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from urllib.parse import urlencode
@@ -57,6 +58,12 @@ class Collection:
                     return False
                 if '$gte' in value and (actual is None or actual < value['$gte']):
                     return False
+                if '$regex' in value:
+                    # Только то, что реально использует код: регистронезависимый
+                    # поиск канала по username, чтобы дубли не создавались.
+                    flags = re.IGNORECASE if value.get('$options') == 'i' else 0
+                    if actual is None or not re.match(value['$regex'], actual, flags):
+                        return False
             elif actual != value:
                 return False
         return True

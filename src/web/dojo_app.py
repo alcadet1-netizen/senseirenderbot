@@ -19,6 +19,7 @@ from aiohttp import web
 
 from src.services.dojo_invite_tasks import InviteTasks, SLUGS as INVITE_SLUGS
 from src.services.dojo_miner_service import CYCLE_HOURS
+from src.services.dojo_task_service import TaskTargetTaken
 from src.services.hedgehog_service import GameError
 from src.services.maintenance_service import MaintenanceService
 from src.web.telegram_auth import verify_init_data
@@ -411,7 +412,16 @@ def setup_dojo(app, container=None):
                 result['is_admin'] = is_admin
             return web.json_response(result, headers=headers)
         except GameError as exc:
-            return web.json_response({'error': str(exc)}, status=409, headers=headers)
+            # Отказ виден игроку, но раньше не попадал в лог: по записи
+            # «admin_save 409» нельзя было понять, что именно не так.
+            # Пишем только текст ошибки — initData и токены не трогаем.
+            logger = logging.getLogger(__name__)
+            logger.info('Dojo action rejected: action=%s reason=%s', action, exc)
+            body = {'error': str(exc)}
+            if isinstance(exc, TaskTargetTaken):
+                # Мини-апп сам откроет существующее задание на редактирование.
+                body.update(code='task_exists', slug=exc.slug, title=exc.title)
+            return web.json_response(body, status=409, headers=headers)
         except Exception:
             # Never log initData, Telegram tokens or raw payloads.
             logging.getLogger(__name__).exception('Dojo miner API failed: action=%s', action)

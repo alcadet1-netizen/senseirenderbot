@@ -1568,8 +1568,12 @@
     } catch {
       throw Error(t("Майнер не ответил. Попробуй ещё раз."));
     }
-    if (!response.ok)
-      throw Error(data.error || t("Майнер не ответил. Попробуй ещё раз."));
+    if (!response.ok) {
+      const error = Error(data.error || t("Майнер не ответил. Попробуй ещё раз."));
+      error.code = data.code || "";
+      error.slug = data.slug || "";
+      throw error;
+    }
     return data;
   }
 
@@ -2485,9 +2489,20 @@
   let adminEditing = "";
   let adminCreateKey = "";
   let adminBusy = false;
-  function adminMessage(text, error = false) {
-    $("admin-message").textContent = text;
-    $("admin-message").classList.toggle("error", error);
+  function adminMessage(text, error = false, actionLabel = "", onAction = null) {
+    const box = $("admin-message");
+    box.textContent = text;
+    box.classList.toggle("error", error);
+    if (!actionLabel) return;
+    // Кнопка живёт внутри сообщения: после перерисовки списка она исчезает,
+    // поэтому обработчик заново привязывается при каждом вызове.
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "admin-message-action";
+    button.textContent = actionLabel;
+    button.addEventListener("click", onAction);
+    box.appendChild(document.createTextNode(" "));
+    box.appendChild(button);
   }
   function renderAdminTasks() {
     const list = $("admin-task-list");
@@ -2522,8 +2537,34 @@
     renderAdminTasks();
   }
   function adminKindLabel() {
-    $("admin-target-label").firstChild.textContent = $("admin-kind").value === "channel" ? "@username канала" : "HTTPS-ссылка приложения";
+    const channel = $("admin-kind").value === "channel";
+    $("admin-target-label").firstChild.textContent = channel ? "@username канала" : "HTTPS-ссылка приложения";
+    $("admin-target").placeholder = channel ? "@mychannel" : "https://t.me/app?startapp=ref";
+    adminTargetHint();
   }
+  // Проверяем ввод до отправки: сервер всё равно проверит канал через
+  // Telegram, но глупые опечатки лучше ловить сразу, а не по отказу 409.
+  function adminTargetHint() {
+    const hint = $("admin-target-hint");
+    const value = $("admin-target").value.trim();
+    const channel = $("admin-kind").value === "channel";
+    if (!value) { hint.textContent = channel
+      ? "Вставь ссылку на канал или @username — приведём к нужному виду сами."
+      : "Ссылка должна начинаться с https://"; hint.classList.remove("error"); return; }
+    if (channel) {
+      const clean = value.replace(/^https?:\/\//i, "").replace(/^t\.me\//i, "").replace(/^@/, "").replace(/\/+$/, "");
+      const ok = /^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(clean);
+      hint.textContent = ok
+        ? `Задание на @${clean}. Бот должен быть админом канала.`
+        : "Не похоже на username: 5–32 символа, латиница, цифры и _, начинается с буквы.";
+      hint.classList.toggle("error", !ok);
+      return;
+    }
+    const ok = /^https:\/\/\S+$/i.test(value);
+    hint.textContent = ok ? "Ссылка корректна." : "Нужна полная HTTPS-ссылка, например https://t.me/app?startapp=ref";
+    hint.classList.toggle("error", !ok);
+  }
+  $("admin-target").addEventListener("input", adminTargetHint);
   function editAdminTask(task = null) {
     adminEditing = task?.slug || "";
     adminCreateKey = task ? "" : crypto.randomUUID();
@@ -2564,7 +2605,16 @@
     try {
       await api("admin_save", {task}); $("admin-task-form").hidden = true;
       await loadAdminTasks(); tasksLoaded = false; adminMessage("Задание сохранено.");
-    } catch (error) { adminMessage(error.message, true); }
+    } catch (error) {
+      if (error.code === "task_exists" && error.slug) {
+        // Не тупик: сразу предлагаем открыть существующее задание.
+        adminMessage(error.message, true, "Открыть его", () => {
+          const twin = adminTasks.find(item => item.slug === error.slug);
+          if (twin) { editAdminTask(twin); adminMessage(""); }
+          else adminMessage("Не нашёл это задание в списке — обнови панель.", true);
+        });
+      } else adminMessage(error.message, true);
+    }
     finally { adminBusy = false; $("admin-save").disabled = false; }
   });
   let grantConfirmation = "";

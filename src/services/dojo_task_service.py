@@ -114,6 +114,19 @@ def link_slug(value: str) -> str:
     return 'link-' + hashlib.sha1(url.encode('utf-8')).hexdigest()[:16]
 
 
+class TaskTargetTaken(GameError):
+    """Канал/ссылка уже заняты другим заданием.
+
+    Держит ``slug`` и ``title`` существующей задачи, чтобы мини-апп мог
+    предложить переход к ней вместо тупикового сообщения об ошибке.
+    """
+
+    def __init__(self, message: str, slug: str = '', title: str = ''):
+        super().__init__(message)
+        self.slug = slug
+        self.title = title
+
+
 class DojoTaskService:
     def __init__(self, container):
         self.container = container
@@ -147,6 +160,14 @@ class DojoTaskService:
         await self.tasks.create_index('active')
         self._defaults_ready = True
 
+    async def task_for_channel(self, username: str) -> dict | None:
+        """Публичная обёртка для бота: есть ли уже задание на этот канал."""
+        await self.ensure_defaults()
+        clean = normalize_username(username)
+        if not clean:
+            return None
+        return await self._find_task_by_target(CHANNEL_KIND, {'username': clean})
+
     async def add_task(
         self,
         username: str,
@@ -163,6 +184,12 @@ class DojoTaskService:
         reward = max(0, min(MAX_REWARD, int(reward_coins)))
         energy = max(0, min(MAX_ENERGY, int(energy_bonus)))
         now = datetime.now(timezone.utc)
+        # /task_add пришёл из бота, а задание могло быть создано в мини-аппе
+        # под другим _id. Правим существующее, иначе на один канал появятся
+        # две записи и награду можно будет получить дважды.
+        twin = await self._find_task_by_target(
+            CHANNEL_KIND, {'username': clean, 'url': f'https://t.me/{clean}'})
+        slug = twin['_id'] if twin else clean.lower()
         doc = {
             'kind': CHANNEL_KIND,
             'username': clean,
@@ -176,11 +203,11 @@ class DojoTaskService:
             'updated_at': now,
         }
         await self.tasks.update_one(
-            {'_id': clean.lower()},
+            {'_id': slug},
             {'$set': doc, '$setOnInsert': {'created_at': now}},
             upsert=True,
         )
-        return self._public({'_id': clean.lower(), **doc}, claimed=False)
+        return self._public({'_id': slug, **doc}, claimed=False)
 
     async def add_link(
         self,
@@ -240,30 +267,33 @@ class DojoTaskService:
         kind = data.get('kind')
         title = data.get('title')
         if kind not in (CHANNEL_KIND, LINK_KIND) or not isinstance(title, str) or not 1 <= len(title.strip()) <= MAX_TITLE:
-            raise GameError('Укажи тип и название задания (до 120 символов).')
+            raise GameError('Укажи название задания — от 1 до 120 символов.')
         values = {}
         for field, maximum in (('reward_coins', MAX_REWARD), ('energy_bonus', MAX_ENERGY),
                                ('reward_gram_hundredths', MAX_GRAM_HUNDREDTHS), ('reward_chests', MAX_CHESTS)):
             number = data.get(field, 0)
             if type(number) is not int or not 0 <= number <= maximum:
-                raise GameError(f'Некорректное значение: {field}.')
+                raise GameError({'reward_coins': 'Coin: целое число от 0 до 1 000 000.',
+                               'energy_bonus': 'Энергия: целое число от 0 до 1000.',
+                               'reward_gram_hundredths': 'GRAM: не больше 100 (2 знака после запятой).',
+                               'reward_chests': 'Сундуки: целое число от 0 до 1000.'}.get(field, f'Некорректное значение: {field}.'))
             values[field] = number
         if not any(values.values()):
-            raise GameError('Укажи хотя бы одну награду.')
+            raise GameError('Задание без награды бессмысленно: укажи Coin, энергию, GRAM или сундуки.')
         target = data.get('target')
         if kind == CHANNEL_KIND:
             username = normalize_username(target)
             if not username:
-                raise GameError('Укажи корректный @username канала.')
+                raise GameError('Нужен @username канала: 5–32 символа, начинается с латинской буквы. Пример: @mychannel.')
             if not self.bot:
-                raise GameError('Проверка канала сейчас недоступна.')
+                raise GameError('Бот не запущен — проверка канала недоступна. Попробуй позже.')
             try:
                 chat = await self.bot.get_chat(f'@{username}')
                 member = await self.bot.get_chat_member(chat.id, self.bot.id)
             except Exception:
-                raise GameError('Не вижу канал. Добавь бота администратором и повтори.')
+                raise GameError('Не вижу этот канал. Проверь: 1) @username написан верно; 2) канал публичный; 3) бот добавлен в него администратором.')
             if chat.type not in ('channel', 'supergroup') or member.status not in ('creator', 'administrator'):
-                raise GameError('Нужен канал или супергруппа с ботом-администратором.')
+                raise GameError('Бот в канале не администратор. Открой канал → Администраторы → добавь бота с правом «Управление» и повтори.')
             fields = {'username': username, 'url': f'https://t.me/{username}',
                       'channel_id': chat.id, 'host': None}
         else:
@@ -272,6 +302,22 @@ class DojoTaskService:
                 raise GameError('Нужна корректная HTTPS-ссылка на приложение (до 2048 символов).')
             host = (urlsplit(url).hostname or '').lower()
             fields = {'username': host, 'host': host, 'url': url, 'channel_id': None}
+        # Один канал (и одна ссылка) не должны превращаться в несколько
+        # заданий: игрок подписывается один раз, а наград становится больше.
+        # Раньше каждое нажатие «Новое» создавало ещё одну запись, потому что
+        # slug считался от случайного create_key, а не от самого канала.
+        twin = await self._find_task_by_target(kind, fields)
+        # Повторная отправка той же формы даёт тот же slug — это не дубль,
+        # а ретрай: задание находится само собой и должно просто обновиться.
+        if twin is not None and twin['_id'] != slug:
+            if is_create:
+                # Подкласс несёт slug существующего задания: мини-апп по нему
+                # сразу открывает форму «Изменить», а не просто ругается.
+                raise TaskTargetTaken(
+                    f"Такое задание уже есть: «{twin.get('title') or twin['_id']}». "
+                    "Открой его кнопкой «Изменить».",
+                    slug=twin['_id'], title=twin.get('title') or '')
+            raise GameError('Этот канал уже привязан к другому заданию.')
         now = datetime.now(timezone.utc)
         doc = {**fields, **values, 'kind': kind, 'title': title.strip(),
                'reward_schema': 2, 'updated_at': now, 'updated_by': admin_id,
@@ -281,6 +327,25 @@ class DojoTaskService:
         result = self._public({'_id': slug, **doc}, claimed=False)
         result['active'] = doc['active']
         return result
+
+    async def _find_task_by_target(self, kind: str, fields: dict) -> dict | None:
+        """Ищет уже существующее задание на тот же канал или ту же ссылку.
+
+        Ссылки и каналы сравниваются по нормализованному признаку: username
+        в нижнем регистре для каналов, полный URL для приложений. Иначе
+        ``@Channel`` и ``channel`` считались бы разными заданиями.
+        """
+        if kind == CHANNEL_KIND:
+            username = fields.get('username')
+            if not username:
+                return None
+            return await self.tasks.find_one(
+                {'kind': CHANNEL_KIND, 'username': {'$regex': f'^{re.escape(username)}$',
+                                                    '$options': 'i'}})
+        url = fields.get('url')
+        if not url:
+            return None
+        return await self.tasks.find_one({'kind': LINK_KIND, 'url': url})
 
     async def set_admin_task_active(self, slug: str, active: bool, admin_id: int) -> None:
         await self.ensure_defaults()
