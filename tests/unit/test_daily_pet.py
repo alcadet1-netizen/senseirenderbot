@@ -153,7 +153,7 @@ async def test_group_command_photo_and_deeplink_not_native_group_send():
     from src.bot.presenters.hedgehog_presenter import launch_hedgehog
     db, service, container, _ = setup()
     bot = AsyncMock()
-    bot.me.return_value = SimpleNamespace(username='Senseigame_bot')
+    bot.me.return_value = SimpleNamespace(username='Senseigame_bot', active_usernames=None)
     message = SimpleNamespace(chat=SimpleNamespace(id=-100, type='supergroup'), bot=bot,
                               answer=AsyncMock(), answer_photo=AsyncMock())
     user = SimpleNamespace(id=7, username=None, first_name='H', last_name=None, is_bot=False)
@@ -265,7 +265,7 @@ async def test_ambiguous_photo_delivery_does_not_retry_or_renew_window():
     from src.bot.presenters.hedgehog_presenter import launch_hedgehog
     db, service, container, _ = setup()
     bot = AsyncMock()
-    bot.me.return_value = SimpleNamespace(username='Senseigame_bot')
+    bot.me.return_value = SimpleNamespace(username='Senseigame_bot', active_usernames=None)
     message = SimpleNamespace(chat=SimpleNamespace(id=-100, type='supergroup'), bot=bot,
                               answer=AsyncMock(), answer_photo=AsyncMock())
     message.answer_photo.side_effect = TelegramNetworkError(method=SendPhoto(chat_id=-100, photo='x'), message='network')

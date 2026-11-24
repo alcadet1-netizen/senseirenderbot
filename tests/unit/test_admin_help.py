@@ -36,7 +36,10 @@ def test_pages_complete_and_telegram_safe():
 async def test_admin_help_router_access_and_delivery(command,allowed):
     from src.bot.handlers.admin_commands import router
     bot=AsyncMock()
-    bot.me.return_value=NS(username='Senseigame_bot')
+    # active_usernames нужен aiogram 3.34: фильтр Command читает
+    # bot.usernames(), а тот обращается к me.active_usernames. Без поля
+    # разбор «/adminhelp@Bot» падал, и обработчик не вызывался вовсе.
+    bot.me.return_value=NS(username='Senseigame_bot', active_usernames=None)
     msg=Message.model_validate(dict(message_id=1,date=1,chat=dict(id=7,type='private'),
         **{'from':dict(id=7,is_bot=False,first_name='<unsafe>')},text=command)).as_(bot)
     with patch('src.bot.filters.admin.settings',NS(admin_ids=[7] if allowed else [],admin_ids_str='')):
