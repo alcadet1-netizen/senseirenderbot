@@ -1240,7 +1240,7 @@
     const fighting = s.phase === "fight", ended = s.phase === "finished";
     setHidden("vs-accept", s.phase !== "invited");
     setHidden("vs-rematch", !ended);
-    setHidden("vs-lobby", s.phase !== "lobby");
+    setHidden("vs-lobby", s.phase !== "lobby" && s.phase !== "room");
     setHidden("vs-controls", !fighting);
     $("vs-left").textContent = s.names ? `${s.side === 0 ? "Ты · " : ""}${s.names[0]} · ${s.hits[0]}` : "Сэнсэй";
     $("vs-right").textContent = s.names ? `${s.hits[1]} · ${s.names[1]}${s.side === 1 ? " · Ты" : ""}` : "Ниндзя";
@@ -1280,6 +1280,7 @@
     const statusLine = resolved ? "Судья подводит итог…" : fighting && s.moves?.attack && s.moves?.dodge ? "Ход зафиксирован · ждём соперника" : fighting ? `Раунд ${s.round} · ${s.seconds} с · ${s.bet} Coin` :
       ended ? (s.draw ? "Бой завершён без победителя" : s.winner ? "Победа!" : "Поражение") :
       s.phase === "invited" ? `Приглашение · ${s.chat} · ставка каждого ${s.bet} Coin` :
+      s.phase === "room" ? `${s.chat} · ждём соперника · ${s.seconds} с` :
       s.phase === "connecting" ? `Подключаем бойцов · ${s.seconds} с` :
       s.phase === "waiting" ? `Ждём соперника · ${s.chat} · ${s.seconds} с` : "Открытый вызов";
     if ($("vs-status").textContent !== statusLine) $("vs-status").textContent = statusLine;

@@ -69,6 +69,9 @@ class Duel:
     inline_arena: Optional[str] = None
     inline_private: bool = False
     dojo_only: bool = False
+    # Комната, из которой пришёл бой. Явное поле, а не getattr: защита от
+    # утечки реванша в чужую комнату должна быть видна в модели.
+    room_token: Optional[str] = None
     connected: set = field(default_factory=set)
     last_exchange: Optional[dict] = None
 

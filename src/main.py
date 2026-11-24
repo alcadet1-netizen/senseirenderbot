@@ -299,6 +299,7 @@ async def main() -> None:
     auto_task = None
     join_watch_task = None
     emission_watch_task = None
+    rooms_cleanup_task = None
     try:
         await on_startup(bot, container)
         await container.dojo_miner_service.ensure_indexes()
@@ -310,6 +311,9 @@ async def main() -> None:
         await container.popugai_service.ensure_indexes()
         await container.throttle_service.ensure_indexes()
         await container.referral_service.ensure_indexes()
+        await container.dojo_rooms.ensure_indexes()
+        rooms_cleanup_task = asyncio.create_task(
+            container.dojo_rooms.cleanup_loop(), name='dojo-rooms-cleanup')
         from src.services.fly_service import FlyService
         await FlyService(container).ensure_indexes()
         from src.services.join_request_watch import JoinRequestWatch
@@ -357,6 +361,9 @@ async def main() -> None:
                 await auto_task
             except asyncio.CancelledError:
                 pass
+        if rooms_cleanup_task is not None:
+            rooms_cleanup_task.cancel()
+            await asyncio.gather(rooms_cleanup_task, return_exceptions=True)
         try:
             if container.native_widget_transport is not None:
                 await container.native_widget_transport.close()

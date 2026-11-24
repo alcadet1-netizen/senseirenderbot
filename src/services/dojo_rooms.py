@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 import time
@@ -122,7 +123,11 @@ class DojoRooms:
     # ------------------------------------------------------------------
 
     async def list_open(self, viewer_id: int, limit: int = 20) -> dict:
-        await self._expire_old()
+        # Раньше каждый опрос списка (раз в 4 секунды на игрока) делал два
+        # write-запроса: update_many + delete_many. При десяти игроках это
+        # пять записей в секунду в никуда. Истёкшие комнаты и так не видны
+        # из-за фильтра по expires, поэтому уборку делает отдельная
+        # периодическая задача, а не читатель.
         cursor = self.collection.find(
             {'status': STATUS_OPEN, 'expires': {'$gt': _now()}},
             {'token': 1, 'owner_id': 1, 'owner_name': 1, 'bet': 1, 'created': 1, 'expires': 1}
@@ -136,8 +141,11 @@ class DojoRooms:
         }
 
     async def my_room(self, user_id: int) -> Optional[dict]:
+        # expires обязателен: без него игрок видел «ждём соперника» у
+        # комнаты, в которую уже никто не может войти.
         doc = await self.collection.find_one(
-            {'owner_id': int(user_id), 'status': {'$in': [STATUS_OPEN, STATUS_JOINING]}},
+            {'owner_id': int(user_id), 'status': {'$in': [STATUS_OPEN, STATUS_JOINING]},
+             'expires': {'$gt': _now()}},
             sort=[('created', -1)])
         return self._public(doc, viewer=user_id) if doc else None
 
@@ -171,6 +179,8 @@ class DojoRooms:
         room = await self.collection.find_one({'token': token})
         if not room:
             raise GameError('Комната не найдена.')
+        # Раньше на своём токене (сам себе прислал ссылку) игрок получал
+        # «В эту комнату уже подключились» — это враньё и путает.
         if room['owner_id'] == int(user_id):
             raise GameError('Это твоя комната. Жди соперника.')
 
@@ -183,6 +193,15 @@ class DojoRooms:
             raise GameError('Комната закрылась. Создай свою.')
 
         bet = room.get('bet', ROOM_MIN_BET)
+        # Проверяем входящего ДО захвата комнаты, иначе забаненный или
+        # безденежный игрок «сжигает» комнату и получает отказ от эскроу.
+        joiner = await self.container.mongo_client.database.users.find_one(
+            {'id': int(user_id), 'is_banned': {'$ne': True}})
+        if not joiner:
+            raise GameError('Профиль недоступен. Открой /dojo заново.')
+        if joiner.get('coins', 0) < bet:
+            raise GameError('Недостаточно Coin для этой ставки.')
+
         # Атомарно забираем комнату: matched_count == 0 означает, что её
         # перехватили между find_one и update_one.
         locked = await self.collection.update_one(
@@ -209,7 +228,15 @@ class DojoRooms:
                 {'token': token},
                 {'$set': {'status': STATUS_PLAYING, 'duel_id': result.id,
                           'chat_id': int(user_id)}})
-            await self.container.duel_service.process_decision(result.id, int(user_id), 'a')
+            try:
+                await self.container.duel_service.process_decision(result.id, int(user_id), 'a')
+            except Exception:
+                # Бой УЖЕ создан, ставки уже списаны. Откатывать комнату в
+                # «open» нельзя: тогда в неё войдёт третий игрок и второй бой
+                # поверх первого. Игроку нельзя говорить «не удалось» —
+                # он решит, что не вошёл, хотя бой идёт.
+                logger.exception('Room duel accepted but announcement failed: token=%s', token)
+                raise GameError('Бой создан. Открой арену — соперник уже ждёт.')
         except DuplicateKeyError:
             await self.collection.update_one({'token': token, 'status': STATUS_JOINING},
                                              {'$set': {'status': STATUS_OPEN, 'rival_id': None}})
@@ -237,6 +264,21 @@ class DojoRooms:
             await self.collection.update_one(
                 {'token': token, 'status': STATUS_PLAYING},
                 {'$set': {'duel_id': int(duel_id)}})
+
+    async def cleanup(self) -> None:
+        """Уборка по расписанию: вызывается редко, не на каждом опросе."""
+        await self._expire_old()
+
+    async def cleanup_loop(self, every: int = 600) -> None:
+        """Фоновая уборка: закрывает протухшие комнаты и метёт старые."""
+        while True:
+            try:
+                await asyncio.sleep(max(60, int(every)))
+                await self._expire_old()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.debug('Room cleanup loop error: %s', exc)
 
     async def _expire_old(self) -> None:
         """Закрывает истёкшие комнаты; старые записи убирает полностью."""

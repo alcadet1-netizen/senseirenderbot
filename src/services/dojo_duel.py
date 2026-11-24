@@ -35,6 +35,18 @@ async def arena(container, uid):
                     seconds=max(0, int(duel.round_deadline_mono - time.monotonic())),
                     moves=duel.actions.get(uid, {}), winner=duel.winner_id == uid,
                     draw=duel.winner_id is None)
+    # Своя комната: персонального оффера нет, но игрок ждёт соперника.
+    # Без этой ветки он видел пустое «Открытый вызов» и не понимал,
+    # что комната жива и её видят другие.
+    room = None
+    if not duel or duel.finished:
+        try:
+            room = await container.dojo_rooms.my_room(uid)
+        except Exception:
+            room = None
+    if room:
+        return {'phase': 'room', 'chat': f"Комната · {room['bet']} Coin",
+                'seconds': room['seconds'], 'room': room}
     return {'phase': 'waiting' if offer else 'lobby', 'chat': (offer or {}).get('title', ''),
             'seconds': max(0, int((offer or {}).get('expires', 0) - time.time()))}
 

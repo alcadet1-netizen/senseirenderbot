@@ -284,3 +284,107 @@ async def test_finished_duel_closes_the_room():
     created = await rooms.create(1, 'Вася', 500)
     await rooms.sync_result(created['token'], 42, True)
     assert docs[0]['status'] == 'closed'
+
+
+# ---------------------------------------------------------------------------
+# Найдено при аудите: сбои, которые обманывали игрока или грузили базу
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_announcement_failure_does_not_reopen_a_live_room():
+    """Бой создан и деньги списаны — комнату нельзя возвращать в «open».
+
+    Если вернуть, в неё войдёт третий игрок и запустит второй бой поверх
+    первого. Игроку при этом нельзя говорить «не удалось»: он решит, что
+    не вошёл, хотя бой идёт.
+    """
+    rooms, _, engine, docs = build()
+    engine.process_decision.side_effect = RuntimeError('network')
+    created = await rooms.create(1, 'Вася', 500)
+
+    with pytest.raises(GameError) as exc:
+        await rooms.join(2, created['token'])
+
+    assert 'Бой создан' in str(exc.value)
+    assert docs[0]['status'] == 'playing', 'комната не должна снова стать свободной'
+    assert docs[0]['rival_id'] == 2
+
+
+@pytest.mark.asyncio
+async def test_banned_player_cannot_join_but_room_stays_open():
+    """Забаненный не «сжигает» комнату: отказ до захвата."""
+    rooms, db, engine, docs = build()
+    created = await rooms.create(1, 'Вася', 500)
+    # База отвечает на запрос входящего: он забанен.
+    db.users.find_one = AsyncMock(return_value=None)
+
+    with pytest.raises(GameError, match='Профиль недоступен'):
+        await rooms.join(2, created['token'])
+
+    engine.create_duel.assert_not_awaited()
+    assert docs[0]['status'] == 'open', 'комната должна остаться доступной'
+
+
+@pytest.mark.asyncio
+async def test_joiner_without_coins_is_refused_before_room_is_taken():
+    rooms, db, engine, docs = build()
+    created = await rooms.create(1, 'Вася', 500)
+    db.users.find_one = AsyncMock(return_value={'id': 2, 'coins': 100})
+
+    with pytest.raises(GameError, match='Недостаточно'):
+        await rooms.join(2, created['token'])
+
+    assert docs[0]['status'] == 'open'
+    engine.create_duel.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_listing_does_not_write_to_the_database():
+    """Опрос списка идёт раз в 4 секунды на игрока — он не должен писать."""
+    rooms, db, _, _ = build()
+    await rooms.create(1, 'Вася', 500)
+    calls = {'update_many': 0, 'delete_many': 0, 'update_one': 0}
+    coll = db.dojo_duel_rooms
+    for name in calls:
+        original = getattr(coll, name)
+
+        async def wrapper(*args, _o=original, _n=name, **kwargs):
+            calls[_n] += 1
+            return await _o(*args, **kwargs)
+
+        setattr(coll, name, wrapper)
+
+    for _ in range(10):
+        await rooms.list_open(2)
+
+    assert calls == {'update_many': 0, 'delete_many': 0, 'update_one': 0}, \
+        f'опрос списка писал в базу: {calls}'
+
+
+@pytest.mark.asyncio
+async def test_expired_rooms_are_hidden_even_without_cleanup():
+    """Истёкшая комната не видна в списке, даже если уборка ещё не прошла."""
+    rooms, _, _, docs = build()
+    created = await rooms.create(1, 'Вася', 500)
+    docs[0]['expires'] = time.time() - 1
+
+    assert (await rooms.list_open(2))['rooms'] == []
+    assert await rooms.my_room(1) is None
+
+
+@pytest.mark.asyncio
+async def test_owner_sees_his_room_in_arena_while_waiting():
+    """Иначе создатель видит пустое «Открытый вызов» и не знает, что ждёт."""
+    from src.services.dojo_duel import arena
+
+    rooms, db, engine, _ = build()
+    db.dojo_duel_offers = NS(find_one=AsyncMock(return_value=None))
+    engine.duels = {}
+    container = NS(mongo_client=NS(database=db), duel_service=engine,
+                   bot=NS(), dojo_rooms=rooms, settings=NS(main_chat_id=-100))
+    await rooms.create(1, 'Вася', 800)
+
+    state = await arena(container, 1)
+    assert state['phase'] == 'room'
+    assert state['room']['bet'] == 800
+    assert '800' in state['chat']
