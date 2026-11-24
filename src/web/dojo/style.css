@@ -5637,8 +5637,10 @@ html.motion-reduced .vs-petals i { animation: none; }
   font: italic 900 clamp(22px, 6vw, 30px)/1 "Unbounded", system-ui, sans-serif; color: #ffd65c;
   -webkit-text-stroke: 1px #241300; letter-spacing: .02em;
   text-shadow: 0 2px 0 #3a1300, 0 0 18px #ff9d2e66, 0 0 34px #ffd65c33;
-  filter: drop-shadow(0 3px 6px #000);
   animation: vs-emblem-pulse 2.2s ease-in-out infinite;
+  /* filter на анимируемом transform-элементе перерисовывал слой каждый
+     кадр — на телефонах эмблема «мерцала». Тень даём box-shadow. */
+  box-shadow: 0 3px 6px #0008;
 }
 @keyframes vs-emblem-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
 html.motion-reduced #vs-score i.vs-emblem { animation: none; }
@@ -6564,6 +6566,7 @@ html.motion-reduced .vs-petals { display: none; }
 
 /* Commit: progress dots + ready pulse */
 #vs-commit {
+  position: relative;
   display: flex; align-items: center; justify-content: center; gap: 10px;
   grid-column: 1 / -1; padding: 14px; border-radius: 16px;
   font-weight: 900; letter-spacing: .07em; text-transform: uppercase; font-size: 14.5px;
@@ -6585,24 +6588,29 @@ html.motion-reduced .vs-petals { display: none; }
 #vs-commit.is-ready {
   border-color: #54ffb0; background: linear-gradient(180deg, #2fdc7a, #1ec661); color: #021a0d;
   cursor: pointer; box-shadow: 0 4px 0 #0c5c28, 0 0 28px rgba(53,245,133,.5);
-  animation: vs-commit-pulse 1.6s ease-in-out infinite;
+  /* Статичное свечение вместо пульсации box-shadow: та перерисовывала
+     кнопку каждый кадр и на слабых устройствах выглядела как мерцание. */
+}
+#vs-commit.is-ready::after {
+  content: ''; position: absolute; inset: -2px; border-radius: inherit;
+  pointer-events: none; box-shadow: 0 0 26px rgba(53,245,133,.55);
+  opacity: .9; transition: opacity .3s ease;
 }
 #vs-commit.is-ready:hover { filter: brightness(1.08); }
 #vs-commit.is-ready:active { transform: translateY(2px); box-shadow: 0 2px 0 #0c5c28; }
 #vs-commit.is-ready .vs-commit-dots i { background: #021a0d; border-color: #021a0d; }
 #vs-commit.is-ready .vs-commit-dots i.is-on { background: #021a0d; box-shadow: none; }
-@keyframes vs-commit-pulse { 0%, 100% { box-shadow: 0 4px 0 #0c5c28, 0 0 20px rgba(53,245,133,.4); } 50% { box-shadow: 0 4px 0 #0c5c28, 0 0 36px rgba(53,245,133,.65); } }
+/* Пульсация box-shadow убрана: осталась только статичная ::after-подсветка.
+   Ключевые кадры оставлены пустыми для совместимости со старыми ссылками. */
 .vs-controls-hint { display: block; font-size: 11px; color: #7fa88c; letter-spacing: .04em; }
 
 /* Reduced motion: still frame, buttons keep states without animation */
 html.motion-reduced .vs-fighter:not([data-pose]) .vs-ninja,
 html.motion-reduced .vs-fighter[data-pose],
-html.motion-reduced #vs-commit.is-ready,
 html.motion-reduced #vs-controls .vs-move-row button.is-selected { animation: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .vs-fighter:not([data-pose]) .vs-ninja,
   .vs-fighter[data-pose],
-  #vs-commit.is-ready,
   #vs-controls .vs-move-row button.is-selected { animation: none !important; }
 }
 
@@ -6667,3 +6675,161 @@ html.motion-reduced #vs-controls .vs-move-row button.is-selected { animation: no
 .vs-move-dodge .vs-move-icon { stroke-width: 1.7; }
 /* commit button: send-button emoji also replaced by plain text */
 #vs-send { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+
+/* =========================================================================
+   SMOOTH COMBAT — плавный бой для слабых устройств
+   -------------------------------------------------------------------------
+   Принцип: анимируем только transform и opacity. Любой filter/blur/clip
+   на движущемся элементе заставляет WebView перерисовывать слой каждый
+   кадр — именно из-за этого на телефонах дёргалось и «мерцало».
+   Здесь слой боя изолирован, кадры идут с ease-out без резких пиков,
+   а переключение поз больше не перезапускает всю сцену.
+   ========================================================================= */
+
+/* Сцена боя — отдельный композитный слой: не трогает остальной интерфейс. */
+.vs-comic {
+  contain: layout paint;
+  transform: translateZ(0);
+}
+
+/* Спрайты: фиксируем слой, чтобы анимация шла на GPU. */
+.vs-fighter {
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+.vs-fighter[data-pose] { will-change: transform, opacity; }
+
+/* Тряска: мягкая, короткая, без микро-дрожи по 0.2px —
+   такие мелкие сдвиги на 60 Гц выглядят как «шум», а не как удар. */
+.vs-comic.is-striking {
+  animation: vs-combat-shake-smooth .62s cubic-bezier(.22, .61, .36, 1) both;
+}
+@keyframes vs-combat-shake-smooth {
+  0%   { transform: translate3d(0, 0, 0); }
+  22%  { transform: translate3d(-2.2px, 1.1px, 0); }
+  42%  { transform: translate3d(2.6px, -1.4px, 0); }
+  62%  { transform: translate3d(-1.4px, .7px, 0); }
+  82%  { transform: translate3d(.7px, -.35px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+/* Выпад: плавный разгон и мягкое возвращение, без ступенек на 16%. */
+.vs-fighter[data-pose=sweep] { animation: vs-lunge-sweep-smooth 1.28s cubic-bezier(.33, .06, .25, 1) both; }
+.vs-fighter[data-pose=kick]  { animation: vs-lunge-kick-smooth 1.28s cubic-bezier(.33, .06, .25, 1) both; }
+@keyframes vs-lunge-sweep-smooth {
+  0%   { transform: translate3d(0, 0, 0) rotate(0deg); }
+  38%  { transform: translate3d(calc(var(--lunge) * 42px), -4px, 0) rotate(calc(var(--lunge) * -5deg)); }
+  52%  { transform: translate3d(calc(var(--lunge) * 36px), -3px, 0) rotate(calc(var(--lunge) * -4deg)); }
+  78%  { transform: translate3d(calc(var(--lunge) * 12px), 1px, 0) rotate(calc(var(--lunge) * -1deg)); }
+  100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+}
+@keyframes vs-lunge-kick-smooth {
+  0%   { transform: translate3d(0, 0, 0); }
+  38%  { transform: translate3d(calc(var(--lunge) * 56px), -8px, 0) rotate(calc(var(--lunge) * -3deg)); }
+  52%  { transform: translate3d(calc(var(--lunge) * 48px), -6px, 0) rotate(calc(var(--lunge) * -2deg)); }
+  78%  { transform: translate3d(calc(var(--lunge) * 18px), 1px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+/* Отдача и уклон — симметрично плавные, без провала в прозрачность:
+   мигание прозрачности читается как «мерцание». */
+.vs-fighter[data-pose=recoil] { animation: vs-recoil-smooth 1.28s cubic-bezier(.36, .05, .27, 1) both; }
+@keyframes vs-recoil-smooth {
+  0%   { transform: translate3d(0, 0, 0) rotate(0deg); }
+  40%  { transform: translate3d(calc(var(--lunge) * -26px), 5px, 0) rotate(calc(var(--lunge) * 7deg)); }
+  56%  { transform: translate3d(calc(var(--lunge) * -21px), 4px, 0) rotate(calc(var(--lunge) * 6deg)); }
+  100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+}
+.vs-fighter[data-pose=slip] { animation: vs-slip-smooth 1.28s cubic-bezier(.36, .05, .27, 1) both; }
+@keyframes vs-slip-smooth {
+  0%   { transform: translate3d(0, 0, 0) scaleY(1); }
+  40%  { transform: translate3d(calc(var(--lunge) * -15px), 11px, 0) scaleY(.82); }
+  56%  { transform: translate3d(calc(var(--lunge) * -12px), 9px, 0) scaleY(.85); }
+  100% { transform: translate3d(0, 0, 0) scaleY(1); }
+}
+
+/* Аура вспыхивает через opacity, а не через filter/brightness. */
+.vs-fighter[data-pose=sweep]::before,
+.vs-fighter[data-pose=kick]::before {
+  animation: vs-aura-flare-smooth .78s ease-out both;
+}
+@keyframes vs-aura-flare-smooth {
+  0%   { opacity: .62; transform: scale(1); }
+  36%  { opacity: 1; transform: scale(1.24); }
+  100% { opacity: .62; transform: scale(1); }
+}
+
+/* Вспышка удара: короткая и мягкая. Резкий белый кадр на всю сцену —
+   главный источник «мерцания» на слабых экранах. */
+.vs-stage.is-flash .vs-hitflash {
+  animation: vs-flash-smooth .3s ease-out both;
+}
+@keyframes vs-flash-smooth {
+  0%   { opacity: 0; }
+  28%  { opacity: .32; }
+  100% { opacity: 0; }
+}
+
+/* Экономия батареи и FPS: на слабых устройствах убираем тяжёлые
+   декоративные слои из композиции удара, оставляя читаемую хореографию. */
+@media (max-width: 480px), (update: slow) {
+  .vs-stage .vs-parallax,
+  .vs-stage::after,
+  .vs-comic .vs-afterimage { display: none; }
+  .vs-fighter::before { animation: none; opacity: .7; }
+  .vs-blade-core, .vs-blade-edge, .vs-blade-thread { filter: none; }
+  .vs-impact { filter: drop-shadow(0 4px 0 #2d0d00); }
+}
+
+/* Пользователь просил меньше движения — оставляем только смену поз. */
+html.motion-reduced .vs-comic.is-striking,
+html.motion-reduced .vs-stage.is-shake .vs-comic,
+html.motion-reduced .vs-fighter[data-pose] {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vs-comic.is-striking,
+  .vs-stage.is-shake .vs-comic,
+  .vs-fighter[data-pose] { animation: none !important; }
+}
+
+/* Комнаты дуэлей ------------------------------------------------------- */
+.vs-rooms { display: grid; gap: 8px; margin-top: 4px; text-align: left; }
+.vs-rooms-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.vs-rooms-head strong { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: #7affaa; }
+.vs-rooms-head small { font-size: 11px; color: #7fa88c; }
+.vs-room-create {
+  padding: 12px; border-radius: 13px; border: 2px solid #54ffb0;
+  background: linear-gradient(180deg, #2fdc7a, #1ec661); color: #021a0d;
+  font-weight: 900; font-size: 13.5px; letter-spacing: .04em; cursor: pointer;
+  box-shadow: 0 3px 0 #0c5c28; transition: transform .12s ease, box-shadow .18s ease;
+}
+.vs-room-create:active { transform: translateY(2px); box-shadow: 0 1px 0 #0c5c28; }
+.vs-room-create:disabled { opacity: .6; cursor: progress; }
+.vs-room-list { display: grid; gap: 6px; }
+.vs-room {
+  display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px;
+  padding: 9px 11px; border-radius: 12px;
+  border: 1.5px solid #2e6b45; background: rgba(4, 28, 15, .9);
+}
+.vs-room.is-mine { border-color: #ffd65c; background: rgba(48, 32, 4, .9); }
+.vs-room-name { font-size: 13px; font-weight: 800; color: #dfffeed2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vs-room-bet { font-size: 12px; font-weight: 900; color: #ffd65c; }
+.vs-room-action {
+  padding: 7px 14px; border-radius: 10px; border: 1.5px solid #54ffb0;
+  background: linear-gradient(180deg, #2fdc7a, #1ec661); color: #021a0d;
+  font-weight: 900; font-size: 12.5px; cursor: pointer;
+  transition: transform .12s ease;
+}
+.vs-room-action:active { transform: scale(.96); }
+.vs-room-action:disabled { opacity: .55; cursor: progress; }
+.vs-chat-panel { display: grid; gap: 6px; margin-top: 6px; }
+.vs-chat-panel[hidden] { display: none; }
+.vs-chat-panel button {
+  padding: 10px; border-radius: 11px; border: 1.5px solid #2e6b45;
+  background: rgba(4, 28, 15, .92); color: #dfffeed2; font-weight: 800;
+  font-size: 13px; cursor: pointer; text-align: left;
+}
+.vs-chat-panel button:active { transform: scale(.985); }
+.vs-chat-panel .vs-chat-cancel { text-align: center; color: #ff9a9a; border-color: #6b2e2e; }

@@ -905,6 +905,13 @@ class DuelService:
 
     async def _finish_duel(self, duel: Duel, winner_id: Optional[int], reason: str):
         if duel.finished: return
+        if getattr(duel, 'room_token', None):
+            # Комната — обычная запись в списке; после боя её надо снять,
+            # иначе она висит «открытой» и в неё пробуют войти.
+            try:
+                await self.container.dojo_rooms.sync_result(duel.room_token, duel.id, True)
+            except Exception:
+                logger.debug('Room close after duel %s failed', duel.id)
         settlement = None
         if duel.bet > 0:
             if duel.settlement_started and duel.settlement_winner != winner_id:

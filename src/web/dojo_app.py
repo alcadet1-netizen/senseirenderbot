@@ -234,6 +234,18 @@ def setup_dojo(app, container=None):
                     result = await finish_private_share(container, uid, payload.get('token'), payload.get('sent'))
                 elif action == 'vs_chats':
                     result = await chat_choices(container, uid)
+                elif action == 'vs_rooms':
+                    # Комната никому не адресована: её видит любой игрок и
+                    # может подключиться, когда удобно.
+                    result = await container.dojo_rooms.list_open(uid)
+                elif action == 'vs_room_create':
+                    result = await container.dojo_rooms.create(
+                        uid, user.get('first_name') or 'Сэнсэй', payload.get('bet'))
+                    result['rooms'] = (await container.dojo_rooms.list_open(uid))['rooms']
+                elif action == 'vs_room_join':
+                    result = await container.dojo_rooms.join(uid, payload.get('token'))
+                elif action == 'vs_room_close':
+                    result = await container.dojo_rooms.close(uid, payload.get('token'))
                 elif action == 'vs_publish':
                     result = await publish(container, uid, user.get('first_name') or 'Игрок', payload.get('bet'), payload.get('chat'), payload.get('rematch'), payload.get('recipient'))
                 else:
@@ -402,7 +414,7 @@ def setup_dojo(app, container=None):
             return web.json_response({'error': str(exc)}, status=409, headers=headers)
         except Exception:
             # Never log initData, Telegram tokens or raw payloads.
-            logging.getLogger(__name__).error('Dojo miner API failed: action=%s', action)
+            logging.getLogger(__name__).exception('Dojo miner API failed: action=%s', action)
             return web.json_response(
                 {'error': 'Майнер не ответил. Попробуйте ещё раз.'}, status=503,
                 headers=headers)
@@ -414,5 +426,5 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/assets/{asset:dojo-arena\\.jpg|ninja-fighter\\.jpg|dojo-temple-bg\\.jpg|ninja-sensei-1\\.png|ninja-sensei-2\\.png|sticker-hero-vs\\.jpg|duel-court\\.webp|sensei\\.webp|loading-hero\\.webp|senseicoin-wordmark\\.svg|unbounded-variable\\.woff2|golos-text-variable\\.woff2|dseg7-classic-regular\\.woff2|sensei-style-(?:400|700)\\.woff2}', page)
     app.router.add_post(
-        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|vs_private_share|vs_share_result|vs_chats|vs_invite|vs_accept|vs_state|vs_publish|vs_commit|vs_move|ref_claim|share|daily|daily_claim|chest}',
+        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|vs_private_share|vs_share_result|vs_chats|vs_invite|vs_accept|vs_state|vs_publish|vs_commit|vs_move|vs_rooms|vs_room_create|vs_room_join|vs_room_close|ref_claim|share|daily|daily_claim|chest}',
         api)
