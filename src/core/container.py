@@ -252,6 +252,14 @@ class Container:
         return self._slots_service
 
     @property
+    def dojo_rooms(self):
+        """Комнаты дуэлей: создал со ставкой — любой может подключиться."""
+        if getattr(self, '_dojo_rooms', None) is None:
+            from src.services.dojo_rooms import DojoRooms
+            self._dojo_rooms = DojoRooms(self)
+        return self._dojo_rooms
+
+    @property
     def duel_service(self):
         if self._duel_service is None:
             from src.services.duel_service import DuelService

@@ -69,6 +69,9 @@ class Duel:
     inline_arena: Optional[str] = None
     inline_private: bool = False
     dojo_only: bool = False
+    # Комната, из которой пришёл бой. Явное поле, а не getattr: защита от
+    # утечки реванша в чужую комнату должна быть видна в модели.
+    room_token: Optional[str] = None
     connected: set = field(default_factory=set)
     last_exchange: Optional[dict] = None
 
@@ -905,6 +908,13 @@ class DuelService:
 
     async def _finish_duel(self, duel: Duel, winner_id: Optional[int], reason: str):
         if duel.finished: return
+        if getattr(duel, 'room_token', None):
+            # Комната — обычная запись в списке; после боя её надо снять,
+            # иначе она висит «открытой» и в неё пробуют войти.
+            try:
+                await self.container.dojo_rooms.sync_result(duel.room_token, duel.id, True)
+            except Exception:
+                logger.debug('Room close after duel %s failed', duel.id)
         settlement = None
         if duel.bet > 0:
             if duel.settlement_started and duel.settlement_winner != winner_id:

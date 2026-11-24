@@ -1135,9 +1135,12 @@
         cancelAnimationFrame(trailRaf); trailRaf = requestAnimationFrame(onTrail);
       }
       const comic = vsDialog.querySelector(".vs-comic");
-      comic.classList.remove("is-striking");
-      void comic.offsetWidth;
+      // Раньше здесь стоял void offsetWidth: принудительный reflow перед
+      // каждым ударом. Он гарантировал перезапуск анимации, но на телефоне
+      // это давало заметный рывок ровно в момент удара. Хореография теперь
+      // на отдельном слое, и перезапуск не нужен.
       comic.classList.add("is-striking");
+      comic.addEventListener("animationend", () => comic.classList.remove("is-striking"), { once: true });
       const read = describeStrike(s, side);
       $("vs-status").textContent = `Раунд ${exchange.round} · атакует ${s.names[side]}`;
       // Hit-stop timing: if hit, freeze 90ms at contact (anime impact frame)
@@ -1237,7 +1240,7 @@
     const fighting = s.phase === "fight", ended = s.phase === "finished";
     setHidden("vs-accept", s.phase !== "invited");
     setHidden("vs-rematch", !ended);
-    setHidden("vs-lobby", s.phase !== "lobby");
+    setHidden("vs-lobby", s.phase !== "lobby" && s.phase !== "room");
     setHidden("vs-controls", !fighting);
     $("vs-left").textContent = s.names ? `${s.side === 0 ? "Ты · " : ""}${s.names[0]} · ${s.hits[0]}` : "Сэнсэй";
     $("vs-right").textContent = s.names ? `${s.hits[1]} · ${s.names[1]}${s.side === 1 ? " · Ты" : ""}` : "Ниндзя";
@@ -1277,6 +1280,7 @@
     const statusLine = resolved ? "Судья подводит итог…" : fighting && s.moves?.attack && s.moves?.dodge ? "Ход зафиксирован · ждём соперника" : fighting ? `Раунд ${s.round} · ${s.seconds} с · ${s.bet} Coin` :
       ended ? (s.draw ? "Бой завершён без победителя" : s.winner ? "Победа!" : "Поражение") :
       s.phase === "invited" ? `Приглашение · ${s.chat} · ставка каждого ${s.bet} Coin` :
+      s.phase === "room" ? `${s.chat} · ждём соперника · ${s.seconds} с` :
       s.phase === "connecting" ? `Подключаем бойцов · ${s.seconds} с` :
       s.phase === "waiting" ? `Ждём соперника · ${s.chat} · ${s.seconds} с` : "Открытый вызов";
     if ($("vs-status").textContent !== statusLine) $("vs-status").textContent = statusLine;
@@ -1299,11 +1303,134 @@
       }
     }
   }
-  $("vs-open")?.addEventListener("click", () => { vsDialog.showModal(); vsRequest("vs_state"); });
+  $("vs-open")?.addEventListener("click", () => { vsDialog.showModal(); vsRequest("vs_state"); loadRooms(); });
   $("vs-close")?.addEventListener("click", () => vsDialog.close());
-  vsDialog?.addEventListener("close", () => { resumePrivateVs(false); clearTimeout(vsTimer); stopVsComic(); });
+  vsDialog?.addEventListener("close", () => { resumePrivateVs(false); clearTimeout(vsTimer); clearTimeout(roomsTimer); stopVsComic(); });
   $("vs-accept")?.addEventListener("click", () => vsRequest("vs_accept"));
   $("vs-rematch")?.addEventListener("click", () => vsRequest("vs_publish", {bet: vsBattle.bet, rematch: vsBattle.id}));
+
+  // --- Комнаты: создал со ставкой — подключится любой -------------------
+  let roomsTimer;
+  function roomBet() {
+    const bet = Number($("vs-bet")?.value);
+    return Number.isSafeInteger(bet) && bet >= 300 ? bet : null;
+  }
+  async function loadRooms() {
+    if (!vsDialog?.open || sessionEnded) return;
+    try { drawRooms(await api("vs_rooms")); }
+    catch { /* сеть моргнула — повторим на следующем тике */ }
+    finally {
+      clearTimeout(roomsTimer);
+      if (vsDialog?.open && !document.hidden) roomsTimer = setTimeout(loadRooms, 4000);
+    }
+  }
+  // Комната могла истечь, пока игрок смотрел на арену. Молчаливое
+  // исчезновение читается как поломка: скажем, что произошло и что делать.
+  let hadOwnRoom = false;
+  function noteRoomExpired(snapshot) {
+    const rooms = snapshot?.rooms || [];
+    const mine = rooms.some(r => r.is_mine);
+    if (hadOwnRoom && !mine) {
+      const hint = $("vs-rooms-hint");
+      if (hint) {
+        hint.textContent = "Комната закрылась. Создай новую.";
+        hint.dataset.sticky = "1";
+      }
+      showToast("Комната закрылась — 5 минут истекли");
+    }
+    if (mine) {
+      const hint = $("vs-rooms-hint");
+      if (hint) delete hint.dataset.sticky;
+    }
+    hadOwnRoom = mine || (vsBattle?.phase === "room");
+  }
+  function drawRooms(snapshot) {
+    const list = $("vs-room-list");
+    if (!list) return;
+    noteRoomExpired(snapshot);
+    const rooms = snapshot?.rooms || [];
+    const hint = $("vs-rooms-hint");
+    if (hint && !hint.dataset.sticky) hint.textContent = rooms.length
+      ? `${rooms.length} ${rooms.length === 1 ? "комната ждёт" : "комнат ждут"} соперника`
+      : "Создай комнату — подключится любой";
+    // Перестраиваем только при реальном изменении: иначе кнопки
+    // пересоздаются каждые 4 секунды и «мерцают» на слабых устройствах.
+    const key = rooms.map(r => `${r.token}:${r.bet}:${r.seconds > 0 ? 1 : 0}`).join("|");
+    if (list.dataset.key === key) return;
+    list.dataset.key = key;
+    if (!rooms.length) {
+      list.replaceChildren();
+      return;
+    }
+    list.replaceChildren(...rooms.map(room => {
+      const row = document.createElement("div");
+      row.className = "vs-room" + (room.is_mine ? " is-mine" : "");
+      row.setAttribute("role", "listitem");
+      const title = document.createElement("span");
+      title.className = "vs-room-name";
+      title.textContent = room.is_mine ? "Твоя комната" : room.owner_name;
+      const stake = document.createElement("span");
+      stake.className = "vs-room-bet";
+      stake.textContent = `${room.bet} Coin`;
+      const action = document.createElement("button");
+      action.type = "button";
+      action.className = "vs-room-action";
+      if (room.is_mine) {
+        action.textContent = "Закрыть";
+        action.addEventListener("click", async () => {
+          action.disabled = true;
+          action.textContent = "Закрываем…";
+          try {
+            await api("vs_room_close", {token: room.token});
+            showToast("Комната закрыта. Ставка не списана.");
+            list.dataset.key = "";
+            await loadRooms();
+          } catch (err) {
+            showToast(err.message, true);
+            action.disabled = false;
+            action.textContent = "Закрыть";
+          }
+        });
+      } else {
+        action.textContent = "Войти";
+        action.addEventListener("click", async () => {
+          action.disabled = true;
+          action.textContent = "Входим…";
+          try {
+            await api("vs_room_join", {token: room.token});
+            // Без явного подтверждения игрок не понимает, что вход
+            // состоялся: экран просто меняется.
+            showToast(`Ты в бою · ставка ${room.bet} Coin`);
+            if (navigator.vibrate) try { navigator.vibrate(18); } catch {}
+            vsRequest("vs_state");
+          } catch (err) {
+            showToast(err.message, true);
+            action.disabled = false;
+            action.textContent = "Войти";
+          }
+        });
+      }
+      row.append(title, stake, action);
+      return row;
+    }));
+  }
+  $("vs-room-create")?.addEventListener("click", async () => {
+    const bet = roomBet();
+    if (!bet) return showToast("Минимальная ставка — 300 Coin", true);
+    const button = $("vs-room-create");
+    button.disabled = true;
+    try {
+      const result = await api("vs_room_create", {bet});
+      $("vs-room-list").dataset.key = "";
+      drawRooms({rooms: result.rooms || []});
+      showToast(`Комната на ${bet} Coin открыта. Ставка спишется при подключении.`);
+    } catch (err) { showToast(err.message, true); }
+    finally { button.disabled = false; }
+  });
+  $("vs-bet")?.addEventListener("input", () => {
+    const label = $("vs-room-bet");
+    if (label) label.textContent = String(roomBet() ?? "—");
+  });
   // Navigation hint only; the actual offer and deadline always come from Mongo.
   function resumePrivateVs(write) {
     const key = `dojo:resume-private-vs:${currentUserId()}`;
@@ -1332,12 +1459,55 @@
     const v = $("vs-bet").value;
     vsDialog.querySelectorAll(".vs-bet-presets [data-bet]").forEach(b => b.classList.toggle("is-active", b.dataset.bet===v));
   });
-  $("vs-group")?.addEventListener("click", () => {
+  // Публикация в группу идёт через бота на сервере, а не через
+  // switchInlineQuery: тот штатно закрывает мини-апп, и игрок терял арену
+  // прямо во время приглашения. Здесь окно остаётся открытым.
+  $("vs-group")?.addEventListener("click", async () => {
     const bet = vsBet();
     if (!bet) return;
-    if (!tg?.isVersionAtLeast?.("6.7") || !tg.switchInlineQuery) return showToast("Обнови Telegram для выбора группы", true);
-    tg.switchInlineQuery(`dojo_vs ${bet}`, ["groups"]);
+    const button = $("vs-group");
+    button.disabled = true;
+    try {
+      const snapshot = await api("vs_chats");
+      const chats = snapshot?.chats || [];
+      if (!chats.length) {
+        showToast("Нет доступных групп. Добавь Сенсея администратором в чат.", true);
+        return;
+      }
+      const chatId = await pickChat(chats);
+      if (!chatId) return;
+      await api("vs_publish", {bet, chat: chatId});
+      showToast("Вызов опубликован в чате. Арена остаётся открытой.");
+      vsRequest("vs_state");
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      button.disabled = false;
+    }
   });
+
+  // Выбор группы встроенной панелью: системный picker Telegram закрывает
+  // мини-апп так же, как и инлайн-режим.
+  function pickChat(chats) {
+    return new Promise(resolve => {
+      const panel = $("vs-chat-panel");
+      if (!panel) return resolve(chats[0].id);
+      panel.replaceChildren(...chats.map(chat => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.textContent = chat.title;
+        item.addEventListener("click", () => { panel.hidden = true; resolve(chat.id); });
+        return item;
+      }));
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "vs-chat-cancel";
+      cancel.textContent = "Отмена";
+      cancel.addEventListener("click", () => { panel.hidden = true; resolve(null); });
+      panel.append(cancel);
+      panel.hidden = false;
+    });
+  }
   $("vs-address")?.addEventListener("click", () => {
     const bet = vsBet(), recipient = $("vs-handle").value.trim();
     if (bet && recipient) vsRequest("vs_publish", {bet, recipient});

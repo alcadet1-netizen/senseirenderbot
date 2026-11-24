@@ -1030,7 +1030,14 @@
           <div id="vs-read" hidden aria-hidden="true"><span>Удар <b id="vs-read-hit"></b></span><span>Уворот <b id="vs-read-dodge"></b></span><strong id="vs-read-result"></strong></div>
           <details id="vs-recap" hidden><summary>Разбор обмена</summary><ol></ol></details>
           <div id="vs-lobby" hidden><div class="vs-bet-row"><label>Ставка каждого <input id="vs-bet" type="number" min="300" step="100" inputmode="numeric" value="500"> Coin</label><div class="vs-bet-presets" role="group" aria-label="Быстрые ставки"><button type="button" data-bet="300">300</button><button type="button" data-bet="500">500</button><button type="button" data-bet="1000">1000</button><button type="button" data-bet="5000">5000</button></div></div>
-          <button id="vs-send">Отправить дуэль</button><div id="vs-destinations" hidden><button id="vs-dm">В личку</button><button id="vs-group">В группу</button><div id="vs-by-name" hidden><input id="vs-handle" placeholder="@username" aria-label="Имя соперника"><button id="vs-address">Отправить ссылку</button></div></div><small>Вызов на 2 минуты. Ставки резервируются при принятии. Подсказка: <code>/duel @user 500</code> в чате — мгновенно.</small></div>
+          <button id="vs-send">Отправить дуэль</button><div id="vs-destinations" hidden><button id="vs-dm">В личку</button><button id="vs-group">В группу</button><div id="vs-chat-panel" class="vs-chat-panel" hidden role="group" aria-label="Выбери группу"></div><div id="vs-by-name" hidden><input id="vs-handle" placeholder="@username" aria-label="Имя соперника"><button id="vs-address">Отправить ссылку</button></div></div><small>Вызов на 2 минуты. Ставки резервируются при принятии. Подсказка: <code>/duel @user 500</code> в чате — мгновенно.</small>
+          <div id="vs-rooms" class="vs-rooms">
+            <div class="vs-rooms-head"><strong>Комнаты</strong><small id="vs-rooms-hint">Создай комнату — подключится любой</small></div>
+            <button type="button" id="vs-room-create" class="vs-room-create">Создать комнату · <span id="vs-room-bet">500</span> Coin</button>
+            <small class="vs-rooms-note">Ставка спишется только когда кто-то войдёт. Комната живёт 5 минут.</small>
+            <div id="vs-room-list" class="vs-room-list" role="list" aria-live="polite"></div>
+          </div>
+        </div>
           <button id="vs-accept" hidden>Принять вызов</button><button id="vs-rematch" hidden>Реванш · та же ставка</button><small id="vs-ready" hidden></small><div id="vs-controls" hidden>
             <div class="vs-move-group vs-move-attack">
               <span class="vs-move-label"><svg class="vs-move-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 14l8.5-8.5M11 2l3 3M9.5 3.5l3 3M2 14l1.5-1.5" /></svg>Удар</span>

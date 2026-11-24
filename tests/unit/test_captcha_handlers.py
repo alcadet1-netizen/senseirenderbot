@@ -7,7 +7,7 @@ import pytest
 from aiogram.types import MessageReactionUpdated
 
 from src.bot.handlers.captcha import cb_captcha_check, on_reaction
-from src.services.captcha_service import CaptchaService
+from src.services.captcha_service import CAPTCHA_REACTIONS, CaptchaService
 
 from tests.unit.test_captcha_service import FakeCollection
 
@@ -53,8 +53,12 @@ async def test_button_refuses_without_the_reaction():
     service = build_service()
     state = await service.issue(7)
     await service.attach_message(7, 555)
-    # Реакция была, но чужая.
-    await service.record_reaction(7, 555, [{"emoji": "👍"}])
+    # Реакция была, но чужая. Эмодзи нельзя брать из CAPTCHA_REACTIONS:
+    # «👍» там есть, и тест проходил или падал в зависимости от того, что
+    # выпало игроку — то есть проверял не то, что заявлено.
+    foreign = "🤮"
+    assert foreign not in CAPTCHA_REACTIONS
+    await service.record_reaction(7, 555, [{"emoji": foreign}])
 
     callback, bot = make_callback(nonce=state["nonce"])
     await cb_captcha_check(callback, NS(captcha_service=service))

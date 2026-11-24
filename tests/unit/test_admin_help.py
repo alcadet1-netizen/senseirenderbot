@@ -36,7 +36,13 @@ def test_pages_complete_and_telegram_safe():
 async def test_admin_help_router_access_and_delivery(command,allowed):
     from src.bot.handlers.admin_commands import router
     bot=AsyncMock()
-    bot.me.return_value=NS(username='Senseigame_bot')
+    # aiogram 3.34 в фильтре Command проверяет упоминание через
+    # bot.usernames(). У AsyncMock этот метод возвращает AsyncMock, а не
+    # кортеж имён: перебор по нему даёт пустое множество, «Senseigame_bot»
+    # не находится, и «/adminhelp@Senseigame_bot» молча отклоняется.
+    # Задаём реальный кортеж — тест проверяет маршрут, а не заглушку.
+    bot.me.return_value=NS(username='Senseigame_bot', active_usernames=None)
+    bot.usernames = AsyncMock(return_value=('Senseigame_bot',))
     msg=Message.model_validate(dict(message_id=1,date=1,chat=dict(id=7,type='private'),
         **{'from':dict(id=7,is_bot=False,first_name='<unsafe>')},text=command)).as_(bot)
     with patch('src.bot.filters.admin.settings',NS(admin_ids=[7] if allowed else [],admin_ids_str='')):
