@@ -541,7 +541,8 @@
               <h4 id="admin-form-title">Новое задание</h4>
               <label>Тип<select id="admin-kind"><option value="channel">Подписка на канал</option><option value="link">Ссылка на приложение</option></select></label>
               <label>Название<input id="admin-title" maxlength="120" required placeholder="Название задания"></label>
-              <label id="admin-target-label">@username канала<input id="admin-target" required placeholder="@channel или HTTPS-ссылка"></label>
+              <label id="admin-target-label">@username канала<input id="admin-target" required placeholder="@channel или HTTPS-ссылка" autocomplete="off" spellcheck="false"></label>
+              <small id="admin-target-hint" class="admin-hint"></small>
               <div class="admin-rewards">
                 <label>Coin<input id="admin-coins" type="number" min="0" max="1000000" step="1" value="0" required></label>
                 <label>Энергия<input id="admin-energy" type="number" min="0" max="1000" step="1" value="0" required></label>

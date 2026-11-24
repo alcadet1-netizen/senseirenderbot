@@ -72,6 +72,7 @@ jobs:
           node tests/web/dojo_motion.cjs
           node tests/web/dojo_collect_recovery.cjs
           node tests/web/dojo_rooms.cjs
+          node tests/web/dojo_admin_tasks.cjs
           node --check src/web/hedgehog/app.js
           node --check src/web/daily_pet/app.js
       - name: Check startup script

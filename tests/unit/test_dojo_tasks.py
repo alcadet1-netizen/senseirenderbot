@@ -196,11 +196,13 @@ async def test_admin_command_adds_channel_with_reward():
         from_user=SimpleNamespace(id=1),
         answer=AsyncMock(),
     )
-    service_mock = SimpleNamespace(add_task=AsyncMock(return_value={
-        'username': 'MyChannel', 'title': 'Мой канал',
-        'reward_coins': 5000, 'energy_bonus': 50,
-        'url': 'https://t.me/MyChannel',
-    }))
+    service_mock = SimpleNamespace(
+        task_for_channel=AsyncMock(return_value=None),
+        add_task=AsyncMock(return_value={
+            'username': 'MyChannel', 'title': 'Мой канал',
+            'reward_coins': 5000, 'energy_bonus': 50,
+            'url': 'https://t.me/MyChannel',
+        }))
     await cmd_task_add(message, SimpleNamespace(dojo_task_service=service_mock))
     kwargs = service_mock.add_task.await_args.kwargs
     assert kwargs['username'] == 'MyChannel'
@@ -208,6 +210,12 @@ async def test_admin_command_adds_channel_with_reward():
     assert kwargs['reward_coins'] == 5000
     assert kwargs['energy_bonus'] == 50
     assert '5 000' in message.answer.await_args.args[0]
+    assert 'Задание добавлено' in message.answer.await_args.args[0]
+
+    # Повторная команда на тот же канал честно сообщает, что задание обновлено.
+    service_mock.task_for_channel = AsyncMock(return_value={'title': 'Мой канал'})
+    await cmd_task_add(message, SimpleNamespace(dojo_task_service=service_mock))
+    assert 'Задание обновлено' in message.answer.await_args.args[0]
 
 
 @pytest.mark.asyncio
@@ -338,3 +346,25 @@ async def test_addchance_rejects_bad_syntax(text):
     msg = SimpleNamespace(text=text, answer=AsyncMock())
     await cmd_addchance(msg, SimpleNamespace())
     assert 'Использование' in msg.answer.call_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_task_add_reuses_task_created_from_miniapp():
+    """/task_add и мини-апп должны править одно и то же задание.
+
+    Иначе на один канал появляются две записи с разными _id: игрок
+    «подписывается» дважды, а награда начисляется за каждую.
+    """
+    container, tasks, _, bot = service()
+    bot.id = 99
+    bot.get_chat = AsyncMock(return_value=SimpleNamespace(id=-100123, type='channel', title='T'))
+    bot.get_chat_member.return_value = SimpleNamespace(status='administrator')
+    saved = await tasks.save_admin_task({
+        'kind': 'channel', 'title': 'Из мини-аппа', 'target': '@cellchannel',
+        'reward_coins': 5, 'create_key': 'key-1111-1'}, 7)
+    reused = await tasks.add_task('cellchannel', 'Из бота', -100123, 7, 7, 1)
+    assert reused['slug'] == saved['slug']
+    assert reused['title'] == 'Из бота' and reused['reward_coins'] == 7
+    matching = [doc for doc in tasks.tasks.docs.values()
+                if str(doc.get('username', '')).lower() == 'cellchannel']
+    assert len(matching) == 1, 'на один канал должна оставаться одна запись'

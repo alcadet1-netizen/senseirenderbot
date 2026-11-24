@@ -159,6 +159,7 @@ async def cmd_task_add(message: Message, container: Container) -> None:
             'Бот должен быть администратором канала, иначе подписку не проверить.',
             parse_mode='HTML')
         return
+    existing = await container.dojo_task_service.task_for_channel(username)
     task = await container.dojo_task_service.add_task(
         username=username,
         title=chat.title or username,
@@ -167,9 +168,11 @@ async def cmd_task_add(message: Message, container: Container) -> None:
         energy_bonus=energy,
         created_by=message.from_user.id,
     )
+    # Тот же текст, что и в мини-аппе: если задание уже было, админ должен
+    # понимать, что он его перезаписал, а не завёл второе.
     await message.answer(
-        '✅ <b>Задание добавлено</b>\n\n'
-        f'Канал: <b>{html.escape(task["title"])}</b> · @{task["username"]}\n'
+        ('✅ <b>Задание обновлено</b>\n\n' if existing else '✅ <b>Задание добавлено</b>\n\n')
+        + f'Канал: <b>{html.escape(task["title"])}</b> · @{task["username"]}\n'
         f'Награда: <b>{format_number(task["reward_coins"])} SenseiCoin</b>\n'
         f'Энергия: <b>+{task["energy_bonus"]}%</b>\n\n'
         f'Открыть: {task["url"]}',
