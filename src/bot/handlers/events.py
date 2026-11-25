@@ -108,10 +108,20 @@ async def on_user_join(event: ChatMemberUpdated, container: Container):
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_MEMBER >> IS_NOT_MEMBER))
 async def on_user_leave(event: ChatMemberUpdated, container: Container):
-    """Обработка выхода участника (автобан)."""
+    """Обработка выхода участника (автобан).
+
+    Автобан — только за выход из чата, где идёт общение. Отписка от канала
+    задания ничего не нарушает: игрок как раз выполнил условие «подпишись»,
+    и вправе отписаться. Раньше канал не проверялся, поэтому отписка
+    банила игрока и конфисковывала баланс — а /mycoin при этом продолжал
+    показывать счёт, потому что бан читают не все команды.
+    """
     user = event.old_chat_member.user
 
     if user.is_bot:
+        return
+
+    if event.chat.type != "supergroup":
         return
 
     # Автобан и конфискация

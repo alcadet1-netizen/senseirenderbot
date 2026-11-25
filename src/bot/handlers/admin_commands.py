@@ -443,6 +443,26 @@ async def cmd_amnistia(message: Message, container: Container):
     )
 
 
+@router.message(Command("unban_channels"))
+async def cmd_unban_channels(message: Message, container: Container):
+    """Снять баны, ошибочно выданные за отписку от канала задания.
+
+    Отдельная команда, а не /amnistia: здесь возвращаются и конфискованные
+    Coins, и трогаются только автобаны за выход из чата.
+    """
+    username = message.from_user.username
+    mention = f"@{username}" if username else f"<b>{html.escape(message.from_user.full_name)}</b>"
+
+    result = await container.moderation_service.restore_channel_unsubscribe_bans()
+    lines = [f"{mention}\n", "✅ <b>Баны за отписку от канала сняты</b>",
+             f"Разбанено: <b>{result.get('restored', 0)}</b>",
+             f"Возвращено Coins: <b>{result.get('coins_returned', 0):,.2f}</b>"]
+    if result.get('skipped'):
+        lines.append(f"Пропущено: <b>{result['skipped']}</b> — в банке не хватило "
+                     f"денег на возврат, игрок оставлен в бане.")
+    await message.answer("\n".join(lines), parse_mode="HTML")
+
+
 @router.message(Command("addxp"))
 async def cmd_add_xp(message: Message, container: Container):
     """Выдать XP пользователю."""
