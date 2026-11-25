@@ -14,6 +14,10 @@ from src.services.bank_ledger import BankLedger
 
 logger = logging.getLogger(__name__)
 
+# Причина автобана за выход из чата. По ней же находится бан, ошибочно
+# выданный за отписку от канала, поэтому строка вынесена в константу.
+AUTO_BAN_REASON = "Выход из чата (AutoBan)"
+
 
 class ModerationService:
     """Сервис для модерации пользователей."""
@@ -34,7 +38,7 @@ class ModerationService:
         """Обработать выход пользователя (автобан и конфискация)."""
         return await self.ban_user(
             user_id=user_id,
-            reason="Выход из чата (AutoBan)",
+            reason=AUTO_BAN_REASON,
             confiscate_coins=True
         )
 
@@ -158,6 +162,61 @@ class ModerationService:
             }
             for u in users
         ]
+
+    async def restore_channel_unsubscribe_bans(self) -> dict:
+        """Снять баны, выданные за отписку от канала задания.
+
+        Пока ``on_user_leave`` не проверял тип чата, отписка от канала
+        вызывала тот же автобан с конфискацией. Возвращаем только тех, чья
+        причина бана — автобан за выход из чата, и только если игрок после
+        бана ничего не заработал (иначе вернуть конфискованное неоткуда).
+        """
+        restored, skipped, amount_total = 0, 0, 0.0
+        cursor = self.users.find({'is_banned': True,
+                                  'ban_reason': AUTO_BAN_REASON})
+        async for user in cursor:
+            user_id = user.get('id')
+            if user_id is None:
+                continue
+            # Сколько было конфисковано, видно по единственной записи журнала.
+            record = await self.transactions.find_one(
+                {'user_id': user_id, 'tx_type': 'ban_confiscation'},
+                sort=[('created_at', -1)])
+            amount = abs(float((record or {}).get('coins_change', 0) or 0))
+            if amount > 0:
+                refunded = await self._refund_from_bank(user_id, amount)
+                if not refunded:
+                    skipped += 1
+                    continue
+                amount_total += amount
+            await self.users.update_one(
+                {'id': user_id, 'is_banned': True},
+                {'$set': {'is_banned': False, 'ban_reason': None,
+                          'updated_at': datetime.now(timezone.utc)}})
+            restored += 1
+        logger.info('Restored %s channel-unsubscribe bans (%.2f coins), skipped %s',
+                    restored, amount_total, skipped)
+        return {'success': True, 'restored': restored, 'skipped': skipped,
+                'coins_returned': amount_total}
+
+    async def _refund_from_bank(self, user_id: int, amount: float) -> bool:
+        """Вернуть конфискованное из банка. Без денег в банке — не банимся."""
+        if amount <= 0:
+            return True
+        if not await self.ledger.try_withdraw(amount):
+            logger.warning('Cannot refund %.2f to user %s: bank is short', amount, user_id)
+            return False
+        credited = await self.users.update_one(
+            {'id': user_id}, {'$inc': {'coins': amount}})
+        if getattr(credited, 'matched_count', 1) != 1:
+            await self.ledger.deposit(amount)
+            return False
+        await self.transactions.insert_one({
+            'user_id': user_id, 'tx_type': 'ban_refund', 'coins_change': amount,
+            'description': 'Autoban refund: unsubscribing from a task channel is allowed',
+            'created_at': datetime.now(timezone.utc),
+        })
+        return True
 
     async def unban_all_users(self) -> dict:
         """Амнистия: разбанить всех пользователей."""
