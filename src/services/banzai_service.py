@@ -1057,7 +1057,10 @@ class BanzaiService:
             # Распределяем награды
             try:
                 # 1. Билет в лотерею
-                await self.lottery_service.add_ticket(int(winner_id), source="banzai_win")
+                ticket_result = await self.lottery_service.add_ticket(int(winner_id), source="banzai_win")
+                ticket_confirmed = bool(ticket_result and ticket_result.get('success'))
+                if not ticket_confirmed:
+                    logger.warning('Banzai ticket requires verification chat=%s user=%s', chat_id, winner_id)
 
                 # 2. Монеты — из SenseiBank, не из эмиссии. process_game_win
                 # резервирует новые Coin под общий лимит эмиссии; для призовых
@@ -1105,7 +1108,8 @@ class BanzaiService:
                         Visuals.frame_line_left("Ты выдержал тишину до конца", w, "center"),
                         Visuals.frame_separator_left(w),
                         Visuals.frame_line_left("🎁 Трофеи:", w),
-                        Visuals.frame_line_left("🎫 1 Билет", w),
+                        Visuals.frame_line_left("🎫 1 Билет" if ticket_confirmed else
+                                                "🎫 Билет: проверка", w),
                         Visuals.frame_line_left(
                             f"💰 +{BANZAI_PRIZE_COINS:,.0f} Coins"
                             + ("" if payout.get("success") else " (банк пуст)"), w),

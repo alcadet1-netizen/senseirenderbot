@@ -323,3 +323,18 @@ async def test_message_reward_race_never_overdraws_bank_and_records_actual_payou
     assert db.bank.docs['single']['coins'] == 0
     assert db.users.docs[7]['coins'] + db.users.docs[8]['coins'] == 110
     assert sum(tx['coins_change'] for tx in db.transactions.docs.values()) == 10
+
+
+@pytest.mark.asyncio
+async def test_message_milestone_creates_active_ticket_and_returns_its_code():
+    svc, db = economy([{'_id': 'single', 'coins': 100, 'total_emitted': 1000}], user_coins=100)
+    db.users.docs[7]['messages_count'] = 299
+    result = await svc.process_message_reward(7)
+    ticket = next(iter(db.tickets.docs.values()))
+    assert result['messages_count'] == 300
+    assert ticket['burned'] is False and ticket['is_burned'] is False
+    assert ticket['source'] == 'message'
+    assert result['ticket_created'] == ticket['code']
+    assert result['ticket_created']
+    assert (await svc.process_message_reward(7))['ticket_created'] is None
+    assert len(db.tickets.docs) == 1

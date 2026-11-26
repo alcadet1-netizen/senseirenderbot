@@ -7,6 +7,8 @@ import string
 from datetime import datetime, timezone
 from typing import List, Optional
 from motor.motor_asyncio import AsyncIOMotorCollection
+from src.core.constants import TICKET_WORDS
+from src.domain.tickets import active_ticket_filter
 
 
 class TicketRepository:
@@ -19,29 +21,24 @@ class TicketRepository:
         """Генерация уникального кода билета."""
         prefix = "".join(random.choices(string.ascii_uppercase, k=3))
         number = "".join(random.choices(string.digits, k=4))
-        # Note: TICKET_WORDS is imported from src.core.constants, but we don't have it here.
-        # We'll assume it's available via a global import or we can pass it in.
-        # For now, we'll use a placeholder word. In reality, we should import TICKET_WORDS.
-        # Since we cannot import from src.core.constants in this file without causing a circular import?
-        # Actually, we can. Let's do it at the top of the file.
-        # We'll add: from src.core.constants import TICKET_WORDS
-        # But note: we are in the process of converting the file, so we can add the import.
-        # We'll do it below.
-        word = random.choice(TICKET_WORDS)  # This will work if we import TICKET_WORDS
+        word = random.choice(TICKET_WORDS)
         return f"{prefix}-{number}-{word}"
 
     async def create(self, user_id: int) -> dict:
         """Создать новый билет."""
         for _ in range(10):
             code = self._generate_code()
-            existing = await self.collection.find_one({"code": code, "is_burned": False})
+            existing = await self.collection.find_one(active_ticket_filter(code=code))
             if not existing:
                 break
+        else:
+            raise RuntimeError('Unable to generate a unique active ticket code')
 
         ticket = {
             "user_id": user_id,
             "code": code,
             "is_burned": False,
+            "burned": False,
             "burned_at": None,
             "burn_reason": None,
             "created_at": datetime.now(timezone.utc),
@@ -57,16 +54,13 @@ class TicketRepository:
         """Получить билеты пользователя."""
         match = {"user_id": user_id}
         if not include_burned:
-            match["is_burned"] = False
+            match.update(active_ticket_filter())
         cursor = self.collection.find(match).sort("created_at", -1)
         return await cursor.to_list(length=None)
 
     async def count_user_tickets(self, user_id: int) -> int:
         """Подсчитать активные билеты пользователя."""
-        return await self.collection.count_documents({
-            "user_id": user_id,
-            "is_burned": False
-        })
+        return await self.collection.count_documents(active_ticket_filter(user_id=user_id))
 
     async def burn_ticket(
         self,
@@ -75,13 +69,11 @@ class TicketRepository:
     ) -> bool:
         """Сжечь билет."""
         result = await self.collection.update_one(
-            {
-                "_id": ticket_id,
-                "is_burned": False
-            },
+            active_ticket_filter(_id=ticket_id),
             {
                 "$set": {
                     "is_burned": True,
+                    "burned": True,
                     "burned_at": datetime.now(timezone.utc),
                     "burn_reason": reason
                 }
@@ -96,13 +88,11 @@ class TicketRepository:
     ) -> Optional[dict]:
         """Сжечь один билет пользователя (FIFO)."""
         ticket = await self.collection.find_one_and_update(
-            {
-                "user_id": user_id,
-                "is_burned": False
-            },
+            active_ticket_filter(user_id=user_id),
             {
                 "$set": {
                     "is_burned": True,
+                    "burned": True,
                     "burned_at": datetime.now(timezone.utc),
                     "burn_reason": reason
                 }
@@ -116,7 +106,7 @@ class TicketRepository:
         """Получить случайные билеты для лотереи."""
         # Use aggregation with $sample for random selection
         pipeline = [
-            {"$match": {"is_burned": False}},
+            {"$match": active_ticket_filter()},
             {"$sample": {"size": count}}
         ]
         cursor = self.collection.aggregate(pipeline)
@@ -125,10 +115,11 @@ class TicketRepository:
     async def burn_all_tickets(self, reason: str = "season_reset") -> int:
         """Сжечь все билеты (новый сезон)."""
         result = await self.collection.update_many(
-            {"is_burned": False},
+            active_ticket_filter(),
             {
                 "$set": {
                     "is_burned": True,
+                    "burned": True,
                     "burned_at": datetime.now(timezone.utc),
                     "burn_reason": reason
                 }
@@ -139,10 +130,11 @@ class TicketRepository:
     async def burn_all_user_tickets(self, user_id: int, reason: str = "admin_burn") -> int:
         """Сжечь все билеты конкретного пользователя."""
         result = await self.collection.update_many(
-            {"user_id": user_id, "is_burned": False},
+            active_ticket_filter(user_id=user_id),
             {
                 "$set": {
                     "is_burned": True,
+                    "burned": True,
                     "burned_at": datetime.now(timezone.utc),
                     "burn_reason": reason
                 }
@@ -152,7 +144,7 @@ class TicketRepository:
 
     async def get_total_active_tickets(self) -> int:
         """Получить общее количество активных билетов."""
-        return await self.collection.count_documents({"is_burned": False})
+        return await self.collection.count_documents(active_ticket_filter())
 
     async def get_top_by_tickets(self, limit: int = 10) -> List[dict]:
         """Топ по количеству билетов."""
@@ -168,7 +160,7 @@ class TicketRepository:
         # We'll update the method's docstring accordingly.
 
         pipeline = [
-            {"$match": {"is_burned": False}},
+            {"$match": active_ticket_filter()},
             {"$group": {
                 "_id": "$user_id",
                 "ticket_count": {"$sum": 1}
@@ -195,7 +187,7 @@ class TicketRepository:
         """Пагинированный список держателей активных билетов."""
         # First, get the total number of distinct users with at least one active ticket.
         total_pipeline = [
-            {"$match": {"is_burned": False}},
+            {"$match": active_ticket_filter()},
             {"$group": {
                 "_id": "$user_id"
             }},
@@ -207,7 +199,7 @@ class TicketRepository:
 
         # Then, get the paginated list of users with their ticket counts.
         pipeline = [
-            {"$match": {"is_burned": False}},
+            {"$match": active_ticket_filter()},
             {"$group": {
                 "_id": "$user_id",
                 "ticket_count": {"$sum": 1}

@@ -1,11 +1,11 @@
 """
 📊 Сервис статистики.
 """
-
 import asyncio
 from typing import Dict, List, Optional
 from datetime import datetime, timezone
 
+from src.domain.tickets import active_ticket_filter
 from src.core.config import settings
 from src.core.constants import TOTAL_EMISSION_CAP
 from src.services.emission_service import EmissionService
@@ -104,7 +104,7 @@ class StatsService:
         lifetime = float(current_counter + burn_counter + reserve) if current_counter is not None and burn_counter is not None and reserve is not None else None
         remaining = max(0.0, cap - lifetime) if lifetime is not None else None
         percent = min(100.0, lifetime / cap * 100.0) if lifetime is not None and cap else None
-        tickets = await self.tickets.count_documents({'burned': False}, session=session)
+        tickets = await self.tickets.count_documents(active_ticket_filter(), session=session)
         rows = await self.transactions.aggregate([{'$group': {
             '_id': '$tx_type', 'count': {'$sum': 1},
             'total_amount': {'$sum': '$coins_change'}}}], session=session).to_list(length=None)

@@ -5,6 +5,7 @@
 from pymongo.errors import DuplicateKeyError
 from typing import List, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from src.domain.tickets import active_ticket_filter
 from src.core.exceptions import UserNotFoundError
 from src.infra.mongo.client import MongoClient
 from src.services.level_service import LevelService
@@ -85,7 +86,7 @@ class UserService:
                 return None
 
             # Count tickets (only non-burned)
-            tickets_count = await self.tickets.count_documents({"user_id": user_id, "burned": False})
+            tickets_count = await self.tickets.count_documents(active_ticket_filter(user_id=user_id))
             # Count achievements
             achievements_count = await self.achievements.count_documents({"user_id": user_id})
 
@@ -288,9 +289,9 @@ class UserService:
         try:
             # We'll need to aggregate. Only count non-burned (active) tickets.
             pipeline = [
-                {"$match": {"burned": False}},
+                {"$match": active_ticket_filter()},
                 {"$group": {"_id": "$user_id", "count": {"$sum": 1}}},
-                {"$sort": {"count": -1}},
+                {"$sort": {"count": -1, "_id": 1}},
                 {"$limit": limit},
                 {"$lookup": {
                     "from": "users",
@@ -319,7 +320,7 @@ class UserService:
         try:
             # First, get the count of distinct users with active tickets for pagination
             total_pipeline = [
-                {"$match": {"burned": False}},
+                {"$match": active_ticket_filter()},
                 {"$group": {"_id": "$user_id"}},
                 {"$count": "total"}
             ]
@@ -329,9 +330,9 @@ class UserService:
 
             # Then get the paginated list of users with their active ticket counts
             pipeline = [
-                {"$match": {"burned": False}},
+                {"$match": active_ticket_filter()},
                 {"$group": {"_id": "$user_id", "ticket_count": {"$sum": 1}}},
-                {"$sort": {"ticket_count": -1}},  # Sort by ticket count descending
+                {"$sort": {"ticket_count": -1, "_id": 1}},  # Stable pagination for ties
                 {"$skip": page * page_size},
                 {"$limit": page_size},
                 {"$lookup": {
