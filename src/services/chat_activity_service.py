@@ -112,9 +112,11 @@ class ChatActivityService:
         threshold_time = current_time - self._inactivity_threshold
 
         # Find chats that have been inactive for too long
-        inactive_chats_cursor = self.chat_activities.find({
-            "last_activity": {"$lt": threshold_time}
-        })
+        query = {"last_activity": {"$lt": threshold_time}}
+        target = getattr(bot, 'game_chat_id', None)
+        if target is not None:
+            query['chat_id'] = target
+        inactive_chats_cursor = self.chat_activities.find(query)
         inactive_chats = await inactive_chats_cursor.to_list(length=None)
 
         for chat_doc in inactive_chats:

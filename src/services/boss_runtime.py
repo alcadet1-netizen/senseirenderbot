@@ -18,6 +18,10 @@ async def refresh_boss(bot, container, force=False):
             state = await service.get_state()
             if not state:
                 return
+            target = getattr(bot, 'game_chat_id', None)
+            if target is not None and state.get('chat_id') != target:
+                # Do not settle an old boss in a no-longer-permitted group.
+                return
             due = state.get('deadline') and state['deadline'] <= time.time()
             if state.get('settlement_kind') or (due and not state.get('is_dead') and not state.get('is_expired')):
                 state = await settle_boss(container.mongo_client)

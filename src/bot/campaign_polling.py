@@ -5,16 +5,21 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def install_campaign_admission(dispatcher, service, join_watch=None):
+def install_campaign_admission(dispatcher, service, join_watch=None, *, game_chat_id=None):
     listen = dispatcher._listen_updates
 
     async def durable_updates(*args, **kwargs):
         async for update in listen(*args, **kwargs):
             while True:
                 try:
-                    await service.capture(update)
+                    # Only the permitted discussion may admit campaign input.
+                    # Source-channel posts remain available when it is linked.
+                    if game_chat_id is None or getattr(service, 'discussion_id', None) == game_chat_id:
+                        await service.capture(update)
                     if join_watch is not None:
-                        await join_watch.capture(update)
+                        request = update.chat_join_request
+                        if not request or game_chat_id is None or request.chat.id == game_chat_id:
+                            await join_watch.capture(update)
                     break
                 except asyncio.CancelledError:
                     raise

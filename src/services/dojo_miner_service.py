@@ -10,7 +10,7 @@ import logging
 import time
 from uuid import uuid4
 from datetime import datetime, timezone
-from collections import defaultdict
+from weakref import WeakValueDictionary
 
 from src.services.hedgehog_service import GameError
 from src.services.referral_economy import RATES, ancestors, transaction
@@ -32,6 +32,9 @@ SPEED_BOOST_PERCENT = 50
 SPEED_BOOST_BONUS = 0.5
 MINING_REWARD = int(BASE_RATE * CYCLE_HOURS)  # 3h at the full base rate; legacy fallback
 AUTOCOLLECT_INTERVAL = 60
+# Bound both credit rate and the number of stored events per three-hour cycle.
+CIRCLE_MIN_INTERVAL = 2.0
+CIRCLE_MAX_EVENTS = 360
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +65,16 @@ class DojoMinerService:
         self.tasks = tasks
         self.miners = mongo.database.dojo_miners
         self.users = mongo.database.users
-        self._locks = defaultdict(asyncio.Lock)
+        # Only active/waiting operations retain locks; idle users must not grow
+        # process memory indefinitely on a small Render instance.
+        self._locks = WeakValueDictionary()
+
+    def _user_lock(self, user_id: int) -> asyncio.Lock:
+        lock = self._locks.get(user_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._locks[user_id] = lock
+        return lock
 
     async def ensure_indexes(self) -> None:
         await self.users.create_index('dojo_auto_collect')
@@ -140,7 +152,7 @@ class DojoMinerService:
         """
         if type(user_id) is not int or user_id <= 0 or not request_id:
             raise GameError('Неверный запрос пополнения.')
-        async with self._locks[user_id]:
+        async with self._user_lock(user_id):
             for _ in range(8):
                 now = time.time()
                 user = await self.users.find_one({'id': user_id})
@@ -156,6 +168,15 @@ class DojoMinerService:
                 finish = float(doc.get('finish_at') or 0)
                 if doc.get('collected') or now >= finish:
                     raise GameError('Майнинг не запущен.')
+                # Old cycles are never truncated: retain their reward history and
+                # idempotency keys, but do not append beyond the new bound.
+                if len(events) >= CIRCLE_MAX_EVENTS:
+                    return {'added': 0, 'replayed': False, 'limit_reached': True}
+                if events:
+                    last = max(float(item.get('at', 0)) for item in events)
+                    retry = CIRCLE_MIN_INTERVAL - (now - last)
+                    if retry > 0:
+                        return {'added': 0, 'replayed': False, 'retry_after': retry}
                 energy, _ = self._energy_timeline(doc, now)
                 cap = BASE_ENERGY
                 added = min(1.0, max(0.0, cap - energy))
@@ -280,8 +301,10 @@ class DojoMinerService:
             'energy_refill_amount': ENERGY_REFILL_AMOUNT,
             'energy_refill_available': phase == 'mining' and energy <= 0,
             'circle_energy': circle_energy,
-            'circle_available': phase == 'mining' and circle_energy < BASE_ENERGY,
+            'circle_available': phase == 'mining' and circle_energy < BASE_ENERGY and len(doc.get('circle_energy_events') or []) < CIRCLE_MAX_EVENTS,
+            'circle_limit_reached': phase == 'mining' and len(doc.get('circle_energy_events') or []) >= CIRCLE_MAX_EVENTS,
             'circle_energy_limit': BASE_ENERGY,
+            'circle_min_interval': CIRCLE_MIN_INTERVAL,
             'base_rate': base_rate,
             'current_rate': current_rate,
             'pickaxe_level': profile['pickaxe_level'],
@@ -307,7 +330,7 @@ class DojoMinerService:
         }
 
     async def start(self, user_id: int) -> dict:
-        async with self._locks[user_id]:
+        async with self._user_lock(user_id):
             now = time.time()
             doc = await self.miners.find_one({'_id': user_id})
             if doc and not doc.get('collected'):
@@ -391,7 +414,7 @@ class DojoMinerService:
 
     async def collect(self, user_id: int, *, automatic=False) -> dict:
         """Commit the cycle, bank debit, player credit and receipt together."""
-        async with self._locks[user_id]:
+        async with self._user_lock(user_id):
             now = time.time()
 
             async def work(session):
@@ -476,7 +499,7 @@ class DojoMinerService:
         """Add purchased energy to the running cycle, once per Telegram charge."""
         if not charge or type(user_id) is not int or user_id <= 0:
             return False
-        async with self._locks[user_id]:
+        async with self._user_lock(user_id):
             for _ in range(8):
                 now = time.time()
                 doc = await self.miners.find_one({'_id': user_id})
@@ -532,7 +555,7 @@ class DojoMinerService:
         if type(user_id) is not int or user_id <= 0 or amount <= 0:
             return False
         key = str(key or '')
-        async with self._locks[user_id]:
+        async with self._user_lock(user_id):
             for _ in range(4):
                 now = time.time()
                 doc = await self.miners.find_one({'_id': user_id})
@@ -597,7 +620,7 @@ class DojoMinerService:
         if not charge or type(user_id) is not int or user_id <= 0:
             return False
         charge = str(charge)
-        async with self._locks[user_id]:
+        async with self._user_lock(user_id):
             async def apply(session):
                 # The boost entitlement and its cycle reward must commit together.
                 # Otherwise a process crash or a concurrent circle/refill update

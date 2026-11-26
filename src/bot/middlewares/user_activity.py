@@ -861,7 +861,8 @@ class EnhancedUserActivityMiddleware(BaseMiddleware):
         if not isinstance(message, Message):
             return False
 
-        if not message.from_user:
+        if (not message.from_user or message.from_user.is_bot or
+                message.from_user.id == 777000 or message.sender_chat or message.is_automatic_forward):
             return False
 
         # Join updates are handled by events.py for the actual new members.

@@ -417,6 +417,10 @@ async def process_set_chat(message: Message, state: FSMContext):
         await message.answer(f"{Visuals.cross()} Не удалось определить чат. Перешлите сообщение из чата или введите его ID.")
         return
 
+    target = getattr(message.bot, 'game_chat_id', None)
+    if target is not None and target_chat_id != target:
+        await message.answer('БАНЗАЙ доступен только в @airchatton.')
+        return
     await state.update_data(target_chat_id=target_chat_id, target_chat_title=target_chat_title)
     await state.set_state(BanzaiStates.settings)
     data = await state.get_data()
@@ -483,6 +487,10 @@ async def cb_start(callback: CallbackQuery, state: FSMContext, container: Contai
         await callback.answer(f"{Visuals.cross()} Чат не выбран и MAIN_CHAT_ID не настроен!", show_alert=True)
         return
 
+    target = getattr(callback.bot, 'game_chat_id', None)
+    if target is not None and chat_id != target:
+        await callback.answer('БАНЗАЙ доступен только в @airchatton.', show_alert=True)
+        return
     service = container.banzai_service
 
     try:

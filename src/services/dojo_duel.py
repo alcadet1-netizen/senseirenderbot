@@ -52,9 +52,9 @@ async def arena(container, uid):
 
 
 async def chat_ids(container, uid):
-    rows = await container.mongo_client.database.chat_user_activities.find(
-        {'user_id': uid, 'chat_id': {'$lt': 0}}, {'chat_id': 1}).sort('last_activity', -1).limit(30).to_list(30)
-    return {i for i in [container.settings.main_chat_id, *(r['chat_id'] for r in rows)] if i < 0}
+    # Historical activity in other groups must not create new invitations there.
+    chat = container.settings.main_chat_id
+    return {chat} if chat < 0 else set()
 
 
 async def chat_choices(container, uid):
@@ -119,6 +119,10 @@ async def open_invitation(container, uid, owner, token, *, accept=False):
     offer = await db.dojo_duel_offers.find_one(key)
     if not offer or owner == uid:
         return await arena(container, uid)
+    target = getattr(container.bot, 'game_chat_id', None)
+    if target is not None and ((offer.get('chat', 0) < 0 and offer['chat'] != target)
+                               or offer.get('inline_arena')):
+        raise GameError('Приглашение доступно только в @airchatton или личке.')
     if offer.get('rival') not in (None, uid):
         raise GameError('Это персональный вызов другому игроку.')
     if offer['bet'] < 300:
@@ -214,8 +218,12 @@ async def _publish(container, uid, name, bet, chat=None, rematch=None, recipient
         chat = rival = profile['id']
     elif type(chat) is not int or chat not in await chat_ids(container, uid):
         raise GameError('Выбери свою игровую группу.')
+    if isinstance(chat, int) and chat < 0 and chat != container.settings.main_chat_id:
+        raise GameError('Дуэль доступна только в @airchatton.')
     bot = container.bot
     inline_arena = duel.inline_arena if rematch is not None else None
+    if inline_arena and getattr(bot, 'game_chat_id', None) is not None:
+        raise GameError('Inline-реванш недоступен. Создай новый вызов в @airchatton.')
     if inline_arena:
         title = 'Реванш'
     elif chat > 0:

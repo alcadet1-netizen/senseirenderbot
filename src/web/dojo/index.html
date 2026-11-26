@@ -1000,7 +1000,7 @@
       <dialog id="vs-dialog" aria-labelledby="vs-title">
         <div class="vs-stage">
           <div class="vs-scene" aria-hidden="true">
-            <img class="vs-bg" src="/miniapp/dojo/assets/dojo-temple-bg.jpg" alt="" onerror="this.onerror=null;this.src='/miniapp/dojo/assets/sticker-hero-vs.jpg'" />
+            <img class="vs-bg" data-src="/miniapp/dojo/assets/dojo-temple-bg.jpg" alt="" decoding="async" />
             <div class="vs-moon" aria-hidden="true"></div>
             <div class="vs-temple-silhouette" aria-hidden="true"></div>
             <div class="vs-glow"></div>
@@ -1022,10 +1022,10 @@
             <i style="left:94%;--w:9px;--d:14.5s;--dl:-3.1s;--o:.7"></i>
           </div>
           <header class="vs-top">
-            <div class="vs-title-block"><small>ДОДЗЁ / АРЕНА</small><h2 id="vs-title"><span class="vs-title-sensei">SENSEI</span> <span class="vs-title-kanji" aria-hidden="true">VS</span> <span class="vs-title-ninja">NINJA</span></h2></div>
+            <div class="vs-title-block"><small>DOJO <span aria-hidden="true">/</span> ARENA</small><h2 id="vs-title" data-i18n="Арена дуэлей">Арена дуэлей</h2></div>
             <button id="vs-close" aria-label="Закрыть">×</button>
           </header>
-          <div id="vs-score">
+          <div id="vs-score" aria-label="Счёт бойцов" data-i18n-aria="Счёт бойцов">
             <b id="vs-left">Сэнсэй</b>
             <i class="vs-emblem" aria-hidden="true">VS</i>
             <b id="vs-right">Ниндзя</b>
@@ -1034,7 +1034,7 @@
           <div class="vs-vignette" aria-hidden="true"></div>
           <div class="vs-speedlines" aria-hidden="true"></div>
           <div class="vs-hitflash" aria-hidden="true"></div>
-          <canvas class="vs-trail-canvas" width="640" height="360" aria-hidden="true"></canvas>
+          <canvas class="vs-trail-canvas" width="1" height="1" aria-hidden="true"></canvas>
           <div class="vs-comic" aria-hidden="true">
             <div class="vs-fighter left" data-stance="guard"><span class="vs-trail" aria-hidden="true"></span><span class="vs-eye"></span></div>
             <div class="vs-fighter right" data-stance="guard"><span class="vs-trail" aria-hidden="true"></span><span class="vs-eye"></span></div>
@@ -1053,16 +1053,27 @@
         <div class="vs-console">
           <div id="vs-read" hidden aria-hidden="true"><span>Удар <b id="vs-read-hit"></b></span><span>Уворот <b id="vs-read-dodge"></b></span><strong id="vs-read-result"></strong></div>
           <details id="vs-recap" hidden><summary>Разбор обмена</summary><ol></ol></details>
-          <div id="vs-lobby" hidden><div class="vs-bet-row"><label>Ставка каждого <input id="vs-bet" type="number" min="300" step="100" inputmode="numeric" value="500"> Coin</label><div class="vs-bet-presets" role="group" aria-label="Быстрые ставки"><button type="button" data-bet="300">300</button><button type="button" data-bet="500">500</button><button type="button" data-bet="1000">1000</button><button type="button" data-bet="5000">5000</button></div></div>
-          <button id="vs-send">Отправить дуэль</button><div id="vs-destinations" hidden><button id="vs-dm">В личку</button><button id="vs-group">В группу</button><div id="vs-chat-panel" class="vs-chat-panel" hidden role="group" aria-label="Выбери группу"></div><div id="vs-by-name" hidden><input id="vs-handle" placeholder="@username" aria-label="Имя соперника"><button id="vs-address">Отправить ссылку</button></div></div><small>Вызов на 2 минуты. Ставки резервируются при принятии. Подсказка: <code>/duel @user 500</code> в чате — мгновенно.</small>
-          <div id="vs-rooms" class="vs-rooms">
-            <div class="vs-rooms-head"><strong>Комнаты</strong><small id="vs-rooms-hint">Создай комнату — подключится любой</small></div>
-            <button type="button" id="vs-room-create" class="vs-room-create">Создать комнату · <span id="vs-room-bet">500</span> Coin</button>
-            <small class="vs-rooms-note">Ставка спишется только когда кто-то войдёт. Комната живёт 5 минут.</small>
-            <div id="vs-room-list" class="vs-room-list" role="list" aria-live="polite"></div>
+          <div id="vs-lobby" hidden>
+            <div class="vs-section-heading"><div><span class="vs-eyebrow" data-i18n="01 / ПОДГОТОВКА">01 / ПОДГОТОВКА</span><h3 data-i18n="Выбери ставку">Выбери ставку</h3></div><span class="vs-heading-mark" aria-hidden="true">VS</span></div>
+            <div class="vs-bet-row">
+              <label class="vs-bet-field" for="vs-bet"><span data-i18n="Ставка каждого">Ставка каждого</span><span class="vs-bet-value"><input id="vs-bet" type="number" min="300" step="100" inputmode="numeric" value="500"><b>COIN</b></span></label>
+              <div class="vs-bet-presets" role="group" aria-label="Быстрые ставки" data-i18n-aria="Быстрые ставки"><button type="button" data-bet="300" aria-pressed="false">300</button><button type="button" data-bet="500" class="is-active" aria-pressed="true">500</button><button type="button" data-bet="1000" aria-pressed="false">1 000</button><button type="button" data-bet="5000" aria-pressed="false">5 000</button></div>
+            </div>
+            <div class="vs-challenge">
+              <div class="vs-challenge-copy"><strong data-i18n="Вызвать соперника">Вызвать соперника</strong><small data-i18n="Лично или в игровом чате · 2 минуты">Лично или в игровом чате · 2 минуты</small></div>
+              <button type="button" id="vs-send"><span data-i18n="Отправить вызов">Отправить вызов</span><span aria-hidden="true">↗</span></button>
+              <div id="vs-destinations" hidden><button type="button" id="vs-dm">В личку</button><button type="button" id="vs-group">В группу</button><div id="vs-chat-panel" class="vs-chat-panel" hidden role="group" aria-label="Выбери группу"></div><div id="vs-by-name" hidden><input id="vs-handle" placeholder="@username" aria-label="Имя соперника"><button type="button" id="vs-address">Отправить ссылку</button></div></div>
+              <small class="vs-challenge-note" data-i18n="Ставки резервируются при принятии вызова.">Ставки резервируются при принятии вызова.</small>
+            </div>
+            <div id="vs-rooms" class="vs-rooms">
+              <div class="vs-rooms-head"><div><span class="vs-eyebrow" data-i18n="02 / ОТКРЫТАЯ ИГРА">02 / ОТКРЫТАЯ ИГРА</span><strong data-i18n="Комнаты">Комнаты</strong></div><small id="vs-rooms-hint">Создай комнату — подключится любой</small></div>
+              <div id="vs-room-list" class="vs-room-list" role="list" aria-live="polite"></div>
+              <button type="button" id="vs-room-create" class="vs-room-create"><span data-i18n="Создать комнату">Создать комнату</span><span class="vs-create-stake"><span id="vs-room-bet">500</span> Coin <b aria-hidden="true">＋</b></span></button>
+              <small class="vs-rooms-note">Ставка спишется только когда кто-то войдёт. Комната живёт 5 минут.</small>
+            </div>
           </div>
-        </div>
           <button id="vs-accept" hidden>Принять вызов</button><button id="vs-rematch" hidden>Реванш · та же ставка</button><small id="vs-ready" hidden></small><div id="vs-controls" hidden>
+            <div class="vs-fight-heading"><span class="vs-eyebrow" data-i18n="ТВОЙ ХОД">ТВОЙ ХОД</span><strong data-i18n="Выбери действия">Выбери действия</strong><small data-i18n="Оба выбора скрыты до обмена">Оба выбора скрыты до обмена</small></div>
             <div class="vs-move-group vs-move-attack">
               <span class="vs-move-label"><svg class="vs-move-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 14l8.5-8.5M11 2l3 3M9.5 3.5l3 3M2 14l1.5-1.5" /></svg>Удар</span>
               <div class="vs-move-row">

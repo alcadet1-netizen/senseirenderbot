@@ -490,3 +490,25 @@ async def test_custom_fly_caption_does_not_change_hedgehog_default(tl):
     assert client.call_args.args[0].message=='Sensei FLY LAB'
     await transport.send_widget(7,'<html>OK</html>')
     assert client.call_args.args[0].message=='🦔 Ёжик · ежедневный бонус'
+
+
+@pytest.mark.asyncio
+async def test_mtproto_widget_scope_blocks_foreign_group_and_unverifiable_inline(tl):
+    from src.bot.native_widgets import HedgehogWidgetMiddleware
+    client = connected_client()
+    target = tl.utils.get_peer_id(tl.types.PeerChannel(42))
+    container = SimpleNamespace(settings=SimpleNamespace(main_chat_id=target),
+                                bot=SimpleNamespace(game_chat_id=target))
+    transport = MtprotoWidgets(client, container, tl.types, tl.functions, tl.utils)
+    def query(channel):
+        return tl.types.UpdateBotWidgetQuery(
+            query_id=42, query_type=tl.types.WidgetQueryTypeData(), user_id=7,
+            peer=tl.types.PeerChannel(channel), msg_id=55, chat_instance=123,
+            chat_type='supergroup', data=b'hg:s:token')
+    with patch.object(HedgehogWidgetMiddleware, '__call__', new=AsyncMock()) as dispatch:
+        await transport.on_update(query(99))
+        dispatch.assert_not_awaited()
+        await transport.on_update(query(42))
+        dispatch.assert_awaited_once()
+    with pytest.raises(MtprotoWidgetError, match='OUTSIDE'):
+        await transport.send_widget(tl.utils.get_peer_id(tl.types.PeerChannel(99)), 'html')

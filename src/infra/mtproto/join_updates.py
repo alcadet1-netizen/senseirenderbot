@@ -25,6 +25,9 @@ def participant_is_member(participant, types):
 async def handle_channel_participant(update, transport):
     types, container = transport.types, transport.container
     chat_id = transport.utils.get_peer_id(types.PeerChannel(update.channel_id))
+    target = getattr(container.bot, 'game_chat_id', None)
+    if target is not None and chat_id != target:
+        return
     if not container.settings.discussion_chat_id or chat_id != container.settings.discussion_chat_id:
         return
     if participant_is_member(update.prev_participant, types) or not participant_is_member(update.new_participant, types):

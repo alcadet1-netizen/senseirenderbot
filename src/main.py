@@ -226,6 +226,10 @@ async def main() -> None:
     # Workflow data reaches inline_query and chosen_inline_result as well as messages.
     dp = create_dispatcher(container)
 
+    # Resolve the public username to its Telegram ID before any background work.
+    from src.bot.chat_scope import resolve_game_chat, GameChatScopeMiddleware
+    await resolve_game_chat(bot, settings)
+
     # Start web server for health checks
     app = web.Application(client_max_size=16 * 1024)
     setup_dojo(app, container)
@@ -246,6 +250,7 @@ async def main() -> None:
     from src.bot.middlewares.group_admin import GroupAdminMiddleware
     # Receipts must reconcile even if the bot lost group privileges.
     dp.update.outer_middleware(DonationPaymentMiddleware(container))
+    dp.update.outer_middleware(GameChatScopeMiddleware(container))
     from src.bot.middlewares.join_events import JoinDiagnosticsMiddleware, JoinServiceMessageMiddleware
     dp.update.outer_middleware(JoinDiagnosticsMiddleware())
     dp.update.outer_middleware(GroupAdminMiddleware())
@@ -322,7 +327,8 @@ async def main() -> None:
         container._join_request_watch = join_watch
         join_watch_task = asyncio.create_task(join_watch.run())
         from src.bot.campaign_polling import install_campaign_admission
-        install_campaign_admission(dp, container.comment_campaign_service, join_watch)
+        install_campaign_admission(dp, container.comment_campaign_service, join_watch,
+                                   game_chat_id=settings.main_chat_id)
 
         async def polling():
             logger.info("🔄 Starting polling...")

@@ -268,7 +268,8 @@ async def test_boost_bought_before_start_is_in_the_ready_reward():
 
 
 @pytest.mark.asyncio
-async def test_circle_energy_rapid_replay_cap_and_new_cycle():
+async def test_circle_energy_rapid_replay_cap_and_new_cycle(monkeypatch):
+    monkeypatch.setattr(miner, 'CIRCLE_MIN_INTERVAL', 0)
     _, dojo, _ = service()
     with patch.object(miner.time, 'time', return_value=1000):
         await dojo.start(7)
@@ -296,7 +297,8 @@ async def test_circle_energy_rapid_replay_cap_and_new_cycle():
 
 
 @pytest.mark.asyncio
-async def test_circle_energy_adds_reward_only_for_remaining_cycle_and_interacts_with_tasks():
+async def test_circle_energy_adds_reward_only_for_remaining_cycle_and_interacts_with_tasks(monkeypatch):
+    monkeypatch.setattr(miner, 'CIRCLE_MIN_INTERVAL', 0)
     _, dojo, _ = service()
     with patch.object(miner.time, 'time', return_value=1000):
         await dojo.start(7)
@@ -473,3 +475,61 @@ async def test_boost_rolls_back_entitlement_if_cycle_write_fails_and_replays_onc
         assert await dojo.apply_speed_boost(7, 'boost-failure')
         assert await dojo.apply_speed_boost(7, 'boost-failure')
         assert (await dojo.state(7))['reward'] == 128
+
+
+@pytest.mark.asyncio
+async def test_circle_rate_limit_replay_and_two_service_instances(monkeypatch):
+    mongo, first, economy = service()
+    second = DojoMinerService(mongo, economy)
+    with patch.object(miner.time, 'time', return_value=1000):
+        await first.start(7)
+    with patch.object(miner.time, 'time', return_value=4600):
+        results = await asyncio.gather(*(s.add_circle_energy(7, 1000, f'concurrent-{i}')
+                                       for i, s in enumerate([first, second])))
+        assert sorted(r['added'] for r in results) == [0, 1]
+        assert any(r.get('retry_after') == 2 for r in results)
+        winner = next(i for i, r in enumerate(results) if r['added'])
+        replay = await second.add_circle_energy(7, 1000, f'concurrent-{winner}')
+        assert replay == {'added': 1, 'replayed': True}
+    with patch.object(miner.time, 'time', return_value=4602):
+        assert (await second.add_circle_energy(7, 1000, 'another-circle'))['added'] == 1
+    assert len(first.miners.docs[7]['circle_energy_events']) == 2
+
+
+@pytest.mark.asyncio
+async def test_circle_event_limit_preserves_legacy_history_and_replays(monkeypatch):
+    monkeypatch.setattr(miner, 'CIRCLE_MAX_EVENTS', 2)
+    _, dojo, _ = service()
+    with patch.object(miner.time, 'time', return_value=1000):
+        await dojo.start(7)
+    for at, key in [(4600, 'circle-one'), (4602, 'circle-two')]:
+        with patch.object(miner.time, 'time', return_value=at):
+            assert (await dojo.add_circle_energy(7, 1000, key))['added'] == 1
+    with patch.object(miner.time, 'time', return_value=4610):
+        before = copy.deepcopy(dojo.miners.docs[7])
+        assert (await dojo.add_circle_energy(7, 1000, 'circle-three'))['limit_reached']
+        assert (await dojo.add_circle_energy(7, 1000, 'circle-one'))['replayed']
+        assert dojo.miners.docs[7] == before
+        assert (await dojo.state(7))['circle_limit_reached']
+
+
+@pytest.mark.asyncio
+async def test_user_locks_are_shared_while_active_and_released_when_idle():
+    import gc
+    _, dojo, _ = service()
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    async def first():
+        async with dojo._user_lock(7):
+            entered.set()
+            await release.wait()
+    task = asyncio.create_task(first())
+    await entered.wait()
+    active_lock = dojo._user_lock(7)
+    assert active_lock.locked()
+    assert dojo._user_lock(7) is active_lock
+    release.set()
+    await task
+    del active_lock, task
+    gc.collect()
+    assert 7 not in dojo._locks

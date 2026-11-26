@@ -181,6 +181,9 @@ class MtprotoWidgets:
             await self.client.disconnect()
 
     async def send_widget(self, chat_id, html, *, allow_queries=True, caption='🦔 Ёжик · ежедневный бонус'):
+        target = getattr(getattr(self.container, 'bot', None), 'game_chat_id', None)
+        if target is not None and (type(chat_id) is not int or (chat_id < 0 and chat_id != target)):
+            raise MtprotoWidgetError('WIDGET_CHAT_OUTSIDE_AIRCHATTON')
         import zlib
         encoded = html.encode('utf-8')
         if '\x00' in html or len(encoded) > 32768 or len(zlib.compress(encoded, 9)) > 4096:
@@ -211,6 +214,10 @@ class MtprotoWidgets:
 
     async def forward_widget(self, source_chat_id, target_chat_id, sent):
         """Forward only the message created by this explicit private send."""
+        target = getattr(getattr(self.container, 'bot', None), 'game_chat_id', None)
+        if target is not None and (type(target_chat_id) is not int or
+                                   (target_chat_id < 0 and target_chat_id != target)):
+            raise MtprotoWidgetError('WIDGET_CHAT_OUTSIDE_AIRCHATTON')
         ids = {u.message.id for u in getattr(sent, 'updates', [])
                if isinstance(u, (self.types.UpdateNewMessage, self.types.UpdateNewChannelMessage))
                and isinstance(u.message, self.types.Message)
@@ -341,7 +348,14 @@ class MtprotoWidgets:
             event = Update.model_validate({'update_id': 0, 'widget_query': query})
             async def unused_handler(event, data):
                 return None
-            await HedgehogWidgetMiddleware(self.container)(unused_handler, event, {'bot': self})
+            # MTProto bypasses the aiogram dispatcher, so apply the same scope.
+            from src.bot.chat_scope import GameChatScopeMiddleware
+            async def dispatch_widget(event, data):
+                return await HedgehogWidgetMiddleware(self.container)(unused_handler, event, data)
+            if getattr(getattr(self.container, 'bot', None), 'game_chat_id', None) is not None:
+                await GameChatScopeMiddleware(self.container)(dispatch_widget, event, {'bot': self})
+            else:
+                await dispatch_widget(event, {'bot': self})
         except Exception:
             # Do not dump the raw event, wallet data, credentials or request HTML.
             logger.error('MTProto widget query failed; retry from the original widget')
