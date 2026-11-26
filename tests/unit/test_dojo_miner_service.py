@@ -18,7 +18,13 @@ class Collection(BaseCollection):
         return await super().find_one(query)
 
     async def update_one(self, query, changes, **kwargs):
+        doc = next((d for d in self.docs.values() if self.matches(d, query)), None)
         value = await self.find_one_and_update(query, changes, **kwargs)
+        if value is not None and doc is not None:
+            for key, item in changes.get('$addToSet', {}).items():
+                values = doc.setdefault(key, [])
+                if item not in values:
+                    values.append(copy.deepcopy(item))
         return SimpleNamespace(matched_count=int(value is not None))
 
     async def insert_one(self, doc, **kwargs):
@@ -452,3 +458,18 @@ async def test_mining_referral_bonuses_reserved_once_and_owner_claim_only():
         reward = db.dojo_ref_rewards.docs[f"{owner}:7"]
         assert reward['pending'] == 0 and reward['lifetime'] == units
     assert db.bank.docs['single']['coins'] == pytest.approx(900.01)
+
+
+@pytest.mark.asyncio
+async def test_boost_rolls_back_entitlement_if_cycle_write_fails_and_replays_once():
+    _, dojo, _ = service()
+    with patch.object(miner.time, 'time', return_value=1000):
+        await dojo.start(7)
+        with patch.object(dojo.miners, 'find_one_and_update', AsyncMock(return_value=None)):
+            with pytest.raises(RuntimeError, match='Boost cycle changed'):
+                await dojo.apply_speed_boost(7, 'boost-failure')
+        assert 'dojo_boost_until' not in dojo.users.docs[7]
+        assert (await dojo.state(7))['reward'] == 90
+        assert await dojo.apply_speed_boost(7, 'boost-failure')
+        assert await dojo.apply_speed_boost(7, 'boost-failure')
+        assert (await dojo.state(7))['reward'] == 128

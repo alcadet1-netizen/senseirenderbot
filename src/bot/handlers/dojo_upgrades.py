@@ -28,7 +28,8 @@ async def successful_payment(message, container):
     try:
         receipt = await container.dojo_upgrade_service.receive(user_id, payment)
     except Exception:
-        logger.error('Dojo upgrade payment requires reconciliation')
+        logger.exception('Dojo upgrade payment requires reconciliation user=%s charge=%s',
+                         user_id, payment.telegram_payment_charge_id)
         await message.answer(
             'Оплата улучшения требует проверки. Открой /dojo → «Улучшения»; '
             'если улучшение не появилось — /paysupport. Не оплачивай повторно.',
@@ -54,7 +55,9 @@ async def successful_payment(message, container):
         await message.answer(
             f'✅ {title} активировано навсегда.\n'
             f'Оплачено: {receipt["stars"]} ⭐.\n'
-            'Открой /dojo → «Улучшения», чтобы увидеть новый уровень.',
+            + ('Новый запас действует со следующего цикла.\n' if kind == 'energy' else
+               'Новая добыча действует со следующего цикла.\n' if kind == 'pickaxe' else '')
+            + 'Открой /dojo → «Улучшения», чтобы увидеть новый уровень.',
             parse_mode=None)
         if kind == 'auto':
             try:

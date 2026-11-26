@@ -11,6 +11,15 @@
   const LANG_KEY = "sensei_dojo_language";
   const SUPPORTED_LANGS = ["ru", "en"];
   const EN = {
+    "МОЙ СЕНСЕЙ": "MY SENSEI", "МАЙНЕР": "MINER", "УРОВЕНЬ": "LEVEL",
+    "Загружаем профиль…": "Loading profile…", "Билеты": "Tickets", "Сообщения": "Messages",
+    "Серия": "Streak", "Катана": "Katana", "Достижения": "Achievements",
+    "Победы": "Wins", "Поражения": "Losses", "см": "cm", "Нет": "None",
+    "Лимит цикла": "Cycle cap", "Постоянный запас": "Permanent cap",
+    "Постоянные улучшения энергии и кирки применяются со следующего цикла.": "Permanent energy and pickaxe upgrades apply from the next cycle.",
+    "Открой профиль через /dojo в Telegram": "Open /dojo in Telegram to see your profile",
+    "Не удалось загрузить профиль. Открой вкладку снова.": "Profile unavailable. Reopen this tab to retry.",
+    "Оплата получена · проверяем начисление. Не оплачивай повторно.": "Payment received · checking delivery. Do not pay again.",
     "Открой /dojo заново": "Reopen /dojo",
     "Сессия Telegram завершена. Прогресс хранится на сервере.": "Your Telegram session ended. Progress is saved on the server.",
     "Ожидает выплаты": "Awaiting payout",
@@ -1649,6 +1658,33 @@
     return Math.max(0, energy - drain * elapsed);
   }
 
+  async function loadSenseiProfile() {
+    const status = $("sensei-profile-status");
+    if (!initData()) {
+      status.textContent = t("Открой профиль через /dojo в Telegram");
+      return;
+    }
+    status.textContent = t("Загружаем профиль…");
+    try {
+      const { profile: p } = await api("profile");
+      const name = [p.first_name, p.last_name].filter(Boolean).join(" ") || (p.username ? `@${p.username}` : "Sensei");
+      $("sensei-name").textContent = name;
+      $("sensei-rank").textContent = [p.level_name, p.role].filter(Boolean).join(" · ") || "—";
+      $("sensei-level").textContent = coin(p.level);
+      $("sensei-xp").textContent = `${coin(p.xp)} / ${coin(p.xp_next)}`;
+      $("sensei-tickets").textContent = coin(p.tickets);
+      $("sensei-messages").textContent = coin(p.messages);
+      $("sensei-streak").textContent = coin(p.streak);
+      $("sensei-katana").textContent = p.has_katana ? (p.katana_caption || `${coinExact(p.katana_length)} ${t("см")}`) : t("Нет");
+      $("sensei-achievements").textContent = coin(p.achievements_count);
+      $("sensei-wins").textContent = coin(p.wins);
+      $("sensei-losses").textContent = coin(p.losses);
+      status.textContent = "";
+    } catch (error) {
+      status.textContent = t("Не удалось загрузить профиль. Открой вкладку снова.");
+    }
+  }
+
   function percent() {
     if (!model) return 0;
     if (model.phase === "ready_to_collect") return 100;
@@ -1954,11 +1990,12 @@
     $("balance").textContent = balance;
     $("balance").classList.toggle("balance-long", balance.length >= 10);
     $("balance").classList.toggle("balance-extra-long", balance.length >= 15);
-    $("profile-balance").textContent = initData() ? `${balance} Coin` : "—";
+    $("profile-balance").textContent = initData() ? `${coinExact(model?.balance)} Coin` : "—";
     $("profile-reward").textContent = `${coin(model?.reward)} Coin`;
     $("profile-rate").textContent =
       `${coin(model?.base_rate)} ${t("Coin / ч")}`;
     $("profile-energy").textContent = coin(model?.energy_max);
+    $("profile-energy-permanent").textContent = coin(model?.permanent_energy_max ?? model?.energy_max);
     $("profile-auto").textContent = model?.auto_collect ? (model.auto_waiting ? t("Ожидает выплаты") : t("ВКЛ")) : t("ВЫКЛ");
     $("auto-history").hidden = !model?.auto_collect;
     $("auto-last").textContent = model?.last_auto_collect_at ? new Date(model.last_auto_collect_at * 1000).toLocaleString(locale()) : "—";
@@ -2236,6 +2273,7 @@
     }
     renderBank();
     paintBankStatus();
+    if (activeTab === "profile") loadSenseiProfile();
     paintReferralLink();
   }
 
@@ -2813,15 +2851,8 @@
         upgradeBusy = null;
         renderUpgrades();
         if (status === "paid") {
-          showToast(
-            t(
-              kind === "refill"
-                ? "Энергия пополнена"
-                : kind === "boost"
-                  ? "Скорость +50% активирована на 1 час"
-                  : "Оплата получена · включаем улучшение",
-            ),
-          );
+          // Telegram's paid callback is not proof that the server has applied the receipt.
+          showToast(t("Оплата получена · проверяем начисление. Не оплачивай повторно."));
           setTimeout(() => {
             loadUpgrades(true);
             refresh(true);
@@ -3349,6 +3380,7 @@
     if (name === "upgrades") loadUpgrades();
     if (name === "bank") loadBank(true);
     if (name === "referrals") loadReferrals(true);
+    if (name === "profile") loadSenseiProfile();
     // Chat games/mining change users.coins outside this WebView; re-read the
     // authoritative server balance whenever the player returns to a view.
     if (name === "mining" || name === "profile") refresh(true);

@@ -84,6 +84,13 @@ const { chromium } = require("playwright-core");
         : phase === "ready_to_collect"
           ? 1
           : 0;
+    if (action === "profile") {
+      await route.fulfill({json: {profile: {first_name: "<img src=x onerror=alert(1)>",
+        level: 4, level_name: "Ученик", xp: 200, xp_next: 300, tickets: 3,
+        messages: 15, streak: 2, has_katana: true, katana_caption: "Катана · 10 см",
+        achievements_count: 1, wins: 2, losses: 1}}});
+      return;
+    }
     if (action === "upgrades") {
       await route.fulfill({
         json: {
@@ -210,6 +217,7 @@ const { chromium } = require("playwright-core");
                   100 * Math.max(0, (Math.min(now, finish) - started) / 3600),
               ),
       energy_max: energyMax,
+      permanent_energy_max: 200,
       energy_start: energyMax + taskEnergy,
       task_energy_pending: taskEnergy,
       energy_per_hour: 100,
@@ -367,7 +375,7 @@ const { chromium } = require("playwright-core");
   );
   const burnBox = await page.locator("#burn").boundingBox();
   const bonusBox = await page.locator("#bonus-open").boundingBox();
-  assert.ok(burnBox.width > bonusBox.width, "BURN should be larger than BONUS");
+  assert.ok(Math.abs(burnBox.width - bonusBox.width) < 1, "action tiles should match");
   const readyFit = await page.evaluate(() => {
     const stage = document.querySelector(".stage");
     const action = document.querySelector("#action").getBoundingClientRect();
@@ -554,6 +562,16 @@ const { chromium } = require("playwright-core");
   await page.screenshot({ path: ".cache/miner2-referrals.png" });
   await page.click(".tab[data-tab='profile']");
   assert.equal(await page.locator("#view-profile").isVisible(), true);
+  await page.waitForFunction(() => document.querySelector("#sensei-name").textContent.includes("<img"));
+  assert.equal(await page.locator("#sensei-name img").count(), 0, "profile name must be text, not HTML");
+  assert.equal(await page.locator("#sensei-level").textContent(), "4");
+  assert.equal(await page.locator("#profile-energy-permanent").textContent(), "200");
+  for (const width of [320, 360, 390, 560]) {
+    await page.setViewportSize({ width, height: 844 });
+    const fits = await page.locator("#sensei-profile").evaluate(el => el.scrollWidth <= el.clientWidth + 1);
+    assert.ok(fits, `profile should fit at ${width}px`);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
   assert.match(
     await page.locator("#profile-balance").textContent(),
     /^12\s840 Coin$/,

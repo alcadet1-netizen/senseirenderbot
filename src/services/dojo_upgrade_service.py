@@ -151,16 +151,19 @@ class DojoUpgradeService:
         order = await self.orders.find_one({'_id': payload, 'user_id': user_id})
         if (not order or order.get('kind') != kind
                 or order.get('stars') != stars
-                or order.get('state') == 'fulfilled'):
+                or order.get('state') == 'fulfilled' or order.get('charge')):
             raise GameError('Счёт уже использован или устарел.')
         user = await self.users.find_one({'id': user_id})
         if not user or user.get('is_banned'):
             raise GameError('Профиль недоступен.')
         await self._check_available(kind, user)
-        await self.orders.update_one(
-            {'_id': payload, 'user_id': user_id},
+        result = await self.orders.update_one(
+            {'_id': payload, 'user_id': user_id, 'charge': {'$exists': False},
+             'state': {'$ne': 'fulfilled'}},
             {'$set': {'state': 'checkout', 'checkout_at': datetime.now(timezone.utc)}},
         )
+        if result.matched_count != 1:
+            raise GameError('Счёт уже использован или устарел.')
 
     async def receive(self, user_id: int, payment) -> dict:
         match = PAYLOAD_RE.fullmatch(payment.invoice_payload or '')
@@ -190,20 +193,29 @@ class DojoUpgradeService:
             upsert=True,
         )
         receipt = await self.payments.find_one({'_id': charge})
+        if (receipt.get('user_id') != user_id or receipt.get('payload') != payment.invoice_payload
+                or receipt.get('kind') != kind or receipt.get('stars') != payment.total_amount):
+            raise GameError('Чек платежа требует проверки. Обратитесь в /paysupport.')
         if receipt['state'] in {'fulfilled', 'refunded', 'refund_required'}:
             return receipt
-        if order.get('state') == 'fulfilled' and order.get('charge') != charge:
-            state = 'refund_required'
-            applied = False
-        else:
-            applied = await self._apply(user_id, kind, charge)
+        # Atomically reserve an invoice for one charge before applying any benefit.
+        # Concurrent successful payments for the same invoice must not both grant it.
+        await self.orders.update_one(
+            {'_id': payment.invoice_payload, 'user_id': user_id,
+             'charge': {'$exists': False}},
+            {'$set': {'charge': charge}},
+        )
+        order = await self.orders.find_one({'_id': payment.invoice_payload, 'user_id': user_id})
+        owns_order = order and order.get('charge') == charge
+        applied = await self._apply(user_id, kind, charge) if owns_order else False
         state = 'fulfilled' if applied else 'refund_required'
         changes = {'state': state, 'settled_at': datetime.now(timezone.utc)}
         await self.payments.update_one({'_id': charge}, {'$set': changes})
-        await self.orders.update_one(
-            {'_id': payment.invoice_payload, 'user_id': user_id},
-            {'$set': {'state': state, 'charge': charge}},
-        )
+        if owns_order:
+            await self.orders.update_one(
+                {'_id': payment.invoice_payload, 'user_id': user_id, 'charge': charge},
+                {'$set': {'state': state}},
+            )
         return {**receipt, **changes}
 
     async def mark_refunded(self, charge: str) -> None:

@@ -477,3 +477,44 @@ async def test_bank_snapshot_includes_unsettled_duels_or_reports_unknown(rows, e
     summary = await svc.get_bank_summary()
     assert summary['duel_escrow'] == expected_escrow
     assert summary['total_supply'] == expected_total
+
+
+@pytest.mark.asyncio
+async def test_same_invoice_distinct_charges_only_grants_once():
+    users, service = upgrade_service()
+    order = await service.prepare(7, 'energy')
+    first = await service.receive(7, payment(order['payload'], 'energy-first', 50))
+    second = await service.receive(7, payment(order['payload'], 'energy-second', 50))
+    assert first['state'] == 'fulfilled'
+    assert second['state'] == 'refund_required'
+    assert users.docs[7]['dojo_energy_purchases'] == 1
+    assert service.orders.docs[order['payload']]['charge'] == 'energy-first'
+
+
+@pytest.mark.asyncio
+async def test_cycle_shows_purchased_cap_without_changing_current_cycle():
+    users = Users([{'id': 7, 'coins': 0}])
+    db = SimpleNamespace(users=users, dojo_miners=Miners(), dojo_orders=Users(), dojo_payments=Users())
+    dojo = DojoMinerService(SimpleNamespace(database=db), SimpleNamespace())
+    upgrades = DojoUpgradeService(SimpleNamespace(mongo_client=SimpleNamespace(database=db), dojo_miner_service=dojo))
+    with patch.object(miner.time, 'time', return_value=1000):
+        before = await dojo.start(7)
+        order = await upgrades.prepare(7, 'energy')
+        assert (await upgrades.receive(7, payment(order['payload'], 'energy-cap', 50)))['state'] == 'fulfilled'
+        state = await dojo.state(7)
+    assert state['energy_max'] == 100
+    assert state['permanent_energy_max'] == 200
+    assert state['reward'] == before['reward']
+    assert state['next_reward'] > state['reward']
+
+
+@pytest.mark.asyncio
+async def test_refill_replay_after_cycle_finishes_is_not_refunded():
+    db = SimpleNamespace(users=Users([{'id': 7}]), dojo_miners=Miners([{
+        '_id': 7, 'collected': True, 'finish_at': 100, 'energy_refills': [
+            {'charge': 'paid-refill', 'at': 90, 'amount': 100}],
+    }]))
+    dojo = DojoMinerService(SimpleNamespace(database=db), SimpleNamespace())
+    with patch.object(miner.time, 'time', return_value=200):
+        assert await dojo.apply_energy_refill(7, 'paid-refill') is True
+        assert await dojo.apply_energy_refill(7, 'other-refill') is False

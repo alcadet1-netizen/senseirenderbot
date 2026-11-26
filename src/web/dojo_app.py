@@ -281,6 +281,20 @@ def setup_dojo(app, container=None):
                 result = await service.state(user['id'])
             elif action == 'state':
                 result = await service.state(user['id'])
+            elif action == 'profile':
+                # Identity is derived only from verified Telegram initData.
+                profile = await container.user_service.get_profile(user['id'])
+                if not profile or profile.get('is_banned'):
+                    raise GameError('Профиль недоступен.')
+                fields = ('first_name', 'last_name', 'username', 'level', 'level_name',
+                          'xp', 'xp_next', 'coins', 'tickets', 'messages', 'streak',
+                          'has_katana', 'katana_length', 'achievements_count',
+                          'wins', 'losses', 'role')
+                result = {'profile': {key: profile.get(key) for key in fields}}
+                if profile.get('has_katana'):
+                    from src.widgets.katana_models import model_caption
+                    result['profile']['katana_caption'] = model_caption(profile.get('katana_length') or 0)
+
             elif action == 'start':
                 result = await service.start(user['id'])
             elif action == 'circle':
@@ -436,5 +450,5 @@ def setup_dojo(app, container=None):
     app.router.add_get(
         '/miniapp/dojo/assets/{asset:dojo-arena\\.jpg|ninja-fighter\\.jpg|dojo-temple-bg\\.jpg|ninja-sensei-1\\.png|ninja-sensei-2\\.png|sticker-hero-vs\\.jpg|duel-court\\.webp|sensei\\.webp|loading-hero\\.webp|senseicoin-wordmark\\.svg|unbounded-variable\\.woff2|golos-text-variable\\.woff2|dseg7-classic-regular\\.woff2|sensei-style-(?:400|700)\\.woff2}', page)
     app.router.add_post(
-        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|vs_private_share|vs_share_result|vs_chats|vs_invite|vs_accept|vs_state|vs_publish|vs_commit|vs_move|vs_rooms|vs_room_create|vs_room_join|vs_room_close|ref_claim|share|daily|daily_claim|chest}',
+        '/miniapp/dojo/api/{action:admin_tasks|admin_save|admin_toggle|admin_grant|entry|state|profile|start|circle|collect|tasks|task|upgrades|buy|bank|burn|referrals|vs_private_share|vs_share_result|vs_chats|vs_invite|vs_accept|vs_state|vs_publish|vs_commit|vs_move|vs_rooms|vs_room_create|vs_room_join|vs_room_close|ref_claim|share|daily|daily_claim|chest}',
         api)
