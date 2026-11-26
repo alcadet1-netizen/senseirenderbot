@@ -11,6 +11,15 @@
   const LANG_KEY = "sensei_dojo_language";
   const SUPPORTED_LANGS = ["ru", "en"];
   const EN = {
+    "Арена дуэлей": "Duel arena", "Счёт бойцов": "Fighters’ score",
+    "01 / ПОДГОТОВКА": "01 / PREPARATION", "Выбери ставку": "Choose your stake",
+    "Ставка каждого": "Stake per player", "Быстрые ставки": "Quick stakes",
+    "Вызвать соперника": "Challenge an opponent", "Лично или в игровом чате · 2 минуты": "Privately or in the game chat · 2 minutes",
+    "Отправить вызов": "Send challenge", "Ставки резервируются при принятии вызова.": "Stakes are reserved when the challenge is accepted.",
+    "02 / ОТКРЫТАЯ ИГРА": "02 / OPEN PLAY", "Комнаты": "Rooms", "Создать комнату": "Create room",
+    "Пока тихо. Создай первую комнату.": "No rooms yet. Create the first one.",
+    "ТВОЙ ХОД": "YOUR TURN", "Выбери действия": "Choose your moves", "Оба выбора скрыты до обмена": "Both choices stay hidden until the exchange",
+
     "МОЙ СЕНСЕЙ": "MY SENSEI", "МАЙНЕР": "MINER", "УРОВЕНЬ": "LEVEL",
     "Загружаем профиль…": "Loading profile…", "Билеты": "Tickets", "Сообщения": "Messages",
     "Серия": "Streak", "Катана": "Katana", "Достижения": "Achievements",
@@ -962,25 +971,32 @@
   $("session-ended").addEventListener("cancel", event => event.preventDefault());
   // The server owns stake, participants, score and both round actions.
   const vsDialog = $("vs-dialog");
-  // Sticker-man puppets: two chibi sprites, motion is CSS squash/stretch (no sprite swap)
-  const SPRITES = {
-    sensei1: "/miniapp/dojo/assets/ninja-sensei-1.png",
-    sensei2: "/miniapp/dojo/assets/ninja-sensei-2.png",
-  };
-  // preload
-  Object.values(SPRITES).forEach(u=>{ const im=new Image(); im.src=u; });
-  for (const fighter of vsDialog.querySelectorAll(".vs-fighter")) {
-    const tpl = fighter.classList.contains("left") ? "vs-puppet" : "vs-puppet-2";
-    const src = document.getElementById(tpl);
-    fighter.append((src || $("vs-puppet")).content.cloneNode(true));
-    fighter.dataset.base = fighter.classList.contains("left") ? "sensei1" : "sensei2";
-  }
-  // neon slash trail canvas (green energy streak, matches sticker glow)
+  // Artwork is attached only while the arena is open. In particular, opening
+  // the miner must not eagerly decode two fighters or allocate a trail canvas.
   const vsTrailCanvas = vsDialog.querySelector(".vs-trail-canvas");
-  const vsTrailCtx = vsTrailCanvas ? vsTrailCanvas.getContext("2d", {alpha:true, desynchronized:true}) : null;
-  if (vsTrailCtx) vsTrailCtx.globalCompositeOperation = "lighter"; // additive neon, no CSS blend
-  // Match the backing store to the element so strokes are not drawn at 640x360 then upscaled.
-  // Capped at 1.5x DPR: the trail is a soft glow, extra pixels buy nothing but fill cost.
+  let vsTrailCtx = null;
+  function ensureVsVisuals() {
+    const background = vsDialog.querySelector(".vs-bg");
+    if (background && !background.hasAttribute("src")) background.src = background.dataset.src;
+    for (const fighter of vsDialog.querySelectorAll(".vs-fighter")) {
+      if (fighter.querySelector(".vs-ninja")) continue;
+      const tpl = fighter.classList.contains("left") ? "vs-puppet" : "vs-puppet-2";
+      fighter.append($(tpl).content.cloneNode(true));
+    }
+  }
+  function ensureVsTrail() {
+    if (!vsTrailCanvas || vsTrailCtx) return;
+    vsTrailCtx = vsTrailCanvas.getContext("2d", {alpha:true, desynchronized:true});
+    sizeTrail();
+    if (vsTrailCtx) vsTrailCtx.globalCompositeOperation = "lighter";
+  }
+  function releaseVsVisuals() {
+    vsDialog.querySelector(".vs-bg")?.removeAttribute("src");
+    vsDialog.querySelectorAll(".vs-fighter .vs-ninja").forEach(node => node.remove());
+    if (vsTrailCanvas) { vsTrailCanvas.width = 1; vsTrailCanvas.height = 1; }
+    vsTrailCtx = null;
+  }
+  // The soft trail needs no more than 1.5x device pixels.
   let trailDpr = 1;
   function sizeTrail() {
     if (!vsTrailCanvas || !vsTrailCtx) return;
@@ -1053,7 +1069,7 @@
     vsTrailCtx.globalCompositeOperation = "lighter";
   }
   function clearTrail(){ if(vsTrailCtx) vsTrailCtx.clearRect(0,0,vsTrailCanvas.width,vsTrailCanvas.height); cancelAnimationFrame(trailRaf); }
-  let vsBattle, vsTimer, vsBusy = false;
+  let vsBattle, vsTimer, vsBusy = false, vsGeneration = 0;
   let seenExchange = "", vsPlaying = false, frameTimer;
   function stopVsComic() {
     clearTimeout(frameTimer);
@@ -1141,8 +1157,9 @@
         // shockwave center
         ensureShock(); shockEl.style.left = "50%"; shockEl.style.top = "52%";
       }
-      // volumetric neon trail animates over 380ms via rAF
+      // Allocate and paint the trail only for an actual animated strike.
       if (!reduced) {
+        ensureVsTrail();
         let start=null;
         const dur = 380;
         const onTrail = (now)=> {
@@ -1168,11 +1185,6 @@
       frameTimer = setTimeout(() => {
         if (hitStop) {
           stage?.classList.add("is-hitstop");
-          // burst petals outward from impact point
-          vsDialog.querySelectorAll(".vs-petals i").forEach(p=>{
-            p.style.setProperty("--burst-x", ((Math.random()-.5)*2).toFixed(2));
-            p.style.setProperty("--burst-y", ((Math.random()-.5)*2).toFixed(2));
-          });
           // health bar punch
           const defenderCard = side ? $("vs-left") : $("vs-right");
           defenderCard?.classList.add("is-hit"); setTimeout(()=> defenderCard?.classList.remove("is-hit"), 440);
@@ -1253,6 +1265,7 @@
   }
   function drawVs(s) {
     vsBattle = s;
+    setData(vsDialog, "phase", s.phase || "lobby");
     if (vsPlaying) return; // Polling updates vsBattle, never interrupts the cutscene.
     const key = `${s.id}:${s.round}`;
     if (draftKey !== key) { draftKey = key; draft = {...s.moves}; }
@@ -1261,8 +1274,8 @@
     setHidden("vs-rematch", !ended);
     setHidden("vs-lobby", s.phase !== "lobby" && s.phase !== "room");
     setHidden("vs-controls", !fighting);
-    $("vs-left").textContent = s.names ? `${s.side === 0 ? "Ты · " : ""}${s.names[0]} · ${s.hits[0]}` : "Сэнсэй";
-    $("vs-right").textContent = s.names ? `${s.hits[1]} · ${s.names[1]}${s.side === 1 ? " · Ты" : ""}` : "Ниндзя";
+    setText("vs-left", s.names ? `${s.side === 0 ? "Ты · " : ""}${s.names[0]} · ${s.hits[0]}` : "Сэнсэй");
+    setText("vs-right", s.names ? `${s.hits[1]} · ${s.names[1]}${s.side === 1 ? " · Ты" : ""}` : "Ниндзя");
     if (s.hits) {
       for (const [i, id] of ["vs-left", "vs-right"].entries()) {
         const fighter = $(id);
@@ -1306,11 +1319,17 @@
     paintDraft();
   }
   async function vsRequest(action, args = {}) {
-    if (vsBusy || !vsDialog.open) return;
+    if (!vsDialog.open) return;
+    ensureVsVisuals();
+    if (vsBusy) return;
     vsBusy = true;
+    const generation = vsGeneration;
     clearTimeout(vsTimer);
-    try { drawVs(await api(action, args)); }
-    catch (err) { $("vs-status").textContent = err.message; }
+    try {
+      const state = await api(action, args);
+      if (vsDialog.open && generation === vsGeneration) drawVs(state);
+    }
+    catch (err) { if (vsDialog.open && generation === vsGeneration) $("vs-status").textContent = err.message; }
     finally {
       vsBusy = false;
       if (vsDialog.open && !sessionEnded && !document.hidden) {
@@ -1322,9 +1341,9 @@
       }
     }
   }
-  $("vs-open")?.addEventListener("click", () => { vsDialog.showModal(); vsRequest("vs_state"); loadRooms(); });
+  $("vs-open")?.addEventListener("click", () => { vsGeneration++; vsDialog.showModal(); vsRequest("vs_state"); loadRooms(); });
   $("vs-close")?.addEventListener("click", () => vsDialog.close());
-  vsDialog?.addEventListener("close", () => { resumePrivateVs(false); clearTimeout(vsTimer); clearTimeout(roomsTimer); stopVsComic(); });
+  vsDialog?.addEventListener("close", () => { vsGeneration++; resumePrivateVs(false); clearTimeout(vsTimer); clearTimeout(roomsTimer); stopVsComic(); releaseVsVisuals(); });
   $("vs-accept")?.addEventListener("click", () => vsRequest("vs_accept"));
   $("vs-rematch")?.addEventListener("click", () => vsRequest("vs_publish", {bet: vsBattle.bet, rematch: vsBattle.id}));
 
@@ -1336,7 +1355,8 @@
   }
   async function loadRooms() {
     if (!vsDialog?.open || sessionEnded) return;
-    try { drawRooms(await api("vs_rooms")); }
+    const generation = vsGeneration;
+    try { const rooms = await api("vs_rooms"); if (vsDialog.open && generation === vsGeneration) drawRooms(rooms); }
     catch { /* сеть моргнула — повторим на следующем тике */ }
     finally {
       clearTimeout(roomsTimer);
@@ -1374,11 +1394,14 @@
       : "Создай комнату — подключится любой";
     // Перестраиваем только при реальном изменении: иначе кнопки
     // пересоздаются каждые 4 секунды и «мерцают» на слабых устройствах.
-    const key = rooms.map(r => `${r.token}:${r.bet}:${r.seconds > 0 ? 1 : 0}`).join("|");
+    const key = rooms.map(r => `${r.token}:${r.bet}:${r.is_mine ? 1 : 0}:${r.owner_name}:${r.seconds > 0 ? 1 : 0}`).join("|") || "empty";
     if (list.dataset.key === key) return;
     list.dataset.key = key;
     if (!rooms.length) {
-      list.replaceChildren();
+      const empty = document.createElement("div");
+      empty.className = "vs-room-empty";
+      empty.textContent = t("Пока тихо. Создай первую комнату.");
+      list.replaceChildren(empty);
       return;
     }
     list.replaceChildren(...rooms.map(room => {
@@ -1471,12 +1494,13 @@
   vsDialog?.querySelectorAll(".vs-bet-presets [data-bet]").forEach(btn => {
     btn.addEventListener("click", () => {
       $("vs-bet").value = btn.dataset.bet;
-      vsDialog.querySelectorAll(".vs-bet-presets [data-bet]").forEach(b => b.classList.toggle("is-active", b===btn));
+      // Keep the room stake label and accessibility state in sync with the field.
+      $("vs-bet").dispatchEvent(new Event("input", {bubbles: true}));
     });
   });
   $("vs-bet")?.addEventListener("input", () => {
     const v = $("vs-bet").value;
-    vsDialog.querySelectorAll(".vs-bet-presets [data-bet]").forEach(b => b.classList.toggle("is-active", b.dataset.bet===v));
+    vsDialog.querySelectorAll(".vs-bet-presets [data-bet]").forEach(b => { const active = b.dataset.bet===v; b.classList.toggle("is-active", active); b.setAttribute("aria-pressed", String(active)); });
   });
   // Публикация в группу идёт через бота на сервере, а не через
   // switchInlineQuery: тот штатно закрывает мини-апп, и игрок терял арену

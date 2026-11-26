@@ -22,7 +22,7 @@ const {chromium} = require('playwright-core');
       });
       await page.goto('https://dojo.test/miniapp/dojo');
       await page.locator('#vs-open').evaluate(el=>el.click());
-      assert.equal(await page.locator('.vs-fighter .vs-puppet').count(), 2);
+      assert.equal(await page.locator('.vs-fighter .vs-ninja').count(), 2);
       const read = page.locator('#vs-read');
       await page.waitForFunction(()=>!document.querySelector('#vs-read').hidden && document.querySelector('#vs-read-result').textContent==='Попадание');
       assert.equal(await page.locator('.vs-fighter.left').getAttribute('data-pose'), 'sweep');

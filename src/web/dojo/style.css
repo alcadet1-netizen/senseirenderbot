@@ -6878,3 +6878,137 @@ html.motion-reduced .vs-fighter[data-pose] {
 .utility-rail.main-utilities .burn-flame { width: 21px; height: 24px; }
 .utility-rail.main-utilities .burn-title, .utility-rail.main-utilities .bonus-trigger b { font: 600 9px/12px "Golos Text", system-ui, sans-serif; letter-spacing: .03em; }
 @media (max-height: 600px) { .utility-rail.main-utilities #vs-open, .utility-rail.main-utilities .bonus-trigger, .utility-rail.main-utilities .burn-sticker { width: 46px; height: 46px; } }
+
+/* Arena refresh: one lightweight, readable surface shared by lobby and fight. */
+#vs-dialog {
+  box-sizing: border-box;
+  width: min(480px, calc(100vw - 24px));
+  max-width: none;
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  border: 1px solid #41604d;
+  border-radius: 22px;
+  background: #09120e;
+  box-shadow: 0 22px 65px #000b;
+  color: #edf5ed;
+  font-family: "Golos Text", system-ui, sans-serif;
+  overscroll-behavior: contain;
+  scrollbar-color: #426b51 transparent;
+}
+#vs-dialog::backdrop { background: rgba(1, 11, 7, .83); }
+#vs-dialog .vs-stage {
+  height: clamp(218px, 34dvh, 310px);
+  min-height: 218px;
+  border-bottom: 0;
+  background: #11231b;
+  box-shadow: none;
+  perspective: none;
+}
+#vs-dialog .vs-bg { object-position: center 47%; animation: none; will-change: auto; }
+#vs-dialog .vs-temple-silhouette {
+  background: linear-gradient(180deg, #03110dd9 0%, #061c1459 39%, #06120d2e 57%, #07130df0 100%);
+}
+/* Remove persistent animated/composited decoration; action poses still run on demand. */
+#vs-dialog .vs-petals, #vs-dialog .vs-glow, #vs-dialog .vs-mist,
+#vs-dialog .vs-fog, #vs-dialog .vs-parallax, #vs-dialog .vs-vignette,
+#vs-dialog .vs-speedlines, #vs-dialog .vs-afterimage,
+#vs-dialog .vs-stage::before, #vs-dialog .vs-stage::after { display: none; }
+#vs-dialog .vs-fighter { width: min(36%, 145px); bottom: 35px; will-change: auto; }
+#vs-dialog .vs-fighter.left { left: 7%; }
+#vs-dialog .vs-fighter.right { right: 7%; }
+#vs-dialog .vs-fighter::before { opacity: .35; animation: none; will-change: auto; }
+#vs-dialog .vs-fighter:not([data-pose]) .vs-ninja { animation: none; }
+#vs-dialog .vs-top { align-items: center; padding: 15px 17px 0; }
+#vs-dialog .vs-title-block { min-width: 0; }
+#vs-dialog .vs-title-block small { color: #a9d9b3; font-size: 9px; letter-spacing: .18em; font-weight: 700; }
+#vs-dialog .vs-title-block small span { color: #e5b766; padding: 0 3px; }
+#vs-dialog .vs-title-block h2 { margin: 3px 0 0; color: #f7f7ee; font-size: clamp(19px, 5vw, 23px); font-weight: 700; letter-spacing: -.035em; line-height: 1.15; text-shadow: none; }
+#vs-dialog #vs-close { width: 40px; height: 40px; border-radius: 13px; border-color: #ffffff42; background: #0b1b15d9; color: #eff8f1; font-size: 22px; }
+#vs-dialog #vs-close:hover { transform: none; box-shadow: none; background: #253a2c; }
+#vs-dialog #vs-score { gap: 7px; padding: 13px 17px 0; }
+#vs-dialog #vs-score b { padding: 7px 9px 12px; border: 1px solid #a7d3b43d; border-radius: 9px; background: #071a13d9; color: #eef9ee; font-size: 12px; font-weight: 600; }
+#vs-dialog #vs-score b::after { left: 8px; right: 8px; bottom: 5px; height: 3px; box-shadow: none; }
+#vs-dialog #vs-score b::before { left: 8px; bottom: 5px; height: 3px; box-shadow: none; }
+#vs-dialog #vs-score b.is-me { border-color: #dfbe77; box-shadow: none; }
+#vs-dialog #vs-score i.vs-emblem { font: italic 800 15px/1 "Golos Text", system-ui, sans-serif; color: #f0cb86; filter: none; box-shadow: none; text-shadow: none; -webkit-text-stroke: 0; animation: none; }
+#vs-dialog #vs-status { bottom: 10px; max-width: calc(100% - 36px); padding: 7px 12px; border-radius: 9px; border-color: #9bd7a74a; background: #091b13ed; box-shadow: none; color: #e2f6e6; font-size: 11px; font-weight: 600; letter-spacing: 0; overflow-wrap: anywhere; }
+#vs-dialog #vs-status::before { width: 6px; height: 6px; background: #b2e993; box-shadow: none; animation: none; }
+#vs-dialog .vs-console { padding: 20px 17px calc(20px + env(safe-area-inset-bottom, 0px)); background: #0b1711; border-top: 0; text-align: left; }
+#vs-dialog #vs-lobby { gap: 15px; text-align: left; }
+#vs-dialog .vs-section-heading, #vs-dialog .vs-rooms-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+#vs-dialog .vs-section-heading h3 { margin: 4px 0 0; color: #f3f4e9; font-size: 20px; line-height: 1.2; letter-spacing: -.035em; }
+#vs-dialog .vs-eyebrow { display: block; color: #a2bd9e; font-size: 9px; font-weight: 700; letter-spacing: .13em; line-height: 1.3; }
+#vs-dialog .vs-heading-mark { display: grid; place-items: center; width: 37px; height: 37px; flex: none; border: 1px solid #8da67b40; border-radius: 12px; color: #e5c57f; font-size: 19px; }
+#vs-dialog .vs-bet-row { gap: 9px; text-align: left; }
+#vs-dialog .vs-bet-field { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; padding: 5px 6px 5px 12px; border: 1px solid #3b5140; border-radius: 12px; background: #101f16; color: #c3d4c5; font-size: 12px; text-align: left; }
+#vs-dialog .vs-bet-value { display: flex; align-items: center; flex: none; gap: 6px; padding-right: 8px; color: #b1c8ad; font-size: 10px; letter-spacing: .06em; }
+#vs-dialog #vs-bet { width: 82px; min-width: 0; margin: 0; padding: 8px 6px; border: 0; border-radius: 8px; background: #1b3021; color: #f5f6e9; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+#vs-dialog #vs-bet:focus-visible { outline: 2px solid #cae6ad; outline-offset: 2px; }
+#vs-dialog .vs-bet-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+#vs-dialog .vs-bet-presets button { min-width: 0; min-height: 36px; padding: 6px 3px; border: 1px solid #354c3c; border-radius: 9px; background: #122219; color: #c8d9c7; box-shadow: none; font-size: 11px; font-weight: 600; }
+#vs-dialog .vs-bet-presets button.is-active { border-color: #b5d992; background: #314a2c; color: #f3ffdc; }
+#vs-dialog .vs-challenge { display: grid; gap: 10px; padding: 13px; border: 1px solid #344b39; border-radius: 14px; background: #112219; }
+#vs-dialog .vs-challenge-copy { display: grid; gap: 3px; min-width: 0; }
+#vs-dialog .vs-challenge-copy strong { color: #eef3e8; font-size: 14px; font-weight: 700; }
+#vs-dialog .vs-challenge-copy small, #vs-dialog .vs-challenge-note, #vs-dialog .vs-rooms-note { color: #a6baa7; font-size: 11px; line-height: 1.45; }
+#vs-dialog #vs-send { display: flex; justify-content: space-between; width: 100%; min-height: 43px; padding: 10px 13px; border: 1px solid #b6df96; border-radius: 10px; background: #b8dc9e; box-shadow: none; color: #142517; font-size: 12px; font-weight: 700; letter-spacing: 0; }
+#vs-dialog #vs-send span:last-child { font-size: 17px; line-height: 1; }
+#vs-dialog #vs-send:hover { filter: none; background: #c9ebb0; box-shadow: none; }
+#vs-dialog #vs-destinations { gap: 7px; margin: 0; }
+#vs-dialog #vs-destinations button, #vs-dialog #vs-by-name button { min-height: 42px; border-color: #53725a; background: #1b3021; color: #eaf4e8; font-size: 12px; }
+#vs-dialog .vs-chat-panel { grid-column: 1 / -1; }
+#vs-dialog .vs-rooms { gap: 10px; margin: 0; padding-top: 3px; }
+#vs-dialog .vs-rooms-head strong { display: block; margin-top: 4px; color: #f3f4e9; font-size: 18px; font-weight: 700; letter-spacing: -.025em; text-transform: none; }
+#vs-dialog .vs-rooms-head small { max-width: 150px; color: #a6baa7; font-size: 10px; line-height: 1.35; text-align: right; }
+#vs-dialog .vs-room-list { gap: 7px; }
+#vs-dialog .vs-room { grid-template-columns: minmax(0, 1fr) auto auto; gap: 7px; padding: 9px; border: 1px solid #344b39; border-radius: 11px; background: #122219; }
+#vs-dialog .vs-room.is-mine { border-color: #b39760; background: #292a19; }
+#vs-dialog .vs-room-name { color: #edf6e9; font-size: 12px; }
+#vs-dialog .vs-room-bet { color: #ead19b; font-size: 11px; white-space: nowrap; }
+#vs-dialog .vs-room-action { min-height: 37px; padding: 6px 10px; border: 1px solid #a9cf94; border-radius: 8px; background: #b8dc9e; color: #142517; font-size: 11px; box-shadow: none; }
+#vs-dialog .vs-room-empty { padding: 13px; border: 1px dashed #3b5240; border-radius: 11px; color: #9cb2a0; font-size: 11px; line-height: 1.4; text-align: center; }
+#vs-dialog .vs-room-create { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 46px; padding: 10px 12px; border: 1px solid #688566; border-radius: 11px; background: #203827; box-shadow: none; color: #e9f5e4; font-size: 12px; font-weight: 700; letter-spacing: 0; }
+#vs-dialog .vs-create-stake { color: #cfe8ba; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#vs-dialog .vs-create-stake b { margin-left: 5px; font-size: 17px; }
+#vs-dialog .vs-room-create:active, #vs-dialog #vs-send:active { transform: translateY(1px); box-shadow: none; }
+#vs-dialog .vs-rooms-note { margin: 0; }
+#vs-dialog .vs-fight-heading { display: grid; gap: 4px; text-align: left; }
+#vs-dialog .vs-fight-heading strong { color: #f3f4e9; font-size: 18px; line-height: 1.2; }
+#vs-dialog .vs-fight-heading small { color: #a6baa7; font-size: 11px; }
+#vs-dialog #vs-controls { gap: 12px; text-align: left; }
+#vs-dialog .vs-move-group { gap: 7px; }
+#vs-dialog .vs-move-label { justify-content: flex-start; color: #bdd4bb; font-size: 10px; letter-spacing: .1em; text-shadow: none; }
+#vs-dialog .vs-move-dodge .vs-move-label { color: #bdd4bb; text-shadow: none; }
+#vs-dialog #vs-controls .vs-move-row button { min-height: 48px; padding: 10px; border: 1px solid #425d49; border-radius: 11px; background: #172a1d; color: #e7f1e5; box-shadow: none; font-size: 13px; }
+#vs-dialog #vs-controls .vs-move-row button[aria-pressed="true"] { border-color: #d8bd79; background: #e4ce93; color: #272615; box-shadow: none; }
+#vs-dialog .vs-btn-arrow, #vs-dialog .vs-move-dodge .vs-btn-arrow { color: #c1dfaa; text-shadow: none; }
+#vs-dialog #vs-controls .vs-move-row button[aria-pressed="true"] .vs-btn-arrow { color: #272615; }
+#vs-dialog #vs-commit, #vs-dialog #vs-accept, #vs-dialog #vs-rematch { min-height: 48px; border: 1px solid #b4d994; border-radius: 11px; background: #b8dc9e; color: #142517; box-shadow: none; font-size: 12px; font-weight: 700; letter-spacing: 0; }
+#vs-dialog #vs-controls #vs-commit:disabled { border-color: #3c5240; background: #1a2b1e; color: #9eb09e; box-shadow: none; }
+#vs-dialog #vs-ready:not([hidden]) { margin: 0 0 12px; color: #bfdbb4; font-size: 12px; }
+#vs-dialog .vs-controls-hint { color: #a6baa7; text-align: center; }
+#vs-dialog :is(button, input, summary):focus-visible { outline: 2px solid #e3d093; outline-offset: 3px; }
+@media (max-width: 340px) {
+  #vs-dialog { width: calc(100vw - 14px); border-radius: 17px; }
+  #vs-dialog .vs-console { padding-inline: 12px; }
+  #vs-dialog .vs-stage { height: 218px; }
+  #vs-dialog .vs-room { grid-template-columns: minmax(0, 1fr) auto; }
+  #vs-dialog .vs-room-action { grid-column: 1 / -1; }
+  #vs-dialog .vs-rooms-head small { max-width: 120px; }
+}
+@media (max-height: 560px) {
+  #vs-dialog .vs-stage { height: 190px; min-height: 190px; }
+  #vs-dialog .vs-fighter { width: min(30%, 115px); bottom: 24px; }
+  #vs-dialog .vs-top { padding-top: 10px; }
+  #vs-dialog #vs-score { padding-top: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #vs-dialog *, #vs-dialog *::before, #vs-dialog *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+/* Score indicators fill from left to right, including on older WebViews. */
+#vs-dialog #vs-score b::before { z-index: 1; left: 8px; right: 8px; width: auto; transform-origin: left center; transform: scaleX(1); }
+#vs-dialog #vs-score b[data-health='1']::before { transform: scaleX(.5); }
+#vs-dialog #vs-score b[data-health='0']::before { transform: scaleX(0); }
+#vs-dialog .vs-heading-mark { font-size: 11px; font-weight: 800; font-style: italic; letter-spacing: .03em; }
+/* A phase hidden by the game state must stay hidden despite the arena theme. */
+#vs-dialog #vs-controls[hidden], #vs-dialog #vs-lobby[hidden] { display: none; }
