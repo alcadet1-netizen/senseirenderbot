@@ -9,6 +9,7 @@ import secrets
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
+from src.domain.tickets import active_ticket_filter
 from src.core.constants import EXCHANGE_COINS_TO_TICKET, EXCHANGE_TICKET_TO_COINS
 from src.core.exceptions import InsufficientFundsError, InsufficientTicketsError
 from src.infra.mongo.client import MongoClient
@@ -76,7 +77,7 @@ class ExchangeService:
                 if deposited.matched_count != 1:
                     raise RuntimeError('Bank disappeared during exchange')
                 await self.tickets.insert_one({'user_id': user_id, 'code': ticket_code,
-                                               'created_at': now, 'burned': False}, session=session)
+                                               'created_at': now, 'burned': False, 'is_burned': False}, session=session)
                 result = {'success': True, 'direction': direction,
                           'coins_spent': EXCHANGE_COINS_TO_TICKET, 'ticket_code': ticket_code,
                           'new_coins_balance': balance - EXCHANGE_COINS_TO_TICKET}
@@ -84,8 +85,8 @@ class ExchangeService:
                 description = f'Exchange: {EXCHANGE_COINS_TO_TICKET} coins → 1 ticket'
             else:
                 ticket = await self.tickets.find_one_and_update(
-                    {'user_id': user_id, 'burned': False},
-                    {'$set': {'burned': True, 'burned_at': now, 'burn_reason': 'exchange'}},
+                    active_ticket_filter(user_id=user_id),
+                    {'$set': {'burned': True, 'is_burned': True, 'burned_at': now, 'burn_reason': 'exchange'}},
                     sort=[('_id', 1)], return_document=ReturnDocument.BEFORE, session=session)
                 if not ticket:
                     raise InsufficientTicketsError(1, 0)

@@ -501,7 +501,26 @@
 
         <section id="view-profile" class="view tab-view" hidden>
           <p class="view-eyebrow" data-i18n="ПРОФИЛЬ">ПРОФИЛЬ</p>
-          <h2 data-i18n="СЕНСЕЙ-МАЙНЕР">СЕНСЕЙ-МАЙНЕР</h2>
+          <h2 data-i18n="МОЙ СЕНСЕЙ">МОЙ СЕНСЕЙ</h2>
+          <div class="sensei-profile" id="sensei-profile" aria-live="polite">
+            <div class="sensei-profile-heading">
+              <div class="sensei-profile-mark" aria-hidden="true">侍</div>
+              <div class="sensei-profile-identity"><small>SENSEI · PROFILE</small><strong id="sensei-name">—</strong><span id="sensei-rank">—</span></div>
+              <div class="sensei-profile-level"><small data-i18n="УРОВЕНЬ">УРОВЕНЬ</small><strong id="sensei-level">—</strong></div>
+            </div>
+            <p id="sensei-profile-status" class="sensei-profile-status">Загружаем профиль…</p>
+            <div class="sensei-profile-grid">
+              <div><span>XP</span><b id="sensei-xp">—</b></div>
+              <div><span data-i18n="Билеты">Билеты</span><b id="sensei-tickets">—</b></div>
+              <div><span data-i18n="Сообщения">Сообщения</span><b id="sensei-messages">—</b></div>
+              <div><span data-i18n="Серия">Серия</span><b id="sensei-streak">—</b></div>
+              <div><span data-i18n="Катана">Катана</span><b id="sensei-katana">—</b></div>
+              <div><span data-i18n="Достижения">Достижения</span><b id="sensei-achievements">—</b></div>
+              <div><span data-i18n="Победы">Победы</span><b id="sensei-wins">—</b></div>
+              <div><span data-i18n="Поражения">Поражения</span><b id="sensei-losses">—</b></div>
+            </div>
+          </div>
+          <h3 class="profile-miner-title" data-i18n="МАЙНЕР">МАЙНЕР</h3>
           <div class="stat-list profile-list">
             <div class="stat-row">
               <span data-i18n="Баланс">Баланс</span
@@ -512,9 +531,13 @@
               ><b id="profile-rate">75 Coin / ч</b>
             </div>
             <div class="stat-row">
-              <span data-i18n="Энергия">Энергия</span
+              <span data-i18n="Лимит цикла">Лимит цикла</span
               ><b id="profile-energy">100</b>
             </div>
+            <div class="stat-row">
+              <span data-i18n="Постоянный запас">Постоянный запас</span><b id="profile-energy-permanent">100</b>
+            </div>
+            <p class="profile-energy-note" data-i18n="Постоянные улучшения энергии и кирки применяются со следующего цикла.">Постоянные улучшения энергии и кирки применяются со следующего цикла.</p>
             <div class="stat-row">
               <span data-i18n="Цикл">Цикл</span><b data-i18n="3 часа">3 часа</b>
             </div>

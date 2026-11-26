@@ -100,3 +100,16 @@ async def test_quiz_reply_shows_only_confirmed_reward_and_tickets():
     await check_quiz_answer(msg, NS(), NS(quiz_service=service))
     sent = msg.reply.call_args.args[0]
     assert '+0 монет' in sent and 'билет' not in sent
+
+
+@pytest.mark.asyncio
+async def test_quiz_ticket_awards_are_individual_coded_active_records():
+    db, quiz = setup()
+    quiz.QUIZ_REWARD = 6000
+    db.bank.docs['single']['coins'] = 6000
+    result = await quiz.check_answer(11, 7, 'A', 'hello')
+    assert result['tickets'] == 2
+    rows = list(db.tickets.docs.values())
+    assert len(rows) == 2 and len({row['code'] for row in rows}) == 2
+    assert all(row['user_id'] == 7 and row['source'] == 'quiz' and
+               row['burned'] is False and row['is_burned'] is False for row in rows)

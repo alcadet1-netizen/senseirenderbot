@@ -227,3 +227,25 @@ async def test_recent_results_are_empty_without_history():
     service = build_service(game_doc())
     service.banzai_results = NS(find=lambda *a, **k: FakeCursor([]))
     assert await service.get_recent_results(-100) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('confirmed', [True, False])
+async def test_finish_does_not_claim_an_unconfirmed_ticket(confirmed):
+    from src.services.banzai_service import BanzaiService
+
+    service = BanzaiService.__new__(BanzaiService)
+    service.banzai_games = NS(find_one=AsyncMock(return_value={'started_at': 1000}))
+    service._get_last_user_and_ts = AsyncMock(return_value=(7, 1001))
+    service._get_user_display = AsyncMock(return_value='Sensei')
+    service.lottery_service = NS(add_ticket=AsyncMock(return_value={'success': confirmed}))
+    service.economy_service = NS(pay_game_reward_from_bank=AsyncMock(return_value={'success': True}))
+    service.xrocket_service = None
+    service._update_game_interface = AsyncMock()
+    service._record_result = AsyncMock()
+    service.get_game_message_id = AsyncMock(return_value=None)
+    bot = NS(send_message=AsyncMock())
+    await service._finish_game(-100, bot, 10)
+    text = bot.send_message.await_args.args[1]
+    assert ('1 Билет' in text) is confirmed
+    assert ('Билет: проверка' in text) is not confirmed

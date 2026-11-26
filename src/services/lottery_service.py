@@ -7,6 +7,7 @@ import random
 import asyncio
 from datetime import datetime, timezone
 
+from src.domain.tickets import active_ticket_filter
 from src.core.config import settings
 from src.infra.mongo.client import MongoClient
 import logging
@@ -41,8 +42,7 @@ class LotteryService:
 
         if not 1 <= winners_count <= 10:
             raise ValueError('winners_count must be between 1 and 10')
-        active = {'burned': {'$ne': True}, 'is_burned': {'$ne': True},
-                  'code': {'$type': 'string'}}
+        active = active_ticket_filter()
         cursor = self.tickets.find(active, {'user_id': 1, 'code': 1}).sort(
             [('user_id', 1), ('_id', 1)]).batch_size(200)
         selected = []
@@ -152,11 +152,13 @@ class LotteryService:
         result = await self.tickets.update_many(
             {
                 "user_id": user_id,
-                "burned": False
+                "burned": {"$ne": True},
+                "is_burned": {"$ne": True},
             },
             {
                 "$set": {
                     "burned": True,
+                    "is_burned": True,
                     "burn_reason": f"admin_burn_by_{admin_id}",
                     "burned_at": datetime.now(timezone.utc)
                 }
@@ -167,8 +169,8 @@ class LotteryService:
 
         return {
             "success": True,
-            "user_id": user.id,
-            "username": user.username or user.first_name or f"User {user.id}",
+            "user_id": user_id,
+            "username": user.get("username") or user.get("first_name") or f"User {user_id}",
             "burned_count": burned_count
         }
 
@@ -189,11 +191,11 @@ class LotteryService:
     async def get_lottery_stats(self) -> dict:
         """Статистика для лотереи."""
         # Total active (not burned) tickets
-        total_active = await self.tickets.count_documents({"burned": False})
+        total_active = await self.tickets.count_documents(active_ticket_filter())
 
         # Top holders - users with most active tickets
         pipeline = [
-            {"$match": {"burned": False}},
+            {"$match": active_ticket_filter()},
             {"$group": {"_id": "$user_id", "count": {"$sum": 1}}},
             {"$sort": {"count": -1}},
             {"$limit": 5}

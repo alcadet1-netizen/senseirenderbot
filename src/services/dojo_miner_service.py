@@ -271,7 +271,8 @@ class DojoMinerService:
             'next_reward': estimate_amount(profile['base_rate'], base_cap + pending)
             + projected_boost,
             'energy': energy,
-            'energy_max': energy_cap,
+            'energy_max': energy_cap,  # current cycle's frozen cap
+            'permanent_energy_max': base_cap,  # purchased cap for the next cycle
             'energy_start': energy_start,
             'task_energy_pending': pending,
             'energy_per_hour': ENERGY_PER_HOUR,
@@ -476,43 +477,38 @@ class DojoMinerService:
         if not charge or type(user_id) is not int or user_id <= 0:
             return False
         async with self._locks[user_id]:
-            now = time.time()
-            doc = await self.miners.find_one({'_id': user_id})
-            if not doc or doc.get('collected') or now >= doc.get('finish_at', 0):
-                return False
-            refills = list(doc.get('energy_refills') or [])
-            if any(str(item.get('charge')) == str(charge) for item in refills):
-                return True
-            finish = float(doc.get('finish_at', now))
-            energy_start = max(0, int(doc.get('energy_start', BASE_ENERGY)))
-            if self._energy_at(doc, now, finish, energy_start) > 0:
-                return False
-            version = int(doc.get('version', 0))
-            base_rate = float(doc.get('base_rate', BASE_RATE))
-            remaining_hours = max(0.0, (finish - now) / 3600)
-            # 100 energy buys one hour at full power; the rest of the cycle
-            # would have run at 10%, so only that hour is the added reward.
-            full_hours = min(remaining_hours, ENERGY_REFILL_AMOUNT / ENERGY_PER_HOUR)
-            extra = int(base_rate * full_hours * (1.0 - LOW_POWER) + 0.5)
-            amount = int(doc.get('amount', MINING_REWARD)) + extra
-            refills.append({
-                'charge': str(charge),
-                'at': now,
-                'amount': ENERGY_REFILL_AMOUNT,
-            })
-            circle_reward = self._circle_reward({**doc, 'energy_refills': refills}, now)
-            amount += circle_reward - int(doc.get('circle_reward', 0))
-            updated = await self.miners.find_one_and_update(
-                {'_id': user_id, 'version': version, 'collected': False},
-                {'$set': {'energy_refills': refills, 'amount': amount, 'circle_reward': circle_reward},
-                 '$inc': {'version': 1}},
-            )
-            if updated:
-                return True
-            current = await self.miners.find_one({'_id': user_id})
-            return bool(current and any(
-                str(item.get('charge')) == str(charge)
-                for item in current.get('energy_refills') or []))
+            for _ in range(8):
+                now = time.time()
+                doc = await self.miners.find_one({'_id': user_id})
+                refills = list((doc or {}).get('energy_refills') or [])
+                # A replay must succeed even if the cycle finished after credit.
+                if any(str(item.get('charge')) == str(charge) for item in refills):
+                    return True
+                if not doc or doc.get('collected') or now >= doc.get('finish_at', 0):
+                    return False
+                finish = float(doc.get('finish_at', now))
+                energy_start = max(0, int(doc.get('energy_start', BASE_ENERGY)))
+                if self._energy_at(doc, now, finish, energy_start) > 0:
+                    return False
+                version = int(doc.get('version', 0))
+                base_rate = float(doc.get('base_rate', BASE_RATE))
+                remaining_hours = max(0.0, (finish - now) / 3600)
+                full_hours = min(remaining_hours, ENERGY_REFILL_AMOUNT / ENERGY_PER_HOUR)
+                extra = int(base_rate * full_hours * (1.0 - LOW_POWER) + 0.5)
+                amount = int(doc.get('amount', MINING_REWARD)) + extra
+                refills.append({'charge': str(charge), 'at': now, 'amount': ENERGY_REFILL_AMOUNT})
+                circle_reward = self._circle_reward({**doc, 'energy_refills': refills}, now)
+                amount += circle_reward - int(doc.get('circle_reward', 0))
+                updated = await self.miners.find_one_and_update(
+                    {'_id': user_id, 'version': version, 'collected': False},
+                    {'$set': {'energy_refills': refills, 'amount': amount, 'circle_reward': circle_reward},
+                     '$inc': {'version': 1}},
+                )
+                if updated:
+                    return True
+            # A version conflict is not proof that the purchase was ineligible.
+            # Leave the receipt pending rather than refunding an uncertain payment.
+            raise RuntimeError('Energy refill update conflicted repeatedly')
 
     @staticmethod
     def _matched(result) -> bool:
@@ -602,65 +598,49 @@ class DojoMinerService:
             return False
         charge = str(charge)
         async with self._locks[user_id]:
-            for _ in range(4):
+            async def apply(session):
+                # The boost entitlement and its cycle reward must commit together.
+                # Otherwise a process crash or a concurrent circle/refill update
+                # can mark the Stars receipt applied without crediting the reward.
                 now = time.time()
-                user = await self.users.find_one({'id': user_id})
+                user = await self.users.find_one({'id': user_id}, session=session)
                 if not user or user.get('is_banned'):
                     return False
-                receipts = list(user.get('dojo_applied_receipts') or [])
-                if charge in receipts:
+                if charge in (user.get('dojo_applied_receipts') or []):
                     return True
-                doc = await self.miners.find_one({'_id': user_id}) or {}
+                doc = await self.miners.find_one({'_id': user_id}, session=session) or {}
                 cycle_key = self._boost_cycle_key(doc, now)
                 if str(user.get('dojo_boost_cycle') or '') == cycle_key:
-                    # One purchase per cycle, even after the first hour ends.
                     return False
                 old = user.get('dojo_boost_until')
                 old_until = max(0.0, float(old or 0))
                 starts_at = max(now, old_until)
                 new_until = starts_at + SPEED_BOOST_SECONDS
-                query = {
-                    'id': user_id,
-                    'is_banned': {'$ne': True},
-                    'dojo_applied_receipts': {'$ne': charge},
-                    'dojo_boost_cycle': {'$ne': cycle_key},
-                }
-                if old is None:
-                    query['dojo_boost_until'] = {'$exists': False}
-                else:
-                    query['dojo_boost_until'] = old
+                query = {'id': user_id, 'is_banned': {'$ne': True},
+                         'dojo_applied_receipts': {'$ne': charge},
+                         'dojo_boost_cycle': {'$ne': cycle_key}}
+                query['dojo_boost_until'] = {'$exists': False} if old is None else old
                 updated = await self.users.update_one(
-                    query,
-                    {'$set': {'dojo_boost_until': new_until,
-                              'dojo_boost_cycle': cycle_key,
-                              'dojo_boost_updated_at': now},
-                     '$addToSet': {'dojo_applied_receipts': charge}},
-                )
+                    query, {'$set': {'dojo_boost_until': new_until,
+                                     'dojo_boost_cycle': cycle_key,
+                                     'dojo_boost_updated_at': now},
+                            '$addToSet': {'dojo_applied_receipts': charge}}, session=session)
                 if not self._matched(updated):
-                    current = await self.users.find_one({'id': user_id}) or {}
-                    if charge in (current.get('dojo_applied_receipts') or []):
-                        return True
-                    if str(current.get('dojo_boost_cycle') or '') == cycle_key:
-                        return False
-                    continue
-
-                # Reward the part of the running cycle that the boost covers.
-                doc = await self.miners.find_one({'_id': user_id})
-                finish = float((doc or {}).get('finish_at', 0) or 0)
+                    raise RuntimeError('Boost entitlement changed during transaction')
+                finish = float(doc.get('finish_at', 0) or 0)
                 if doc and not doc.get('collected') and now < finish:
-                    bonus = _boost_bonus(
-                        float(doc.get('base_rate', BASE_RATE)),
-                        max(now, old_until), min(new_until, finish),
-                    )
+                    bonus = _boost_bonus(float(doc.get('base_rate', BASE_RATE)),
+                                         starts_at, min(new_until, finish))
                     if bonus > 0:
-                        version = int(doc.get('version', 0))
-                        await self.miners.find_one_and_update(
-                            {'_id': user_id, 'version': version, 'collected': False},
+                        updated_cycle = await self.miners.find_one_and_update(
+                            {'_id': user_id, 'version': int(doc.get('version', 0)),
+                             'collected': False},
                             {'$set': {'boost_bonus': int(doc.get('boost_bonus', 0)) + bonus},
-                             '$inc': {'amount': bonus, 'version': 1}},
-                        )
+                             '$inc': {'amount': bonus, 'version': 1}}, session=session)
+                        if not updated_cycle:
+                            raise RuntimeError('Boost cycle changed during transaction')
                 return True
-        return False
+            return await transaction(self.mongo, apply)
 
     async def auto_step(self, user_id: int) -> str:
         """Collect a finished cycle and immediately start the next one."""

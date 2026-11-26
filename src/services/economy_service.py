@@ -262,11 +262,12 @@ class EconomyService:
                     }, session=session)
                     ticket = None
                     if updated.get('messages_count', 0) % MESSAGES_PER_TICKET == 0:
-                        result = await self.tickets.insert_one({
-                            'user_id': user_id, 'code': await self._generate_ticket_code(),
+                        ticket = await self._generate_ticket_code()
+                        await self.tickets.insert_one({
+                            'user_id': user_id, 'code': ticket, 'burned': False,
+                            'is_burned': False, 'source': 'message',
                             'created_at': datetime.now(timezone.utc),
                         }, session=session)
-                        ticket = str(result.inserted_id)
                     return current, updated, float(paid), ticket
 
                 settled = await transaction(self.mongo_client, settle)
@@ -315,9 +316,9 @@ class EconomyService:
 
     async def _generate_ticket_code(self) -> str:
         """Генерировать уникальный код билета."""
-        # For simplicity, we'll use a random string. In production, we might want something more robust.
+        # Full UUID provides ample entropy without another database round-trip.
         import uuid
-        return str(uuid.uuid4())[:8]
+        return f'TICKET-{uuid.uuid4().hex.upper()}'
 
     # We'll stub out the rest of the methods for now, but we need to implement at least the ones that are called.
     # Since we don't know which ones are called, we'll try to implement the critical ones.

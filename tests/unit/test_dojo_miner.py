@@ -451,3 +451,30 @@ async def test_bonus_menu_and_rare_rewards():
     assert '<small>GRAM</small>' in html
     assert 'const kind = chosen ? prize.kind.toUpperCase()' in js
     assert 'closeBonus();' in js and 'aria-expanded' in js
+
+
+@pytest.mark.asyncio
+async def test_profile_api_uses_signed_identity_and_limits_fields():
+    profile = AsyncMock(return_value={'first_name': '<img src=x onerror=alert(1)>',
+                                     'level': 4, 'xp': 200, 'referrer_id': 42,
+                                     'coins': 100, 'is_banned': False})
+    container = SimpleNamespace(
+        settings=SimpleNamespace(bot_token='test-token', maintenance_mode=False),
+        dojo_miner_service=SimpleNamespace(),
+        user_service=SimpleNamespace(get_profile=profile),
+    )
+    app = web.Application()
+    setup_dojo(app, container)
+    async with TestClient(TestServer(app)) as client:
+        assert (await client.post('/miniapp/dojo/api/profile', json={})).status == 401
+        response = await client.post('/miniapp/dojo/api/profile', json={
+            'initData': signed(now=int(time.time())), 'user_id': 42})
+        assert response.status == 200
+        data = (await response.json())['profile']
+        assert data['first_name'].startswith('<img')
+        assert 'referrer_id' not in data and 'is_banned' not in data
+        profile.assert_awaited_once_with(7)
+        profile.return_value = {'is_banned': True}
+        response = await client.post('/miniapp/dojo/api/profile', json={
+            'initData': signed(now=int(time.time()))})
+        assert response.status == 409

@@ -8,6 +8,7 @@ import math
 from decimal import Decimal
 import logging
 import textwrap
+import secrets
 from typing import Optional, Dict, List
 from datetime import datetime, timezone
 
@@ -328,9 +329,12 @@ class QuizService:
                     await self.transactions.insert_one({'user_id': user_id, 'amount': amount,
                         'type': 'quiz_win', 'timestamp': datetime.now(timezone.utc)}, session=tx)
                 tickets_earned = int(amount // EXCHANGE_COINS_TO_TICKET)
-                if tickets_earned:
-                    await self.tickets.insert_one({'user_id': user_id, 'amount': tickets_earned,
-                        'source': 'quiz', 'timestamp': datetime.now(timezone.utc)}, session=tx)
+                for _ in range(tickets_earned):
+                    await self.tickets.insert_one({
+                        'user_id': user_id, 'code': f'TICKET-{secrets.token_hex(16).upper()}',
+                        'source': 'quiz', 'burned': False, 'is_burned': False,
+                        'created_at': datetime.now(timezone.utc),
+                    }, session=tx)
                 used = copy.deepcopy(state.get('used_questions', []))
                 question_id = state.get('current_question_id')
                 if question_id and question_id not in used:
