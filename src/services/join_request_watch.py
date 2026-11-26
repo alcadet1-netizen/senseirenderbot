@@ -61,6 +61,10 @@ class JoinRequestWatch:
         if not item:
             return False
         chat_id, user_id = item['chat_id'], item['user_id']
+        allowed_id = getattr(getattr(self.container, 'settings', None), 'main_chat_id', None)
+        if allowed_id is not None and chat_id != allowed_id:
+            await self.collection.delete_many({'_id': item['_id']})
+            return True
         try:
             if not await group_admin_access.allowed(self.bot, chat_id):
                 logger.warning('Join request check skipped: bot admin not verified chat=%s', chat_id)

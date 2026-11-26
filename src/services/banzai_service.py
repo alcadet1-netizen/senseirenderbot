@@ -180,6 +180,9 @@ class BanzaiService:
 
     async def start_game(self, chat_id: int, bot: Bot, duration_minutes: int = 10, reward_ton: float = 0.0) -> bool:
         """Запускает игру БАНЗАЙ в чате. Использует MongoDB для хранения состояния."""
+        target = getattr(bot, 'game_chat_id', None)
+        if target is not None and chat_id != target:
+            return False
         # Проверяем, не активна ли уже игра
         existing = await self.banzai_games.find_one({"_id": chat_id})
         if existing and existing.get("active", False):
@@ -383,6 +386,11 @@ class BanzaiService:
         try:
             async for game in self.banzai_games.find({"active": True}):
                 chat_id = game["_id"]
+                target = getattr(bot, 'game_chat_id', None)
+                if target is not None and chat_id != target:
+                    # Preserve old games for operator review, but don't resume
+                    # their timers or settle rewards in disallowed groups.
+                    continue
                 if chat_id in self._workers and not self._workers[chat_id].done():
                     continue
 

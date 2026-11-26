@@ -99,6 +99,9 @@ class CommentCampaignService:
         discussion_id = self.discussion_id or pinned.get('discussion_id') or channel.linked_chat_id
         if not discussion_id or channel.linked_chat_id != discussion_id:
             raise RuntimeError('Configured discussion is not linked to target channel')
+        game_chat_id = getattr(self.container.settings, 'main_chat_id', 0)
+        if game_chat_id and discussion_id != game_chat_id:
+            raise RuntimeError('Comment campaign discussion must be @airchatton')
         discussion = await bot.get_chat(discussion_id)
         if discussion.type != 'supergroup' or (discussion.linked_chat_id and discussion.linked_chat_id != channel.id):
             raise RuntimeError('Discussion/channel link mismatch')

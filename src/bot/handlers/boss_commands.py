@@ -61,11 +61,16 @@ render_boss_caption = BossPresenter.render_boss_caption
 async def launch_boss(
     bot, chat_id, boss_id, container, duration=None, reward_settings=None
 ):
+    target = getattr(bot, 'game_chat_id', None)
+    if target is not None and chat_id != target:
+        raise ValueError('Босс доступен только в @airchatton.')
     boss_service = container.boss_service
 
     from src.services.boss_settlement_service import settle_boss
     async with boss_service._lock:
         current = await boss_service.get_state()
+        if target is not None and current and current.get('chat_id') and current['chat_id'] != target:
+            raise ValueError('Старая игра в другом чате требует проверки администратора.')
         if current and (current.get('settlement_kind') or
                 (current.get('deadline') and current['deadline'] <= time.time())):
             await settle_boss(container.mongo_client)

@@ -6,6 +6,8 @@ import os
 import re
 from urllib.parse import parse_qsl
 import secrets
+import time
+from collections import OrderedDict
 from pathlib import Path
 
 from aiogram.types import (
@@ -176,6 +178,10 @@ def setup_dojo(app, container=None):
         'Referrer-Policy': 'no-referrer',
     }
 
+    # A small per-process ingress shield avoids MongoDB work for floods. The
+    # persistent per-cycle rule remains authoritative across multiple workers.
+    circle_requests = OrderedDict()
+
     async def page(request):
         name = request.match_info.get('asset', 'index.html')
         if request.path.startswith('/miniapp/dojo/assets/'):
@@ -213,6 +219,21 @@ def setup_dojo(app, container=None):
                 {'error': 'Сенсей на техобслуживании. Попробуйте позже.'},
                 status=503, headers=headers)
         action = request.match_info['action']
+        if action == 'circle':
+            request_id, cycle = payload.get('request_id'), payload.get('cycle')
+            if (not isinstance(request_id, str) or not re.fullmatch(r'[a-zA-Z0-9_-]{8,64}', request_id)
+                    or type(cycle) not in (int, float) or not 0 < cycle < 10**12 or not math.isfinite(cycle)):
+                return web.json_response({'error': 'Неверный запрос пополнения.'}, status=409, headers=headers)
+            now = time.monotonic()
+            previous = circle_requests.get(user['id'])
+            if previous is not None and now - previous < 0.5:
+                return web.json_response({'error': 'Слишком быстро. Попробуй ещё раз.',
+                                          'code': 'circle_rate_limit'}, status=429,
+                                         headers={**headers, 'Retry-After': '1'})
+            circle_requests[user['id']] = now
+            circle_requests.move_to_end(user['id'])
+            while len(circle_requests) > 4096:
+                circle_requests.popitem(last=False)
         is_admin = user['id'] in getattr(container.settings, 'admin_ids', ())
         if action.startswith('admin_') and not is_admin:
             return web.json_response({'error': 'Доступ только для администраторов.'}, status=403, headers=headers)

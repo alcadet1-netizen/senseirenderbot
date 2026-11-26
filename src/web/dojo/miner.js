@@ -45,6 +45,7 @@
     "Эффекты: как в системе": "Effects: system default",
     "Эффекты: выключены": "Effects: off",
     "+{amount} энергии": "+{amount} energy",
+    "Лимит кругов на этот цикл достигнут": "Circle limit reached for this cycle",
     ЭНЕРГИЯ: "ENERGY",
     "Энергия майнинга": "Mining energy",
     "ПРОГРЕСС ЦИКЛА": "CYCLE PROGRESS",
@@ -542,6 +543,7 @@
     let winding = 0;
     let queue = [];
     let sending = false;
+    let nextCircleAt = 0;
 
     async function sendCircles() {
       if (sending) return;
@@ -572,7 +574,10 @@
             const amount = Number(data.circle.added);
             showToast(t("+{amount} энергии", {amount: amount < 0.001 ? "<0.001" : coinExact(amount)}));
           }
-          else queue = queue.filter(next => next.cycle !== item.cycle);
+          else {
+            queue = queue.filter(next => next.cycle !== item.cycle);
+            if (data.circle.retry_after) nextCircleAt = Date.now() + data.circle.retry_after * 1000;
+          }
         } catch (error) {
           // Retry with the same id: an interrupted response may already be credited.
           if (!model || model.phase !== "mining" || model.started_at !== item.cycle) { queue.shift(); continue; }
@@ -585,7 +590,7 @@
       sending = false;
     }
     function recordOrbit(event) {
-      if (!model || model.phase !== "mining" || !initData() ||
+      if (!model || model.phase !== "mining" || model.circle_limit_reached || !initData() || Date.now() < nextCircleAt ||
           circleEnergyValue() >= (model.circle_energy_limit ?? 100)) {
         lastAngle = null; winding = 0; return;
       }
@@ -600,7 +605,12 @@
         winding += delta;
         if (Math.abs(winding) >= 2 * Math.PI - 0.15) {
           winding -= Math.sign(winding) * 2 * Math.PI;
-          queue.push({cycle: model.started_at, request_id: crypto.randomUUID()});
+          // Never accumulate an unbounded backlog while the network is slow.
+          if (queue.length < 1) {
+            queue.push({cycle: model.started_at, request_id: crypto.randomUUID()});
+            nextCircleAt = Date.now() + 1000 * (model.circle_min_interval ?? 2);
+          }
+          // A later gesture can retry a retained item after transient failures.
           sendCircles();
         }
       }
@@ -1729,6 +1739,7 @@
         "Энергия исчерпана · добыча идёт на 10% · {rate} Coin/ч",
       { energy: Math.floor(energy), max: energyMax(), rate: coinExact(rate) },
     );
+    if (model.circle_limit_reached) $("hint").textContent += ` · ${t("Лимит кругов на этот цикл достигнут")}`;
   }
 
   function clock(ms) {

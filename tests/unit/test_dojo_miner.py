@@ -173,6 +173,13 @@ async def test_api_requires_signature_and_dispatches_actions():
         response = await client.post('/miniapp/dojo/api/circle', json={'initData': auth, 'cycle': 1234, 'request_id': 'orbit-test-1'})
         assert response.status == 200 and (await response.json())['circle']['added'] == 1
         circle.assert_awaited_once_with(7, 1234, 'orbit-test-1')
+        # A flood is rejected before a second Mongo/service call; retry after
+        # an ambiguous response uses the same request id.
+        limited = await client.post('/miniapp/dojo/api/circle', json={
+            'initData': auth, 'cycle': 1234, 'request_id': 'orbit-test-1'})
+        assert limited.status == 429 and limited.headers['Retry-After'] == '1'
+        assert (await limited.json())['code'] == 'circle_rate_limit'
+        circle.assert_awaited_once()
         for bad_cycle in (True, -1, 1e100, None):
             response = await client.post('/miniapp/dojo/api/circle', json={'initData': auth, 'cycle': bad_cycle, 'request_id': 'orbit-test-2'})
             assert response.status == 409
