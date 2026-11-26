@@ -4,6 +4,7 @@
 
 from typing import List, Dict, Optional
 import random
+import asyncio
 from datetime import datetime, timezone
 
 from src.core.config import settings
@@ -23,49 +24,85 @@ class LotteryService:
         self.tickets = self.db.tickets  # For ticket tracking
         self.users = self.db.users
 
-    async def run_lottery(self, winners_count: int) -> List[dict]:
-        """Провести розыгрыш."""
+    @staticmethod
+    def _present(member) -> bool:
+        status = member.status
+        return (status in ('creator', 'administrator', 'member') or
+                (status == 'restricted' and bool(getattr(member, 'is_member', False))))
+
+    async def run_lottery(self, winners_count: int, *, chat_id: int, bot) -> List[dict]:
+        """Uniformly draw eligible tickets, not users, from this Telegram chat.
+
+        Stream in owner order so a holder is checked once and Python memory is
+        O(winners_count), not O(all tickets). Any membership error aborts the
+        whole draw before burning anything rather than biasing the draw.
+        """
+        from src.services.referral_economy import transaction
+
+        if not 1 <= winners_count <= 10:
+            raise ValueError('winners_count must be between 1 and 10')
+        active = {'burned': {'$ne': True}, 'is_burned': {'$ne': True},
+                  'code': {'$type': 'string'}}
+        cursor = self.tickets.find(active, {'user_id': 1, 'code': 1}).sort(
+            [('user_id', 1), ('_id', 1)]).batch_size(200)
+        selected = []
+        seen = 0
+        last_user_id = None
+        member = None
+        try:
+            async for ticket in cursor:
+                uid = ticket.get('user_id')
+                if isinstance(uid, bool) or not isinstance(uid, int) or uid <= 0:
+                    continue
+                uid = int(uid)  # BSON int64 is an int subclass, common for Telegram IDs.
+                if uid != last_user_id:
+                    member = await asyncio.wait_for(bot.get_chat_member(chat_id, uid), timeout=10)
+                    last_user_id = uid
+                if not self._present(member) or getattr(getattr(member, 'user', None), 'is_bot', False):
+                    continue
+                seen += 1
+                item = (ticket, member.user)
+                if len(selected) < winners_count:
+                    selected.append(item)
+                else:
+                    index = random.randrange(seen)
+                    if index < winners_count:
+                        selected[index] = item
+
+        finally:
+            await cursor.close()
+
+        # Telegram membership and Mongo cannot share an atomic snapshot. Check
+        # again immediately before burning; never silently replace a departed
+        # winner because that would skew the draw.
+        verified = set()
+        for ticket, _ in selected:
+            uid = ticket['user_id']
+            if uid not in verified:
+                current = await asyncio.wait_for(bot.get_chat_member(chat_id, uid), timeout=10)
+                if not self._present(current) or getattr(current.user, 'is_bot', False):
+                    raise RuntimeError('Membership changed during lottery; retry')
+                verified.add(uid)
+
+        if not selected:
+            return []
+        random.shuffle(selected)
+        async def burn(session):
+            now = datetime.now(timezone.utc)
+            for ticket, _ in selected:
+                result = await self.tickets.update_one(
+                    {'_id': ticket['_id'], 'burned': {'$ne': True},
+                     'is_burned': {'$ne': True}},
+                    {'$set': {'burned': True, 'is_burned': True,
+                              'burn_reason': 'lottery_win', 'burned_at': now}}, session=session)
+                if result.matched_count != 1:
+                    raise RuntimeError('Ticket changed during lottery; retry')
+        await transaction(self.mongo_client, burn)
         winners = []
-
-        # Get active (not burned) tickets
-        active_tickets_cursor = self.tickets.find({"burned": False})
-        active_tickets = await active_tickets_cursor.to_list(length=None)
-
-        if not active_tickets:
-            return winners
-
-        # Shuffle and pick winners
-        random.shuffle(active_tickets)
-        winner_tickets = active_tickets[:min(winners_count, len(active_tickets))]
-
-        for ticket_doc in winner_tickets:
-            # Mark ticket as burned
-            await self.tickets.update_one(
-                {"_id": ticket_doc["_id"]},
-                {"$set": {
-                    "burned": True,
-                    "burn_reason": "lottery_win",
-                    "burned_at": datetime.now(timezone.utc)
-                }}
-            )
-
-            # Get user info
-            user = await self.users.find_one({"id": ticket_doc["user_id"]})
-            if not user:
-                continue
-
-            username = user.get("username")
-            first_name = user.get("first_name", "")
-            last_name = user.get("last_name", "")
-            full_name = f"{first_name} {last_name}".strip() or f"User {ticket_doc['user_id']}"
-
-            winners.append({
-                "user_id": ticket_doc["user_id"],
-                "username": username,
-                "full_name": full_name,
-                "ticket_code": ticket_doc["code"],
-            })
-
+        for ticket, user in selected:
+            name = ' '.join(filter(None, (user.first_name, user.last_name))) or f"User {user.id}"
+            winners.append({'user_id': user.id, 'username': user.username,
+                            'full_name': name, 'ticket_code': ticket['code']})
         return winners
 
     async def admin_add_ticket(self, user_id: int, admin_id: int) -> dict:

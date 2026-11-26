@@ -5,6 +5,7 @@
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 import logging
+import math
 import re
 
 from aiogram import Bot
@@ -35,12 +36,60 @@ class ModerationService:
         await self.muted_users.create_index([('user_id', 1), ('muted_until', 1)])
 
     async def handle_user_left(self, user_id: int) -> dict:
-        """Обработать выход пользователя (автобан и конфискация)."""
-        return await self.ban_user(
-            user_id=user_id,
-            reason=AUTO_BAN_REASON,
-            confiscate_coins=True
-        )
+        """Atomically confiscate the balance and active tickets on group exit.
+
+        This path requires a Mongo replica set, like the other financial paths.
+        Re-delivered exit events cannot confiscate twice while the ban is active.
+        Katana fields are deliberately never modified.
+        """
+        from src.services.referral_economy import transaction
+
+        async def settle(session):
+            user = await self.users.find_one({'id': user_id}, session=session)
+            if not user:
+                return {'success': False, 'error': 'User not found'}
+            if user.get('is_banned'):
+                return {'success': False, 'error': 'Already banned'}
+            amount = float(user.get('coins', 0) or 0)
+            if not math.isfinite(amount) or amount < 0:
+                raise ValueError('Invalid balance for autoban')
+            now = datetime.now(timezone.utc)
+            banned = await self.users.update_one(
+                {'id': user_id, 'is_banned': {'$ne': True}},
+                {'$set': {'is_banned': True, 'ban_reason': AUTO_BAN_REASON,
+                          'coins': 0, 'updated_at': now}}, session=session)
+            if banned.matched_count != 1:
+                raise RuntimeError('User changed during autoban')
+            if amount:
+                canonical = await self.bank.find_one({'_id': 'single'}, session=session)
+                legacy = await self.bank.find_one({'_id': 'main'}, session=session) if canonical is None else None
+                if canonical is not None:
+                    bank_id, field = 'single', 'coins'
+                elif legacy is not None:
+                    bank_id, field = 'main', 'balance'
+                else:
+                    raise RuntimeError('No bank account available for autoban')
+                deposited = await self.bank.update_one(
+                    {'_id': bank_id}, {'$inc': {field: amount}}, session=session)
+                if deposited.matched_count != 1:
+                    raise RuntimeError('Bank unavailable during autoban')
+                await self.transactions.insert_one({
+                    'user_id': user_id, 'tx_type': 'ban_confiscation',
+                    'coins_change': -amount, 'description': f'Ban confiscation: {AUTO_BAN_REASON}',
+                    'created_at': now,
+                }, session=session)
+            # Both fields occur in historical tickets; setting both prevents a
+            # legacy reader from treating a confiscated ticket as active.
+            tickets = await self.db.tickets.update_many(
+                {'user_id': user_id, 'burned': {'$ne': True}, 'is_burned': {'$ne': True}},
+                {'$set': {'burned': True, 'is_burned': True,
+                          'burn_reason': 'autoban_exit', 'burned_at': now}}, session=session)
+            return {'success': True, 'user_id': user_id,
+                    'username': user.get('username') or user.get('first_name'),
+                    'reason': AUTO_BAN_REASON, 'confiscated': amount,
+                    'tickets_confiscated': tickets.modified_count}
+
+        return await transaction(self.mongo_client, settle)
 
     async def ban_user(
         self,
@@ -164,59 +213,12 @@ class ModerationService:
         ]
 
     async def restore_channel_unsubscribe_bans(self) -> dict:
-        """Снять баны, выданные за отписку от канала задания.
+        """Disabled: historical channel and group bans have the same reason.
 
-        Пока ``on_user_leave`` не проверял тип чата, отписка от канала
-        вызывала тот же автобан с конфискацией. Возвращаем только тех, чья
-        причина бана — автобан за выход из чата, и только если игрок после
-        бана ничего не заработал (иначе вернуть конфискованное неоткуда).
+        There is no reliable evidence in the old records to safely refund one
+        group without refunding the other; never mutate balances in this method.
         """
-        restored, skipped, amount_total = 0, 0, 0.0
-        cursor = self.users.find({'is_banned': True,
-                                  'ban_reason': AUTO_BAN_REASON})
-        async for user in cursor:
-            user_id = user.get('id')
-            if user_id is None:
-                continue
-            # Сколько было конфисковано, видно по единственной записи журнала.
-            record = await self.transactions.find_one(
-                {'user_id': user_id, 'tx_type': 'ban_confiscation'},
-                sort=[('created_at', -1)])
-            amount = abs(float((record or {}).get('coins_change', 0) or 0))
-            if amount > 0:
-                refunded = await self._refund_from_bank(user_id, amount)
-                if not refunded:
-                    skipped += 1
-                    continue
-                amount_total += amount
-            await self.users.update_one(
-                {'id': user_id, 'is_banned': True},
-                {'$set': {'is_banned': False, 'ban_reason': None,
-                          'updated_at': datetime.now(timezone.utc)}})
-            restored += 1
-        logger.info('Restored %s channel-unsubscribe bans (%.2f coins), skipped %s',
-                    restored, amount_total, skipped)
-        return {'success': True, 'restored': restored, 'skipped': skipped,
-                'coins_returned': amount_total}
-
-    async def _refund_from_bank(self, user_id: int, amount: float) -> bool:
-        """Вернуть конфискованное из банка. Без денег в банке — не банимся."""
-        if amount <= 0:
-            return True
-        if not await self.ledger.try_withdraw(amount):
-            logger.warning('Cannot refund %.2f to user %s: bank is short', amount, user_id)
-            return False
-        credited = await self.users.update_one(
-            {'id': user_id}, {'$inc': {'coins': amount}})
-        if getattr(credited, 'matched_count', 1) != 1:
-            await self.ledger.deposit(amount)
-            return False
-        await self.transactions.insert_one({
-            'user_id': user_id, 'tx_type': 'ban_refund', 'coins_change': amount,
-            'description': 'Autoban refund: unsubscribing from a task channel is allowed',
-            'created_at': datetime.now(timezone.utc),
-        })
-        return True
+        return {'success': False, 'error': 'Historical ban origin is ambiguous'}
 
     async def unban_all_users(self) -> dict:
         """Амнистия: разбанить всех пользователей."""

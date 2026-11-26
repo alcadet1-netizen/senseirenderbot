@@ -1,109 +1,113 @@
+from types import SimpleNamespace as NS
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
-import random
 
 from src.services.lottery_service import LotteryService
 
 
+class Cursor:
+    def __init__(self, docs):
+        self.docs = docs
+    def sort(self, spec):
+        assert spec == [('user_id', 1), ('_id', 1)]
+        self.docs.sort(key=lambda doc: (doc['user_id'], doc['_id']))
+        return self
+    def batch_size(self, size):
+        assert size == 200
+        return self
+    async def close(self):
+        pass
+    def __aiter__(self):
+        async def iterator():
+            for doc in self.docs:
+                yield doc
+        return iterator()
+
+
+def member(uid, status='member', is_member=True, is_bot=False):
+    return NS(status=status, is_member=is_member,
+              user=NS(id=uid, is_bot=is_bot, first_name=f'User{uid}', last_name=None, username=None))
+
+
+def setup(monkeypatch, tickets, members):
+    active = [t.copy() for t in tickets if not t.get('burned') and not t.get('is_burned')
+              and isinstance(t.get('code'), str)]
+    collection = NS(find=lambda query, projection: Cursor(active),
+                    update_one=AsyncMock(return_value=NS(matched_count=1)))
+    mongo = NS(database=NS(tickets=collection, users=NS()))
+    async def lookup(chat_id, uid):
+        assert chat_id == -100
+        result = members[uid]
+        if isinstance(result, Exception):
+            raise result
+        return result
+    bot = NS(get_chat_member=AsyncMock(side_effect=lookup))
+    async def transaction(_mongo, callback):
+        return await callback('session')
+    monkeypatch.setattr('src.services.referral_economy.transaction', transaction)
+    return LotteryService(mongo), collection, bot
+
+
 @pytest.mark.asyncio
-async def test_get_random_tickets_lottery_fix():
-    """Test that the lottery service picks winners correctly."""
-    # Setup mock mongo client and collections
-    mock_mongo_client = AsyncMock()
-    db = AsyncMock()
-    mock_mongo_client.database = db
-
-    # Mock collections
-    # tickets.find is not awaited, so we use MagicMock for the collection and its find method
-    db.tickets = MagicMock()
-    # tickets.update_one is awaited, so we make it an AsyncMock
-    db.tickets.update_one = AsyncMock()
-    # users.find_one is awaited, so we make it an AsyncMock
-    db.users.find_one = AsyncMock()
-
-    # We'll make our mocks stateful to track changes
-    # Initial ticket data
-    stored_tickets = [
-        {"_id": 1, "user_id": 99999, "code": "LOTT-1", "burned": False},
-        {"_id": 2, "user_id": 99999, "code": "LOTT-2", "burned": False},
-        {"_id": 3, "user_id": 88888, "code": "LOTT-3", "burned": False},  # Another user
+async def test_lottery_only_chat_members_and_active_tickets(monkeypatch):
+    tickets = [
+        {'_id': 1, 'user_id': 1, 'code': 'one', 'burned': False},
+        {'_id': 2, 'user_id': 1, 'code': 'two'},  # historical missing flag
+        {'_id': 3, 'user_id': 2, 'code': 'left'},
+        {'_id': 4, 'user_id': 3, 'code': 'restricted'},
+        {'_id': 5, 'user_id': 4, 'code': 'present'},
+        {'_id': 6, 'user_id': 4, 'code': 'already', 'is_burned': True},
+        {'_id': 7, 'user_id': 5, 'code': 'bot'},
     ]
-    # Initial user data
-    stored_users = {
-        99999: {"id": 99999, "username": "lottery_test", "first_name": "Lottery"},
-        88888: {"id": 88888, "username": "another", "first_name": "Another"},
-    }
+    svc, collection, bot = setup(monkeypatch, tickets, {
+        1: member(1), 2: member(2, 'left'), 3: member(3, 'restricted', False),
+        4: member(4, 'restricted', True), 5: member(5, is_bot=True)})
+    winners = await svc.run_lottery(10, chat_id=-100, bot=bot)
+    assert {w['ticket_code'] for w in winners} == {'one', 'two', 'present'}
+    assert collection.update_one.await_count == 3
+    assert [call.args[1] for call in bot.get_chat_member.await_args_list].count(1) == 2
+    for call in collection.update_one.await_args_list:
+        assert call.kwargs['session'] == 'session'
+        assert call.args[1]['$set']['burned'] is True
+        assert call.args[1]['$set']['is_burned'] is True
 
-    # Setup mocks for tickets collection
-    # We need to mock the find method to return a cursor object that has a to_list method
-    def make_tickets_find():
-        def side_effect(filter_dict):
-            # We only support the filter {"burned": False} for this test
-            if filter_dict == {"burned": False}:
-                # Return a mock cursor that has a to_list method
-                mock_cursor = MagicMock()
-                # Filter the stored_tickets by the burned field
-                filtered_tickets = [t for t in stored_tickets if t.get("burned") == False]
-                # Make the to_list method an AsyncMock that returns the filtered tickets
-                mock_cursor.to_list = AsyncMock(return_value=filtered_tickets)
-                return mock_cursor
-            # For other filters, return a cursor that returns an empty list
-            mock_cursor = MagicMock()
-            mock_cursor.to_list = AsyncMock(return_value=[])
-            return mock_cursor
-        return side_effect
 
-    def make_tickets_update_one():
-        def side_effect(filter_dict, update_dict, **kwargs):
-            nonlocal stored_tickets
-            # We expect the filter to be by _id and the update to set burned to True
-            if "_id" in filter_dict and "$set" in update_dict and "burned" in update_dict["$set"]:
-                ticket_id = filter_dict["_id"]
-                # Find the ticket and update it
-                for ticket in stored_tickets:
-                    if ticket["_id"] == ticket_id:
-                        ticket["burned"] = update_dict["$set"]["burned"]
-                        break
-            # Return a mock result
-            result = AsyncMock()
-            result.acknowledged = True
-            result.matched_count = 1
-            result.modified_count = 1 if ("$set" in update_dict) else 0
-            result.upserted_id = None
-            return result
-        return side_effect
+@pytest.mark.asyncio
+async def test_membership_error_aborts_before_any_burn(monkeypatch):
+    svc, collection, bot = setup(monkeypatch, [
+        {'_id': 1, 'user_id': 1, 'code': 'A'}, {'_id': 2, 'user_id': 2, 'code': 'B'}],
+        {1: member(1), 2: RuntimeError('Telegram unavailable')})
+    with pytest.raises(RuntimeError, match='Telegram unavailable'):
+        await svc.run_lottery(1, chat_id=-100, bot=bot)
+    collection.update_one.assert_not_awaited()
 
-    # Setup mocks for users collection
-    def make_users_find_one():
-        def side_effect(query):
-            user_id = query.get("id")
-            if user_id in stored_users:
-                return stored_users[user_id].copy()
-            return None
-        return side_effect
 
-    # Apply the side effects
-    db.tickets.find.side_effect = make_tickets_find()
-    db.tickets.update_one.side_effect = make_tickets_update_one()
-    db.users.find_one.side_effect = make_users_find_one()
+@pytest.mark.asyncio
+async def test_membership_change_aborts_before_any_burn(monkeypatch):
+    svc, collection, bot = setup(monkeypatch, [{'_id': 1, 'user_id': 1, 'code': 'A'}], {1: member(1)})
+    bot.get_chat_member.side_effect = [member(1), member(1, 'left')]
+    with pytest.raises(RuntimeError, match='Membership changed'):
+        await svc.run_lottery(1, chat_id=-100, bot=bot)
+    collection.update_one.assert_not_awaited()
 
-    # Create service
-    service = LotteryService(mock_mongo_client)
 
-    # Execute
-    winners = await service.run_lottery(winners_count=1)
+@pytest.mark.asyncio
+async def test_lottery_uses_reservoir_over_tickets(monkeypatch):
+    svc, collection, bot = setup(monkeypatch, [
+        {'_id': i, 'user_id': 1, 'code': str(i)} for i in range(1, 5)], {1: member(1)})
+    # Reservoir keeps the last two tickets when every random position is zero.
+    monkeypatch.setattr('src.services.lottery_service.random.randrange', lambda n: 0)
+    result = await svc.run_lottery(2, chat_id=-100, bot=bot)
+    assert {w['ticket_code'] for w in result} == {'2', '4'}
+    assert collection.update_one.await_count == 2
 
-    # Verify
-    assert len(winners) == 1
-    winner = winners[0]
-    assert winner["user_id"] in [99999, 88888]  # Should be one of the users we set up
-    assert winner["ticket_code"] in ["LOTT-1", "LOTT-2", "LOTT-3"]
-    assert winner["username"] in ["lottery_test", "another"]
-    assert "full_name" in winner
 
-    # Verify that exactly one ticket was marked as burned
-    burned_count = sum(1 for t in stored_tickets if t.get("burned") == True)
-    assert burned_count == 1
-
-    # Verify that the update_one was called on the tickets collection
-    assert db.tickets.update_one.call_count == 1
+@pytest.mark.asyncio
+async def test_lottery_accepts_bson_int64_telegram_ids(monkeypatch):
+    from bson.int64 import Int64
+    uid = 9876543210
+    svc, collection, bot = setup(monkeypatch,
+        [{'_id': 1, 'user_id': Int64(uid), 'code': 'A'}], {uid: member(uid)})
+    winners = await svc.run_lottery(1, chat_id=-100, bot=bot)
+    assert winners[0]['user_id'] == uid
