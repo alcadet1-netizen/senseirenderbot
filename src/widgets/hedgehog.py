@@ -1,12 +1,47 @@
 """Native tap game with server-owned rewards; no WebApp SDK or fetch."""
+import asyncio
 import base64
 import hashlib
 import io
 import json
 import re
+import warnings
 import zlib
 
 from PIL import Image, ImageOps
+
+from src.widgets.limits import RENDER_SLOTS
+
+# Same guard as the sage vision path: never decode a bitmap bomb.
+MAX_THUMB_SOURCE_PIXELS = 20_000_000
+
+
+def _thumb_candidates(content: bytes) -> list:
+    """Build base64 JPEG thumbnails; empty list means "render without photo".
+
+    One RGB conversion feeds every thumbnail, and large JPEGs decode at
+    reduced scale, so a single widget query never holds several full-size
+    copies of the source image.
+    """
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(content)) as original:
+                if original.width * original.height > MAX_THUMB_SOURCE_PIXELS:
+                    return []
+                original.draft('RGB', (128, 128))
+                base = original.convert('RGB')
+        base = ImageOps.contain(base, (128, 128))
+        candidates = []
+        for size, quality in ((128, 30), (96, 25), (64, 18), (48, 18), (32, 16)):
+            thumb = ImageOps.contain(base, (size, size))
+            buffer = io.BytesIO()
+            thumb.save(buffer, 'JPEG', quality=quality, optimize=True)
+            candidates.append('data:image/jpeg;base64,' + base64.b64encode(buffer.getvalue()).decode('ascii'))
+        return candidates
+    except Exception:
+        # Corrupt stored image degrades to a photo-less widget, never to a crash.
+        return []
 
 
 async def to_hedgehog_html(token: str, hedgehog_gridfs, *, template=None) -> str:
@@ -37,13 +72,10 @@ async def to_hedgehog_html(token: str, hedgehog_gridfs, *, template=None) -> str
             if not content:
                 candidates = ['']
             else:
-                candidates = []
-                with Image.open(io.BytesIO(content)) as original:
-                    for size, quality in ((128, 30), (96, 25), (64, 18), (48, 18), (32, 16)):
-                        thumb = ImageOps.contain(original.convert('RGB'), (size, size))
-                        buffer = io.BytesIO()
-                        thumb.save(buffer, 'JPEG', quality=quality, optimize=True)
-                        candidates.append('data:image/jpeg;base64,' + base64.b64encode(buffer.getvalue()).decode('ascii'))
+                async with RENDER_SLOTS:
+                    candidates = await asyncio.to_thread(_thumb_candidates, content)
+                if not candidates:
+                    candidates = ['']
 
     for image in candidates:
         html = (TEMPLATE if template is None else template).replace('__TOKEN__', json.dumps(token)).replace('__IMAGE__', image)
