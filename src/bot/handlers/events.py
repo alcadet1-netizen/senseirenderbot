@@ -121,7 +121,16 @@ async def on_user_leave(event: ChatMemberUpdated, container: Container):
     if user.is_bot:
         return
 
-    if event.chat.type != "supergroup":
+    if event.chat.type not in ("group", "supergroup"):
+        return
+    # A Telegram kick/ban is not a voluntary exit.
+    if event.new_chat_member.status != 'left' or event.from_user.id != user.id:
+        return
+
+    # Respect the existing per-chat admin switch; absent means enabled.
+    setting = await container.chat_settings_service.get_setting(
+        event.chat.id, f"chat:{event.chat.id}:autoban_enabled")
+    if setting == "0":
         return
 
     # Автобан и конфискация
@@ -154,7 +163,8 @@ async def on_user_leave(event: ChatMemberUpdated, container: Container):
             await event.answer(
                 f"⚠️ <b>АВТОБАН</b>\n\n"
                 f"{ban_text}\n"
-                f"Конфисковано: {result.get('confiscated', 0):,.2f} монет\n\n"
+                f"Конфисковано: {result.get('confiscated', 0):,.2f} монет; билетов: {result.get('tickets_confiscated', 0)}\n"
+                f"Катана сохранена.\n\n"
                 f"<i>{phrase}</i>",
                 parse_mode="HTML"
             )
