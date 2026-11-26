@@ -1,8 +1,10 @@
 """Daily hedgehog reward delivered as a photo in chat."""
+import asyncio
 import io
 import os
 import time
 import logging
+import warnings
 
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import InputMediaPhoto, BufferedInputFile
@@ -10,12 +12,15 @@ from PIL import Image, ImageOps
 
 from src.core.exceptions import DailyAlreadyClaimedError
 from src.services.hedgehog_service import GameError
+from src.widgets.limits import RENDER_SLOTS
 
 logger = logging.getLogger(__name__)
 
 MAX_TELEGRAM_PHOTO_SIDE = 2560
 MAX_TELEGRAM_PHOTO_BYTES = 9 * 1024 * 1024
 MAX_IMAGE_ATTEMPTS = 4
+# Reject before decoding: one oversized bitmap must never eat the process.
+MAX_IMAGE_PIXELS = 20_000_000
 
 
 class UnusableHedgehogImageError(GameError):
@@ -34,31 +39,56 @@ def normalize_photo_bytes(content: bytes) -> bytes:
         raise UnusableHedgehogImageError('Картинка ежа пуста.')
     # Fast-path for short synthetic test payloads used in unit tests when not valid image headers.
     try:
-        with Image.open(io.BytesIO(content)) as img:
-            img.load()
-            fmt = (img.format or '').upper()
-            width, height = img.size
-            needs_reencode = (
-                fmt not in {'JPEG', 'PNG'}
-                or img.mode not in {'RGB', 'L'}
-                or width <= 0 or height <= 0
-                or width > MAX_TELEGRAM_PHOTO_SIDE
-                or height > MAX_TELEGRAM_PHOTO_SIDE
-                or (width + height) > 9000
-                or max(width / max(height, 1), height / max(width, 1)) > 19.5
-                or len(content) > MAX_TELEGRAM_PHOTO_BYTES
-                or bool(img.info.get('exif'))
-                or bool(img.info.get('icc_profile'))
-            )
-            if not needs_reencode:
-                return content
-            rgb = ImageOps.exif_transpose(img).convert('RGB')
-            w, h = rgb.size
-            if w > MAX_TELEGRAM_PHOTO_SIDE or h > MAX_TELEGRAM_PHOTO_SIDE:
-                rgb = ImageOps.contain(rgb, (MAX_TELEGRAM_PHOTO_SIDE, MAX_TELEGRAM_PHOTO_SIDE), Image.Resampling.LANCZOS)
-            out = io.BytesIO()
-            rgb.save(out, format='JPEG', quality=88, optimize=True)
-            return out.getvalue()
+        with warnings.catch_warnings():
+            # A silent decompression-bomb warning must not slip past the guard.
+            warnings.simplefilter('error', Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(content)) as img:
+                # Header dimensions/mode decide validity, so capture them before
+                # any reduced-scale draft decode changes what Pillow reports.
+                width, height = img.size
+                mode = img.mode
+                if width * height > MAX_IMAGE_PIXELS:
+                    raise UnusableHedgehogImageError('Картинка ежа слишком большая.')
+                fmt = (img.format or '').upper()
+                needs_reencode = (
+                    fmt not in {'JPEG', 'PNG'}
+                    or mode not in {'RGB', 'L'}
+                    or width <= 0 or height <= 0
+                    or width > MAX_TELEGRAM_PHOTO_SIDE
+                    or height > MAX_TELEGRAM_PHOTO_SIDE
+                    or (width + height) > 9000
+                    or max(width / max(height, 1), height / max(width, 1)) > 19.5
+                    or len(content) > MAX_TELEGRAM_PHOTO_BYTES
+                    or bool(img.info.get('exif'))
+                    or bool(img.info.get('icc_profile'))
+                )
+                if needs_reencode:
+                    # Reduced-scale decode for JPEG: the draft target must be the
+                    # final contain box, so the scaled decode still covers it and
+                    # no full-size intermediate ever materializes. PNG/WebP ignore
+                    # draft and decode as-is; Pillow cannot scale them at decode time.
+                    fit = min(MAX_TELEGRAM_PHOTO_SIDE / max(width, 1),
+                              MAX_TELEGRAM_PHOTO_SIDE / max(height, 1))
+                    if fit < 1:
+                        img.draft('RGB', (max(1, round(width * fit)), max(1, round(height * fit))))
+                else:
+                    # The original bytes go out untouched; decode at 1/8 scale
+                    # purely to validate that the file structure is intact.
+                    img.draft('RGB', (16, 16))
+                img.load()
+                if not needs_reencode:
+                    return content
+                # In-place: the decoded copy is ours; avoid a second full-size buffer.
+                ImageOps.exif_transpose(img, in_place=True)
+                rgb = img
+                if rgb.mode != 'RGB':
+                    rgb = rgb.convert('RGB')
+                w, h = rgb.size
+                if w > MAX_TELEGRAM_PHOTO_SIDE or h > MAX_TELEGRAM_PHOTO_SIDE:
+                    rgb = ImageOps.contain(rgb, (MAX_TELEGRAM_PHOTO_SIDE, MAX_TELEGRAM_PHOTO_SIDE), Image.Resampling.LANCZOS)
+                out = io.BytesIO()
+                rgb.save(out, format='JPEG', quality=88)
+                return out.getvalue()
     except UnusableHedgehogImageError:
         raise
     except Exception as exc:
@@ -67,6 +97,16 @@ def normalize_photo_bytes(content: bytes) -> bytes:
         if len(content) <= 32 and content.isalpha():
             return content
         raise UnusableHedgehogImageError('Картинка ежа повреждена.') from exc
+
+
+async def normalize_photo_bytes_async(content: bytes) -> bytes:
+    """Pillow work off the event loop, with at most two concurrent decodes.
+
+    Delivery must never block Bot API polling (that is where request timeouts
+    come from) and never stack unbounded decode spikes in memory.
+    """
+    async with RENDER_SLOTS:
+        return await asyncio.to_thread(normalize_photo_bytes, content)
 
 
 async def _get_random_image_from_gridfs(container) -> bytes:
@@ -85,7 +125,7 @@ async def _get_random_image_from_gridfs(container) -> bytes:
         if not content:
             continue
         try:
-            return normalize_photo_bytes(content)
+            return await normalize_photo_bytes_async(content)
         except UnusableHedgehogImageError:
             logger.warning('Skipping unusable random hedgehog image filename=%s', candidate.get('filename'))
     raise GameError('Картинки ежа временно недоступны. Попробуйте позже.')
@@ -99,7 +139,7 @@ async def _get_image_by_name_from_gridfs(container, image_name: str) -> bytes:
     content = await gridfs.get_image(image_name)
     if not content:
         raise UnusableHedgehogImageError('Сохранённая картинка ежа недоступна. Обратитесь в /paysupport; не платите повторно.')
-    return normalize_photo_bytes(content)
+    return await normalize_photo_bytes_async(content)
 
 
 async def picture(container, token, image_name=None):
