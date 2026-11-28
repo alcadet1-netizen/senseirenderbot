@@ -357,21 +357,22 @@ def test_reference_art_is_bundled_and_used_without_mutating_cached_source(school
 
 
 @pytest.mark.asyncio
-async def test_busy_render_queue_returns_text_receipt_without_starting_more_threads():
+async def test_saturated_render_queue_still_ships_bundled_gif_without_rendering():
     import asyncio
     msg = message()
     with (
         patch('src.bot.presenters.katana_presenter.RENDER_SLOTS', asyncio.Semaphore(0)),
-        patch('src.bot.presenters.katana_presenter.to_upgrade_gif') as gif,
+        patch('src.bot.presenters.katana_presenter.to_upgrade_gif', return_value=b'GIF89a'),
         patch('src.bot.presenters.katana_presenter.to_upgrade_png') as png,
     ):
         await send_katana_upgrade(msg, 7, 'Name', result(), animate=True)
-    gif.assert_not_called()
+    # The queue bounds Pillow renders only; a bundled file read must not queue.
     png.assert_not_called()
-    msg.answer.assert_awaited_once()
-    assert '20.40 → 20.76' in msg.answer.call_args.args[0]
-    msg.answer_animation.assert_not_awaited()
+    msg.answer_animation.assert_awaited_once()
+    assert msg.answer_animation.call_args.args[0].filename.endswith('.gif')
+    assert '20.40 → 20.76' in msg.answer_animation.call_args.kwargs['caption']
     msg.answer_photo.assert_not_awaited()
+    msg.answer.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -436,15 +437,14 @@ def test_compact_receipt_contains_no_schematic_caption():
 
 
 @pytest.mark.asyncio
-async def test_gif_render_taking_more_than_two_seconds_is_still_sent():
-    import asyncio
+async def test_bundled_gif_is_sent_without_waiting_for_the_render_queue():
     msg = message()
-    async def slow_render(renderer, receipt):
-        assert renderer is to_upgrade_gif
-        await asyncio.sleep(2.1)
-        return b'GIF89a'
-    with patch('src.bot.presenters.katana_presenter.render_receipt', side_effect=slow_render):
+    with patch(
+        'src.bot.presenters.katana_presenter.render_receipt',
+        side_effect=AssertionError('bundled GIF must not render'),
+    ) as render:
         await send_katana_upgrade(msg, 7, 'Name', result(), animate=True)
+    render.assert_not_awaited()
     msg.answer_animation.assert_awaited_once()
     msg.answer_photo.assert_not_awaited()
 
