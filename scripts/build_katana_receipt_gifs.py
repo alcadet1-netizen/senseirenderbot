@@ -7,6 +7,10 @@ Run from the repository root:
 
 The presenter only reads the bundled files, so a chat notification is a file
 send instead of a live 40-frame render.
+
+`--check` compares bytes, so run it in the same environment that baked the
+files: GIF rasterisation is not guaranteed to be byte-identical across
+Pillow/font builds.
 """
 import argparse
 import sys

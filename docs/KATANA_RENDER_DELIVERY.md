@@ -9,8 +9,9 @@ no remote asset request occurs while handling an upgrade.
 The animated receipt is delivered as a **ready-made GIF**, not a live render.
 `scripts/build_katana_receipt_gifs.py` bakes all 15 models × 2 outcomes
 (30 files, 760×290, 40-frame timeline with the final hold) into
-`src/widgets/assets/katanas/receipts/`; `--check` fails when they no longer match
-the renderer. At notification time `to_upgrade_gif` only picks the file for
+`src/widgets/assets/katanas/receipts/`; `--check` (run in the baking
+environment — GIF bytes are not portable across Pillow/font builds) fails when
+they no longer match the renderer. At notification time `to_upgrade_gif` only picks the file for
 `model_index(new_length)` and the outcome, so the animation reaches the chat in
 milliseconds instead of queueing behind a multi-second Pillow render. The static
 PNG fallback still renders live and keeps the real per-user numbers; GIF frames
