@@ -92,7 +92,7 @@ def blade_length(receipt, phase):
     return 425
 
 
-def render_forge(receipt, phase=1.0, *, scale=SCALE):
+def render_forge(receipt, phase=1.0, *, scale=SCALE, labels=None, summary=None):
     phase = max(0.0, min(1.0, phase))
     c = PALETTES["dark"]
     # Cosmetic schools are deterministic, never another economic roll.
@@ -269,7 +269,9 @@ def render_forge(receipt, phase=1.0, *, scale=SCALE):
         draw = ImageDraw.Draw(image)
 
     # All numeric labels stay outside the forge region, invariant across frames.
-    columns = [
+    # Live receipts print the real before/after values; bundled animations pass
+    # model-scoped labels because one pre-rendered file cannot know user numbers.
+    columns = list(labels) if labels is not None else [
         ("БЫЛО", f"{receipt.before:.2f} см"),
         ("ИЗМЕНЕНИЕ", f"{receipt.delta:+.2f} см"),
         ("СТАЛО", f"{receipt.after:.2f} см"),
@@ -283,7 +285,8 @@ def render_forge(receipt, phase=1.0, *, scale=SCALE):
             size -= 1
         text(x + 12, 226, value, size, accent if i == 1 else c["text"])
     blade, rank = Visuals.get_katana_art(receipt.after)
-    summary = f"{katana_name(receipt.after)} · {school+1}/15  |  Попытка: {receipt.cost:,.0f} монет"
+    if summary is None:
+        summary = f"{katana_name(receipt.after)} · {school+1}/15  |  Попытка: {receipt.cost:,.0f} монет"
     size = 13
     while size > 10 and draw.textlength(summary, font=font(size * scale)) > 704 * scale:
         size -= 1

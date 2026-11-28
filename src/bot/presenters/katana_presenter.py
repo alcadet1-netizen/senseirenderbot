@@ -36,8 +36,10 @@ async def send_katana_upgrade(
     if animate:
         try:
             started = time.monotonic()
-            payload = await asyncio.wait_for(render_receipt(to_upgrade_gif, receipt), timeout=20.0)
-            logger.info("Katana GIF rendered version=compact-v3 seconds=%.3f bytes=%s", time.monotonic()-started, len(payload))
+            # A bundled file needs no render slot: the notification must never
+            # queue behind other widgets' Pillow work the way /mykatana does not.
+            payload = await asyncio.wait_for(asyncio.to_thread(to_upgrade_gif, receipt), timeout=5.0)
+            logger.info("Katana GIF served source=bundled seconds=%.3f bytes=%s", time.monotonic()-started, len(payload))
             await message.answer_animation(
                 BufferedInputFile(payload, filename="sensei-katana-upgrade.gif"),
                 caption=caption,

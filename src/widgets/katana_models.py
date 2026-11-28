@@ -31,6 +31,12 @@ def model_animation_path(index: int) -> Path:
     return model_preview_path(index).with_suffix('.gif')
 
 
+def model_receipt_path(index: int, success: bool) -> Path:
+    """Baked /upkatana receipt animation for one model and one outcome."""
+    # Keep validation identical to the underlying model asset.
+    return model_path(index).parent / 'receipts' / f'{index:02d}_{"ok" if success else "fail"}.gif'
+
+
 def katana_name(length: float) -> str:
     """The displayed name of the cosmetic model for this length level."""
     return MODEL_NAMES[model_index(length)]
